@@ -54,4 +54,15 @@ describe("confidential Git path boundary", () => {
     repositories.push(cwd);
     expect(check(cwd).status).not.toBe(0);
   });
+  it("rejects prohibited paths added and removed in earlier commits", () => {
+    const cwd = repository();
+    stagePath(cwd, "data/placeholder.kmz");
+    const commit = (message: string) => execFileSync("git", ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", message], { cwd });
+    commit("test(FL-57): metadata fixture");
+    execFileSync("git", ["update-index", "--force-remove", "data/placeholder.kmz"], { cwd });
+    commit("test(FL-57): remove metadata fixture");
+    const result = check(cwd);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("prohibited Git path");
+  });
 });

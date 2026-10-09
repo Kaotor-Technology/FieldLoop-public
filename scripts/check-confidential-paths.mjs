@@ -9,12 +9,15 @@ if (head.status !== 0 && head.status !== 128) {
 const committed = head.status === 0
   ? execFileSync("git", ["ls-tree", "-r", "--name-only", "-z", "HEAD"], { encoding: "utf8" })
   : "";
-const forbidden = new Set((paths + committed).split("\0").filter((path) =>
+const history = execFileSync("git", ["log", "--all", "--format=", "--name-only", "-z"], {
+  encoding: "utf8", maxBuffer: 16 * 1024 * 1024,
+});
+const forbidden = new Set((paths + committed + history).split("\0").map((path) => path.replace(/^\n+/, "")).filter((path) =>
   /(^|\/)raw-data(\/|$)/i.test(path) || /\.kmz$/i.test(path),
 ));
 if (forbidden.size > 0) {
   console.error(`Confidential path check failed: ${forbidden.size} prohibited Git path(s).`);
   process.exitCode = 1;
 } else {
-  console.log("Confidential path check passed (HEAD and index).");
+  console.log("Confidential path check passed (HEAD, index and fetched history).");
 }
