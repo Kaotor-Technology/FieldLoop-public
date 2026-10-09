@@ -20,7 +20,7 @@
     "@fieldloop/config": "workspace:*",
     "@google/design.md": "0.4.0",
     "@types/node": "22.20.5",
-    "eslint": "9.39.5",
+    "eslint": "10.12.0",
     "turbo": "2.11.7",
     "typescript": "5.9.3",
     "vitest": "3.2.7"
