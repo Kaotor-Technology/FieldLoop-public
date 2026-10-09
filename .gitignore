@@ -1,0 +1,119 @@
+# =============================================================================
+# FieldLoop v2 — derived from docs/architecture.md (§1 folders, §2 stack, §6 deploy)
+# =============================================================================
+
+# --- Confidential prospect material (Highly Restricted, ADR-0002). Never commit.
+raw-data/
+*.kmz
+*.kml.confidential
+# Data exports pulled from any real system for analysis
+*.confidential.*
+
+# --- Node / pnpm / Turborepo (apps/web, apps/api, apps/guardrail, apps/signal-worker, packages/*)
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+npm-debug.log*
+yarn-error.log*
+.turbo/
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+
+# --- Build output (Vite SPA, Fastify bundles, generated clients)
+dist/
+build/
+.vite/
+dev-dist/
+# vite-plugin-pwa dev service worker
+apps/web/public/sw.js
+apps/web/public/workbox-*.js
+# Generated from DESIGN.md by `design.md export` (rebuild in CI, do not hand-edit)
+packages/ui/src/generated/
+# Generated from OpenAPI / JSON Schema in packages/contracts
+packages/contracts/generated/
+py/fieldloop_common/generated/
+
+# --- Python / uv (apps/assistant, apps/simulator, py/*)
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+*.egg-info/
+.coverage
+.coverage.*
+htmlcov/
+
+# --- Tests and tooling output (Vitest, Playwright, k6, Lighthouse, agent evals)
+coverage/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+perf/results/
+lighthouse-*.html
+apps/assistant/evals/runs/
+
+# --- Local environment and secrets (Secret Manager in GCP; never in git)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*-sa-key.json
+service-account*.json
+credentials*.json
+# Local Keycloak realm exports that contain client secrets (§6.1 local)
+infra/compose/keycloak/*secret*
+infra/compose/keycloak/*.local.json
+
+# --- Local stack (infra/compose: Postgres + PostGIS + pgvector, Pub/Sub emulator, fake-gcs-server)
+docker-compose.override.yml
+compose.override.yml
+infra/compose/data/
+infra/compose/.volumes/
+*.dump
+*.sql.gz
+*.backup
+
+# --- Terraform (infra/terraform). Keep .terraform.lock.hcl committed.
+infra/terraform/**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+*.auto.tfvars
+secrets.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# --- Helm (infra/helm/fieldloop)
+infra/helm/**/charts/*.tgz
+infra/helm/**/*.local.yaml
+
+# --- Synthetic data generators (data/synthetic): keep generators and curated
+#     outputs; ignore scratch runs and large intermediates.
+data/synthetic/**/tmp/
+data/synthetic/**/*.partial
+data/**/.cache/
+
+# --- Logs
+logs/
+*.log
+
+# --- OS / editor / agents
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+# Personal Claude Code settings (shared .claude/skills symlink stays tracked)
+.claude/settings.local.json
