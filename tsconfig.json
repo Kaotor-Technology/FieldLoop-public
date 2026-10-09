@@ -1,0 +1,5 @@
+{
+  "extends": "@fieldloop/config/tsconfig",
+  "compilerOptions": { "noEmit": true },
+  "include": ["scripts/**/*.ts", "vitest.config.ts"]
+}
