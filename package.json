@@ -14,12 +14,14 @@
     "typecheck": "turbo run typecheck && tsc --noEmit -p tsconfig.json",
     "test": "turbo run test && vitest run --config vitest.config.ts",
     "lint:design": "design.md lint DESIGN.md",
-    "check:safety": "node scripts/check-confidential-paths.mjs"
+    "check:safety": "node scripts/check-confidential-paths.mjs",
+    "db:migrate": "dbmate up"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",
     "@google/design.md": "0.4.0",
     "@types/node": "22.20.5",
+    "dbmate": "^2.15.0",
     "eslint": "10.12.0",
     "turbo": "2.11.7",
     "typescript": "5.9.3",
