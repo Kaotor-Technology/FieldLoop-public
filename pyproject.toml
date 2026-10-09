@@ -1,0 +1,30 @@
+[project]
+name = "fieldloop-workspace"
+version = "0.0.0"
+requires-python = ">=3.12,<3.13"
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["apps/assistant", "apps/simulator", "py/fieldloop_common"]
+
+[dependency-groups]
+dev = ["ruff==0.15.20", "mypy==1.20.2", "pytest==9.0.3", "httpx==0.28.1"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+include = ["apps/assistant/**/*.py", "apps/simulator/**/*.py", "py/**/*.py"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["apps/assistant/src", "apps/simulator/src", "py/fieldloop_common/src"]
+
+[tool.pytest.ini_options]
+testpaths = ["apps/assistant/tests", "apps/simulator/tests", "py/fieldloop_common/tests"]
+addopts = "--import-mode=importlib"
