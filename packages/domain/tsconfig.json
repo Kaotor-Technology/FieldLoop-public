@@ -1,0 +1,9 @@
+{
+  "extends": "@fieldloop/config/tsconfig",
+  "compilerOptions": {
+    "outDir": "dist"
+  },
+  "include": [
+    "src/**/*.ts"
+  ]
+}

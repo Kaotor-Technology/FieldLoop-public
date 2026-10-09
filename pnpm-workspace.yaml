@@ -1,0 +1,11 @@
+packages:
+  - apps/web
+  - apps/api
+  - apps/guardrail
+  - apps/signal-worker
+  - packages/*
+injectWorkspacePackages: true
+syncInjectedDepsAfterScripts:
+  - build
+onlyBuiltDependencies:
+  - esbuild
