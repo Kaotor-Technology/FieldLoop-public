@@ -17,7 +17,10 @@
       "classification": "public",
       "licence": "public legal text; reuse basis to be confirmed",
       "simulated": false,
-      "sourceUrls": ["https://nan.energy.go.th/th/related-laws/content"],
+      "sourceUrls": [
+        "https://nan.energy.go.th/th/related-laws/content",
+        "https://elaw.doeb.go.th/document_doeb/655_0001.pdf"
+      ],
       "contentPath": null,
       "contentState": "metadata_only"
     },
@@ -164,7 +167,10 @@
       "classification": "public",
       "licence": "public legal text; reuse basis to be confirmed",
       "simulated": false,
-      "sourceUrls": ["https://www.etda.or.th/"],
+      "sourceUrls": [
+        "https://www.etda.or.th/en/ETC/strategy-law-standard/law.aspx",
+        "https://www.etda.or.th/getattachment/ef10d3c2-1d31-43c9-96cd-4a58b4fcb10d/ETA-3-ACT-ENG-Version.aspx"
+      ],
       "contentPath": null,
       "contentState": "metadata_only"
     },
@@ -182,7 +188,7 @@
       "classification": "public",
       "licence": "public consultation material; reuse basis to be confirmed",
       "simulated": false,
-      "sourceUrls": ["https://www.etda.or.th/"],
+      "sourceUrls": ["https://www.etda.or.th/th/pr-news/law_ai.aspx?feed=cb66f430-5546-4dd8-b279-3827e88d154b"],
       "contentPath": null,
       "contentState": "metadata_only"
     },
@@ -200,7 +206,7 @@
       "classification": "public",
       "licence": "public legal text; reuse basis to be confirmed",
       "simulated": false,
-      "sourceUrls": ["https://www.disaster.go.th/"],
+      "sourceUrls": ["https://lei.disaster.go.th/law/download?id=8605"],
       "contentPath": null,
       "contentState": "metadata_only"
     },
@@ -272,7 +278,10 @@
       "classification": "public",
       "licence": "public legal text; reuse basis to be confirmed",
       "simulated": false,
-      "sourceUrls": ["https://webportal.bangkok.go.th/"],
+      "sourceUrls": [
+        "https://webportal.bangkok.go.th/law/page/sub/22566",
+        "https://webportal.bangkok.go.th/public/user_files_editor/72/ita/2023/O2/p.bangkok2528.pdf"
+      ],
       "contentPath": null,
       "contentState": "metadata_only"
     },
@@ -290,7 +299,7 @@
       "classification": "public",
       "licence": "public legal text; reuse basis to be confirmed",
       "simulated": false,
-      "sourceUrls": ["https://www.dpt.go.th/"],
+      "sourceUrls": ["https://gov.bangkok.go.th/LegalDetail?id=da385b9a-0a61-4c8e-9efc-9fa303717b20"],
       "contentPath": null,
       "contentState": "metadata_only"
     },
