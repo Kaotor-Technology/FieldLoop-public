@@ -1,0 +1,55 @@
+# Synthetic regression fixture; not a product contract.
+components:
+  schemas:
+    Problem:
+      type: object
+      properties:
+        message:
+          type: string
+  responses:
+    Good:
+      description: Shared Problem across files.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "../../openapi.yaml#/components/schemas/Problem"
+    Extended:
+      description: Shared Problem with an extension.
+      content:
+        application/problem+json:
+          schema:
+            allOf:
+              - $ref: "../../openapi.yaml#/components/schemas/Problem"
+              - type: object
+                properties:
+                  loginUrl:
+                    type: string
+    Alias:
+      $ref: "#/components/responses/Good"
+    BadInline:
+      description: Wrong inline error.
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+    BadLookAlike:
+      description: Same member names are not the shared schema.
+      content:
+        application/problem+json:
+          schema:
+            type: object
+            required: [type, title, status, code]
+            properties:
+              type: { type: string }
+              title: { type: string }
+              status: { type: integer }
+              code: { type: integer }
+    BadNamedProblem:
+      description: A different file's Problem is not the canonical Problem.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"

@@ -1,0 +1,151 @@
+# Test fixture: example paths that follow every convention. Not a product contract.
+openapi: 3.1.0
+info:
+  title: Conforming fixture
+  version: 0.0.0
+  description: Example paths that follow the FieldLoop API conventions.
+  contact:
+    name: FieldLoop engineering
+    url: https://github.com/Kaotor-Technology/FieldLoop-v2
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: /
+security:
+  - sessionCookie: []
+tags:
+  - name: health-proposals
+    description: Health Proposals.
+  - name: auth
+    description: SSO session.
+paths:
+  /v1/health-proposals:
+    get:
+      operationId: listHealthProposals
+      description: Lists Health Proposals, newest first.
+      tags: [health-proposals]
+      parameters:
+        - $ref: "../../openapi.yaml#/components/parameters/Cursor"
+        - $ref: "../../openapi.yaml#/components/parameters/Limit"
+        - name: barrierId
+          in: query
+          description: Only proposals for this Barrier.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: One page of Health Proposals.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "../../openapi.yaml#/components/schemas/CursorPage"
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/HealthProposal"
+        "400":
+          $ref: "../../openapi.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "../../openapi.yaml#/components/responses/Unauthenticated"
+  /v1/health-proposals/{healthProposalId}:accept:
+    post:
+      operationId: acceptHealthProposal
+      description: Accepts a Health Proposal. A person decides; nothing is applied automatically.
+      tags: [health-proposals]
+      parameters:
+        - name: healthProposalId
+          in: path
+          required: true
+          description: Health Proposal ID.
+          schema:
+            type: string
+            format: uuid
+        - $ref: "../../openapi.yaml#/components/parameters/CsrfToken"
+        - $ref: "../../openapi.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: The accepted Health Proposal.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthProposal"
+        "401":
+          $ref: "../../openapi.yaml#/components/responses/Unauthenticated"
+        "403":
+          $ref: "../../openapi.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "../../openapi.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "../../openapi.yaml#/components/responses/Conflict"
+        "429":
+          $ref: "../../openapi.yaml#/components/responses/TooManyRequests"
+        "500":
+          $ref: "../../openapi.yaml#/components/responses/InternalError"
+        "503":
+          $ref: "../../openapi.yaml#/components/responses/ServiceUnavailable"
+  /auth/logout:
+    post:
+      operationId: logout
+      description: Ends the session. It uses the session, so it takes the CSRF header.
+      tags: [auth]
+      parameters:
+        - $ref: "../../openapi.yaml#/components/parameters/CsrfToken"
+      responses:
+        "204":
+          description: The session is closed.
+        "403":
+          description: A Problem extended with one more member.
+          content:
+            application/problem+json:
+              schema:
+                allOf:
+                  - $ref: "../../openapi.yaml#/components/schemas/Problem"
+                  - type: object
+                    properties:
+                      loginUrl:
+                        type: string
+  /auth/backchannel-logout:
+    post:
+      operationId: backchannelLogout
+      description: Called by the identity provider with no session, so it takes no CSRF header.
+      tags: [auth]
+      security: []
+      responses:
+        "204":
+          description: The sessions are closed.
+components:
+  securitySchemes:
+    sessionCookie:
+      $ref: "../../openapi.yaml#/components/securitySchemes/sessionCookie"
+  schemas:
+    HealthProposal:
+      type: object
+      required: [id, barrierId, proposedHealth, simulated]
+      properties:
+        id:
+          type: string
+          format: uuid
+        barrierId:
+          type: string
+          format: uuid
+        proposedHealth:
+          type: string
+          enum: [healthy, degraded, failed, unverified]
+        simulated:
+          type: boolean

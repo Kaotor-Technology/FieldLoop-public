@@ -30,6 +30,7 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm lint:design
+pnpm lint:api
 pnpm build
 uv run --locked --all-packages ruff check .
 uv run --locked --all-packages mypy
@@ -41,6 +42,8 @@ uv build --all-packages
 TypeScript app's `dist`, and declarations for the empty shared modules.
 The config package validates its source presets without emitting runtime code.
 `uv build --all-packages` emits wheels and source distributions in root `dist`.
+`pnpm lint:api` checks `packages/contracts/openapi.yaml` against the API conventions
+in [packages/contracts](packages/contracts/README.md).
 Empty shared packages currently allow zero tests; service probes and the Git path
 boundary have real tests. Domain and risk-engine tests arrive with their implementations.
 
@@ -76,7 +79,7 @@ update it when adding new build inputs.
 
 GitHub Actions runs on pull requests and pushes to `main`. It checks confidential
 paths before a redacted Gitleaks scan, then lint, types, Vitest, pytest, DESIGN.md
-lint, builds, and a six-app Linux amd64 container build/startup matrix. It publishes
+lint, OpenAPI lint, builds, and a six-app Linux amd64 container build/startup matrix. It publishes
 no images and provisions no cloud resources in the CI workflow. Action references are pinned to commits.
 
 The path checker inspects only Git metadata for the index, HEAD and fetched
