@@ -38,6 +38,8 @@ CREATE TABLE signal (
     id bigserial,
     org_id text NOT NULL,
     source text NOT NULL,
+    tag text NOT NULL,
+    value numeric,
     observed_at timestamptz NOT NULL,
     payload jsonb,
     simulated boolean NOT NULL DEFAULT false,
@@ -46,11 +48,21 @@ CREATE TABLE signal (
     created_by text,
     PRIMARY KEY (id, observed_at)
 ) PARTITION BY RANGE (observed_at);
--- In production, create daily partitions. For demo, we just need a default partition or initial partition
+-- Daily partitions (UTC) from the first build day to the end of the demo month; anything
+-- outside that range lands in the default partition.
 CREATE TABLE signal_default PARTITION OF signal DEFAULT;
-CREATE TABLE signal_y2026m10d10 PARTITION OF signal FOR VALUES FROM ('2026-10-10 00:00:00Z') TO ('2026-10-11 00:00:00Z');
-CREATE TABLE signal_y2026m10d11 PARTITION OF signal FOR VALUES FROM ('2026-10-11 00:00:00Z') TO ('2026-10-12 00:00:00Z');
-CREATE TABLE signal_y2026m10d12 PARTITION OF signal FOR VALUES FROM ('2026-10-12 00:00:00Z') TO ('2026-10-13 00:00:00Z');
+DO $$
+DECLARE
+    day date;
+BEGIN
+    FOR day IN SELECT generate_series(DATE '2026-10-10', DATE '2026-10-31', INTERVAL '1 day')::date LOOP
+        EXECUTE format(
+            'CREATE TABLE app.%I PARTITION OF app.signal FOR VALUES FROM (%L) TO (%L)',
+            'signal_' || to_char(day, '"y"YYYY"m"MM"d"DD'),
+            day::text || ' 00:00:00+00',
+            (day + 1)::text || ' 00:00:00+00');
+    END LOOP;
+END $$;
 
 CREATE TABLE signal_rule (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
