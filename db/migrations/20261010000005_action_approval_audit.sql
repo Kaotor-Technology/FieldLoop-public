@@ -1,5 +1,12 @@
 -- migrate:up
 SET search_path = app, public;
+-- SHA-256 of the canonical jsonb text. convert_to is only STABLE because it takes an encoding
+-- name; with the encoding fixed to UTF8 the result is immutable.
+CREATE FUNCTION payload_sha256(payload jsonb)
+RETURNS text AS $$
+    SELECT pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(payload::text, 'UTF8')), 'hex');
+$$ LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE;
+
 CREATE TABLE action_request (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id text NOT NULL,
@@ -7,7 +14,7 @@ CREATE TABLE action_request (
     action_level text NOT NULL,
     payload jsonb NOT NULL,
     -- Derived, never client-supplied, so the hash cannot drift from the payload (PRD AX-2).
-    payload_hash text NOT NULL GENERATED ALWAYS AS (encode(public.digest(payload::text, 'sha256'), 'hex')) STORED,
+    payload_hash text NOT NULL GENERATED ALWAYS AS (app.payload_sha256(payload)) STORED,
     rationale text,
     citations jsonb,
     requested_by text,
@@ -206,3 +213,4 @@ DROP TABLE action_request;
 DROP FUNCTION guard_action_request_approval;
 DROP FUNCTION guard_approval_modification;
 DROP FUNCTION check_approval_payload_hash;
+DROP FUNCTION payload_sha256;

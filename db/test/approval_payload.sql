@@ -28,7 +28,7 @@ INSERT INTO app.action_request (id, org_id, action_type, action_level, payload, 
 VALUES ('00000000-0000-0000-0000-000000000001', 'org-test', 'public_warning', 'l1', '{"message": "a"}', 'open', true);
 
 SELECT pg_temp.expect(
-    payload_hash = encode(public.digest(payload::text, 'sha256'), 'hex'),
+    payload_hash = encode(sha256(convert_to(payload::text, 'UTF8')), 'hex'),
     'payload_hash is derived from the payload')
 FROM app.action_request;
 

@@ -1,8 +1,9 @@
 -- migrate:up
 SET search_path = app, public;
+-- On Cloud SQL these already exist (infra/terraform/extensions.sql) and the statements are
+-- no-ops; they create the extensions for local and test databases.
 CREATE EXTENSION IF NOT EXISTS postgis;
 CREATE EXTENSION IF NOT EXISTS vector;
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 CREATE SCHEMA IF NOT EXISTS app;
 
@@ -20,6 +21,4 @@ SET search_path = app, public;
 -- so only this database's grants are removed and the role is kept.
 DROP OWNED BY fieldloop_app;
 DROP SCHEMA IF EXISTS app CASCADE;
-DROP EXTENSION IF EXISTS pgcrypto;
-DROP EXTENSION IF EXISTS vector;
-DROP EXTENSION IF EXISTS postgis;
+-- PostGIS and pgvector are infrastructure-owned and stay installed.
