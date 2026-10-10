@@ -11,7 +11,7 @@ CREATE TABLE action_request (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id text NOT NULL,
     action_type text NOT NULL,
-    action_level text NOT NULL,
+    action_level text NOT NULL CHECK (action_level IN ('l0', 'l1', 'l2')),
     payload jsonb NOT NULL,
     -- Derived, never client-supplied, so the hash cannot drift from the payload (PRD AX-2).
     payload_hash text NOT NULL GENERATED ALWAYS AS (app.payload_sha256(payload)) STORED,
@@ -42,6 +42,9 @@ CREATE TABLE approval (
     created_at timestamptz NOT NULL DEFAULT now(),
     created_by text
 );
+-- An Approver decides once per payload; two-person approval needs two different people (PRD AX-3).
+CREATE UNIQUE INDEX idx_approval_one_per_approver ON approval (action_request_id, approver_sub)
+WHERE voided_at IS NULL;
 
 -- Exact-payload approvals (PRD AX-2). The trigger functions are SECURITY DEFINER with a fixed
 -- search_path: they work for any caller without that caller holding UPDATE on approval, which
@@ -177,6 +180,8 @@ CREATE TABLE audit_event (
     before_hash text,
     after_hash text,
     prev_hash text,
+    simulated boolean NOT NULL DEFAULT false,
+    classification text,
     created_at timestamptz NOT NULL DEFAULT now(),
     created_by text
 );

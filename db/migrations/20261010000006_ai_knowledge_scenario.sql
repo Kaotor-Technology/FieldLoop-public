@@ -71,6 +71,17 @@ CREATE TABLE stakeholder (
 );
 CREATE INDEX idx_stakeholder_geom ON stakeholder USING GIST (geom);
 
+CREATE TABLE stakeholder_asset (
+    stakeholder_id uuid NOT NULL REFERENCES stakeholder(id),
+    asset_id uuid NOT NULL REFERENCES asset(id),
+    org_id text NOT NULL,
+    simulated boolean NOT NULL DEFAULT false,
+    classification text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    created_by text,
+    PRIMARY KEY (stakeholder_id, asset_id)
+);
+
 CREATE TABLE controlled_document (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id text NOT NULL,
@@ -102,21 +113,6 @@ CREATE TABLE document_chunk (
 );
 CREATE INDEX idx_document_chunk_embedding ON document_chunk USING hnsw (embedding vector_l2_ops);
 
-CREATE TABLE draft (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    org_id text NOT NULL,
-    kind text NOT NULL,
-    content text,
-    citations jsonb,
-    confidence numeric,
-    status text NOT NULL,
-    approved_by text,
-    simulated boolean NOT NULL DEFAULT false,
-    classification text,
-    created_at timestamptz NOT NULL DEFAULT now(),
-    created_by text
-);
-
 CREATE TABLE assistant_session (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id text NOT NULL,
@@ -125,6 +121,22 @@ CREATE TABLE assistant_session (
     context jsonb,
     status text NOT NULL,
     token_budget_used int,
+    simulated boolean NOT NULL DEFAULT false,
+    classification text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    created_by text
+);
+
+CREATE TABLE draft (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    org_id text NOT NULL,
+    assistant_session_id uuid REFERENCES assistant_session(id),
+    kind text NOT NULL,
+    content text,
+    citations jsonb,
+    confidence numeric,
+    status text NOT NULL,
+    approved_by text,
     simulated boolean NOT NULL DEFAULT false,
     classification text,
     created_at timestamptz NOT NULL DEFAULT now(),
@@ -213,10 +225,11 @@ DROP TABLE scenario;
 DROP TABLE kml_import_item;
 DROP TABLE kml_import;
 DROP TABLE agent_step;
-DROP TABLE assistant_session;
 DROP TABLE draft;
+DROP TABLE assistant_session;
 DROP TABLE document_chunk;
 DROP TABLE controlled_document;
+DROP TABLE stakeholder_asset;
 DROP TABLE stakeholder;
 DROP TABLE held_request;
 DROP TABLE intercept;

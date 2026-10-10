@@ -74,6 +74,14 @@ SELECT pg_temp.expect_error(
 SELECT pg_temp.expect_error(
     $$TRUNCATE app.approval$$,
     '23514', 'approval cannot be truncated');
+SELECT pg_temp.expect_error(
+    $$INSERT INTO app.approval (org_id, action_request_id, approver_sub, decision, payload_hash, auth_time)
+      SELECT 'org-test', id, 'approver-1', 'approved', payload_hash, now() FROM app.action_request$$,
+    '23505', 'one approver cannot approve the same payload twice');
+SELECT pg_temp.expect_error(
+    $$INSERT INTO app.action_request (org_id, action_type, action_level, payload, status)
+      VALUES ('org-test', 'public_warning', 'L3', '{}', 'open')$$,
+    '23514', 'action_level must be a glossary value');
 
 -- A status-only update keeps the Approval.
 SELECT pg_temp.expect(status = 'approved', 'status-only update keeps approved') FROM app.action_request;

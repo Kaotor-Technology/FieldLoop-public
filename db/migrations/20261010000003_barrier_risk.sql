@@ -17,7 +17,7 @@ CREATE TABLE barrier (
     type text NOT NULL,
     side text NOT NULL,
     pfd_band numeric,
-    health text,
+    health text CHECK (health IN ('healthy', 'degraded', 'failed', 'unverified')),
     evidence_interval interval,
     owner_id uuid REFERENCES app_user(id),
     independence_group_id uuid REFERENCES independence_group(id),
