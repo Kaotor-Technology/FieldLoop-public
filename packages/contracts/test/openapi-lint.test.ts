@@ -52,9 +52,12 @@ describe("FieldLoop OpenAPI conventions", () => {
     expect(reported).toEqual([
       "fieldloop-command-post-only @ paths > /v1/things/{thingId}:archive",
       "fieldloop-command-post-only @ paths > /v1/things/{thingId}:archive > get",
+      "fieldloop-command-post-only @ paths > /v1/things/{thingId}:archive > head",
+      "fieldloop-csrf-on-unsafe-methods @ paths > /auth/things > delete",
       "fieldloop-csrf-on-unsafe-methods @ paths > /v1/things > post",
       "fieldloop-error-problem-json @ paths > /v1/Health_Proposals > get > responses > 404 > content",
-      "fieldloop-error-problem-schema @ paths > /v1/Health_Proposals > get > responses > 400 > content > application/problem+json > schema > required",
+      "fieldloop-error-problem-json @ paths > /v1/things/{thingId}:archive > head > responses > 500 > content",
+      "fieldloop-error-problem-schema @ paths > /v1/Health_Proposals > get > responses > 400 > content > application/problem+json > schema",
       "fieldloop-global-session-security @ security > 0",
       "fieldloop-no-browser-token-scheme @ components > securitySchemes > oauth",
       "fieldloop-no-default-response @ paths > /v1/Health_Proposals > get > responses > default",
@@ -62,7 +65,8 @@ describe("FieldLoop OpenAPI conventions", () => {
       "fieldloop-operation-id-camel-case @ paths > /v1/Health_Proposals > get > operationId",
       "fieldloop-path-kebab-case @ paths > /v1/Health_Proposals",
       "fieldloop-path-prefix @ paths > /api/things",
-      "fieldloop-property-camel-case @ paths > /v1/Health_Proposals > get > responses > 200 > content > application/json > schema > properties > payload_hash",
+      "fieldloop-property-camel-case @ paths > /v1/Health_Proposals > get > responses > 200 > content > application/json > schema > allOf > 0 > properties > payload_hash",
+      "fieldloop-property-camel-case @ paths > /v1/Health_Proposals > get > responses > 200 > content > application/json > schema > allOf > 1 > properties > next_cursor",
       "fieldloop-query-camel-case @ paths > /v1/Health_Proposals > get > parameters > 0 > name",
       "fieldloop-session-cookie-scheme @ components > securitySchemes > sessionCookie > name",
     ]);

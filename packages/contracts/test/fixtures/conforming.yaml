@@ -102,12 +102,33 @@ paths:
   /auth/logout:
     post:
       operationId: logout
-      description: Ends the session. Public, so it needs no CSRF header.
+      description: Ends the session. It uses the session, so it takes the CSRF header.
+      tags: [auth]
+      parameters:
+        - $ref: "../../openapi.yaml#/components/parameters/CsrfToken"
+      responses:
+        "204":
+          description: The session is closed.
+        "403":
+          description: A Problem extended with one more member.
+          content:
+            application/problem+json:
+              schema:
+                allOf:
+                  - $ref: "../../openapi.yaml#/components/schemas/Problem"
+                  - type: object
+                    properties:
+                      loginUrl:
+                        type: string
+  /auth/backchannel-logout:
+    post:
+      operationId: backchannelLogout
+      description: Called by the identity provider with no session, so it takes no CSRF header.
       tags: [auth]
       security: []
       responses:
         "204":
-          description: The session is closed.
+          description: The sessions are closed.
 components:
   securitySchemes:
     sessionCookie:

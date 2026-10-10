@@ -3,6 +3,12 @@
 extends:
   - spectral:oas
 
+aliases:
+  Operation:
+    - "$.paths[*][get,put,post,patch,delete,head,options,trace]"
+  ErrorResponse:
+    - "#Operation.responses[?(@property.match(/^[45]/))]"
+
 rules:
   # The base spec defines shared components before any feature path uses them.
   oas3-unused-component: off
@@ -62,12 +68,18 @@ rules:
         function: falsy
       - field: delete
         function: falsy
+      - field: head
+        function: falsy
+      - field: options
+        function: falsy
+      - field: trace
+        function: falsy
 
   fieldloop-operation-id-camel-case:
     description: operationId is camelCase, so generated client method names are stable.
     message: "operationId `{{value}}` must be camelCase."
     severity: error
-    given: "$.paths[*][get,put,post,patch,delete].operationId"
+    given: "#Operation.operationId"
     then:
       function: casing
       functionOptions:
@@ -77,7 +89,7 @@ rules:
     description: JSON property names are camelCase.
     message: "Property `{{property}}` must be camelCase."
     severity: error
-    given: "$..[?(@ && @.type === 'object' && @.properties)].properties"
+    given: "$..properties"
     then:
       field: "@key"
       function: casing
@@ -98,7 +110,7 @@ rules:
     description: Every 4xx and 5xx response is RFC 9457 application/problem+json and nothing else.
     message: "An error response must have exactly one media type, application/problem+json."
     severity: error
-    given: "$.paths[*][get,put,post,patch,delete].responses[?(@property.match(/^[45]/))]"
+    given: "#ErrorResponse"
     then:
       function: schema
       functionOptions:
@@ -116,30 +128,41 @@ rules:
                   required: [schema]
 
   fieldloop-error-problem-schema:
-    description: An error body is the shared Problem schema (or extends it).
-    message: "An error body must be #/components/schemas/Problem."
+    description: An error body is a $ref to the shared Problem schema, or an allOf that includes that $ref.
+    message: "An error body must be a $ref to #/components/schemas/Problem, or an allOf that includes it."
     severity: error
-    given: "$.paths[*][get,put,post,patch,delete].responses[?(@property.match(/^[45]/))].content[application/problem+json].schema"
+    # Checked before $ref resolution, so a look-alike inline schema cannot pass.
+    resolved: false
+    given:
+      - "$.paths[*][*].responses[?(@property.match(/^[45]/))].content[application/problem+json].schema"
+      - "$.components.responses[*].content[application/problem+json].schema"
     then:
       function: schema
       functionOptions:
         schema:
-          type: object
-          required: [required, properties]
-          properties:
-            required:
-              type: array
-              allOf:
-                - contains: { const: type }
-                - contains: { const: title }
-                - contains: { const: status }
-                - contains: { const: code }
+          $defs:
+            problemRef:
+              type: object
+              required: [$ref]
+              properties:
+                $ref:
+                  type: string
+                  pattern: "#/components/schemas/Problem$"
+          anyOf:
+            - $ref: "#/$defs/problemRef"
+            - type: object
+              required: [allOf]
+              properties:
+                allOf:
+                  type: array
+                  contains:
+                    $ref: "#/$defs/problemRef"
 
   fieldloop-no-default-response:
     description: Responses list explicit status codes; `default` hides which errors a client must handle.
     message: "Responses must not use `default`; list each status code."
     severity: error
-    given: "$.paths[*][get,put,post,patch,delete].responses"
+    given: "#Operation.responses"
     then:
       field: default
       function: falsy
@@ -202,19 +225,25 @@ rules:
               sessionCookie: {}
 
   fieldloop-csrf-on-unsafe-methods:
-    description: Every non-GET /v1 operation on a session takes the X-CSRF-Token header (architecture §4.3).
-    message: "A non-GET /v1 operation must include #/components/parameters/CsrfToken."
+    description: Every non-GET operation that uses the session takes the X-CSRF-Token header, declared on the operation (architecture §4.3).
+    message: "A non-GET operation on the session must include #/components/parameters/CsrfToken in its own `parameters`."
     severity: error
-    given: "$.paths[?(@property.match(/^\\/v1\\//))][put,post,patch,delete]"
+    given: "$.paths[*][put,post,patch,delete]"
     then:
       function: schema
       functionOptions:
         schema:
           type: object
           if:
-            properties:
-              security: { type: array, maxItems: 0 }
+            # Exempt only when the operation overrides security and no alternative uses the session.
             required: [security]
+            properties:
+              security:
+                type: array
+                not:
+                  contains:
+                    type: object
+                    required: [sessionCookie]
           else:
             required: [parameters]
             properties:

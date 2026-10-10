@@ -47,11 +47,15 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  # fieldloop-property-camel-case
-                  payload_hash:
-                    type: string
+                # fieldloop-property-camel-case, twice: with and without an explicit type
+                allOf:
+                  - type: object
+                    properties:
+                      payload_hash:
+                        type: string
+                  - properties:
+                      next_cursor:
+                        type: string
         # fieldloop-error-problem-json
         "404":
           description: Wrong media type.
@@ -64,17 +68,45 @@ paths:
           description: Not the Problem schema.
           content:
             application/problem+json:
+              # A look-alike with the right member names is still not the shared schema.
               schema:
                 type: object
-                required: [message]
+                required: [type, title, status, code]
                 properties:
-                  message:
+                  type:
                     type: string
+                  title:
+                    type: string
+                  status:
+                    type: integer
+                  code:
+                    type: integer
         # fieldloop-no-default-response
         default:
           description: Anything else.
   # fieldloop-command-post-only
   /v1/things/{thingId}:archive:
+    head:
+      operationId: probeArchiveThing
+      description: A command that also answers HEAD.
+      tags: [things]
+      parameters:
+        - name: thingId
+          in: path
+          required: true
+          description: Thing ID.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK.
+        # fieldloop-error-problem-json on a HEAD operation
+        "500":
+          description: Wrong media type.
+          content:
+            text/plain:
+              schema:
+                type: string
     get:
       operationId: archiveThing
       description: A command that is not a POST.
@@ -89,6 +121,15 @@ paths:
       responses:
         "200":
           description: OK.
+  /auth/things:
+    # fieldloop-csrf-on-unsafe-methods outside /v1
+    delete:
+      operationId: deleteAuthThing
+      description: No CSRF header.
+      tags: [things]
+      responses:
+        "204":
+          description: Deleted.
   /v1/things:
     # fieldloop-csrf-on-unsafe-methods
     post:
