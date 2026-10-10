@@ -1,0 +1,62 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "dl-01-bvs-001",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          99.4383142,
+          18.4354718
+        ]
+      },
+      "properties": {
+        "name": "DL-01 Block Valve Station 001",
+        "facility_type": "block_valve_station",
+        "chainage_m": 45000,
+        "label": "SYNTHETIC",
+        "simulated": true,
+        "classification": "internal"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "dl-01-bvs-002",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          99.6665657,
+          18.7774766
+        ]
+      },
+      "properties": {
+        "name": "DL-01 Block Valve Station 002",
+        "facility_type": "block_valve_station",
+        "chainage_m": 90000,
+        "label": "SYNTHETIC",
+        "simulated": true,
+        "classification": "internal"
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "dl-01-bvs-003",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          99.8916217,
+          19.1141599
+        ]
+      },
+      "properties": {
+        "name": "DL-01 Block Valve Station 003",
+        "facility_type": "block_valve_station",
+        "chainage_m": 135000,
+        "label": "SYNTHETIC",
+        "simulated": true,
+        "classification": "internal"
+      }
+    }
+  ]
+}
