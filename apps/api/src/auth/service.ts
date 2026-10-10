@@ -261,14 +261,8 @@ export class BffAuthService implements AuthServicePort {
     const shouldIntrospect = forceIntrospection || user.lastValidatedAt.getTime() + INTROSPECTION_INTERVAL_MS <= now.getTime();
     let didIntrospect = false;
     if (shouldIntrospect && user.accessExpiresAt.getTime() > now.getTime()) {
-      const accessToken = await this.options.crypto.decryptWithKey(user.accessToken, user.wrappedDataKey, `session:${sessionHash}:access`);
-      if (!(await this.options.oidc.introspect(accessToken))) {
-        await this.options.store.deleteSession(sessionHash);
-        throw new AuthError("Session is no longer active", 401);
-      }
-      user = { ...user, lastValidatedAt: now };
+      user = await this.introspectOrThrow(sessionHash, user, now);
       didIntrospect = true;
-      await this.options.store.markSessionValidated(sessionHash, now);
     }
 
     if (shouldRefresh && user.refreshToken) {
@@ -300,17 +294,21 @@ export class BffAuthService implements AuthServicePort {
     }
 
     if (shouldIntrospect && !didIntrospect) {
-      const accessToken = await this.options.crypto.decryptWithKey(user.accessToken, user.wrappedDataKey, `session:${sessionHash}:access`);
-      if (!(await this.options.oidc.introspect(accessToken))) {
-        await this.options.store.deleteSession(sessionHash);
-        throw new AuthError("Session is no longer active", 401);
-      }
-      user = { ...user, lastValidatedAt: now };
-      await this.options.store.markSessionValidated(sessionHash, now);
+      user = await this.introspectOrThrow(sessionHash, user, now);
     }
 
     await this.options.store.touchSession(sessionHash, now);
     return { ...user, lastActiveAt: now };
+  }
+
+  private async introspectOrThrow(sessionHash: string, user: AuthUser, now: Date): Promise<AuthUser> {
+    const accessToken = await this.options.crypto.decryptWithKey(user.accessToken, user.wrappedDataKey, `session:${sessionHash}:access`);
+    if (!(await this.options.oidc.introspect(accessToken))) {
+      await this.options.store.deleteSession(sessionHash);
+      throw new AuthError("Session is no longer active", 401);
+    }
+    await this.options.store.markSessionValidated(sessionHash, now);
+    return { ...user, lastValidatedAt: now };
   }
 }
 
