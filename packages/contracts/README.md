@@ -7,6 +7,7 @@ API and message contracts shared by the TypeScript and Python services
 | --- | --- |
 | `openapi.yaml` | The OpenAPI 3.1 contract of the platform API. Today it is the base: shared components and no paths. |
 | `.spectral.yaml` | The Spectral ruleset that enforces the conventions below. |
+| `functions/shared-problem.js` | Checks resolved schema provenance against the canonical shared Problem, including cross-file response aliases. |
 | `test/` | Fixtures and a test that prove each rule fires, and that conforming paths pass. |
 
 Clients are generated from `openapi.yaml`, never written by hand (AGENTS.md §2).
@@ -44,12 +45,12 @@ so the reviewer does.
 | A POST `:verb` command takes required `Idempotency-Key` (`#/components/parameters/IdempotencyKey`). A stateless command may instead declare a nonempty `x-idempotency-exempt` reason. Review must verify the exemption has no persistent effects. Consequential POSTs without `:verb` still require review. | `fieldloop-command-idempotency` and Review |
 | `operationId`, JSON properties and query parameters are camelCase. | `fieldloop-operation-id-camel-case`, `fieldloop-property-camel-case`, `fieldloop-query-camel-case` |
 | Every operation has an `operationId`, a description and a declared tag. | `operation-operationId`, `operation-description`, `operation-tags`, `operation-tag-defined` |
-| Every 4xx and 5xx response is `application/problem+json` (RFC 9457). Its schema is a `$ref` to the shared `Problem`, or an `allOf` that includes that `$ref`; an inline look-alike fails. Reuse `#/components/responses/*`. | `fieldloop-error-problem-json`, `fieldloop-error-problem-schema` |
+| Every 4xx and 5xx response is `application/problem+json` (RFC 9457). Its schema is a `$ref` to the shared `Problem`, or an `allOf` that includes that `$ref`; an inline look-alike or another file’s schema named `Problem` fails. Cross-file response aliases are followed to the canonical `openapi.yaml` schema. Reuse `#/components/responses/*`. | `fieldloop-error-problem-json`, `fieldloop-error-problem-schema` |
 | Responses list status codes; no `default`. | `fieldloop-no-default-response` |
 | Errors carry a stable `code` from `ErrorCode`. Add a value there before a service returns it. | Review |
 | The session cookie `fl_session` is the default security requirement. A public endpoint says `security: []`. | `fieldloop-session-cookie-scheme`, `fieldloop-global-session-security` |
 | No OAuth 2, OpenID Connect or query-string key scheme: the browser holds no token (ADR-0008). | `fieldloop-no-browser-token-scheme` |
-| Every non-GET operation that uses the session takes `X-CSRF-Token` (`#/components/parameters/CsrfToken`), listed in the operation's own `parameters`, not the path item's. Only an operation whose `security` leaves out `sessionCookie` (for example `security: []`) is exempt. | `fieldloop-csrf-on-unsafe-methods` |
+| Every non-GET operation (PUT, POST, PATCH, DELETE, HEAD, OPTIONS and TRACE) that uses the session takes `X-CSRF-Token` (`#/components/parameters/CsrfToken`), listed in the operation's own `parameters`, not the path item's. Only an operation whose `security` leaves out `sessionCookie` (for example `security: []`) is exempt. | `fieldloop-csrf-on-unsafe-methods` |
 | A list takes `cursor` and `limit`, and returns `CursorPage` composed with a required `items` array. | Review |
 | Enum values are lowercase `snake_case` ([glossary](../../docs/glossary.md)). | Review |
 
@@ -77,3 +78,11 @@ an operation only when retrying it cannot change state or cause an external effe
 The lint verifies the presence of a non-whitespace reason, not whether the
 operation is stateless. An approval, notification, ingestion or mutation must
 never use this exemption. Header references are resolved before validation.
+
+### Accepted policy and limits
+
+The stakeholder accepted these conventions on 10 October 2026; see
+[decisions.md](../../docs/decisions.md). List limits are default 50 and maximum
+200; idempotency keys are 16–128 characters. Runtime retry storage, expiry and
+scope must be specified by the feature that implements consequential operations.
+The base contract does not implement runtime CSRF or idempotency enforcement.
