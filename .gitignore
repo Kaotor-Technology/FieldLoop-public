@@ -70,8 +70,6 @@ credentials*.json
 # Local Keycloak realm exports that contain client secrets (§6.1 local)
 infra/compose/keycloak/*secret*
 infra/compose/keycloak/*.local.json
-# Persona passwords written by scripts/keycloak/apply-realm-spec.mjs
-infra/keycloak/*.local.json
 
 # --- Local stack (infra/compose: Postgres + PostGIS + pgvector, Pub/Sub emulator, fake-gcs-server)
 docker-compose.override.yml
