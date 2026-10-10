@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createPublicKey, randomUUID } from "node:crypto";
 import { exportJWK, importJWK, importPKCS8, SignJWT, type JWK } from "jose";
 import type { AuthUser, InternalTokenService } from "./model.js";
 import type { SecretReader } from "./secrets.js";
@@ -44,9 +44,9 @@ export class SecretManagerInternalTokenService implements InternalTokenService {
     this.keyPairPromise ??= (async () => {
       const pem = await this.secrets.read("fieldloop-v2-internal-token-signing");
       const privateKey = await importPKCS8(pem, "RS256");
-      const privateJwk = await exportJWK(privateKey);
-      if (!privateJwk.kty || !privateJwk.n || !privateJwk.e) throw new Error("Internal signing secret must be an RSA private key");
-      const publicKey = await importJWK({ kty: privateJwk.kty, n: privateJwk.n, e: privateJwk.e }, "RS256");
+      const publicJwk = createPublicKey(pem).export({ format: "jwk" });
+      if (!publicJwk.kty || !publicJwk.n || !publicJwk.e) throw new Error("Internal signing secret must be an RSA private key");
+      const publicKey = await importJWK({ kty: publicJwk.kty, n: publicJwk.n, e: publicJwk.e }, "RS256");
       const jwk = await exportJWK(publicKey);
       return { privateKey, publicKey, jwk };
     })();
