@@ -10,7 +10,7 @@ declare module "fastify" {
 }
 
 export function buildApp(options: { auth?: AuthServicePort; baseUrl?: string } = {}) {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: { serializers: { req: serializeRequestForLog } } });
   const auth = options.auth ?? new UnavailableAuthService();
   app.decorate("fieldLoopAuth", auth);
   app.get("/healthz", async () => ({ status: "ok" }));
@@ -18,4 +18,9 @@ export function buildApp(options: { auth?: AuthServicePort; baseUrl?: string } =
   app.get("/health", async () => ({ status: "ok" }));
   registerAuthRoutes(app, auth, options.baseUrl ?? process.env["FIELDLOOP_BASE_URL"]);
   return app;
+}
+
+// Query strings carry the OIDC authorization code and state on /api/auth/callback.
+export function serializeRequestForLog(request: { method: string; url: string; host: string; ip: string }) {
+  return { method: request.method, url: request.url.split("?", 1)[0] ?? "", host: request.host, remoteAddress: request.ip };
 }
