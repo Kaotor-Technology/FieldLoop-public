@@ -1,0 +1,45 @@
+---
+document_id: "SYN-UC1-RCA-EN-010-A"
+title: "Synthetic root-cause analysis: maintenance handover"
+document_type: "root-cause-analysis"
+language: "en"
+revision: "A"
+status: "draft"
+review_status: "pending"
+folder: "Pipeline Integrity/Incidents/RCA"
+classification: "internal"
+licence: "synthetic"
+simulated: true
+label: "SYNTHETIC"
+recorded_on: "2026-10-10"
+supersedes: null
+superseded_by: "SYN-UC1-RCA-EN-010-B"
+---
+
+# Synthetic root-cause analysis: maintenance handover
+
+> SYNTHETIC — Candidate document for demonstration only. Human review is pending.
+
+## Event summary
+
+This is a fictional learning scenario. No incident, injury, release, or asset damage occurred.
+
+## Evidence reviewed
+
+The sample review uses placeholder records marked SYNTHETIC. Missing or conflicting evidence is listed as an open question, not treated as fact.
+
+## Cause analysis
+
+Candidate contributing factors are hypotheses for human review. The document does not assign fault or establish a final cause.
+
+## Actions for review
+
+A responsible reviewer may propose follow-up questions or preventive learning. No action is approved or sent to a system of record by this document.
+
+## Document control
+
+- Revision: A
+- Status: draft
+- Recorded on: 2026-10-10 (synthetic record date)
+- Review: pending human review
+- All identifiers, observations, and values in this document are fictional. No field activity occurred.
