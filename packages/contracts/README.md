@@ -41,7 +41,7 @@ so the reviewer does.
 | Path segments are lowercase kebab-case; path parameters are `{camelCase}`. | `fieldloop-path-kebab-case` |
 | Resources are plural nouns: `/v1/health-proposals`. | Review |
 | A command is `POST …/{id}:verb` with one kebab-case verb, and defines no other method (`head`, `options` and `trace` included). | `fieldloop-path-kebab-case`, `fieldloop-command-post-only` |
-| A consequential command takes `Idempotency-Key` (`#/components/parameters/IdempotencyKey`). | Review |
+| A POST `:verb` command takes required `Idempotency-Key` (`#/components/parameters/IdempotencyKey`). A stateless command may instead declare a nonempty `x-idempotency-exempt` reason. Review must verify the exemption has no persistent effects. Consequential POSTs without `:verb` still require review. | `fieldloop-command-idempotency` and Review |
 | `operationId`, JSON properties and query parameters are camelCase. | `fieldloop-operation-id-camel-case`, `fieldloop-property-camel-case`, `fieldloop-query-camel-case` |
 | Every operation has an `operationId`, a description and a declared tag. | `operation-operationId`, `operation-description`, `operation-tags`, `operation-tag-defined` |
 | Every 4xx and 5xx response is `application/problem+json` (RFC 9457). Its schema is a `$ref` to the shared `Problem`, or an `allOf` that includes that `$ref`; an inline look-alike fails. Reuse `#/components/responses/*`. | `fieldloop-error-problem-json`, `fieldloop-error-problem-schema` |
@@ -69,3 +69,11 @@ so the reviewer does.
 | `rate_limited` | 429 | Too many requests; see `Retry-After`. |
 | `internal_error` | 500 | Unexpected failure. |
 | `service_unavailable` | 503 | A dependency is down; see `Retry-After`. |
+
+### Stateless command exemptions
+
+Use `x-idempotency-exempt: "Pure risk calculation; no persistent effects."` on
+an operation only when retrying it cannot change state or cause an external effect.
+The lint verifies the presence of a non-whitespace reason, not whether the
+operation is stateless. An approval, notification, ingestion or mutation must
+never use this exemption. Header references are resolved before validation.
