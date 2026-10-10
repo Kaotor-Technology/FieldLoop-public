@@ -58,18 +58,23 @@ describe("legal corpus manifest and Controlled Document loader", () => {
     };
     const part192 = manifest.records.find(({ documentKey }) => documentKey === "US-49-CFR-192");
     const part195 = manifest.records.find(({ documentKey }) => documentKey === "US-49-CFR-195");
-    if (!part192?.contentPath || !part195?.contentPath) {
+    if (!part192 || !part195) {
+      throw new Error("Both CFR records must point to a source snapshot.");
+    }
+    const part192Path = part192.contentPath;
+    const part195Path = part195.contentPath;
+    if (typeof part192Path !== "string" || typeof part195Path !== "string") {
       throw new Error("Both CFR records must point to a source snapshot.");
     }
 
-    for (const record of [part192, part195]) {
+    for (const [record, contentPath] of [[part192, part192Path], [part195, part195Path]] as const) {
       expect(record.contentState).toBe("full_text_snapshot");
-      expect(existsSync(resolve("data/corpus/legal", record.contentPath))).toBe(true);
+      expect(existsSync(resolve("data/corpus/legal", contentPath))).toBe(true);
     }
-    expect(readFileSync(resolve("data/corpus/legal", part192.contentPath), "utf8")).toContain("PART 192—");
-    expect(readFileSync(resolve("data/corpus/legal", part192.contentPath), "utf8")).toContain("§ 192.1");
-    expect(readFileSync(resolve("data/corpus/legal", part195.contentPath), "utf8")).toContain("PART 195—");
-    expect(readFileSync(resolve("data/corpus/legal", part195.contentPath), "utf8")).toContain("§ 195.1");
+    expect(readFileSync(resolve("data/corpus/legal", part192Path), "utf8")).toContain("PART 192—");
+    expect(readFileSync(resolve("data/corpus/legal", part192Path), "utf8")).toContain("§ 192.1");
+    expect(readFileSync(resolve("data/corpus/legal", part195Path), "utf8")).toContain("PART 195—");
+    expect(readFileSync(resolve("data/corpus/legal", part195Path), "utf8")).toContain("§ 195.1");
   });
 
   it("creates parameterized public Controlled Document records without a database connection", () => {
