@@ -50,9 +50,9 @@ echo "==> dbmate rollback x${MIGRATION_COUNT}"
 for _ in $(seq 1 "${MIGRATION_COUNT}"); do
   dbmate rollback
 done
-LEFTOVER="$(run_psql -At -c "SELECT (SELECT count(*) FROM public.schema_migrations) + (SELECT count(*) FROM pg_namespace WHERE nspname = 'app')")"
+LEFTOVER="$(run_psql -At -c "SELECT (SELECT count(*) FROM public.schema_migrations) + (SELECT count(*) FROM pg_namespace WHERE nspname IN ('app', 'adk'))")"
 if [ "${LEFTOVER}" != "0" ]; then
-  echo "Rollback left migrations or the app schema behind" >&2
+  echo "Rollback left migrations or the app or adk schema behind" >&2
   exit 1
 fi
 
