@@ -15,11 +15,13 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",
+    "lint:openapi": "spectral lint openapi.yaml --ruleset .spectral.yaml --fail-severity warn",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",
+    "@stoplight/spectral-cli": "6.16.3",
     "typescript": "5.9.3",
     "vitest": "3.2.7"
   }

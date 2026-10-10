@@ -1,0 +1,224 @@
+openapi: 3.1.0
+info:
+  title: FieldLoop API
+  version: 0.1.0
+  summary: Base contract for the FieldLoop platform API served by web-api.
+  description: |
+    Shared conventions and components for every `/v1` endpoint. Feature
+    endpoints are added to `paths` by the Jira issue that implements them and
+    must pass the Spectral ruleset in `.spectral.yaml`. See `README.md` in this
+    package for the conventions.
+  contact:
+    name: FieldLoop engineering
+    url: https://github.com/Kaotor-Technology/FieldLoop-v2
+  license:
+    name: Proprietary
+    identifier: LicenseRef-Proprietary
+servers:
+  - url: /
+    description: Same origin as the SPA. web-api serves both (architecture §2).
+security:
+  - sessionCookie: []
+tags: []
+paths: {}
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: fl_session
+      description: |
+        Opaque server-side session ID set by `GET /auth/callback` (HttpOnly,
+        Secure, SameSite=Lax). The browser never holds a token (ADR-0008).
+        State-changing requests must also send `X-CSRF-Token`.
+
+  parameters:
+    Cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from `nextCursor` of the previous page. Omit it for the first page.
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 512
+    Limit:
+      name: limit
+      in: query
+      description: Maximum number of items in the page.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      description: Per-session CSRF token returned by `GET /v1/me`. Required on every non-GET request.
+      schema:
+        type: string
+        minLength: 1
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        Client-generated key, unique per intended command. Repeating a request
+        with the same key and the same body returns the first result; the same
+        key with a different body is rejected with `idempotency_key_reused`.
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+
+  headers:
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: integer
+        minimum: 0
+
+  schemas:
+    ErrorCode:
+      type: string
+      description: Stable machine-readable error code. Clients branch on this, never on `title` or `detail`.
+      enum:
+        - validation_failed
+        - unauthenticated
+        - csrf_token_invalid
+        - reauthentication_required
+        - forbidden
+        - not_found
+        - conflict
+        - idempotency_key_reused
+        - payload_hash_mismatch
+        - rate_limited
+        - internal_error
+        - service_unavailable
+
+    Problem:
+      type: object
+      description: RFC 9457 problem details, with FieldLoop extension members `code`, `traceId` and `errors`.
+      required:
+        - type
+        - title
+        - status
+        - code
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          default: about:blank
+          description: URI reference that identifies the problem type.
+        title:
+          type: string
+          description: Short, human-readable summary of the problem type.
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+          description: HTTP status code of this response.
+        detail:
+          type: string
+          description: Human-readable explanation of this occurrence. Never contains restricted data.
+        instance:
+          type: string
+          format: uri-reference
+          description: URI reference that identifies this occurrence.
+        code:
+          $ref: "#/components/schemas/ErrorCode"
+        traceId:
+          type: string
+          description: OpenTelemetry trace ID of the request, for support and audit.
+        errors:
+          type: array
+          description: Field-level errors. Present when `code` is `validation_failed`.
+          items:
+            $ref: "#/components/schemas/FieldError"
+
+    FieldError:
+      type: object
+      required:
+        - pointer
+        - detail
+      properties:
+        pointer:
+          type: string
+          description: JSON Pointer (RFC 6901) to the invalid body member, or `#/query/<name>` or `#/header/<name>` for a parameter.
+        detail:
+          type: string
+          description: What is wrong with the value.
+
+    CursorPage:
+      type: object
+      description: |
+        Envelope of every list response. A feature schema composes it with
+        `allOf` and adds a required `items` array.
+      required:
+        - nextCursor
+      properties:
+        nextCursor:
+          type:
+            - string
+            - "null"
+          description: Cursor for the next page, or `null` on the last page.
+
+  responses:
+    BadRequest:
+      description: The request is malformed or fails validation (`validation_failed`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unauthenticated:
+      description: No valid session (`unauthenticated`). The SPA sends the user to `/auth/login`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Forbidden:
+      description: |
+        The session may not do this: `forbidden`, `csrf_token_invalid`, or
+        `reauthentication_required` when an approval needs a fresh login.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: The resource does not exist or is outside the caller's scope (`not_found`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: |
+        The request conflicts with the current state: `conflict`,
+        `idempotency_key_reused` or `payload_hash_mismatch`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    TooManyRequests:
+      description: The caller is rate limited (`rate_limited`).
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    InternalError:
+      description: Unexpected server error (`internal_error`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    ServiceUnavailable:
+      description: A dependency is unavailable (`service_unavailable`).
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
