@@ -77,9 +77,19 @@ update it when adding new build inputs.
 GitHub Actions runs on pull requests and pushes to `main`. It checks confidential
 paths before a redacted Gitleaks scan, then lint, types, Vitest, pytest, DESIGN.md
 lint, builds, and a six-app Linux amd64 container build/startup matrix. It publishes
-no images and provisions no cloud resources. Action references are pinned to commits.
+no images and provisions no cloud resources in the CI workflow. Action references are pinned to commits.
 
 The path checker inspects only Git metadata for the index, HEAD and fetched
 history. It rejects any `raw-data` path segment or `.kmz` extension, including
 case variants and additions removed in later commits. Tests use empty Git blobs
 and index metadata in temporary repositories, without opening prohibited files.
+
+## GCP infrastructure and releases
+
+See [the FL-58 operator handoff](infra/terraform/README.md) for the adopted resources,
+remote state, approved THB budget, release workflow and remaining acceptance gaps.
+Terraform checks run without cloud credentials on pull requests. The separate
+Deploy workflow publishes digest-pinned images through GitHub OIDC and updates
+dev after successful main CI, or demo for a `demo-*` tag. The private web-api
+remote probe is `GET /health`; `/healthz` remains available locally. Schema-bearing
+releases require a configured FL-60 dbmate job before application updates.
