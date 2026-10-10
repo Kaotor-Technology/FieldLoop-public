@@ -87,7 +87,8 @@ and index metadata in temporary repositories, without opening prohibited files.
 ## GCP infrastructure and releases
 
 See [the FL-58 operator handoff](infra/terraform/README.md) for the adopted resources,
-remote state, approved THB budget, release workflow and remaining acceptance gaps.
+remote state, approved THB budget and release workflow, and
+[the FL-58 acceptance record](docs/reviews/FL-58-acceptance.md) for the work handed to other issues.
 Terraform checks run without cloud credentials on pull requests. The separate
 Deploy workflow publishes digest-pinned images through GitHub OIDC and updates
 dev after successful main CI, or demo for a `demo-*` tag. The private web-api
