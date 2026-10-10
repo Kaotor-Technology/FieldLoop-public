@@ -1,13 +1,16 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { Kysely, PostgresDialect } from "kysely";
 import pg from "pg";
 
 const UUID_NAMESPACE_URL = Buffer.from("6ba7b8119dad11d180b400c04fd430c8", "hex");
 const MANIFEST_URL = new URL("./manifest.json", import.meta.url);
 const CREATED_BY = "seed:fl-65-legal-corpus";
+const STATUS_UNVERIFIED = "status unverified";
+const CONTENT_FULL_TEXT = "full_text_snapshot";
+const CONTENT_METADATA_ONLY = "metadata_only";
 
 export function readManifest() {
   return JSON.parse(readFileSync(MANIFEST_URL, "utf8"));
@@ -55,16 +58,24 @@ export function validateManifest(manifest) {
     if (record.classification !== "public" || record.simulated !== false) {
       throw new Error(`Legal corpus record ${record.documentKey} must remain public and non-simulated.`);
     }
-    if (record.reviewRequired && (record.status !== "status unverified" || record.contentPath !== null)) {
+    if (record.reviewRequired && (record.status !== STATUS_UNVERIFIED || record.contentPath !== null)) {
       throw new Error(`Unverified record ${record.documentKey} must require review and remain metadata-only.`);
     }
-    if (record.status === "status unverified" && !record.reviewRequired) {
+    if (record.status === STATUS_UNVERIFIED && !record.reviewRequired) {
       throw new Error(`Unverified record ${record.documentKey} must require human review.`);
     }
-    if (record.contentState === "full_text_snapshot" && typeof record.contentPath !== "string") {
-      throw new Error(`Full-text record ${record.documentKey} requires a contentPath.`);
+    if (record.contentState !== CONTENT_FULL_TEXT && record.contentState !== CONTENT_METADATA_ONLY) {
+      throw new Error(`Legal corpus record ${record.documentKey} has an unknown contentState.`);
     }
-    if (record.contentState === "metadata_only" && record.contentPath !== null) {
+    if (record.contentState === CONTENT_FULL_TEXT) {
+      if (typeof record.contentPath !== "string") {
+        throw new Error(`Full-text record ${record.documentKey} requires a contentPath.`);
+      }
+      if (!existsSync(fileURLToPath(new URL(record.contentPath, MANIFEST_URL)))) {
+        throw new Error(`Full-text record ${record.documentKey} points to a missing file.`);
+      }
+    }
+    if (record.contentState === CONTENT_METADATA_ONLY && record.contentPath !== null) {
       throw new Error(`Metadata-only record ${record.documentKey} cannot reference a body file.`);
     }
   }
@@ -116,6 +127,14 @@ export function buildSeedQueries(database, manifest, orgId) {
       folder: expression.ref("excluded.folder"),
       title: expression.ref("excluded.title"),
       revision: expression.ref("excluded.revision"),
+      // A status a person set after loading is kept. Only a record that is
+      // still unverified follows the manifest.
+      status: expression
+        .case()
+        .when("controlled_document.status", "=", STATUS_UNVERIFIED)
+        .then(expression.ref("excluded.status"))
+        .else(expression.ref("controlled_document.status"))
+        .end(),
       classification: expression.ref("excluded.classification"),
       licence: expression.ref("excluded.licence"),
       simulated: expression.ref("excluded.simulated"),

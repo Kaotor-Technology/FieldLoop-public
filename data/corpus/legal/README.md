@@ -28,6 +28,11 @@ until a deployment uploads it to the approved document store. The FL-70 indexer
 owns chunk creation and retrieval indexing. Do not mark a Thai item current
 until its status and source text have been reviewed by a person.
 
-Re-running the seed refreshes source metadata while preserving the document's
-status, `superseded_by` link and `blob_uri` once a person or storage step has set
-them.
+Re-running the seed refreshes source metadata while preserving the
+`superseded_by` link and `blob_uri` once a person or storage step has set them.
+A record that is still `status unverified` takes its status from the manifest,
+so a verified status recorded there reaches the database on the next run. Any
+other stored status is kept.
+
+Source links point to public agencies only. Do not link to an Organisation's
+website.
