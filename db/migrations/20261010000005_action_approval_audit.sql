@@ -186,9 +186,7 @@ CREATE TABLE audit_event (
     created_by text
 );
 
--- audit_event is append-only: the app role never gets UPDATE or DELETE, and the triggers hold
--- for every role.
-REVOKE UPDATE, DELETE, TRUNCATE ON audit_event FROM fieldloop_app;
+-- audit_event is append-only for every role; the app role's grants are in the grants migration.
 CREATE FUNCTION prevent_audit_modification()
 RETURNS TRIGGER AS $$
 BEGIN

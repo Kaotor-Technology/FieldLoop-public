@@ -120,8 +120,6 @@ SELECT pg_temp.expect_error(
 INSERT INTO app.approval (org_id, action_request_id, approver_sub, decision, payload_hash, auth_time, simulated)
 SELECT 'org-test', id, 'approver-3', 'approved', payload_hash, now(), true
 FROM app.action_request;
-GRANT SELECT, INSERT, UPDATE ON app.action_request TO fieldloop_app;
-GRANT SELECT, INSERT ON app.approval TO fieldloop_app;
 SET LOCAL ROLE fieldloop_app;
 SELECT pg_temp.expect_error(
     $$UPDATE app.approval SET voided_at = now()$$,
