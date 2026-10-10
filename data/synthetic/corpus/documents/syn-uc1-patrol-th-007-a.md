@@ -6,11 +6,14 @@ language: "th"
 revision: "A"
 status: "draft"
 review_status: "pending"
-folder: "Pipeline Integrity/Inspection/Patrol"
+folder: "Maintenance/Patrol Logs"
 classification: "internal"
 licence: "synthetic"
 simulated: true
 label: "SYNTHETIC"
+asset_code: "DL-01"
+chainage_from: 91000
+chainage_to: 92000
 recorded_on: "2026-10-10"
 supersedes: null
 superseded_by: "SYN-UC1-PATROL-TH-007-B"
@@ -18,15 +21,15 @@ superseded_by: "SYN-UC1-PATROL-TH-007-B"
 
 # บันทึกการตรวจแนวท่อจำลอง: ความพร้อมของสถานีวาล์ว
 
-> SYNTHETIC — Candidate document for demonstration only. Human review is pending.
+> SYNTHETIC — เอกสาร candidate สำหรับการสาธิตเท่านั้น รอการทบทวนโดยบุคคล
 
 ## ขอบเขตการตรวจ
 
-รายการตรวจแนวท่อสมมติสำหรับชุดสาธิต DL-01 โดยไม่ระบุเส้นทางหรือผู้ประกอบการจริง
+รายการตรวจแนวท่อสมมติของบริษัท ฟิลด์ลูป เดโม ไปป์ไลน์ จำกัด (บริษัทสมมติ)สำหรับ DL-01 ที่ Chainage 91,000–92,000 m (SYNTHETIC) การตรวจครั้งนี้ดูการเข้าถึง สภาพ และบันทึกการทดสอบการทำงานของสถานีวาล์ว รายการนี้ไม่ระบุเส้นทางหรือ Organisation จริง
 
 ## ข้อสังเกต
 
-ข้อสังเกตจำลอง: [อธิบายสภาพสมมติ] ตำแหน่งอ้างอิง: [ตำแหน่งจำลอง]
+ข้อสังเกต SYNTHETIC: การทดสอบการทำงานของวาล์วที่เลยกำหนด ตำแหน่ง: Chainage 91,000–92,000 m (SYNTHETIC) บันทึกประกอบ: บันทึกการทดสอบการทำงานของวาล์วและแบบตรวจสถานี
 
 ## การตอบสนองทันที
 
@@ -36,10 +39,14 @@ superseded_by: "SYN-UC1-PATROL-TH-007-B"
 
 บันทึกแหล่งข้อมูล ผลการทบทวน และคำขอตรวจสอบเพิ่มเติม แยกข้อสังเกตที่ยังไม่ยืนยันออกจาก Evidence ที่ยอมรับแล้ว
 
-## Document control
+## การเปลี่ยนแปลงใน revision นี้
+
+ออกครั้งแรก
+
+## การควบคุมเอกสาร
 
 - Revision: A
-- Status: draft
-- Recorded on: 2026-10-10 (synthetic record date)
-- Review: pending human review
-- All identifiers, observations, and values in this document are fictional. No field activity occurred.
+- สถานะ: draft
+- วันที่บันทึก: 2026-10-10 (วันที่บันทึกแบบ SYNTHETIC)
+- การทบทวน: รอการทบทวนโดยบุคคล
+- ตัวระบุ ข้อสังเกต และค่าทั้งหมดในเอกสารนี้เป็นข้อมูลสมมติ ไม่มีกิจกรรมภาคสนามเกิดขึ้นจริง

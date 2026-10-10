@@ -6,11 +6,14 @@ language: "th"
 revision: "A"
 status: "draft"
 review_status: "pending"
-folder: "Pipeline Integrity/Engineering/Memos"
+folder: "Integrity/Engineering Memos"
 classification: "internal"
 licence: "synthetic"
 simulated: true
 label: "SYNTHETIC"
+asset_code: "DL-01"
+chainage_from: 66000
+chainage_to: 67000
 recorded_on: "2026-10-10"
 supersedes: null
 superseded_by: "SYN-UC1-MEMO-TH-005-B"
@@ -18,15 +21,15 @@ superseded_by: "SYN-UC1-MEMO-TH-005-B"
 
 # บันทึกวิศวกรรมจำลอง: ข้อสังเกตจากการตรวจแนวเขตทาง
 
-> SYNTHETIC — Candidate document for demonstration only. Human review is pending.
+> SYNTHETIC — เอกสาร candidate สำหรับการสาธิตเท่านั้น รอการทบทวนโดยบุคคล
 
 ## วัตถุประสงค์
 
-สรุปสถานะการทบทวนเอกสารสมมติสำหรับผู้ชมการสาธิต
+สรุปสถานะข้อสังเกตจากการตรวจแนวเขตทางของ DL-01 ที่ Chainage 66,000–67,000 m (SYNTHETIC) สำหรับบริษัท ฟิลด์ลูป เดโม ไปป์ไลน์ จำกัด (บริษัทสมมติ)
 
 ## บริบท
 
-การอ้างถึง Asset และข้อสังเกตทั้งหมดเป็นข้อมูลสมมติและติดป้าย SYNTHETIC บันทึกนี้ไม่ใช่คำวินิจฉัยของ Technical Authority
+การทบทวนครอบคลุมกิจกรรมของบุคคลภายนอกและสภาพพื้นดินใน Right-of-Way และอาศัยภาพถ่ายจากการตรวจแนวท่อและทะเบียนใบอนุญาตขุด มีรายการที่ยังเปิดอยู่หนึ่งรายการ คือ เครื่องจักรขุดที่ไม่มีใบอนุญาตจอดอยู่ใกล้แนวท่อ การอ้างถึง Asset และข้อสังเกตทั้งหมดเป็นข้อมูลสมมติและติดป้าย SYNTHETIC บันทึกนี้ไม่ใช่คำวินิจฉัยของ Technical Authority
 
 ## คำขอทบทวน
 
@@ -34,12 +37,16 @@ superseded_by: "SYN-UC1-MEMO-TH-005-B"
 
 ## สถานะ
 
-ร่างเพื่อ human review บันทึกนี้ไม่ได้สร้างการอนุมัติ คำสั่งซ่อม ขีดจำกัดการเดินระบบ หรือการยื่นเอกสารภายนอก
+เพื่อให้บุคคลทบทวน บันทึกนี้ไม่ได้สร้างการอนุมัติ คำสั่งซ่อม ขีดจำกัดการเดินระบบ หรือการยื่นเอกสารภายนอก
 
-## Document control
+## การเปลี่ยนแปลงใน revision นี้
+
+ออกครั้งแรก
+
+## การควบคุมเอกสาร
 
 - Revision: A
-- Status: draft
-- Recorded on: 2026-10-10 (synthetic record date)
-- Review: pending human review
-- All identifiers, observations, and values in this document are fictional. No field activity occurred.
+- สถานะ: draft
+- วันที่บันทึก: 2026-10-10 (วันที่บันทึกแบบ SYNTHETIC)
+- การทบทวน: รอการทบทวนโดยบุคคล
+- ตัวระบุ ข้อสังเกต และค่าทั้งหมดในเอกสารนี้เป็นข้อมูลสมมติ ไม่มีกิจกรรมภาคสนามเกิดขึ้นจริง

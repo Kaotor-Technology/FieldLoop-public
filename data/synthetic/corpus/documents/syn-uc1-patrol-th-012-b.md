@@ -6,11 +6,14 @@ language: "th"
 revision: "B"
 status: "draft"
 review_status: "pending"
-folder: "Pipeline Integrity/Inspection/Patrol"
+folder: "Maintenance/Patrol Logs"
 classification: "internal"
 licence: "synthetic"
 simulated: true
 label: "SYNTHETIC"
+asset_code: "DL-01"
+chainage_from: 161000
+chainage_to: 162000
 recorded_on: "2026-10-10"
 supersedes: "SYN-UC1-PATROL-TH-012-A"
 superseded_by: null
@@ -18,15 +21,15 @@ superseded_by: null
 
 # บันทึกการตรวจแนวท่อจำลอง: การทบทวนโดยฝ่ายบริหาร
 
-> SYNTHETIC — Candidate document for demonstration only. Human review is pending.
+> SYNTHETIC — เอกสาร candidate สำหรับการสาธิตเท่านั้น รอการทบทวนโดยบุคคล
 
 ## ขอบเขตการตรวจ
 
-รายการตรวจแนวท่อสมมติสำหรับชุดสาธิต DL-01 โดยไม่ระบุเส้นทางหรือผู้ประกอบการจริง
+รายการตรวจแนวท่อสมมติของบริษัท ฟิลด์ลูป เดโม ไปป์ไลน์ จำกัด (บริษัทสมมติ)สำหรับ DL-01 ที่ Chainage 161,000–162,000 m (SYNTHETIC) การตรวจครั้งนี้ดูรายการดำเนินการด้านความสมบูรณ์ที่ยังเปิดอยู่และการทบทวนที่เลยกำหนด รายการนี้ไม่ระบุเส้นทางหรือ Organisation จริง
 
 ## ข้อสังเกต
 
-ข้อสังเกตจำลอง: [อธิบายสภาพสมมติ] ตำแหน่งอ้างอิง: [ตำแหน่งจำลอง]
+ข้อสังเกต SYNTHETIC: รายการดำเนินการจากการทบทวนที่ไม่มีผู้รับผิดชอบ ตำแหน่ง: Chainage 161,000–162,000 m (SYNTHETIC) บันทึกประกอบ: ตารางติดตามการดำเนินการและรายงานการประชุมทบทวนครั้งก่อน
 
 ## การตอบสนองทันที
 
@@ -36,10 +39,18 @@ superseded_by: null
 
 บันทึกแหล่งข้อมูล ผลการทบทวน และคำขอตรวจสอบเพิ่มเติม แยกข้อสังเกตที่ยังไม่ยืนยันออกจาก Evidence ที่ยอมรับแล้ว
 
-## Document control
+## ความเห็นของผู้ทบทวน
+
+บุคคลที่สองตรวจรายการนี้เทียบกับตารางติดตามการดำเนินการและรายงานการประชุมทบทวนครั้งก่อน และขอให้ตรวจแนวท่อซ้ำที่ Chainage 161,000–162,000 m (SYNTHETIC)
+
+## การเปลี่ยนแปลงใน revision นี้
+
+แทนที่ revision A และเพิ่มหัวข้อ “ความเห็นของผู้ทบทวน”
+
+## การควบคุมเอกสาร
 
 - Revision: B
-- Status: draft
-- Recorded on: 2026-10-10 (synthetic record date)
-- Review: pending human review
-- All identifiers, observations, and values in this document are fictional. No field activity occurred.
+- สถานะ: draft
+- วันที่บันทึก: 2026-10-10 (วันที่บันทึกแบบ SYNTHETIC)
+- การทบทวน: รอการทบทวนโดยบุคคล
+- ตัวระบุ ข้อสังเกต และค่าทั้งหมดในเอกสารนี้เป็นข้อมูลสมมติ ไม่มีกิจกรรมภาคสนามเกิดขึ้นจริง

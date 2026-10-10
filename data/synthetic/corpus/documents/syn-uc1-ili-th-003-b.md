@@ -6,11 +6,14 @@ language: "th"
 revision: "B"
 status: "draft"
 review_status: "pending"
-folder: "Pipeline Integrity/Inspection/ILI"
+folder: "Integrity/ILI Reports"
 classification: "internal"
 licence: "synthetic"
 simulated: true
 label: "SYNTHETIC"
+asset_code: "DL-01"
+chainage_from: 33500
+chainage_to: 34500
 recorded_on: "2026-10-10"
 supersedes: "SYN-UC1-ILI-TH-003-A"
 superseded_by: null
@@ -18,15 +21,15 @@ superseded_by: null
 
 # รายงาน ILI จำลอง: การทบทวนระบบป้องกันการกัดกร่อนแบบแคโทดิก
 
-> SYNTHETIC — Candidate document for demonstration only. Human review is pending.
+> SYNTHETIC — เอกสาร candidate สำหรับการสาธิตเท่านั้น รอการทบทวนโดยบุคคล
 
 ## ขอบเขต
 
-รายงานสมมตินี้อธิบายตัวอย่างการทบทวนบันทึกการตรวจสอบภายในท่อของ DL-01 ไม่ใช่การประเมินทางวิศวกรรม
+รายงานสมมตินี้ครอบคลุมการทบทวนระบบป้องกันการกัดกร่อนแบบแคโทดิกของ DL-01 ที่ Chainage 33,500–34,500 m (SYNTHETIC) ไม่ใช่การประเมินทางวิศวกรรม
 
 ## สรุปบันทึก
 
-บันทึกตัวอย่างมีข้อบ่งชี้และค่าการวัดตัวอย่างที่ติดป้าย SYNTHETIC ไม่มีการตรวจจริงหรือการวัดท่อจริงรวมอยู่
+การทบทวนพิจารณากระแสจ่ายของ rectifier และค่าศักย์ที่จุดทดสอบ ชุดบันทึก SYNTHETIC ประกอบด้วยบันทึก rectifier และแบบบันทึกการสำรวจจุดทดสอบ และบรรยายสภาพสมมติหนึ่งรายการ คือ ค่าอ่านที่จุดทดสอบอยู่นอกเกณฑ์การป้องกันตามระเบียบปฏิบัติ ไม่มีการตรวจจริงหรือการวัดท่อจริงรวมอยู่ และไม่ระบุขนาดใด ๆ
 
 ## ข้อสังเกตในการทบทวน
 
@@ -34,12 +37,20 @@ superseded_by: null
 
 ## ข้อจำกัด
 
-ห้ามใช้เอกสาร candidate นี้เพื่อตัดสินความเหมาะสมต่อการใช้งาน การซ่อมแซม แรงดัน หรือการกลับเข้าปฏิบัติงาน
+ห้ามใช้เอกสารนี้เพื่อตัดสินความเหมาะสมต่อการใช้งาน การซ่อมแซม แรงดัน หรือการกลับเข้าปฏิบัติงาน
 
-## Document control
+## แผนการยืนยันผล
+
+เสนอให้มีการยืนยันผลภาคสนามที่ Chainage 33,500–34,500 m (SYNTHETIC) เพื่อให้บุคคลพิจารณาอนุมัติ รายงานนี้ไม่ได้กำหนดเวลาหรืออนุมัติงานดังกล่าว
+
+## การเปลี่ยนแปลงใน revision นี้
+
+แทนที่ revision A และเพิ่มหัวข้อ “แผนการยืนยันผล”
+
+## การควบคุมเอกสาร
 
 - Revision: B
-- Status: draft
-- Recorded on: 2026-10-10 (synthetic record date)
-- Review: pending human review
-- All identifiers, observations, and values in this document are fictional. No field activity occurred.
+- สถานะ: draft
+- วันที่บันทึก: 2026-10-10 (วันที่บันทึกแบบ SYNTHETIC)
+- การทบทวน: รอการทบทวนโดยบุคคล
+- ตัวระบุ ข้อสังเกต และค่าทั้งหมดในเอกสารนี้เป็นข้อมูลสมมติ ไม่มีกิจกรรมภาคสนามเกิดขึ้นจริง

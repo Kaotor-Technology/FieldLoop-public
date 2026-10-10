@@ -6,11 +6,14 @@ language: "en"
 revision: "A"
 status: "draft"
 review_status: "pending"
-folder: "Pipeline Integrity/Incidents/RCA"
+folder: "Lessons Learned/Root-Cause Analyses"
 classification: "internal"
 licence: "synthetic"
 simulated: true
 label: "SYNTHETIC"
+asset_code: "DL-01"
+chainage_from: 120500
+chainage_to: 121500
 recorded_on: "2026-10-10"
 supersedes: null
 superseded_by: "SYN-UC1-RCA-EN-009-B"
@@ -22,19 +25,23 @@ superseded_by: "SYN-UC1-RCA-EN-009-B"
 
 ## Event summary
 
-This is a fictional learning scenario. No incident, injury, release, or asset damage occurred.
+This is a fictional learning scenario about the inspection record quality for DL-01 at Chainage 120,500–121,500 m (SYNTHETIC). The scenario starts from one finding: inspection sheets without a recorded inspector or date. No incident, injury, release or asset damage occurred.
 
 ## Evidence reviewed
 
-The sample review uses placeholder records marked SYNTHETIC. Missing or conflicting evidence is listed as an open question, not treated as fact.
+The review used a sample of inspection sheets and their source files, all marked SYNTHETIC. Missing or conflicting records are listed as open questions, not treated as fact.
 
 ## Cause analysis
 
-Candidate contributing factors are hypotheses for human review. The document does not assign fault or establish a final cause.
+Candidate contributing factors relate to the completeness and traceability of inspection records. They are hypotheses for human review. The document does not assign fault or establish a final cause.
 
 ## Actions for review
 
 A responsible reviewer may propose follow-up questions or preventive learning. No action is approved or sent to a system of record by this document.
+
+## Changes in this revision
+
+Initial issue.
 
 ## Document control
 
@@ -42,4 +49,4 @@ A responsible reviewer may propose follow-up questions or preventive learning. N
 - Status: draft
 - Recorded on: 2026-10-10 (synthetic record date)
 - Review: pending human review
-- All identifiers, observations, and values in this document are fictional. No field activity occurred.
+- All identifiers, observations and values in this document are fictional. No field activity occurred.

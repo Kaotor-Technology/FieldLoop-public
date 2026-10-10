@@ -6,11 +6,14 @@ language: "th"
 revision: "B"
 status: "draft"
 review_status: "pending"
-folder: "Pipeline Integrity/Inspection/Patrol"
+folder: "Maintenance/Patrol Logs"
 classification: "internal"
 licence: "synthetic"
 simulated: true
 label: "SYNTHETIC"
+asset_code: "DL-01"
+chainage_from: 147000
+chainage_to: 148000
 recorded_on: "2026-10-10"
 supersedes: "SYN-UC1-PATROL-TH-011-A"
 superseded_by: null
@@ -18,15 +21,15 @@ superseded_by: null
 
 # บันทึกการตรวจแนวท่อจำลอง: การตรวจสอบย้อนกลับของหลักฐาน
 
-> SYNTHETIC — Candidate document for demonstration only. Human review is pending.
+> SYNTHETIC — เอกสาร candidate สำหรับการสาธิตเท่านั้น รอการทบทวนโดยบุคคล
 
 ## ขอบเขตการตรวจ
 
-รายการตรวจแนวท่อสมมติสำหรับชุดสาธิต DL-01 โดยไม่ระบุเส้นทางหรือผู้ประกอบการจริง
+รายการตรวจแนวท่อสมมติของบริษัท ฟิลด์ลูป เดโม ไปป์ไลน์ จำกัด (บริษัทสมมติ)สำหรับ DL-01 ที่ Chainage 147,000–148,000 m (SYNTHETIC) การตรวจครั้งนี้ดูความเชื่อมโยงระหว่าง Evidence แต่ละรายการกับบันทึกต้นทาง รายการนี้ไม่ระบุเส้นทางหรือ Organisation จริง
 
 ## ข้อสังเกต
 
-ข้อสังเกตจำลอง: [อธิบายสภาพสมมติ] ตำแหน่งอ้างอิง: [ตำแหน่งจำลอง]
+ข้อสังเกต SYNTHETIC: Evidence ที่ไม่พบไฟล์ต้นทาง ตำแหน่ง: Chainage 147,000–148,000 m (SYNTHETIC) บันทึกประกอบ: ทะเบียน Evidence และไฟล์ต้นทางที่อ้างอิง
 
 ## การตอบสนองทันที
 
@@ -36,10 +39,18 @@ superseded_by: null
 
 บันทึกแหล่งข้อมูล ผลการทบทวน และคำขอตรวจสอบเพิ่มเติม แยกข้อสังเกตที่ยังไม่ยืนยันออกจาก Evidence ที่ยอมรับแล้ว
 
-## Document control
+## ความเห็นของผู้ทบทวน
+
+บุคคลที่สองตรวจรายการนี้เทียบกับทะเบียน Evidence และไฟล์ต้นทางที่อ้างอิง และขอให้ตรวจแนวท่อซ้ำที่ Chainage 147,000–148,000 m (SYNTHETIC)
+
+## การเปลี่ยนแปลงใน revision นี้
+
+แทนที่ revision A และเพิ่มหัวข้อ “ความเห็นของผู้ทบทวน”
+
+## การควบคุมเอกสาร
 
 - Revision: B
-- Status: draft
-- Recorded on: 2026-10-10 (synthetic record date)
-- Review: pending human review
-- All identifiers, observations, and values in this document are fictional. No field activity occurred.
+- สถานะ: draft
+- วันที่บันทึก: 2026-10-10 (วันที่บันทึกแบบ SYNTHETIC)
+- การทบทวน: รอการทบทวนโดยบุคคล
+- ตัวระบุ ข้อสังเกต และค่าทั้งหมดในเอกสารนี้เป็นข้อมูลสมมติ ไม่มีกิจกรรมภาคสนามเกิดขึ้นจริง

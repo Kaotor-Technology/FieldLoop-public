@@ -6,11 +6,14 @@ language: "th"
 revision: "B"
 status: "draft"
 review_status: "pending"
-folder: "Pipeline Integrity/Inspection/Patrol"
+folder: "Maintenance/Patrol Logs"
 classification: "internal"
 licence: "synthetic"
 simulated: true
 label: "SYNTHETIC"
+asset_code: "DL-01"
+chainage_from: 35000
+chainage_to: 36000
 recorded_on: "2026-10-10"
 supersedes: "SYN-UC1-PATROL-TH-003-A"
 superseded_by: null
@@ -18,15 +21,15 @@ superseded_by: null
 
 # บันทึกการตรวจแนวท่อจำลอง: การทบทวนระบบป้องกันการกัดกร่อนแบบแคโทดิก
 
-> SYNTHETIC — Candidate document for demonstration only. Human review is pending.
+> SYNTHETIC — เอกสาร candidate สำหรับการสาธิตเท่านั้น รอการทบทวนโดยบุคคล
 
 ## ขอบเขตการตรวจ
 
-รายการตรวจแนวท่อสมมติสำหรับชุดสาธิต DL-01 โดยไม่ระบุเส้นทางหรือผู้ประกอบการจริง
+รายการตรวจแนวท่อสมมติของบริษัท ฟิลด์ลูป เดโม ไปป์ไลน์ จำกัด (บริษัทสมมติ)สำหรับ DL-01 ที่ Chainage 35,000–36,000 m (SYNTHETIC) การตรวจครั้งนี้ดูกระแสจ่ายของ rectifier และค่าศักย์ที่จุดทดสอบ รายการนี้ไม่ระบุเส้นทางหรือ Organisation จริง
 
 ## ข้อสังเกต
 
-ข้อสังเกตจำลอง: [อธิบายสภาพสมมติ] ตำแหน่งอ้างอิง: [ตำแหน่งจำลอง]
+ข้อสังเกต SYNTHETIC: ค่าอ่านที่จุดทดสอบอยู่นอกเกณฑ์การป้องกันตามระเบียบปฏิบัติ ตำแหน่ง: Chainage 35,000–36,000 m (SYNTHETIC) บันทึกประกอบ: บันทึก rectifier และแบบบันทึกการสำรวจจุดทดสอบ
 
 ## การตอบสนองทันที
 
@@ -36,10 +39,18 @@ superseded_by: null
 
 บันทึกแหล่งข้อมูล ผลการทบทวน และคำขอตรวจสอบเพิ่มเติม แยกข้อสังเกตที่ยังไม่ยืนยันออกจาก Evidence ที่ยอมรับแล้ว
 
-## Document control
+## ความเห็นของผู้ทบทวน
+
+บุคคลที่สองตรวจรายการนี้เทียบกับบันทึก rectifier และแบบบันทึกการสำรวจจุดทดสอบ และขอให้ตรวจแนวท่อซ้ำที่ Chainage 35,000–36,000 m (SYNTHETIC)
+
+## การเปลี่ยนแปลงใน revision นี้
+
+แทนที่ revision A และเพิ่มหัวข้อ “ความเห็นของผู้ทบทวน”
+
+## การควบคุมเอกสาร
 
 - Revision: B
-- Status: draft
-- Recorded on: 2026-10-10 (synthetic record date)
-- Review: pending human review
-- All identifiers, observations, and values in this document are fictional. No field activity occurred.
+- สถานะ: draft
+- วันที่บันทึก: 2026-10-10 (วันที่บันทึกแบบ SYNTHETIC)
+- การทบทวน: รอการทบทวนโดยบุคคล
+- ตัวระบุ ข้อสังเกต และค่าทั้งหมดในเอกสารนี้เป็นข้อมูลสมมติ ไม่มีกิจกรรมภาคสนามเกิดขึ้นจริง

@@ -6,11 +6,14 @@ language: "th"
 revision: "A"
 status: "draft"
 review_status: "pending"
-folder: "Pipeline Integrity/Inspection/ILI"
+folder: "Integrity/ILI Reports"
 classification: "internal"
 licence: "synthetic"
 simulated: true
 label: "SYNTHETIC"
+asset_code: "DL-01"
+chainage_from: 131500
+chainage_to: 132500
 recorded_on: "2026-10-10"
 supersedes: null
 superseded_by: "SYN-UC1-ILI-TH-010-B"
@@ -18,15 +21,15 @@ superseded_by: "SYN-UC1-ILI-TH-010-B"
 
 # รายงาน ILI จำลอง: การส่งมอบงานบำรุงรักษา
 
-> SYNTHETIC — Candidate document for demonstration only. Human review is pending.
+> SYNTHETIC — เอกสาร candidate สำหรับการสาธิตเท่านั้น รอการทบทวนโดยบุคคล
 
 ## ขอบเขต
 
-รายงานสมมตินี้อธิบายตัวอย่างการทบทวนบันทึกการตรวจสอบภายในท่อของ DL-01 ไม่ใช่การประเมินทางวิศวกรรม
+รายงานสมมตินี้ครอบคลุมการส่งมอบงานบำรุงรักษาของ DL-01 ที่ Chainage 131,500–132,500 m (SYNTHETIC) ไม่ใช่การประเมินทางวิศวกรรม
 
 ## สรุปบันทึก
 
-บันทึกตัวอย่างมีข้อบ่งชี้และค่าการวัดตัวอย่างที่ติดป้าย SYNTHETIC ไม่มีการตรวจจริงหรือการวัดท่อจริงรวมอยู่
+การทบทวนพิจารณางานค้างและรายการตรวจที่ส่งต่อระหว่างกะบำรุงรักษา ชุดบันทึก SYNTHETIC ประกอบด้วยบันทึกการส่งมอบกะและรายการใบสั่งงานที่ยังเปิดอยู่ และบรรยายสภาพสมมติหนึ่งรายการ คือ ใบสั่งงานที่ยังเปิดอยู่แต่ไม่ปรากฏในบันทึกการส่งมอบกะ ไม่มีการตรวจจริงหรือการวัดท่อจริงรวมอยู่ และไม่ระบุขนาดใด ๆ
 
 ## ข้อสังเกตในการทบทวน
 
@@ -34,12 +37,16 @@ superseded_by: "SYN-UC1-ILI-TH-010-B"
 
 ## ข้อจำกัด
 
-ห้ามใช้เอกสาร candidate นี้เพื่อตัดสินความเหมาะสมต่อการใช้งาน การซ่อมแซม แรงดัน หรือการกลับเข้าปฏิบัติงาน
+ห้ามใช้เอกสารนี้เพื่อตัดสินความเหมาะสมต่อการใช้งาน การซ่อมแซม แรงดัน หรือการกลับเข้าปฏิบัติงาน
 
-## Document control
+## การเปลี่ยนแปลงใน revision นี้
+
+ออกครั้งแรก
+
+## การควบคุมเอกสาร
 
 - Revision: A
-- Status: draft
-- Recorded on: 2026-10-10 (synthetic record date)
-- Review: pending human review
-- All identifiers, observations, and values in this document are fictional. No field activity occurred.
+- สถานะ: draft
+- วันที่บันทึก: 2026-10-10 (วันที่บันทึกแบบ SYNTHETIC)
+- การทบทวน: รอการทบทวนโดยบุคคล
+- ตัวระบุ ข้อสังเกต และค่าทั้งหมดในเอกสารนี้เป็นข้อมูลสมมติ ไม่มีกิจกรรมภาคสนามเกิดขึ้นจริง

@@ -6,11 +6,14 @@ language: "th"
 revision: "A"
 status: "draft"
 review_status: "pending"
-folder: "Pipeline Integrity/Incidents/RCA"
+folder: "Lessons Learned/Root-Cause Analyses"
 classification: "internal"
 licence: "synthetic"
 simulated: true
 label: "SYNTHETIC"
+asset_code: "DL-01"
+chainage_from: 106500
+chainage_to: 107500
 recorded_on: "2026-10-10"
 supersedes: null
 superseded_by: "SYN-UC1-RCA-TH-008-B"
@@ -18,28 +21,32 @@ superseded_by: "SYN-UC1-RCA-TH-008-B"
 
 # รายงานวิเคราะห์สาเหตุรากจำลอง: การเตรียมงานซ่อมบำรุง
 
-> SYNTHETIC — Candidate document for demonstration only. Human review is pending.
+> SYNTHETIC — เอกสาร candidate สำหรับการสาธิตเท่านั้น รอการทบทวนโดยบุคคล
 
 ## สรุปเหตุการณ์
 
-นี่คือสถานการณ์เรียนรู้สมมติ ไม่มีเหตุการณ์ การบาดเจ็บ การรั่วไหล หรือความเสียหายต่อ Asset เกิดขึ้นจริง
+นี่คือสถานการณ์เรียนรู้สมมติเกี่ยวกับการเตรียมงานซ่อมบำรุงของ DL-01 ที่ Chainage 106,500–107,500 m (SYNTHETIC) สถานการณ์เริ่มจากข้อค้นพบหนึ่งรายการ คือ ชุดเอกสารงานที่อ้างอิง revision ของระเบียบปฏิบัติที่ถูกแทนที่แล้ว ไม่มีเหตุการณ์ การบาดเจ็บ การรั่วไหล หรือความเสียหายต่อ Asset เกิดขึ้นจริง
 
 ## หลักฐานที่ทบทวน
 
-ตัวอย่างใช้บันทึก placeholder ที่ติดป้าย SYNTHETIC หลักฐานที่ขาดหรือขัดแย้งจะระบุเป็นคำถามเปิด ไม่ถือเป็นข้อเท็จจริง
+การทบทวนใช้ชุดเอกสารงานฉบับร่างและทะเบียนใบอนุญาต ซึ่งติดป้าย SYNTHETIC ทั้งหมด บันทึกที่ขาดหรือขัดแย้งจะระบุเป็นคำถามเปิด ไม่ถือเป็นข้อเท็จจริง
 
 ## การวิเคราะห์สาเหตุ
 
-ปัจจัยที่อาจเกี่ยวข้องเป็นสมมติฐานสำหรับ human review เอกสารนี้ไม่ระบุความผิดหรือยืนยันสาเหตุสุดท้าย
+ปัจจัยที่อาจเกี่ยวข้องสัมพันธ์กับขอบเขตงาน แผนการตัดแยกระบบ และใบอนุญาตสำหรับงานซ่อมที่วางแผนไว้ เป็นสมมติฐานสำหรับให้บุคคลทบทวน เอกสารนี้ไม่ระบุความผิดหรือยืนยันสาเหตุสุดท้าย
 
 ## การดำเนินการเพื่อทบทวน
 
 ผู้ทบทวนอาจเสนอคำถามติดตามหรือบทเรียนป้องกันได้ เอกสารนี้ไม่ได้อนุมัติหรือส่งการดำเนินการไปยังระบบบันทึกหลัก
 
-## Document control
+## การเปลี่ยนแปลงใน revision นี้
+
+ออกครั้งแรก
+
+## การควบคุมเอกสาร
 
 - Revision: A
-- Status: draft
-- Recorded on: 2026-10-10 (synthetic record date)
-- Review: pending human review
-- All identifiers, observations, and values in this document are fictional. No field activity occurred.
+- สถานะ: draft
+- วันที่บันทึก: 2026-10-10 (วันที่บันทึกแบบ SYNTHETIC)
+- การทบทวน: รอการทบทวนโดยบุคคล
+- ตัวระบุ ข้อสังเกต และค่าทั้งหมดในเอกสารนี้เป็นข้อมูลสมมติ ไม่มีกิจกรรมภาคสนามเกิดขึ้นจริง

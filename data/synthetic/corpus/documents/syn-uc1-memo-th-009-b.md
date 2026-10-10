@@ -6,11 +6,14 @@ language: "th"
 revision: "B"
 status: "draft"
 review_status: "pending"
-folder: "Pipeline Integrity/Engineering/Memos"
+folder: "Integrity/Engineering Memos"
 classification: "internal"
 licence: "synthetic"
 simulated: true
 label: "SYNTHETIC"
+asset_code: "DL-01"
+chainage_from: 122000
+chainage_to: 123000
 recorded_on: "2026-10-10"
 supersedes: "SYN-UC1-MEMO-TH-009-A"
 superseded_by: null
@@ -18,15 +21,15 @@ superseded_by: null
 
 # บันทึกวิศวกรรมจำลอง: คุณภาพบันทึกการตรวจสอบ
 
-> SYNTHETIC — Candidate document for demonstration only. Human review is pending.
+> SYNTHETIC — เอกสาร candidate สำหรับการสาธิตเท่านั้น รอการทบทวนโดยบุคคล
 
 ## วัตถุประสงค์
 
-สรุปสถานะการทบทวนเอกสารสมมติสำหรับผู้ชมการสาธิต
+สรุปสถานะคุณภาพบันทึกการตรวจสอบของ DL-01 ที่ Chainage 122,000–123,000 m (SYNTHETIC) สำหรับบริษัท ฟิลด์ลูป เดโม ไปป์ไลน์ จำกัด (บริษัทสมมติ)
 
 ## บริบท
 
-การอ้างถึง Asset และข้อสังเกตทั้งหมดเป็นข้อมูลสมมติและติดป้าย SYNTHETIC บันทึกนี้ไม่ใช่คำวินิจฉัยของ Technical Authority
+การทบทวนครอบคลุมความครบถ้วนและการตรวจสอบย้อนกลับได้ของบันทึกการตรวจสอบ และอาศัยตัวอย่างแบบบันทึกการตรวจสอบและไฟล์ต้นทาง มีรายการที่ยังเปิดอยู่หนึ่งรายการ คือ แบบบันทึกการตรวจสอบที่ไม่ระบุผู้ตรวจหรือวันที่ การอ้างถึง Asset และข้อสังเกตทั้งหมดเป็นข้อมูลสมมติและติดป้าย SYNTHETIC บันทึกนี้ไม่ใช่คำวินิจฉัยของ Technical Authority
 
 ## คำขอทบทวน
 
@@ -34,12 +37,20 @@ superseded_by: null
 
 ## สถานะ
 
-ร่างเพื่อ human review บันทึกนี้ไม่ได้สร้างการอนุมัติ คำสั่งซ่อม ขีดจำกัดการเดินระบบ หรือการยื่นเอกสารภายนอก
+เพื่อให้บุคคลทบทวน บันทึกนี้ไม่ได้สร้างการอนุมัติ คำสั่งซ่อม ขีดจำกัดการเดินระบบ หรือการยื่นเอกสารภายนอก
 
-## Document control
+## การทบทวนครั้งถัดไป
+
+รายการที่ยังเปิดอยู่จะนำเข้าการทบทวนโดยฝ่ายบริหารครั้งถัดไป โดยให้บุคคลเป็นผู้กำหนดผู้รับผิดชอบการทบทวน
+
+## การเปลี่ยนแปลงใน revision นี้
+
+แทนที่ revision A และเพิ่มหัวข้อ “การทบทวนครั้งถัดไป”
+
+## การควบคุมเอกสาร
 
 - Revision: B
-- Status: draft
-- Recorded on: 2026-10-10 (synthetic record date)
-- Review: pending human review
-- All identifiers, observations, and values in this document are fictional. No field activity occurred.
+- สถานะ: draft
+- วันที่บันทึก: 2026-10-10 (วันที่บันทึกแบบ SYNTHETIC)
+- การทบทวน: รอการทบทวนโดยบุคคล
+- ตัวระบุ ข้อสังเกต และค่าทั้งหมดในเอกสารนี้เป็นข้อมูลสมมติ ไม่มีกิจกรรมภาคสนามเกิดขึ้นจริง

@@ -6,11 +6,14 @@ language: "en"
 revision: "A"
 status: "draft"
 review_status: "pending"
-folder: "Pipeline Integrity/Inspection/Patrol"
+folder: "Maintenance/Patrol Logs"
 classification: "internal"
 licence: "synthetic"
 simulated: true
 label: "SYNTHETIC"
+asset_code: "DL-01"
+chainage_from: 105000
+chainage_to: 106000
 recorded_on: "2026-10-10"
 supersedes: null
 superseded_by: "SYN-UC1-PATROL-EN-008-B"
@@ -22,11 +25,11 @@ superseded_by: "SYN-UC1-PATROL-EN-008-B"
 
 ## Patrol scope
 
-A fictional patrol entry for the DL-01 demonstration set. The entry does not identify a real route or operator.
+A fictional patrol entry by FieldLoop Demo Pipeline Co. (a fictional company) for DL-01 at Chainage 105,000–106,000 m (SYNTHETIC). The patrol looked at the work scope, isolation plan and permits for a planned repair. The entry does not identify a real route or Organisation.
 
 ## Observation
 
-SYNTHETIC observation: [describe a fictional condition]. Location reference: [SYNTHETIC LOCATION].
+SYNTHETIC observation: a work pack that cites a superseded procedure revision. Location: Chainage 105,000–106,000 m (SYNTHETIC). Supporting records: the draft work pack and the permit register.
 
 ## Immediate response
 
@@ -34,7 +37,11 @@ No field response is represented. A qualified person must assess any real observ
 
 ## Follow-up
 
-Record the source, review decision, and any request for further inspection. Keep unverified observations separate from accepted Evidence.
+Record the source, review decision and any request for further inspection. Keep unverified observations separate from accepted Evidence.
+
+## Changes in this revision
+
+Initial issue.
 
 ## Document control
 
@@ -42,4 +49,4 @@ Record the source, review decision, and any request for further inspection. Keep
 - Status: draft
 - Recorded on: 2026-10-10 (synthetic record date)
 - Review: pending human review
-- All identifiers, observations, and values in this document are fictional. No field activity occurred.
+- All identifiers, observations and values in this document are fictional. No field activity occurred.

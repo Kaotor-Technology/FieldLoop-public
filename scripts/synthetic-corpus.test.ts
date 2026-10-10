@@ -1,11 +1,12 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 type CorpusManifest = {
   documentCount: number;
+  review: { pending: number; passed: number; failedAndRemoved: number };
   documents: {
     documentId: string;
     documentType: string;
@@ -13,6 +14,7 @@ type CorpusManifest = {
     revision: "A" | "B";
     status: string;
     reviewStatus: string;
+    folder: string;
     simulated: boolean;
     label: string;
     supersedes: string | null;
@@ -20,6 +22,10 @@ type CorpusManifest = {
     contentPath: string;
   }[];
 };
+
+const DOCUMENT_TYPES = ["procedure", "ili-report", "patrol-log", "root-cause-analysis", "memo"];
+// Top-level folders of the Pipeline Domain Pack (PRD KL-2).
+const PACK_FOLDERS = ["Company Standards", "Integrity", "Maintenance", "Lessons Learned"];
 
 const repositoryRoot = resolve(".");
 const generator = resolve("data/synthetic/corpus/generate.mjs");
@@ -41,6 +47,30 @@ function readManifest(directory: string): CorpusManifest {
   return JSON.parse(readFileSync(join(directory, "manifest.json"), "utf8")) as CorpusManifest;
 }
 
+function documentBody(directory: string, contentPath: string) {
+  const content = readFileSync(join(directory, contentPath), "utf8");
+  // Drop the front matter, the title and the revision-specific lines.
+  return content
+    .slice(content.indexOf("\n---\n") + 5)
+    .split("\n")
+    .filter((line) => !line.startsWith("# ") && !line.startsWith("- Revision: "))
+    .join("\n");
+}
+
+function recordDecisions(directory: string, decisions: Record<string, string[]>) {
+  const checklistFile = join(directory, "review-checklist.csv");
+  const rows = readFileSync(checklistFile, "utf8").trimEnd().split("\n").map((row) => {
+    const documentId = row.split(",")[0]?.replaceAll('"', "") ?? "";
+    const decision = decisions[documentId];
+    if (!decision) {
+      return row;
+    }
+    const cells = row.split('","').slice(0, 6).join('","');
+    return `${cells}","${decision.join('","')}"`;
+  });
+  writeFileSync(checklistFile, `${rows.join("\n")}\n`, "utf8");
+}
+
 afterEach(() => {
   for (const directory of generatedDirectories.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
@@ -48,20 +78,26 @@ afterEach(() => {
 });
 
 describe("synthetic document corpus generator", () => {
-  it("generates 240 bilingual documents across all five required document types", () => {
+  it("generates 240 documents with every document type in both languages", () => {
     const directory = temporaryDirectory();
     generateInto(directory);
     const manifest = readManifest(directory);
 
     expect(manifest.documentCount).toBe(240);
     expect(manifest.documents).toHaveLength(240);
-    expect(new Set(manifest.documents.map(({ documentType }) => documentType))).toEqual(
-      new Set(["procedure", "ili-report", "patrol-log", "root-cause-analysis", "memo"]),
-    );
-    expect(manifest.documents.filter(({ language }) => language === "en")).toHaveLength(120);
-    expect(manifest.documents.filter(({ language }) => language === "th")).toHaveLength(120);
-    expect(manifest.documents.filter(({ revision }) => revision === "A")).toHaveLength(120);
-    expect(manifest.documents.filter(({ revision }) => revision === "B")).toHaveLength(120);
+    for (const documentType of DOCUMENT_TYPES) {
+      for (const language of ["en", "th"]) {
+        for (const revision of ["A", "B"]) {
+          expect(manifest.documents.filter((document) =>
+            document.documentType === documentType
+            && document.language === language
+            && document.revision === revision)).toHaveLength(12);
+        }
+      }
+    }
+    for (const document of manifest.documents) {
+      expect(PACK_FOLDERS).toContain(document.folder.split("/")[0]);
+    }
   });
 
   it("keeps every generated record labelled, simulated, and pending human review", () => {
@@ -69,14 +105,17 @@ describe("synthetic document corpus generator", () => {
     generateInto(directory);
     const manifest = readManifest(directory);
 
+    expect(manifest.review).toEqual({ pending: 240, passed: 0, failedAndRemoved: 0 });
     for (const document of manifest.documents) {
       expect(document.status).toBe("draft");
       expect(document.reviewStatus).toBe("pending");
       expect(document.simulated).toBe(true);
       expect(document.label).toBe("SYNTHETIC");
       const content = readFileSync(join(directory, document.contentPath), "utf8");
-      expect(content).toContain("SYNTHETIC");
-      expect(content).toContain("Human review is pending");
+      expect(content).toContain("> SYNTHETIC — ");
+      expect(content).toContain(document.language === "en"
+        ? "Human review is pending"
+        : "รอการทบทวนโดยบุคคล");
       if (document.revision === "A") {
         expect(document.supersededBy).not.toBeNull();
         expect(document.supersedes).toBeNull();
@@ -84,6 +123,36 @@ describe("synthetic document corpus generator", () => {
         expect(document.supersedes).not.toBeNull();
         expect(document.supersededBy).toBeNull();
       }
+    }
+  });
+
+  it("writes a distinct body for every document, with no unfilled placeholder", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    const manifest = readManifest(directory);
+
+    const bodies = manifest.documents.map(({ contentPath }) => documentBody(directory, contentPath));
+    expect(new Set(bodies).size).toBe(240);
+    for (const body of bodies) {
+      expect(body).not.toMatch(/\[[^\]]*\]|\{\w+\}/);
+    }
+  });
+
+  it("matches the committed batch", () => {
+    const directory = temporaryDirectory();
+    const committed = resolve("data/synthetic/corpus");
+    // Start from the committed checklist so recorded decisions are replayed.
+    writeFileSync(
+      join(directory, "review-checklist.csv"),
+      readFileSync(join(committed, "review-checklist.csv"), "utf8"),
+      "utf8",
+    );
+    generateInto(directory);
+
+    const filenames = readdirSync(join(directory, "documents")).sort();
+    expect(readdirSync(join(committed, "documents")).sort()).toEqual(filenames);
+    for (const path of ["manifest.json", "review-checklist.csv", ...filenames.map((name) => `documents/${name}`)]) {
+      expect(readFileSync(join(committed, path), "utf8"), path).toBe(readFileSync(join(directory, path), "utf8"));
     }
   });
 
@@ -104,6 +173,48 @@ describe("synthetic document corpus generator", () => {
     for (const row of rows.slice(1)) {
       expect(row.endsWith(',"","","",""')).toBe(true);
     }
+  });
+
+  it("keeps recorded review decisions and removes failed documents on a rerun", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    recordDecisions(directory, {
+      "SYN-UC1-PROC-EN-001-A": ["Reviewer One", "pass", "2026-10-11", "Clear, and labelled."],
+      "SYN-UC1-PROC-EN-001-B": ["Reviewer One", "PASS", "2026-10-11", ""],
+      "SYN-UC1-MEMO-TH-002-A": ["Reviewer Two", "pass", "2026-10-11", ""],
+      "SYN-UC1-MEMO-TH-002-B": ["Reviewer Two", "fail", "2026-10-11", 'Unclear ""scope"", remove.'],
+    });
+    const reviewedChecklist = readFileSync(join(directory, "review-checklist.csv"), "utf8")
+      .replace('"PASS"', '"pass"');
+
+    generateInto(directory);
+    const manifest = readManifest(directory);
+    const byId = new Map(manifest.documents.map((document) => [document.documentId, document]));
+
+    expect(readFileSync(join(directory, "review-checklist.csv"), "utf8")).toBe(reviewedChecklist);
+    expect(manifest.review).toEqual({ pending: 236, passed: 3, failedAndRemoved: 1 });
+    expect(manifest.documentCount).toBe(239);
+    expect(byId.has("SYN-UC1-MEMO-TH-002-B")).toBe(false);
+    expect(readdirSync(join(directory, "documents"))).not.toContain("syn-uc1-memo-th-002-b.md");
+    expect(byId.get("SYN-UC1-PROC-EN-001-A")).toMatchObject({ status: "superseded", reviewStatus: "passed" });
+    expect(byId.get("SYN-UC1-PROC-EN-001-B")).toMatchObject({ status: "current", reviewStatus: "passed" });
+    expect(byId.get("SYN-UC1-MEMO-TH-002-A")).toMatchObject({ status: "current", supersededBy: null });
+    expect(readFileSync(join(directory, "documents/syn-uc1-proc-en-001-b.md"), "utf8"))
+      .toContain("Human review passed");
+  });
+
+  it.each([
+    [["", "pass", "2026-10-11", ""], /requires a reviewer and reviewed_at/],
+    [["Reviewer One", "maybe", "2026-10-11", ""], /must be "pass", "fail" or blank/],
+  ])("rejects an incomplete or unknown review decision", (decision, expectedError) => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    recordDecisions(directory, { "SYN-UC1-ILI-EN-004-A": decision });
+
+    expect(() => execFileSync(process.execPath, [generator, "--output-dir", directory], {
+      cwd: repositoryRoot,
+      stdio: "pipe",
+    })).toThrow(expectedError);
   });
 
   it("rejects unsupported command-line arguments", () => {
