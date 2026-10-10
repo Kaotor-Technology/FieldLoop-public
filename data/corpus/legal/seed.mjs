@@ -116,11 +116,8 @@ export function buildSeedQueries(database, manifest, orgId) {
       folder: expression.ref("excluded.folder"),
       title: expression.ref("excluded.title"),
       revision: expression.ref("excluded.revision"),
-      status: expression.ref("excluded.status"),
       classification: expression.ref("excluded.classification"),
       licence: expression.ref("excluded.licence"),
-      blob_uri: expression.ref("excluded.blob_uri"),
-      superseded_by: expression.ref("excluded.superseded_by"),
       simulated: expression.ref("excluded.simulated"),
       created_by: expression.ref("excluded.created_by"),
     }))));

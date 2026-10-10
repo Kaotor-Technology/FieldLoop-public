@@ -27,3 +27,7 @@ has no object-storage uploader; the full-text XML remains in this directory
 until a deployment uploads it to the approved document store. The FL-70 indexer
 owns chunk creation and retrieval indexing. Do not mark a Thai item current
 until its status and source text have been reviewed by a person.
+
+Re-running the seed refreshes source metadata while preserving the document's
+status, `superseded_by` link and `blob_uri` once a person or storage step has set
+them.

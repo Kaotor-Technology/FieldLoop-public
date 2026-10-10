@@ -89,6 +89,13 @@ describe("legal corpus manifest and Controlled Document loader", () => {
       expect(query.parameters).toContain("public");
       expect(query.parameters).toContain(false);
       expect(query.parameters).toContain(null);
+      const updateClause = query.sql.split(" do update set ")[1];
+      if (!updateClause) {
+        throw new Error("Seed query must update metadata on conflict.");
+      }
+      expect(updateClause).not.toContain('"status"');
+      expect(updateClause).not.toContain('"blob_uri"');
+      expect(updateClause).not.toContain('"superseded_by"');
     }
 
     const statuses = queries.map(({ parameters }) => parameters.find((value) => value === "status unverified"));
