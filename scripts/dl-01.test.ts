@@ -23,11 +23,45 @@ type TransactionResult = {
   ended: boolean;
   error: string | null;
 };
+type BowtiePathFixture = {
+  id: string;
+  side: "preventive" | "mitigative";
+  targetId: string;
+  barrierIds: string[];
+};
+type BowtieFixture = {
+  metadata: {
+    label: string;
+    simulated: boolean;
+    classification: string;
+    simulationStartsAt: string;
+  };
+  threats: { id: string; name: string; frequencyPerYear: number }[];
+  consequences: { id: string; name: string; severity: Record<string, number>; conditionalProbability: number }[];
+  barriers: {
+    id: string;
+    name: string;
+    type: string;
+    side: "preventive" | "mitigative";
+    pfdBand: number;
+    evidenceInterval: string;
+    performanceStandard: string;
+    triad: Record<string, { pass: boolean; justification: string }>;
+    evidence: { id: string; observedAt: string }[];
+    degradationFactors?: { description: string; controls: { description: string }[] }[];
+  }[];
+  paths: BowtiePathFixture[];
+};
 
 const repositoryRoot = resolve(".");
 const generator = resolve("data/synthetic/dl-01/generate.mjs");
 const seeder = resolve("data/synthetic/dl-01/seed.mjs");
+const bowtieSeedFile = resolve("data/synthetic/dl-01/bowtie-a.json");
 const generatedDirectories: string[] = [];
+
+function readBowtieFixture(): BowtieFixture {
+  return JSON.parse(readFileSync(bowtieSeedFile, "utf8")) as BowtieFixture;
+}
 
 function previewSeed(orgId: string): SeedQuery[] {
   return JSON.parse(execFileSync(
@@ -37,9 +71,10 @@ function previewSeed(orgId: string): SeedQuery[] {
   )) as SeedQuery[];
 }
 
-function runSeedTransaction(failAt: number): TransactionResult {
+function runSeedTransaction(failAt: number, mutation = "none"): TransactionResult {
   // Exercise Kysely's PostgreSQL driver without connecting to a database.
   const script = `
+    import { readFileSync } from 'node:fs';
     import { Kysely, PostgresDialect } from 'kysely';
     import { buildDataset } from './data/synthetic/dl-01/generate.mjs';
     import { loadSeed } from './data/synthetic/dl-01/seed.mjs';
@@ -60,8 +95,13 @@ function runSeedTransaction(failAt: number): TransactionResult {
       async end() { ended = true; },
     };
     const database = new Kysely({ dialect: new PostgresDialect({ pool }) });
+    const bowtieSeed = JSON.parse(readFileSync('./data/synthetic/dl-01/bowtie-a.json', 'utf8'));
+    if (process.argv[2] === 'missing-classification') delete bowtieSeed.metadata.classification;
+    if (process.argv[2] === 'missing-threat-path') {
+      bowtieSeed.paths = bowtieSeed.paths.filter((path) => path.targetId !== 'third-party-excavation');
+    }
     try {
-      await loadSeed(database, buildDataset(), "demo'pipeline");
+      await loadSeed(database, buildDataset(), "demo'pipeline", bowtieSeed);
     } catch (failure) {
       error = failure.message;
     } finally {
@@ -71,7 +111,7 @@ function runSeedTransaction(failAt: number): TransactionResult {
   `;
   return JSON.parse(execFileSync(
     process.execPath,
-    ["--input-type=module", "--eval", script, String(failAt)],
+    ["--input-type=module", "--eval", script, String(failAt), mutation],
     { cwd: repositoryRoot, encoding: "utf8" },
   )) as TransactionResult;
 }
@@ -243,24 +283,95 @@ describe("synthetic DL-01 route generator", () => {
     }
   });
 
+  it("authors Bowtie A with complete paths, Triad, Evidence and the Scenario A ageing window", () => {
+    const bowtie = readBowtieFixture();
+    expect(bowtie.metadata).toMatchObject({
+      label: "SYNTHETIC",
+      simulated: true,
+      classification: "internal",
+    });
+    expect(bowtie.threats.map(({ name }) => name)).toEqual([
+      "Third-party excavation",
+      "External corrosion",
+      "Slope movement / river scour",
+      "Overpressure",
+    ]);
+    expect(bowtie.consequences.map(({ name, severity }) => [name, severity])).toEqual([
+      ["Jet fire near a High Consequence Area", { people: 5 }],
+      ["Supply interruption", { service_continuity: 4 }],
+      ["Environmental damage at a river crossing", { environment: 3 }],
+    ]);
+    expect(bowtie.barriers).toHaveLength(15);
+
+    const preventiveTargets = new Set(
+      bowtie.paths.filter(({ side }) => side === "preventive").map(({ targetId }) => targetId),
+    );
+    const mitigativeTargets = new Set(
+      bowtie.paths.filter(({ side }) => side === "mitigative").map(({ targetId }) => targetId),
+    );
+    const usedBarrierIds = new Set(bowtie.paths.flatMap(({ barrierIds }) => barrierIds));
+    for (const threat of bowtie.threats) {
+      expect(preventiveTargets.has(threat.id)).toBe(true);
+      expect(threat.frequencyPerYear).toBeGreaterThan(0);
+    }
+    for (const consequence of bowtie.consequences) {
+      expect(mitigativeTargets.has(consequence.id)).toBe(true);
+      expect(consequence.conditionalProbability).toBeGreaterThanOrEqual(0);
+      expect(consequence.conditionalProbability).toBeLessThanOrEqual(1);
+    }
+    for (const barrier of bowtie.barriers) {
+      expect(usedBarrierIds.has(barrier.id)).toBe(true);
+      expect(barrier.performanceStandard.trim().length).toBeGreaterThan(0);
+      expect(Object.values(barrier.triad).map(({ pass }) => pass)).toEqual([true, true, true]);
+      expect(barrier.evidence.length).toBeGreaterThan(0);
+      expect(barrier.pfdBand).toBeGreaterThanOrEqual(barrier.type === "technical" ? 0.01 : 0.1);
+    }
+
+    const cathodicProtection = bowtie.barriers.find(({ id }) => id === "cathodic-protection");
+    expect(cathodicProtection).toBeDefined();
+    expect(cathodicProtection?.evidenceInterval).toBe("12 months");
+    const latestEvidence = cathodicProtection?.evidence
+      .map(({ observedAt }) => Date.parse(observedAt))
+      .reduce((latest, observedAt) => Math.max(latest, observedAt), 0);
+    const simulationStart = Date.parse(bowtie.metadata.simulationStartsAt);
+    const expiry = new Date(latestEvidence ?? 0);
+    expiry.setUTCFullYear(expiry.getUTCFullYear() + 1);
+    expect(expiry.getTime()).toBeGreaterThan(simulationStart);
+    expect(expiry.getTime()).toBeLessThanOrEqual(simulationStart + 3 * 24 * 60 * 60 * 1000);
+  });
+
   it("binds Organisation IDs, GeoJSON and attributes outside the SQL text", () => {
     const orgId = "demo'pipeline\\'); DROP TABLE app.asset; --";
     const queries = previewSeed(orgId);
-    expect(queries).toHaveLength(10);
-    expect(queries.filter(({ sql }) => sql.startsWith('insert into "app"."asset"'))).toHaveLength(4);
-    expect(queries.filter(({ sql }) => sql.startsWith('insert into "app"."segment"'))).toHaveLength(6);
+    const insertCount = (table: string) => queries.filter(({ sql }) => sql.startsWith(`insert into "app"."${table}"`)).length;
+    expect(insertCount("asset")).toBe(4);
+    expect(insertCount("segment")).toBe(6);
+    expect(insertCount("bowtie")).toBe(1);
+    expect(insertCount("bowtie_asset")).toBe(1);
+    expect(insertCount("threat")).toBe(4);
+    expect(insertCount("consequence")).toBe(3);
+    expect(insertCount("barrier")).toBe(15);
+    expect(insertCount("barrier_path")).toBe(21);
+    expect(insertCount("independence_group")).toBe(1);
+    expect(insertCount("degradation_factor")).toBe(4);
+    expect(insertCount("degradation_control")).toBe(4);
+    expect(insertCount("evidence")).toBe(16);
     for (const query of queries) {
       expect(query.sql).not.toContain(orgId);
       expect(query.sql).not.toContain("SYNTHETIC");
       expect(query.sql).not.toContain("coordinates");
-      expect(query.sql).toContain("ST_GeomFromGeoJSON($6::text)");
-      expect(query.sql).toContain('on conflict ("id") do update set');
-      expect(query.parameters[1]).toBe(orgId);
+      expect(query.sql).toContain("on conflict");
+      expect(query.parameters).toContain(orgId);
       expect(query.parameters).toContain(true);
       expect(query.parameters).toContain("internal");
+    }
+    const geometryQueries = queries.filter(({ sql }) => sql.includes("ST_GeomFromGeoJSON"));
+    expect(geometryQueries).toHaveLength(10);
+    for (const query of geometryQueries) {
+      expect(query.sql).toContain("ST_GeomFromGeoJSON($6::text)");
       expect(JSON.parse(String(query.parameters[5]))).toHaveProperty("coordinates");
     }
-    for (const query of queries.slice(0, 4)) {
+    for (const query of queries.filter(({ sql }) => sql.startsWith('insert into "app"."asset"'))) {
       expect(JSON.parse(String(query.parameters[6]))).toHaveProperty("label", "SYNTHETIC");
     }
   });
@@ -269,10 +380,9 @@ describe("synthetic DL-01 route generator", () => {
     const first = previewSeed("demo-pipeline");
     expect(previewSeed("demo-pipeline")).toEqual(first);
     const other = previewSeed("other-org");
-    expect(new Set(first.map(({ parameters }) => parameters[0])).size).toBe(10);
     for (const [index, query] of first.entries()) {
       expect(other[index]?.parameters[0]).not.toBe(query.parameters[0]);
-      if (index > 0) {
+      if (index > 0 && index < 10) {
         const parentIndex = index < 4 ? 3 : 2;
         expect(query.parameters[parentIndex]).toBe(first[0]?.parameters[0]);
       }
@@ -285,7 +395,7 @@ describe("synthetic DL-01 route generator", () => {
     expect(result.connections).toBe(1);
     expect(result.releases).toBe(1);
     expect(result.ended).toBe(true);
-    expect(result.queries).toHaveLength(12);
+    expect(result.queries).toHaveLength(previewSeed("demo'pipeline").length + 2);
     expect(result.queries[0]?.sql).toBe("begin");
     expect(result.queries.at(-1)?.sql).toBe("commit");
     expect(result.queries.slice(1, -1)).toEqual(previewSeed("demo'pipeline"));
@@ -301,5 +411,16 @@ describe("synthetic DL-01 route generator", () => {
     expect(result.queries[0]?.sql).toBe("begin");
     expect(result.queries.at(-1)?.sql).toBe("rollback");
     expect(result.queries.some(({ sql }) => sql === "commit")).toBe(false);
+  });
+
+  it.each([
+    ["missing-classification", "metadata.classification"],
+    ["missing-threat-path", "Every Threat must have a Preventive path to the Top Event."],
+  ])("rejects invalid Bowtie A data before inserting records (%s)", (mutation, expectedError) => {
+    const result = runSeedTransaction(0, mutation);
+    expect(result.error).toContain(expectedError);
+    expect(result.connections).toBe(1);
+    expect(result.queries.map(({ sql }) => sql)).toEqual(["begin", "rollback"]);
+    expect(result.queries.some(({ sql }) => sql.startsWith("insert"))).toBe(false);
   });
 });

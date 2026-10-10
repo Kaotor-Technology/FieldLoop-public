@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Kysely, PostgresDialect, sql } from "kysely";
@@ -11,7 +12,208 @@ const UUID_NAMESPACE_URL = Buffer.from(
 );
 const DEFAULT_OUTPUT_DIR = new URL(".", import.meta.url);
 const CREATED_BY = "seed:dl-01";
-const CLASSIFICATION = "internal";
+const BOWTIE_SEED_URL = new URL("./bowtie-a.json", import.meta.url);
+
+function readBowtieSeed() {
+  return JSON.parse(readFileSync(BOWTIE_SEED_URL, "utf8"));
+}
+
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function requireString(value, fieldName) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error(`Bowtie A seed requires ${fieldName}.`);
+  }
+}
+
+function validateBowtieSeed(seed) {
+  if (!isRecord(seed)) {
+    throw new Error("Bowtie A seed must be a JSON object.");
+  }
+  for (const fieldName of ["id", "assetCode", "hazard", "topEvent", "domain", "status", "version"]) {
+    requireString(seed[fieldName], fieldName);
+  }
+  if (!isRecord(seed.metadata)) {
+    throw new Error("Bowtie A seed requires metadata.");
+  }
+  if (seed.metadata.label !== "SYNTHETIC" || seed.metadata.simulated !== true) {
+    throw new Error("Bowtie A seed metadata must label the data SYNTHETIC and simulated.");
+  }
+  requireString(seed.metadata.classification, "metadata.classification");
+  requireString(seed.metadata.parameterBasis, "metadata.parameterBasis");
+  if (!Number.isFinite(Date.parse(seed.metadata.simulationStartsAt))) {
+    throw new Error("Bowtie A seed requires a valid metadata.simulationStartsAt.");
+  }
+  for (const fieldName of ["threats", "consequences", "barriers", "independenceGroups", "paths"]) {
+    if (!Array.isArray(seed[fieldName]) || seed[fieldName].length === 0) {
+      throw new Error(`Bowtie A seed requires a non-empty ${fieldName} array.`);
+    }
+  }
+
+  const entities = [
+    ...seed.threats.map((item) => ["Threat", item]),
+    ...seed.consequences.map((item) => ["Consequence", item]),
+    ...seed.barriers.map((item) => ["Barrier", item]),
+    ...seed.independenceGroups.map((item) => ["Independence Group", item]),
+  ];
+  const entityIds = new Set();
+  for (const [entityName, entity] of entities) {
+    if (!isRecord(entity)) {
+      throw new Error(`Bowtie A seed contains an invalid ${entityName}.`);
+    }
+    requireString(entity.id, `${entityName}.id`);
+    if (entityIds.has(entity.id)) {
+      throw new Error(`Bowtie A seed repeats entity ID ${entity.id}.`);
+    }
+    entityIds.add(entity.id);
+  }
+
+  const threatIds = new Set(seed.threats.map((threat) => threat.id));
+  const consequenceIds = new Set(seed.consequences.map((consequence) => consequence.id));
+  const barriersById = new Map(seed.barriers.map((barrier) => [barrier.id, barrier]));
+  const groupsById = new Map(seed.independenceGroups.map((group) => [group.id, group]));
+  const preventiveTargets = new Set();
+  const mitigativeTargets = new Set();
+  const barrierUsage = new Set();
+  const pathIds = new Set();
+
+  for (const threat of seed.threats) {
+    requireString(threat.name, `Threat ${threat.id}.name`);
+    if (!Number.isFinite(threat.frequencyPerYear) || threat.frequencyPerYear <= 0) {
+      throw new Error(`Threat ${threat.id} requires a positive simulated frequencyPerYear.`);
+    }
+  }
+  for (const consequence of seed.consequences) {
+    requireString(consequence.name, `Consequence ${consequence.id}.name`);
+    if (!isRecord(consequence.severity) || Object.keys(consequence.severity).length === 0) {
+      throw new Error(`Consequence ${consequence.id} requires a severity dimension.`);
+    }
+    if (Object.values(consequence.severity).some((band) => !Number.isInteger(band) || band < 1 || band > 5)) {
+      throw new Error(`Consequence ${consequence.id} has a severity band outside 1–5.`);
+    }
+    if (!Number.isFinite(consequence.conditionalProbability) || consequence.conditionalProbability < 0 || consequence.conditionalProbability > 1) {
+      throw new Error(`Consequence ${consequence.id} requires a conditional probability from 0 to 1.`);
+    }
+  }
+  for (const barrier of seed.barriers) {
+    requireString(barrier.name, `Barrier ${barrier.id}.name`);
+    requireString(barrier.performanceStandard, `Barrier ${barrier.id}.performanceStandard`);
+    requireString(barrier.evidenceInterval, `Barrier ${barrier.id}.evidenceInterval`);
+    if (!["technical", "organisational", "human"].includes(barrier.type)) {
+      throw new Error(`Barrier ${barrier.id} has an invalid type.`);
+    }
+    if (!["preventive", "mitigative"].includes(barrier.side)) {
+      throw new Error(`Barrier ${barrier.id} has an invalid side.`);
+    }
+    const minimumPfd = barrier.type === "technical" ? 0.01 : 0.1;
+    if (!Number.isFinite(barrier.pfdBand) || barrier.pfdBand < minimumPfd || barrier.pfdBand > 1) {
+      throw new Error(`Barrier ${barrier.id} violates the PRD AS-4 PFD ceiling for ${barrier.type}.`);
+    }
+    if (!["healthy", "degraded", "failed", "unverified"].includes(barrier.health)) {
+      throw new Error(`Barrier ${barrier.id} has an invalid Health value.`);
+    }
+    if (!isRecord(barrier.triad)) {
+      throw new Error(`Barrier ${barrier.id} requires the Validation Triad.`);
+    }
+    for (const checkName of ["effective", "independent", "auditable"]) {
+      const check = barrier.triad[checkName];
+      if (!isRecord(check) || check.pass !== true) {
+        throw new Error(`Barrier ${barrier.id} must pass the ${checkName} Validation Triad check.`);
+      }
+      requireString(check.justification, `Barrier ${barrier.id} ${checkName} justification`);
+    }
+    if (!Array.isArray(barrier.evidence) || barrier.evidence.length === 0) {
+      throw new Error(`Barrier ${barrier.id} requires at least one Evidence record.`);
+    }
+    for (const evidence of barrier.evidence) {
+      requireString(evidence.id, `Barrier ${barrier.id} Evidence.id`);
+      requireString(evidence.kind, `Evidence ${evidence.id}.kind`);
+      requireString(evidence.source, `Evidence ${evidence.id}.source`);
+      if (!Number.isFinite(Date.parse(evidence.observedAt))) {
+        throw new Error(`Evidence ${evidence.id} requires a valid observedAt timestamp.`);
+      }
+    }
+    if (barrier.independenceGroupId && !groupsById.has(barrier.independenceGroupId)) {
+      throw new Error(`Barrier ${barrier.id} references an unknown Independence Group.`);
+    }
+    for (const factor of barrier.degradationFactors ?? []) {
+      requireString(factor.id, `Barrier ${barrier.id} DegradationFactor.id`);
+      requireString(factor.description, `Degradation Factor ${factor.id}.description`);
+      if (!Array.isArray(factor.controls) || factor.controls.length === 0) {
+        throw new Error(`Degradation Factor ${factor.id} requires a Degradation Control.`);
+      }
+      for (const control of factor.controls) {
+        requireString(control.id, `Degradation Factor ${factor.id} control.id`);
+        requireString(control.description, `Degradation Control ${control.id}.description`);
+      }
+    }
+  }
+  for (const group of seed.independenceGroups) {
+    requireString(group.cause, `Independence Group ${group.id}.cause`);
+    const members = seed.barriers.filter((barrier) => barrier.independenceGroupId === group.id);
+    if (members.length < 2) {
+      throw new Error(`Independence Group ${group.id} must contain at least two Barriers.`);
+    }
+  }
+
+  for (const path of seed.paths) {
+    requireString(path.id, "path.id");
+    if (pathIds.has(path.id)) {
+      throw new Error(`Bowtie A seed repeats path ID ${path.id}.`);
+    }
+    pathIds.add(path.id);
+    const validTarget = path.side === "preventive"
+      ? threatIds.has(path.targetId)
+      : path.side === "mitigative" && consequenceIds.has(path.targetId);
+    if (!validTarget) {
+      throw new Error(`Path ${path.id} does not target a ${path.side === "preventive" ? "Threat" : "Consequence"}.`);
+    }
+    if (!Array.isArray(path.barrierIds) || path.barrierIds.length === 0) {
+      throw new Error(`Path ${path.id} requires at least one Barrier.`);
+    }
+    const targetSet = path.side === "preventive" ? preventiveTargets : mitigativeTargets;
+    targetSet.add(path.targetId);
+    for (const barrierId of path.barrierIds) {
+      const barrier = barriersById.get(barrierId);
+      if (!barrier || barrier.side !== path.side) {
+        throw new Error(`Path ${path.id} references a missing or wrong-side Barrier ${barrierId}.`);
+      }
+      if (path.barrierIds.indexOf(barrierId) !== path.barrierIds.lastIndexOf(barrierId)) {
+        throw new Error(`Path ${path.id} repeats Barrier ${barrierId}.`);
+      }
+      barrierUsage.add(barrierId);
+    }
+  }
+  if (seed.threats.some((threat) => !preventiveTargets.has(threat.id))) {
+    throw new Error("Every Threat must have a Preventive path to the Top Event.");
+  }
+  if (seed.consequences.some((consequence) => !mitigativeTargets.has(consequence.id))) {
+    throw new Error("Every Consequence must have a Mitigative path from the Top Event.");
+  }
+  if (seed.barriers.some((barrier) => !barrierUsage.has(barrier.id))) {
+    throw new Error("Every Barrier must be used by at least one Bowtie path.");
+  }
+  return seed;
+}
+
+function jsonbExpression(value) {
+  return sql`${JSON.stringify(value)}::jsonb`;
+}
+
+function insertById(database, table, values) {
+  return database
+    .insertInto(table)
+    .values(values)
+    .onConflict((conflict) => conflict.column("id").doUpdateSet((expression) =>
+      Object.fromEntries(
+        Object.keys(values)
+          .filter((column) => column !== "id")
+          .map((column) => [column, expression.ref(`excluded.${column}`)]),
+      ),
+    ));
+}
 
 function geometryExpression(geometry) {
   return sql`ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify(geometry)}::text), 4326)`;
@@ -41,7 +243,7 @@ function databaseId(orgId, entityKey) {
   return deterministicUuid("fieldloop:dl-01:" + orgId + ":" + entityKey);
 }
 
-function insertAsset(database, { id, orgId, type, parentId, domainPack, geometry, attributes }) {
+function insertAsset(database, { id, orgId, type, parentId, domainPack, geometry, attributes, simulated, classification }) {
   return database
     .insertInto("app.asset")
     .values({
@@ -52,8 +254,8 @@ function insertAsset(database, { id, orgId, type, parentId, domainPack, geometry
       domain_pack: domainPack,
       geom: geometryExpression(geometry),
       attributes: sql`${JSON.stringify(attributes)}::jsonb`,
-      simulated: true,
-      classification: CLASSIFICATION,
+      simulated,
+      classification,
       created_by: CREATED_BY,
     })
     .onConflict((conflict) => conflict.column("id").doUpdateSet((expression) => ({
@@ -69,7 +271,7 @@ function insertAsset(database, { id, orgId, type, parentId, domainPack, geometry
     })));
 }
 
-function insertSegment(database, { id, orgId, assetId, geometry, properties }) {
+function insertSegment(database, { id, orgId, assetId, geometry, properties, simulated, classification }) {
   return database
     .insertInto("app.segment")
     .values({
@@ -79,8 +281,8 @@ function insertSegment(database, { id, orgId, assetId, geometry, properties }) {
       chainage_from: properties.chainage_from_m,
       chainage_to: properties.chainage_to_m,
       geom: geometryExpression(geometry),
-      simulated: true,
-      classification: CLASSIFICATION,
+      simulated,
+      classification,
       created_by: CREATED_BY,
     })
     .onConflict((conflict) => conflict.column("id").doUpdateSet((expression) => ({
@@ -95,10 +297,12 @@ function insertSegment(database, { id, orgId, assetId, geometry, properties }) {
     })));
 }
 
-export function buildSeedQueries(database, dataset, orgId) {
+export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowtieSeed()) {
   if (typeof orgId !== "string" || orgId.trim().length === 0) {
     throw new Error("An Organisation ID is required.");
   }
+  validateBowtieSeed(bowtieSeed);
+  const { simulated, classification } = bowtieSeed.metadata;
 
   const routeFeature = dataset.route.features[0];
   const pipelineId = databaseId(orgId, "asset:dl-01");
@@ -110,6 +314,8 @@ export function buildSeedQueries(database, dataset, orgId) {
       parentId: null,
       domainPack: "pipeline-integrity",
       geometry: routeFeature.geometry,
+      simulated,
+      classification,
       attributes: {
         asset_code: routeFeature.properties.asset_code,
         name: routeFeature.properties.name,
@@ -133,6 +339,8 @@ export function buildSeedQueries(database, dataset, orgId) {
         parentId: pipelineId,
         domainPack: "pipeline-integrity",
         geometry: facility.geometry,
+        simulated,
+        classification,
         attributes: {
           name: facility.properties.name,
           facility_type: facility.properties.facility_type,
@@ -151,16 +359,172 @@ export function buildSeedQueries(database, dataset, orgId) {
         assetId: pipelineId,
         geometry: segment.geometry,
         properties: segment.properties,
+        simulated,
+        classification,
       }),
     );
+  }
+
+  const bowtieId = databaseId(orgId, `bowtie:${bowtieSeed.id}`);
+  const databaseIdFor = (entityType, entityId) => databaseId(orgId, `${entityType}:${entityId}`);
+  statements.push(insertById(database, "app.bowtie", {
+    id: bowtieId,
+    org_id: orgId,
+    hazard: bowtieSeed.hazard,
+    top_event: bowtieSeed.topEvent,
+    domain: bowtieSeed.domain,
+    status: bowtieSeed.status,
+    version: bowtieSeed.version,
+    simulated,
+    classification,
+    created_by: CREATED_BY,
+  }));
+  statements.push(database
+    .insertInto("app.bowtie_asset")
+    .values({
+      bowtie_id: bowtieId,
+      asset_id: pipelineId,
+      org_id: orgId,
+      simulated,
+      classification,
+      created_by: CREATED_BY,
+    })
+    .onConflict((conflict) => conflict
+      .columns(["bowtie_id", "asset_id"])
+      .doUpdateSet((expression) => ({
+        org_id: expression.ref("excluded.org_id"),
+        simulated: expression.ref("excluded.simulated"),
+        classification: expression.ref("excluded.classification"),
+        created_by: expression.ref("excluded.created_by"),
+      })),
+    ));
+
+  for (const threat of bowtieSeed.threats) {
+    statements.push(insertById(database, "app.threat", {
+      id: databaseIdFor("threat", threat.id),
+      org_id: orgId,
+      bowtie_id: bowtieId,
+      name: threat.name,
+      frequency_per_year: threat.frequencyPerYear,
+      simulated,
+      classification,
+      created_by: CREATED_BY,
+    }));
+  }
+
+  for (const consequence of bowtieSeed.consequences) {
+    statements.push(insertById(database, "app.consequence", {
+      id: databaseIdFor("consequence", consequence.id),
+      org_id: orgId,
+      bowtie_id: bowtieId,
+      name: consequence.name,
+      severity: jsonbExpression(consequence.severity),
+      p_conditional: consequence.conditionalProbability,
+      simulated,
+      classification,
+      created_by: CREATED_BY,
+    }));
+  }
+
+  for (const group of bowtieSeed.independenceGroups) {
+    statements.push(insertById(database, "app.independence_group", {
+      id: databaseIdFor("independence_group", group.id),
+      org_id: orgId,
+      bowtie_id: bowtieId,
+      cause: group.cause,
+      simulated,
+      classification,
+      created_by: CREATED_BY,
+    }));
+  }
+
+  for (const barrier of bowtieSeed.barriers) {
+    const barrierId = databaseIdFor("barrier", barrier.id);
+    statements.push(insertById(database, "app.barrier", {
+      id: barrierId,
+      org_id: orgId,
+      name: barrier.name,
+      type: barrier.type,
+      side: barrier.side,
+      pfd_band: barrier.pfdBand,
+      health: barrier.health,
+      evidence_interval: barrier.evidenceInterval,
+      performance_standard: barrier.performanceStandard,
+      independence_group_id: barrier.independenceGroupId
+        ? databaseIdFor("independence_group", barrier.independenceGroupId)
+        : null,
+      triad: jsonbExpression(barrier.triad),
+      simulated,
+      classification,
+      created_by: CREATED_BY,
+    }));
+  }
+
+  for (const path of bowtieSeed.paths) {
+    for (const [index, barrierKey] of path.barrierIds.entries()) {
+      const pathTargetId = path.side === "preventive"
+        ? databaseIdFor("threat", path.targetId)
+        : databaseIdFor("consequence", path.targetId);
+      statements.push(insertById(database, "app.barrier_path", {
+        id: databaseIdFor("barrier_path", `${path.id}:${barrierKey}`),
+        org_id: orgId,
+        barrier_id: databaseIdFor("barrier", barrierKey),
+        threat_id: path.side === "preventive" ? pathTargetId : null,
+        consequence_id: path.side === "mitigative" ? pathTargetId : null,
+        position: index + 1,
+        simulated,
+        classification,
+        created_by: CREATED_BY,
+      }));
+    }
+  }
+
+  for (const barrier of bowtieSeed.barriers) {
+    for (const factor of barrier.degradationFactors ?? []) {
+      const factorId = databaseIdFor("degradation_factor", factor.id);
+      statements.push(insertById(database, "app.degradation_factor", {
+        id: factorId,
+        org_id: orgId,
+        barrier_id: databaseIdFor("barrier", barrier.id),
+        description: factor.description,
+        simulated,
+        classification,
+        created_by: CREATED_BY,
+      }));
+      for (const control of factor.controls) {
+        statements.push(insertById(database, "app.degradation_control", {
+          id: databaseIdFor("degradation_control", control.id),
+          org_id: orgId,
+          degradation_factor_id: factorId,
+          description: control.description,
+          simulated,
+          classification,
+          created_by: CREATED_BY,
+        }));
+      }
+    }
+    for (const evidence of barrier.evidence) {
+      statements.push(insertById(database, "app.evidence", {
+        id: databaseIdFor("evidence", evidence.id),
+        org_id: orgId,
+        barrier_id: databaseIdFor("barrier", barrier.id),
+        kind: evidence.kind,
+        source: evidence.source,
+        observed_at: evidence.observedAt,
+        blob_uri: evidence.blobUri ?? null,
+        simulated,
+        classification,
+        created_by: CREATED_BY,
+      }));
+    }
   }
 
   return statements;
 }
 
-export async function loadSeed(database, dataset, orgId) {
+export async function loadSeed(database, dataset, orgId, bowtieSeed = readBowtieSeed()) {
   await database.transaction().execute(async (transaction) => {
-    for (const query of buildSeedQueries(transaction, dataset, orgId)) {
+    for (const query of buildSeedQueries(transaction, dataset, orgId, bowtieSeed)) {
       await query.execute();
     }
   });
@@ -232,6 +596,7 @@ async function main() {
     throw new Error("Set FIELDLOOP_ORG_ID or pass --org-id.");
   }
   const dataset = buildDataset();
+  const bowtieSeed = validateBowtieSeed(readBowtieSeed());
   const databaseUrl = process.env.FIELDLOOP_DATABASE_URL;
   if (!options.printSql && !databaseUrl) {
     throw new Error(
@@ -252,7 +617,7 @@ async function main() {
   });
   try {
     if (options.printSql) {
-      const queries = buildSeedQueries(database, dataset, orgId).map((query) => {
+      const queries = buildSeedQueries(database, dataset, orgId, bowtieSeed).map((query) => {
         const { sql: querySql, parameters } = query.compile();
         return { sql: querySql, parameters };
       });
@@ -260,16 +625,16 @@ async function main() {
       return;
     }
     await writeDataset(options.outputDir);
-    await loadSeed(database, dataset, orgId);
+    await loadSeed(database, dataset, orgId, bowtieSeed);
   } finally {
     await database.destroy();
   }
   process.stdout.write(
     "Loaded the synthetic DL-01 Asset, " +
       dataset.segments.features.length +
-      " Segments and " +
+      " Segments, " +
       dataset.facilities.features.length +
-      " Facilities for Organisation " +
+      " Facilities, Bowtie A and its Threats, Consequences, Barriers, Evidence for Organisation " +
       orgId +
       ".\n",
   );

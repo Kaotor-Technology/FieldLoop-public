@@ -20,12 +20,15 @@ temporary or review copies.
 
 ## Load the seed
 
-The target database must have the FL-60 schema migrated. Install repository
-dependencies with **pnpm install --frozen-lockfile** before running the loader.
+The target database must have the FL-60 schema and Bowtie seed fields migrated.
+Install repository dependencies with **pnpm install --frozen-lockfile** before
+running the loader.
 Set **FIELDLOOP_ORG_ID** to the Organisation key used by the application, and
 set **FIELDLOOP_DATABASE_URL** from the approved local secret source. The loader
-uses Kysely with the PostgreSQL driver, parameter bindings and a single
-transaction. Stable IDs make re-running it update the same records.
+creates the Asset, Facilities, Segments and Bowtie A records from
+**bowtie-a.json** in one command. It uses Kysely with the PostgreSQL driver,
+parameter bindings and one transaction. Stable IDs make re-running it update the
+same records.
 
 ```sh
 FIELDLOOP_ORG_ID=<org-id> FIELDLOOP_DATABASE_URL=<postgres-url> \
@@ -42,7 +45,14 @@ node data/synthetic/dl-01/seed.mjs --print-sql --org-id demo-pipeline
 including Organisation IDs, GeoJSON and Asset attributes, stay outside the SQL
 text. This preview is for inspection; it is not a standalone SQL script for psql.
 
-Assets and Segments are marked **simulated=true**. The Asset attributes and
-GeoJSON features carry the **SYNTHETIC** label, and all rows use the **internal**
-classification. The route and Facility shape can be regenerated without
-database access.
+Every loaded record is marked **simulated=true** and uses the **internal**
+classification. The Asset attributes, GeoJSON features and Bowtie A metadata
+carry the **SYNTHETIC** label. Bowtie A's rate and probability inputs are
+illustrative simulation values, not operating measurements or a QRA.
+
+Cathodic-protection Evidence is dated **2025-10-13** with a **12-month** interval.
+The fixture's simulation clock starts **2026-10-12**, so Scenario A's `T+3d`
+Evidence-ageing event occurs after that interval has passed. The older Evidence
+record remains in the history.
+
+The route and Facility shape can be regenerated without database access.

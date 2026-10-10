@@ -1,0 +1,385 @@
+{
+  "id": "dl-01-bowtie-a",
+  "assetCode": "DL-01",
+  "hazard": "Natural gas at transmission pressure",
+  "topEvent": "Loss of Primary Containment",
+  "domain": "mah",
+  "status": "approved",
+  "version": "1.0.0",
+  "metadata": {
+    "label": "SYNTHETIC",
+    "simulated": true,
+    "classification": "internal",
+    "parameterBasis": "Illustrative simulation inputs only; these are not measured operating rates or a QRA. PFD values use the demo defaults in PRD AS-4.",
+    "simulationStartsAt": "2026-10-12T00:00:00.000Z",
+    "scenarioReference": "cp-rectifier-failure"
+  },
+  "threats": [
+    {
+      "id": "third-party-excavation",
+      "name": "Third-party excavation",
+      "frequencyPerYear": 0.001
+    },
+    {
+      "id": "external-corrosion",
+      "name": "External corrosion",
+      "frequencyPerYear": 0.001
+    },
+    {
+      "id": "slope-movement-river-scour",
+      "name": "Slope movement / river scour",
+      "frequencyPerYear": 0.001
+    },
+    {
+      "id": "overpressure",
+      "name": "Overpressure",
+      "frequencyPerYear": 0.001
+    }
+  ],
+  "consequences": [
+    {
+      "id": "jet-fire-near-high-consequence-area",
+      "name": "Jet fire near a High Consequence Area",
+      "severity": { "people": 5 },
+      "conditionalProbability": 0.1
+    },
+    {
+      "id": "supply-interruption",
+      "name": "Supply interruption",
+      "severity": { "service_continuity": 4 },
+      "conditionalProbability": 0.1
+    },
+    {
+      "id": "environmental-damage-at-river-crossing",
+      "name": "Environmental damage at a river crossing",
+      "severity": { "environment": 3 },
+      "conditionalProbability": 0.1
+    }
+  ],
+  "independenceGroups": [
+    {
+      "id": "shared-control-power",
+      "cause": "Shared control power supply (synthetic common-cause scenario)"
+    }
+  ],
+  "barriers": [
+    {
+      "id": "depth-of-cover-and-markers",
+      "name": "Depth of cover & markers",
+      "type": "technical",
+      "side": "preventive",
+      "pfdBand": 0.01,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "Depth of cover and marker condition are checked and documented at least once within each 12-month evidence interval.",
+      "triad": {
+        "effective": { "pass": true, "justification": "Adequate cover and visible markers reduce the chance that excavation contacts the pipeline." },
+        "independent": { "pass": true, "justification": "Physical cover and markers do not depend on the permit or patrol process." },
+        "auditable": { "pass": true, "justification": "Survey and marker inspection records provide reviewable evidence." }
+      },
+      "evidence": [
+        { "id": "cover-survey-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
+      ]
+    },
+    {
+      "id": "right-of-way-patrol",
+      "name": "Right-of-Way patrol",
+      "type": "human",
+      "side": "preventive",
+      "pfdBand": 0.1,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "Patrol completion and findings are recorded within each 12-month evidence interval.",
+      "triad": {
+        "effective": { "pass": true, "justification": "Patrols identify encroachment before it reaches the pipeline." },
+        "independent": { "pass": true, "justification": "Field observation is separate from the physical cover and permit records." },
+        "auditable": { "pass": true, "justification": "Dated patrol records document the route and findings." }
+      },
+      "degradationFactors": [
+        {
+          "id": "patrol-frequency-cut",
+          "description": "Patrol frequency cut",
+          "controls": [
+            { "id": "patrol-kpi-monitoring", "description": "Patrol KPI monitoring" }
+          ]
+        }
+      ],
+      "evidence": [
+        { "id": "patrol-record-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
+      ]
+    },
+    {
+      "id": "excavation-permit-one-call",
+      "name": "Excavation permit / one-call",
+      "type": "organisational",
+      "side": "preventive",
+      "pfdBand": 0.1,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "Permit and one-call records are retained for excavation work within each 12-month evidence interval.",
+      "triad": {
+        "effective": { "pass": true, "justification": "The permit and one-call process checks planned work before excavation begins." },
+        "independent": { "pass": true, "justification": "The authorization process is separate from patrol observation and physical cover." },
+        "auditable": { "pass": true, "justification": "Permit decisions and notifications are recorded." }
+      },
+      "evidence": [
+        { "id": "permit-audit-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
+      ]
+    },
+    {
+      "id": "coating",
+      "name": "Coating",
+      "type": "technical",
+      "side": "preventive",
+      "pfdBand": 0.01,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "Coating condition is assessed and findings are recorded within each 12-month evidence interval.",
+      "triad": {
+        "effective": { "pass": true, "justification": "The coating separates the pipe surface from the surrounding corrosive environment." },
+        "independent": { "pass": true, "justification": "The coating is a physical layer independent of cathodic protection and inspection." },
+        "auditable": { "pass": true, "justification": "Coating inspection and repair records can be reviewed." }
+      },
+      "evidence": [
+        { "id": "coating-check-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
+      ]
+    },
+    {
+      "id": "cathodic-protection",
+      "name": "Cathodic protection",
+      "type": "technical",
+      "side": "preventive",
+      "pfdBand": 0.01,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "Rectifier output and protection readings are checked and recorded within each 12-month evidence interval.",
+      "triad": {
+        "effective": { "pass": true, "justification": "Cathodic protection reduces external corrosion when the rectifier operates within its synthetic limits." },
+        "independent": { "pass": true, "justification": "The electrochemical protection system is separate from coating and in-line inspection." },
+        "auditable": { "pass": true, "justification": "Dated rectifier and survey readings provide reviewable evidence." }
+      },
+      "degradationFactors": [
+        {
+          "id": "rectifier-outage",
+          "description": "Rectifier outage",
+          "controls": [
+            { "id": "remote-rectifier-monitoring", "description": "Remote rectifier monitoring" }
+          ]
+        }
+      ],
+      "evidence": [
+        { "id": "cp-survey-2024", "kind": "performance_check", "source": "manual", "observedAt": "2024-10-13T00:00:00.000Z" },
+        { "id": "cp-survey-2025", "kind": "performance_check", "source": "manual", "observedAt": "2025-10-13T00:00:00.000Z" }
+      ]
+    },
+    {
+      "id": "in-line-inspection-and-response",
+      "name": "In-line inspection & response",
+      "type": "organisational",
+      "side": "preventive",
+      "pfdBand": 0.1,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "In-line inspection findings and responses are documented within each 12-month evidence interval.",
+      "triad": {
+        "effective": { "pass": true, "justification": "Inspection identifies corrosion anomalies so that they can be assessed and addressed." },
+        "independent": { "pass": true, "justification": "Inspection and response are separate from the coating and cathodic-protection systems." },
+        "auditable": { "pass": true, "justification": "Inspection reports and response records are retained." }
+      },
+      "evidence": [
+        { "id": "ili-review-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
+      ]
+    },
+    {
+      "id": "slope-protection",
+      "name": "Slope protection",
+      "type": "technical",
+      "side": "preventive",
+      "pfdBand": 0.01,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "Slope-protection condition is inspected and recorded within each 12-month evidence interval.",
+      "triad": {
+        "effective": { "pass": true, "justification": "The protection reduces slope movement and scour exposure to the pipeline." },
+        "independent": { "pass": true, "justification": "The physical protection is separate from monitoring and patrol controls." },
+        "auditable": { "pass": true, "justification": "Inspection records document the condition of the synthetic protection works." }
+      },
+      "evidence": [
+        { "id": "slope-check-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
+      ]
+    },
+    {
+      "id": "strain-inclinometer-monitoring",
+      "name": "Strain / inclinometer monitoring",
+      "type": "technical",
+      "side": "preventive",
+      "pfdBand": 0.01,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "Monitoring instrument checks and readings are recorded within each 12-month evidence interval.",
+      "triad": {
+        "effective": { "pass": true, "justification": "Monitoring detects movement that may threaten pipeline integrity." },
+        "independent": { "pass": true, "justification": "Instrument monitoring is separate from physical slope protection and patrol." },
+        "auditable": { "pass": true, "justification": "Instrument checks and readings are retained with observation times." }
+      },
+      "evidence": [
+        { "id": "slope-monitor-check-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
+      ]
+    },
+    {
+      "id": "post-rain-patrol",
+      "name": "Post-rain patrol",
+      "type": "organisational",
+      "side": "preventive",
+      "pfdBand": 0.1,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "Rain-triggered inspection rules and completed patrol records are reviewed within each 12-month evidence interval.",
+      "triad": {
+        "effective": { "pass": true, "justification": "A patrol after extreme rainfall checks for movement and scour before damage progresses." },
+        "independent": { "pass": true, "justification": "The field patrol is separate from slope-protection structures and instruments." },
+        "auditable": { "pass": true, "justification": "Trigger and completion records document the patrol response." }
+      },
+      "degradationFactors": [
+        {
+          "id": "extreme-rainfall",
+          "description": "Extreme rainfall",
+          "controls": [
+            { "id": "rainfall-triggered-inspection-rule", "description": "Rainfall-triggered inspection rule" }
+          ]
+        }
+      ],
+      "evidence": [
+        { "id": "post-rain-drill-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
+      ]
+    },
+    {
+      "id": "pressure-control",
+      "name": "Pressure control",
+      "type": "technical",
+      "side": "preventive",
+      "pfdBand": 0.01,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "Pressure-control function checks and calibration records are current within each 12-month evidence interval.",
+      "triad": {
+        "effective": { "pass": true, "justification": "The control system maintains pressure within the synthetic operating limits." },
+        "independent": { "pass": true, "justification": "Pressure control is separate from the independent overpressure-protection function." },
+        "auditable": { "pass": true, "justification": "Function checks and calibration records are retained." }
+      },
+      "degradationFactors": [
+        {
+          "id": "instrument-drift",
+          "description": "Instrument drift",
+          "controls": [
+            { "id": "calibration-programme", "description": "Calibration programme" }
+          ]
+        }
+      ],
+      "evidence": [
+        { "id": "pressure-control-check-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
+      ]
+    },
+    {
+      "id": "overpressure-protection",
+      "name": "Overpressure protection",
+      "type": "technical",
+      "side": "preventive",
+      "pfdBand": 0.01,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "The overpressure-protection function is tested and documented within each 12-month evidence interval.",
+      "triad": {
+        "effective": { "pass": true, "justification": "The protection function limits pressure excursions beyond the synthetic operating limits." },
+        "independent": { "pass": true, "justification": "Its protection function is separate from normal pressure control." },
+        "auditable": { "pass": true, "justification": "Test and maintenance records document its availability." }
+      },
+      "evidence": [
+        { "id": "overpressure-test-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
+      ]
+    },
+    {
+      "id": "operating-limits-procedure",
+      "name": "Operating limits procedure",
+      "type": "organisational",
+      "side": "preventive",
+      "pfdBand": 0.1,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "The approved operating-limits procedure is reviewed within each 12-month evidence interval and current copies are available to operators.",
+      "triad": {
+        "effective": { "pass": true, "justification": "The procedure directs operators to respond before pressure exceeds the synthetic operating limits." },
+        "independent": { "pass": true, "justification": "The procedure is an administrative control separate from the two technical pressure functions." },
+        "auditable": { "pass": true, "justification": "Revision and review records show which procedure was current." }
+      },
+      "evidence": [
+        { "id": "operating-procedure-review-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
+      ]
+    },
+    {
+      "id": "leak-detection-scada-alarm",
+      "name": "Leak detection & SCADA alarm",
+      "type": "technical",
+      "side": "mitigative",
+      "pfdBand": 0.01,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "Leak-detection and alarm functions are tested and documented within each 12-month evidence interval.",
+      "independenceGroupId": "shared-control-power",
+      "triad": {
+        "effective": { "pass": true, "justification": "Timely leak detection and alarm support mitigation after loss of containment." },
+        "independent": { "pass": true, "justification": "Its shared control-power dependency is documented and modelled by the Independence Group." },
+        "auditable": { "pass": true, "justification": "Alarm tests and event records provide reviewable evidence." }
+      },
+      "evidence": [
+        { "id": "leak-detection-test-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
+      ]
+    },
+    {
+      "id": "remote-automatic-valve-closure",
+      "name": "Remote / automatic valve closure",
+      "type": "technical",
+      "side": "mitigative",
+      "pfdBand": 0.01,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "Valve closure function checks and test records are current within each 12-month evidence interval.",
+      "independenceGroupId": "shared-control-power",
+      "triad": {
+        "effective": { "pass": true, "justification": "Valve closure limits the release after loss of containment." },
+        "independent": { "pass": true, "justification": "Its shared control-power dependency is documented and modelled by the Independence Group." },
+        "auditable": { "pass": true, "justification": "Valve function tests and maintenance records are retained." }
+      },
+      "evidence": [
+        { "id": "valve-closure-test-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
+      ]
+    },
+    {
+      "id": "emergency-response-plan",
+      "name": "Emergency response plan",
+      "type": "organisational",
+      "side": "mitigative",
+      "pfdBand": 0.1,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "The response plan is reviewed and an exercise record is retained within each 12-month evidence interval.",
+      "triad": {
+        "effective": { "pass": true, "justification": "The plan provides a coordinated response to reduce harm after a release." },
+        "independent": { "pass": true, "justification": "The response plan does not depend on the leak-detection or valve-control functions." },
+        "auditable": { "pass": true, "justification": "Plan revisions, exercise records and actions can be reviewed." }
+      },
+      "evidence": [
+        { "id": "response-plan-exercise-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
+      ]
+    }
+  ],
+  "paths": [
+    { "id": "third-party-excavation-path", "side": "preventive", "targetId": "third-party-excavation", "barrierIds": ["depth-of-cover-and-markers", "right-of-way-patrol", "excavation-permit-one-call"] },
+    { "id": "external-corrosion-path", "side": "preventive", "targetId": "external-corrosion", "barrierIds": ["coating", "cathodic-protection", "in-line-inspection-and-response"] },
+    { "id": "slope-movement-river-scour-path", "side": "preventive", "targetId": "slope-movement-river-scour", "barrierIds": ["slope-protection", "strain-inclinometer-monitoring", "post-rain-patrol"] },
+    { "id": "overpressure-path", "side": "preventive", "targetId": "overpressure", "barrierIds": ["pressure-control", "overpressure-protection", "operating-limits-procedure"] },
+    { "id": "jet-fire-mitigation-path", "side": "mitigative", "targetId": "jet-fire-near-high-consequence-area", "barrierIds": ["leak-detection-scada-alarm", "remote-automatic-valve-closure", "emergency-response-plan"] },
+    { "id": "supply-interruption-mitigation-path", "side": "mitigative", "targetId": "supply-interruption", "barrierIds": ["leak-detection-scada-alarm", "remote-automatic-valve-closure", "emergency-response-plan"] },
+    { "id": "environmental-damage-mitigation-path", "side": "mitigative", "targetId": "environmental-damage-at-river-crossing", "barrierIds": ["leak-detection-scada-alarm", "remote-automatic-valve-closure", "emergency-response-plan"] }
+  ]
+}
