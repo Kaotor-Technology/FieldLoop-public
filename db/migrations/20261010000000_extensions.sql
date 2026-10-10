@@ -16,8 +16,9 @@ GRANT USAGE ON SCHEMA app TO fieldloop_app;
 
 -- migrate:down
 SET search_path = app, public;
+-- Roles are cluster-wide and other databases on the instance may still use fieldloop_app,
+-- so only this database's grants are removed and the role is kept.
 DROP OWNED BY fieldloop_app;
-DROP ROLE IF EXISTS fieldloop_app;
 DROP SCHEMA IF EXISTS app CASCADE;
 DROP EXTENSION IF EXISTS pgcrypto;
 DROP EXTENSION IF EXISTS vector;
