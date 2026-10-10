@@ -113,6 +113,7 @@ CREATE TABLE cross_domain_link (
 );
 
 -- migrate:down
+SET search_path = app, public;
 DROP TABLE cross_domain_link;
 DROP TABLE consequence;
 DROP TABLE threat;

@@ -78,6 +78,7 @@ CREATE TABLE risk_snapshot (
 );
 
 -- migrate:down
+SET search_path = app, public;
 DROP TABLE risk_snapshot;
 DROP TABLE degradation_control;
 DROP TABLE degradation_factor;

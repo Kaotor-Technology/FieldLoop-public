@@ -97,6 +97,7 @@ CREATE TABLE health_change (
 );
 
 -- migrate:down
+SET search_path = app, public;
 DROP TABLE health_change;
 DROP TABLE health_proposal;
 DROP TABLE signal_rule;

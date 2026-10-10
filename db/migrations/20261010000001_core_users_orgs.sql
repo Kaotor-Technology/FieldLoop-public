@@ -41,6 +41,7 @@ CREATE TABLE organisation (
 CREATE INDEX idx_organisation_geom ON organisation USING GIST (central_location);
 
 -- migrate:down
+SET search_path = app, public;
 DROP TABLE organisation;
 DROP TABLE user_session;
 DROP TABLE app_user;

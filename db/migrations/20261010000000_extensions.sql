@@ -15,6 +15,7 @@ END $$;
 GRANT USAGE ON SCHEMA app TO fieldloop_app;
 
 -- migrate:down
+SET search_path = app, public;
 DROP OWNED BY fieldloop_app;
 DROP ROLE IF EXISTS fieldloop_app;
 DROP SCHEMA IF EXISTS app CASCADE;

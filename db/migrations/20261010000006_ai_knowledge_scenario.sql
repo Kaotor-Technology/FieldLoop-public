@@ -207,6 +207,7 @@ CREATE TABLE simulation_run (
 );
 
 -- migrate:down
+SET search_path = app, public;
 DROP TABLE simulation_run;
 DROP TABLE scenario;
 DROP TABLE kml_import_item;

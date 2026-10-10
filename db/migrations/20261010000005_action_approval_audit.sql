@@ -123,6 +123,7 @@ FOR EACH ROW
 EXECUTE FUNCTION prevent_audit_modification();
 
 -- migrate:down
+SET search_path = app, public;
 DROP TRIGGER trg_prevent_audit_modification ON audit_event;
 DROP FUNCTION prevent_audit_modification;
 DROP TABLE audit_event;
