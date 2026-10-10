@@ -1,3 +1,5 @@
+import { readFile, writeFile, unlink } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
@@ -71,4 +73,29 @@ describe("FieldLoop OpenAPI conventions", () => {
       "fieldloop-session-cookie-scheme @ components > securitySchemes > sessionCookie > name",
     ]);
   }, timeoutMs);
+});
+
+// Mutations of a complete conforming contract prove the new rule independently.
+describe("command idempotency", () => {
+  const cases = [
+    { name: "rejects a command without the header", exemption: "", rejects: true },
+    { name: "rejects an empty exemption", exemption: '      x-idempotency-exempt: ""\n', rejects: true },
+    { name: "accepts a documented stateless exemption", exemption: '      x-idempotency-exempt: "Pure calculation; no persistent effects."\n', rejects: false },
+    { name: "rejects a boolean exemption", exemption: '      x-idempotency-exempt: true\n', rejects: true },
+  ];
+  for (const testCase of cases) {
+    it(testCase.name, async () => {
+      const fixture = resolve(packageRoot, "test/fixtures", `temporary-${randomUUID()}.yaml`);
+      const source = (await readFile(resolve(packageRoot, "test/fixtures/conforming.yaml"), "utf8"))
+        .replace('        - $ref: "../../openapi.yaml#/components/parameters/IdempotencyKey"\n', "")
+        .replace("      operationId: acceptHealthProposal\n", `${testCase.exemption}      operationId: acceptHealthProposal\n`);
+      try {
+        await writeFile(fixture, source);
+        const findings = (await lint(fixture)).filter((finding) => finding.code === "fieldloop-command-idempotency");
+        expect(findings.length > 0).toBe(testCase.rejects);
+      } finally {
+        await unlink(fixture);
+      }
+    }, timeoutMs);
+  }
 });

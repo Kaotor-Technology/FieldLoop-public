@@ -256,3 +256,31 @@ rules:
                     name: { const: X-CSRF-Token }
                     in: { const: header }
                     required: { const: true }
+
+  fieldloop-command-idempotency:
+    description: Every POST command has Idempotency-Key unless a documented stateless exemption applies.
+    message: "A POST command needs required Idempotency-Key, or a nonempty x-idempotency-exempt reason for a stateless operation."
+    severity: error
+    given: "$.paths[?(@property.match(/:[^/]*$/))].post"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          anyOf:
+            - required: [parameters]
+              properties:
+                parameters:
+                  type: array
+                  contains:
+                    type: object
+                    required: [name, in, required]
+                    properties:
+                      name: { const: Idempotency-Key }
+                      in: { const: header }
+                      required: { const: true }
+            - required: [x-idempotency-exempt]
+              properties:
+                x-idempotency-exempt:
+                  type: string
+                  pattern: "\\S"
