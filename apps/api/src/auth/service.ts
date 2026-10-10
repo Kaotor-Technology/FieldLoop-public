@@ -1,5 +1,13 @@
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import type { AuthStore, AuthUser, EnvelopeCrypto, InternalTokenService, LoginTokens, OidcProvider } from "./model.js";
+import {
+  OidcRejectedError,
+  type AuthStore,
+  type AuthUser,
+  type EnvelopeCrypto,
+  type InternalTokenService,
+  type LoginTokens,
+  type OidcProvider,
+} from "./model.js";
 
 const SESSION_IDLE_MS = 30 * 60 * 1000;
 const SESSION_ABSOLUTE_MS = 12 * 60 * 60 * 1000;
@@ -109,13 +117,18 @@ export class BffAuthService implements AuthServicePort {
     }
 
     const now = this.now();
-    const tokens = await this.options.oidc.exchange({
-      callbackUrl,
-      state,
-      nonce: transaction.nonce,
-      codeVerifier,
-      ...(reauth ? { maxAge: 0 as const } : {}),
-    });
+    const tokens = await this.options.oidc
+      .exchange({
+        callbackUrl,
+        state,
+        nonce: transaction.nonce,
+        codeVerifier,
+        ...(reauth ? { maxAge: 0 as const } : {}),
+      })
+      .catch((error: unknown) => {
+        if (error instanceof OidcRejectedError) throw new AuthError("Keycloak sign-in was not completed", 401);
+        throw error;
+      });
     const identity = identityFrom(tokens, this.options.clientId ?? DEFAULT_CLIENT_ID, reauth);
     if (reauth) {
       const authAgeMs = now.getTime() - identity.authTime.getTime();
@@ -203,7 +216,10 @@ export class BffAuthService implements AuthServicePort {
   }
 
   async backchannelLogout(token: string): Promise<void> {
-    const { sid } = await this.options.oidc.verifyBackchannelLogout(token);
+    const { sid } = await this.options.oidc.verifyBackchannelLogout(token).catch((error: unknown) => {
+      if (error instanceof OidcRejectedError) throw new AuthError("Invalid back-channel logout token", 400);
+      throw error;
+    });
     await this.options.store.deleteSessionsBySid(sid);
   }
 
@@ -267,7 +283,11 @@ export class BffAuthService implements AuthServicePort {
 
     if (shouldRefresh && user.refreshToken) {
       const refreshToken = await this.options.crypto.decryptWithKey(user.refreshToken, user.wrappedDataKey, `session:${sessionHash}:refresh`);
-      const refreshed = await this.options.oidc.refresh(refreshToken);
+      const refreshed = await this.options.oidc.refresh(refreshToken).catch(async (error: unknown) => {
+        if (!(error instanceof OidcRejectedError)) throw error;
+        await this.options.store.deleteSession(sessionHash);
+        throw new AuthError("Session is no longer active", 401);
+      });
       const encryptedAccess = await this.options.crypto.encryptWithKey(refreshed.accessToken, user.wrappedDataKey, `session:${sessionHash}:access`);
       const encryptedRefresh = refreshed.refreshToken
         ? await this.options.crypto.encryptWithKey(refreshed.refreshToken, user.wrappedDataKey, `session:${sessionHash}:refresh`)

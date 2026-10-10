@@ -1,7 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { BffAuthService, csrfMatches, hash, safeReturnPath, type AuthServicePort } from "../src/auth/service.js";
-import type { AuthStore, AuthUser, EnvelopeCrypto, InternalTokenService, LoginTokens, OidcProvider, OidcTransaction } from "../src/auth/model.js";
+import {
+  OidcRejectedError,
+  type AuthStore,
+  type AuthUser,
+  type EnvelopeCrypto,
+  type InternalTokenService,
+  type LoginTokens,
+  type OidcProvider,
+  type OidcTransaction,
+} from "../src/auth/model.js";
 
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => {
@@ -397,6 +406,50 @@ describe("BFF auth service", () => {
 
     expect(introspect).toHaveBeenCalledOnce();
     expect(store.validationMarks).toEqual([{ sessionHash: hash("opaque-session-value"), lastValidatedAt: new Date("2026-10-10T00:02:00Z") }]);
+  });
+
+  it("deletes the session and returns 401 when Keycloak rejects the refresh token", async () => {
+    const store = new TestAuthStore(sessionFixture());
+    const session = store.sessionForTest;
+    if (!session) throw new Error("Test session missing");
+    session.accessExpiresAt = new Date("2026-10-10T00:01:59Z");
+    const service = createTestService(store, testOidc({ refresh: async () => { throw new OidcRejectedError("invalid_grant"); } }));
+
+    await expect(service.getCurrentUser("opaque-session-value")).rejects.toMatchObject({ statusCode: 401, code: "unauthenticated" });
+    expect(store.deletedSessions).toEqual([hash("opaque-session-value")]);
+  });
+
+  it("keeps the session and fails as unavailable when Keycloak cannot be reached during refresh", async () => {
+    const store = new TestAuthStore(sessionFixture());
+    const session = store.sessionForTest;
+    if (!session) throw new Error("Test session missing");
+    session.accessExpiresAt = new Date("2026-10-10T00:01:59Z");
+    const service = createTestService(store, testOidc({ refresh: async () => { throw new Error("connect ETIMEDOUT"); } }));
+
+    await expect(service.getCurrentUser("opaque-session-value")).rejects.toThrow("connect ETIMEDOUT");
+    expect(store.deletedSessions).toEqual([]);
+  });
+
+  it("rejects a back-channel logout token that Keycloak did not sign as a validation failure", async () => {
+    const store = new TestAuthStore(sessionFixture());
+    const service = createTestService(
+      store,
+      testOidc({ verifyBackchannelLogout: async () => { throw new OidcRejectedError("bad signature"); } }),
+    );
+
+    await expect(service.backchannelLogout("forged-token")).rejects.toMatchObject({ statusCode: 400, code: "validation_failed" });
+    expect(store.deletedSids).toEqual([]);
+  });
+
+  it("returns 401 when Keycloak rejects the authorization code", async () => {
+    const store = new TestAuthStore();
+    store.transactions.set(hash("one-time-state"), transactionFixture("one-time-state"));
+    const service = createTestService(store, testOidc({ exchange: async () => { throw new OidcRejectedError("invalid_grant"); } }));
+
+    await expect(
+      service.completeLogin(new URL("https://fieldloop-dev.kaotor.com/api/auth/callback?code=used-code&state=one-time-state")),
+    ).rejects.toMatchObject({ statusCode: 401 });
+    expect(store.savedSession).toBeUndefined();
   });
 
   it("uses same-origin return paths and compares CSRF values safely", () => {

@@ -5,11 +5,12 @@ import {
   ClientSecretBasic,
   discovery,
   refreshTokenGrant,
+  ResponseBodyError,
   tokenIntrospection,
   type Configuration,
 } from "openid-client";
-import { createRemoteJWKSet, jwtVerify } from "jose";
-import type { LoginTokens, OidcProvider } from "./model.js";
+import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from "jose";
+import { OidcRejectedError, type LoginTokens, type OidcProvider } from "./model.js";
 
 const LOGOUT_EVENT = "http://schemas.openid.net/event/backchannel-logout";
 
@@ -58,7 +59,7 @@ export class KeycloakOidcProvider implements OidcProvider {
       expectedNonce: input.nonce,
       pkceCodeVerifier: input.codeVerifier,
       ...(input.maxAge !== undefined ? { maxAge: input.maxAge } : {}),
-    });
+    }).catch(rethrowInvalidGrant);
     return this.tokensFrom(response);
   }
 
@@ -70,7 +71,7 @@ export class KeycloakOidcProvider implements OidcProvider {
   }
 
   async refresh(refreshToken: string): Promise<LoginTokens> {
-    const response = await refreshTokenGrant(await this.configuration(), refreshToken);
+    const response = await refreshTokenGrant(await this.configuration(), refreshToken).catch(rethrowInvalidGrant);
     const accessToken = response.access_token;
     if (!accessToken) throw new Error("Keycloak did not return an access token during refresh");
     return {
@@ -95,6 +96,12 @@ export class KeycloakOidcProvider implements OidcProvider {
       issuer: this.issuer,
       audience: this.clientId,
       algorithms: ["RS256"],
+    }).catch((error: unknown) => {
+      const keySetUnavailable = error instanceof joseErrors.JWKSTimeout || error instanceof joseErrors.JWKSInvalid;
+      if (error instanceof joseErrors.JOSEError && !keySetUnavailable) {
+        throw new OidcRejectedError("Keycloak back-channel logout token failed verification");
+      }
+      throw error;
     });
     const events = payload["events"];
     const sid = payload["sid"];
@@ -107,7 +114,7 @@ export class KeycloakOidcProvider implements OidcProvider {
       typeof events !== "object" ||
       !(LOGOUT_EVENT in events)
     ) {
-      throw new Error("Invalid Keycloak back-channel logout token");
+      throw new OidcRejectedError("Invalid Keycloak back-channel logout token");
     }
     return { sid };
   }
@@ -170,4 +177,11 @@ export class KeycloakOidcProvider implements OidcProvider {
       expiresIn: response.expiresIn() ?? 300,
     };
   }
+}
+
+function rethrowInvalidGrant(error: unknown): never {
+  if (error instanceof ResponseBodyError && error.error === "invalid_grant") {
+    throw new OidcRejectedError("Keycloak rejected the grant");
+  }
+  throw error;
 }

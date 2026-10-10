@@ -38,6 +38,11 @@ export interface LoginTokens {
   expiresIn: number;
 }
 
+// The identity provider gave a definitive refusal, as opposed to being unreachable.
+export class OidcRejectedError extends Error {
+  override readonly name = "OidcRejectedError";
+}
+
 export interface AuthStore {
   createTransaction(transaction: OidcTransaction): Promise<void>;
   consumeTransaction(stateHash: string): Promise<OidcTransaction | undefined>;
