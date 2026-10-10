@@ -92,6 +92,40 @@ history. It rejects any `raw-data` path segment or `.kmz` extension, including
 case variants and additions removed in later commits. Tests use empty Git blobs
 and index metadata in temporary repositories, without opening prohibited files.
 
+### Choosing the runner
+
+Workflows read their runner from repository variables and run on GitHub-hosted
+`ubuntu-latest` when a variable is not set:
+
+| Variable | Workflows | Current value |
+| --- | --- | --- |
+| `CI_RUNNER` | `ci.yml`, `terraform.yml` | `["self-hosted","linux","x64","kaotor-ci"]` |
+| `RELEASE_RUNNER` | `release.yml` (called by `deploy.yml`) | `["self-hosted","linux","x64","kaotor-release"]` |
+
+```sh
+gh variable list                                # show the current values
+
+# Use the organisation's self-hosted runners
+gh variable set CI_RUNNER --body '["self-hosted","linux","x64","kaotor-ci"]'
+gh variable set RELEASE_RUNNER --body '["self-hosted","linux","x64","kaotor-release"]'
+
+# Go back to GitHub-hosted runners
+gh variable delete CI_RUNNER
+gh variable delete RELEASE_RUNNER
+```
+
+The value must be a JSON array or a JSON string; anything else fails every job
+that reads it. A change applies to the next run. Do not point `RELEASE_RUNNER`
+at the `kaotor-ci` runners: release jobs can obtain the deploy service account
+and must not share a runner with pull request code.
+
+Limits of the self-hosted runners: two CI jobs and one release job run at a
+time, and images, build cache and workspaces survive between jobs, so a job
+must not depend on a clean machine. They are operated from
+[Core-CI-Platform](https://github.com/Kaotor-Technology/Core-CI-Platform); see its
+[runbook](https://github.com/Kaotor-Technology/Core-CI-Platform/blob/main/docs/runbook.md)
+when a job stays queued.
+
 ## GCP infrastructure and releases
 
 See [the FL-58 operator handoff](infra/terraform/README.md) for the adopted resources,
