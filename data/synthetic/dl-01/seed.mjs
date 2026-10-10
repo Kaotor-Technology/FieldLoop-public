@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
-import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { Kysely, PostgresDialect, sql } from "kysely";
+import pg from "pg";
 import { buildDataset, writeDataset } from "./generate.mjs";
 
 const UUID_NAMESPACE_URL = Buffer.from(
@@ -12,20 +13,8 @@ const DEFAULT_OUTPUT_DIR = new URL(".", import.meta.url);
 const CREATED_BY = "seed:dl-01";
 const CLASSIFICATION = "internal";
 
-function sqlLiteral(value) {
-  return "'" + String(value).replaceAll("'", "''") + "'";
-}
-
-function jsonbLiteral(value) {
-  return sqlLiteral(JSON.stringify(value)) + "::jsonb";
-}
-
 function geometryExpression(geometry) {
-  return (
-    "ST_SetSRID(ST_GeomFromGeoJSON(" +
-    sqlLiteral(JSON.stringify(geometry)) +
-    "), 4326)"
-  );
+  return sql`ST_SetSRID(ST_GeomFromGeoJSON(${JSON.stringify(geometry)}::text), 4326)`;
 }
 
 function deterministicUuid(name) {
@@ -52,71 +41,61 @@ function databaseId(orgId, entityKey) {
   return deterministicUuid("fieldloop:dl-01:" + orgId + ":" + entityKey);
 }
 
-function insertAsset({ id, orgId, type, parentId, domainPack, geometry, attributes }) {
-  const parentValue = parentId === null ? "NULL" : sqlLiteral(parentId);
-  const domainPackValue = domainPack === null ? "NULL" : sqlLiteral(domainPack);
-  return [
-    "INSERT INTO app.asset",
-    "  (id, org_id, type, parent_id, domain_pack, geom, attributes, simulated, classification, created_by)",
-    "VALUES",
-    "  (" +
-      [
-        sqlLiteral(id),
-        sqlLiteral(orgId),
-        sqlLiteral(type),
-        parentValue,
-        domainPackValue,
-        geometryExpression(geometry),
-        jsonbLiteral(attributes),
-        "TRUE",
-        sqlLiteral(CLASSIFICATION),
-        sqlLiteral(CREATED_BY),
-      ].join(", ") +
-      ")",
-    "ON CONFLICT (id) DO UPDATE SET",
-    "  org_id = EXCLUDED.org_id,",
-    "  type = EXCLUDED.type,",
-    "  parent_id = EXCLUDED.parent_id,",
-    "  domain_pack = EXCLUDED.domain_pack,",
-    "  geom = EXCLUDED.geom,",
-    "  attributes = EXCLUDED.attributes,",
-    "  simulated = EXCLUDED.simulated,",
-    "  classification = EXCLUDED.classification,",
-    "  created_by = EXCLUDED.created_by;",
-  ].join("\n");
+function insertAsset(database, { id, orgId, type, parentId, domainPack, geometry, attributes }) {
+  return database
+    .insertInto("app.asset")
+    .values({
+      id,
+      org_id: orgId,
+      type,
+      parent_id: parentId,
+      domain_pack: domainPack,
+      geom: geometryExpression(geometry),
+      attributes: sql`${JSON.stringify(attributes)}::jsonb`,
+      simulated: true,
+      classification: CLASSIFICATION,
+      created_by: CREATED_BY,
+    })
+    .onConflict((conflict) => conflict.column("id").doUpdateSet((expression) => ({
+      org_id: expression.ref("excluded.org_id"),
+      type: expression.ref("excluded.type"),
+      parent_id: expression.ref("excluded.parent_id"),
+      domain_pack: expression.ref("excluded.domain_pack"),
+      geom: expression.ref("excluded.geom"),
+      attributes: expression.ref("excluded.attributes"),
+      simulated: expression.ref("excluded.simulated"),
+      classification: expression.ref("excluded.classification"),
+      created_by: expression.ref("excluded.created_by"),
+    })));
 }
 
-function insertSegment({ id, orgId, assetId, geometry, properties }) {
-  return [
-    "INSERT INTO app.segment",
-    "  (id, org_id, asset_id, chainage_from, chainage_to, geom, simulated, classification, created_by)",
-    "VALUES",
-    "  (" +
-      [
-        sqlLiteral(id),
-        sqlLiteral(orgId),
-        sqlLiteral(assetId),
-        String(properties.chainage_from_m),
-        String(properties.chainage_to_m),
-        geometryExpression(geometry),
-        "TRUE",
-        sqlLiteral(CLASSIFICATION),
-        sqlLiteral(CREATED_BY),
-      ].join(", ") +
-      ")",
-    "ON CONFLICT (id) DO UPDATE SET",
-    "  org_id = EXCLUDED.org_id,",
-    "  asset_id = EXCLUDED.asset_id,",
-    "  chainage_from = EXCLUDED.chainage_from,",
-    "  chainage_to = EXCLUDED.chainage_to,",
-    "  geom = EXCLUDED.geom,",
-    "  simulated = EXCLUDED.simulated,",
-    "  classification = EXCLUDED.classification,",
-    "  created_by = EXCLUDED.created_by;",
-  ].join("\n");
+function insertSegment(database, { id, orgId, assetId, geometry, properties }) {
+  return database
+    .insertInto("app.segment")
+    .values({
+      id,
+      org_id: orgId,
+      asset_id: assetId,
+      chainage_from: properties.chainage_from_m,
+      chainage_to: properties.chainage_to_m,
+      geom: geometryExpression(geometry),
+      simulated: true,
+      classification: CLASSIFICATION,
+      created_by: CREATED_BY,
+    })
+    .onConflict((conflict) => conflict.column("id").doUpdateSet((expression) => ({
+      org_id: expression.ref("excluded.org_id"),
+      asset_id: expression.ref("excluded.asset_id"),
+      chainage_from: expression.ref("excluded.chainage_from"),
+      chainage_to: expression.ref("excluded.chainage_to"),
+      geom: expression.ref("excluded.geom"),
+      simulated: expression.ref("excluded.simulated"),
+      classification: expression.ref("excluded.classification"),
+      created_by: expression.ref("excluded.created_by"),
+    })));
 }
 
-export function buildSeedSql(dataset, orgId) {
+export function buildSeedQueries(database, dataset, orgId) {
   if (typeof orgId !== "string" || orgId.trim().length === 0) {
     throw new Error("An Organisation ID is required.");
   }
@@ -124,8 +103,7 @@ export function buildSeedSql(dataset, orgId) {
   const routeFeature = dataset.route.features[0];
   const pipelineId = databaseId(orgId, "asset:dl-01");
   const statements = [
-    "-- Synthetic DL-01 seed. psql applies this file as one transaction.",
-    insertAsset({
+    insertAsset(database, {
       id: pipelineId,
       orgId,
       type: "linear",
@@ -148,7 +126,7 @@ export function buildSeedSql(dataset, orgId) {
   for (const facility of dataset.facilities.features) {
     const facilityId = databaseId(orgId, "asset:" + facility.id);
     statements.push(
-      insertAsset({
+      insertAsset(database, {
         id: facilityId,
         orgId,
         type: "facility",
@@ -167,7 +145,7 @@ export function buildSeedSql(dataset, orgId) {
 
   for (const segment of dataset.segments.features) {
     statements.push(
-      insertSegment({
+      insertSegment(database, {
         id: databaseId(orgId, "segment:" + segment.id),
         orgId,
         assetId: pipelineId,
@@ -177,10 +155,18 @@ export function buildSeedSql(dataset, orgId) {
     );
   }
 
-  return statements.join("\n\n") + "\n";
+  return statements;
 }
 
-function connectionEnvironment(connectionString) {
+export async function loadSeed(database, dataset, orgId) {
+  await database.transaction().execute(async (transaction) => {
+    for (const query of buildSeedQueries(transaction, dataset, orgId)) {
+      await query.execute();
+    }
+  });
+}
+
+function validateConnectionString(connectionString) {
   let url;
   try {
     url = new URL(connectionString);
@@ -190,32 +176,11 @@ function connectionEnvironment(connectionString) {
   if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") {
     throw new Error("FIELDLOOP_DATABASE_URL must use postgres:// or postgresql://.");
   }
-
-  const databaseName = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
-  const socketHost = url.searchParams.get("host");
-  const host = socketHost ?? decodeURIComponent(url.hostname);
-  if (!databaseName || !host || !url.username) {
+  if (!url.pathname.replace(/^\/+/, "") || !(url.searchParams.get("host") ?? url.hostname) || !url.username) {
     throw new Error(
       "FIELDLOOP_DATABASE_URL must include a host, database name and user.",
     );
   }
-
-  const environment = {
-    ...process.env,
-    PGHOST: host,
-    PGPORT: url.port || "5432",
-    PGDATABASE: databaseName,
-    PGUSER: decodeURIComponent(url.username),
-  };
-  delete environment.FIELDLOOP_DATABASE_URL;
-  if (url.password) {
-    environment.PGPASSWORD = decodeURIComponent(url.password);
-  }
-  const sslMode = url.searchParams.get("sslmode");
-  if (sslMode) {
-    environment.PGSSLMODE = sslMode;
-  }
-  return environment;
 }
 
 function parseArguments(argumentsList) {
@@ -267,39 +232,37 @@ async function main() {
     throw new Error("Set FIELDLOOP_ORG_ID or pass --org-id.");
   }
   const dataset = buildDataset();
-  const sql = buildSeedSql(dataset, orgId);
-
-  if (options.printSql) {
-    process.stdout.write(sql);
-    return;
-  }
-
   const databaseUrl = process.env.FIELDLOOP_DATABASE_URL;
-  if (!databaseUrl) {
+  if (!options.printSql && !databaseUrl) {
     throw new Error(
       "Set FIELDLOOP_DATABASE_URL to the target database before loading the seed.",
     );
   }
-  await writeDataset(options.outputDir);
-
-  const result = spawnSync(
-    "psql",
-    ["--no-psqlrc", "--quiet", "--set=ON_ERROR_STOP=1", "--single-transaction"],
-    {
-      env: connectionEnvironment(databaseUrl),
-      input: sql,
-      encoding: "utf8",
-    },
-  );
-  if (result.error) {
-    throw new Error("Could not run psql: " + result.error.message);
+  if (!options.printSql) {
+    validateConnectionString(databaseUrl);
   }
-  if (result.status !== 0) {
-    const detail = result.stderr.trim();
-    throw new Error(
-      "DL-01 seed transaction failed." +
-        (detail.length > 0 ? "\n" + detail : ""),
-    );
+  const database = new Kysely({
+    dialect: new PostgresDialect({
+      pool: new pg.Pool({
+        connectionString: options.printSql ? undefined : databaseUrl,
+        max: 1,
+        connectionTimeoutMillis: 10_000,
+      }),
+    }),
+  });
+  try {
+    if (options.printSql) {
+      const queries = buildSeedQueries(database, dataset, orgId).map((query) => {
+        const { sql: querySql, parameters } = query.compile();
+        return { sql: querySql, parameters };
+      });
+      process.stdout.write(JSON.stringify(queries, null, 2) + "\n");
+      return;
+    }
+    await writeDataset(options.outputDir);
+    await loadSeed(database, dataset, orgId);
+  } finally {
+    await database.destroy();
   }
   process.stdout.write(
     "Loaded the synthetic DL-01 Asset, " +

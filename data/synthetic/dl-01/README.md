@@ -20,22 +20,27 @@ temporary or review copies.
 
 ## Load the seed
 
-The target database must have the FL-60 schema migrated and **psql** installed.
+The target database must have the FL-60 schema migrated. Install repository
+dependencies with **pnpm install --frozen-lockfile** before running the loader.
 Set **FIELDLOOP_ORG_ID** to the Organisation key used by the application, and
 set **FIELDLOOP_DATABASE_URL** from the approved local secret source. The loader
-uses psql's single-transaction option and stable IDs, so re-running it updates
-the same records.
+uses Kysely with the PostgreSQL driver, parameter bindings and a single
+transaction. Stable IDs make re-running it update the same records.
 
 ```sh
 FIELDLOOP_ORG_ID=<org-id> FIELDLOOP_DATABASE_URL=<postgres-url> \
   node data/synthetic/dl-01/seed.mjs
 ```
 
-To inspect generated SQL without a database connection:
+To inspect generated SQL and its parameter bindings without a database connection:
 
 ```sh
 node data/synthetic/dl-01/seed.mjs --print-sql --org-id demo-pipeline
 ```
+
+**--print-sql** emits a JSON array of **sql** and **parameters** pairs. Values,
+including Organisation IDs, GeoJSON and Asset attributes, stay outside the SQL
+text. This preview is for inspection; it is not a standalone SQL script for psql.
 
 Assets and Segments are marked **simulated=true**. The Asset attributes and
 GeoJSON features carry the **SYNTHETIC** label, and all rows use the **internal**
