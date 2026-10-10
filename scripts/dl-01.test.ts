@@ -97,6 +97,7 @@ function runSeedTransaction(failAt: number, mutation = "none"): TransactionResul
     const database = new Kysely({ dialect: new PostgresDialect({ pool }) });
     const bowtieSeed = JSON.parse(readFileSync('./data/synthetic/dl-01/bowtie-a.json', 'utf8'));
     if (process.argv[2] === 'missing-classification') delete bowtieSeed.metadata.classification;
+    if (process.argv[2] === 'mismatched-asset') bowtieSeed.assetCode = 'DL-02';
     if (process.argv[2] === 'missing-threat-path') {
       bowtieSeed.paths = bowtieSeed.paths.filter((path) => path.targetId !== 'third-party-excavation');
     }
@@ -415,6 +416,7 @@ describe("synthetic DL-01 route generator", () => {
 
   it.each([
     ["missing-classification", "metadata.classification"],
+    ["mismatched-asset", "Bowtie A seed assetCode must match the generated DL-01 Asset."],
     ["missing-threat-path", "Every Threat must have a Preventive path to the Top Event."],
   ])("rejects invalid Bowtie A data before inserting records (%s)", (mutation, expectedError) => {
     const result = runSeedTransaction(0, mutation);

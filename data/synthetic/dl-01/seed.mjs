@@ -305,6 +305,9 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
   const { simulated, classification } = bowtieSeed.metadata;
 
   const routeFeature = dataset.route.features[0];
+  if (bowtieSeed.assetCode !== routeFeature.properties.asset_code) {
+    throw new Error("Bowtie A seed assetCode must match the generated DL-01 Asset.");
+  }
   const pipelineId = databaseId(orgId, "asset:dl-01");
   const statements = [
     insertAsset(database, {
