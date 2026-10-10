@@ -57,6 +57,7 @@ describe("FieldLoop OpenAPI conventions", () => {
       "fieldloop-command-post-only @ paths > /v1/things/{thingId}:archive > head",
       "fieldloop-csrf-on-unsafe-methods @ paths > /auth/things > delete",
       "fieldloop-csrf-on-unsafe-methods @ paths > /v1/things > post",
+      "fieldloop-csrf-on-unsafe-methods @ paths > /v1/things/{thingId}:archive > head > parameters",
       "fieldloop-error-problem-json @ paths > /v1/Health_Proposals > get > responses > 404 > content",
       "fieldloop-error-problem-json @ paths > /v1/things/{thingId}:archive > head > responses > 500 > content",
       "fieldloop-error-problem-schema @ paths > /v1/Health_Proposals > get > responses > 400 > content > application/problem+json > schema",
@@ -96,6 +97,52 @@ describe("command idempotency", () => {
       } finally {
         await unlink(fixture);
       }
+    }, timeoutMs);
+  }
+});
+
+async function lintMutation(transform: (source: string) => string): Promise<Finding[]> {
+  const fixture = resolve(packageRoot, `test/fixtures/review-${randomUUID()}.yaml`);
+  try {
+    await writeFile(fixture, transform(await readFile(resolve(packageRoot, "test/fixtures/conforming.yaml"), "utf8")));
+    return await lint(fixture);
+  } finally {
+    await unlink(fixture);
+  }
+}
+
+describe("referenced error responses", () => {
+  for (const response of ["Good", "Extended", "Alias", "BadInline", "BadLookAlike", "BadNamedProblem"]) {
+    it(`validates external ${response} against the shared Problem`, async () => {
+      const findings = await lintMutation((source) => source.replace(
+        "../../openapi.yaml#/components/responses/BadRequest",
+        `./referenced-errors.yaml#/components/responses/${response}`,
+      ));
+      if (response.startsWith("Bad")) {
+        expect(findings.some((finding) => finding.code === "fieldloop-error-problem-schema")).toBe(true);
+      } else {
+        expect(findings).toEqual([]);
+      }
+    }, timeoutMs);
+  }
+});
+
+describe("CSRF on every session non-GET operation", () => {
+  for (const method of ["put", "post", "patch", "delete", "head", "options", "trace"]) {
+    for (const hasHeader of [false, true]) {
+      it(`${hasHeader ? "accepts" : "rejects"} session ${method} ${hasHeader ? "with" : "without"} CSRF`, async () => {
+        const findings = await lintMutation((source) => {
+          const changed = source.replace("    get:\n", `    ${method}:\n`);
+          return hasHeader ? changed.replace("      parameters:\n", '      parameters:\n        - $ref: "../../openapi.yaml#/components/parameters/CsrfToken"\n') : changed;
+        });
+        if (hasHeader) expect(findings).toEqual([]);
+        else expect(findings.some((finding) => finding.code === "fieldloop-csrf-on-unsafe-methods")).toBe(true);
+      }, timeoutMs);
+    }
+  }
+  for (const method of ["head", "options", "trace"]) {
+    it(`accepts public ${method} without CSRF`, async () => {
+      expect(await lintMutation((source) => source.replace("    get:\n", `    ${method}:\n      security: []\n`))).toEqual([]);
     }, timeoutMs);
   }
 });

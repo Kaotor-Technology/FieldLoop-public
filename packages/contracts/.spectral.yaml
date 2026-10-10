@@ -3,6 +3,10 @@
 extends:
   - spectral:oas
 
+functionsDir: ./functions
+functions:
+  - shared-problem
+
 aliases:
   Operation:
     - "$.paths[*][get,put,post,patch,delete,head,options,trace]"
@@ -131,32 +135,12 @@ rules:
     description: An error body is a $ref to the shared Problem schema, or an allOf that includes that $ref.
     message: "An error body must be a $ref to #/components/schemas/Problem, or an allOf that includes it."
     severity: error
-    # Checked before $ref resolution, so a look-alike inline schema cannot pass.
-    resolved: false
+    # Follow response/schema aliases and verify canonical schema provenance.
     given:
       - "$.paths[*][*].responses[?(@property.match(/^[45]/))].content[application/problem+json].schema"
       - "$.components.responses[*].content[application/problem+json].schema"
     then:
-      function: schema
-      functionOptions:
-        schema:
-          $defs:
-            problemRef:
-              type: object
-              required: [$ref]
-              properties:
-                $ref:
-                  type: string
-                  pattern: "#/components/schemas/Problem$"
-          anyOf:
-            - $ref: "#/$defs/problemRef"
-            - type: object
-              required: [allOf]
-              properties:
-                allOf:
-                  type: array
-                  contains:
-                    $ref: "#/$defs/problemRef"
+      function: shared-problem
 
   fieldloop-no-default-response:
     description: Responses list explicit status codes; `default` hides which errors a client must handle.
@@ -228,7 +212,7 @@ rules:
     description: Every non-GET operation that uses the session takes the X-CSRF-Token header, declared on the operation (architecture §4.3).
     message: "A non-GET operation on the session must include #/components/parameters/CsrfToken in its own `parameters`."
     severity: error
-    given: "$.paths[*][put,post,patch,delete]"
+    given: "$.paths[*][put,post,patch,delete,head,options,trace]"
     then:
       function: schema
       functionOptions:
