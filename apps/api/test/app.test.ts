@@ -5,9 +5,11 @@ const app = buildApp();
 afterEach(async () => { await app.close(); });
 
 describe("service scaffold", () => {
-  it("starts and answers a health probe without external dependencies", async () => {
-    const response = await app.inject({ method: "GET", url: "/healthz" });
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: "ok" });
+  it("answers local and Cloud Run health probes without external dependencies", async () => {
+    for (const url of ["/healthz", "/health"]) {
+      const response = await app.inject({ method: "GET", url });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ status: "ok" });
+    }
   });
 });

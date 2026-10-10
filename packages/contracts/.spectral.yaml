@@ -1,0 +1,270 @@
+# FieldLoop API conventions (AGENTS.md §2 API, docs/architecture.md §4).
+# Every rule is an error: `pnpm lint:api` fails on any finding.
+extends:
+  - spectral:oas
+
+functionsDir: ./functions
+functions:
+  - shared-problem
+
+aliases:
+  Operation:
+    - "$.paths[*][get,put,post,patch,delete,head,options,trace]"
+  ErrorResponse:
+    - "#Operation.responses[?(@property.match(/^[45]/))]"
+
+rules:
+  # The base spec defines shared components before any feature path uses them.
+  oas3-unused-component: off
+
+  operation-operationId: error
+  operation-description: error
+  operation-tags: error
+  operation-tag-defined: error
+  info-contact: error
+  info-description: error
+
+  fieldloop-openapi-3-1:
+    description: The contract is written in OpenAPI 3.1.
+    message: "`openapi` must be 3.1.x."
+    severity: error
+    given: $.openapi
+    then:
+      function: pattern
+      functionOptions:
+        match: "^3\\.1\\.\\d+$"
+
+  fieldloop-path-prefix:
+    description: Paths are versioned under /v1. /auth, /guardrail/v1 and /internal are the only other roots (architecture §4.2).
+    message: "{{property}} must start with /v1/, /auth/, /guardrail/v1/ or /internal/."
+    severity: error
+    given: $.paths
+    then:
+      field: "@key"
+      function: pattern
+      functionOptions:
+        match: "^/(v1|auth|guardrail/v1|internal)/"
+
+  fieldloop-path-kebab-case:
+    description: Path segments are lowercase kebab-case; parameters are camelCase; a command ends with one `:verb`.
+    message: "{{property}} must use kebab-case segments, {camelCase} parameters and at most one trailing :verb."
+    severity: error
+    given: $.paths
+    then:
+      field: "@key"
+      function: pattern
+      functionOptions:
+        match: "^(/([a-z0-9]+(-[a-z0-9]+)*|\\{[a-z][A-Za-z0-9]*\\}))+(:[a-z]+(-[a-z]+)*)?$"
+
+  fieldloop-command-post-only:
+    description: A `:verb` command path defines POST and no other method.
+    message: "A `:verb` command path must define `post` and no other method."
+    severity: error
+    given: "$.paths[?(@property.match(/:[^/]*$/))]"
+    then:
+      - field: post
+        function: truthy
+      - field: get
+        function: falsy
+      - field: put
+        function: falsy
+      - field: patch
+        function: falsy
+      - field: delete
+        function: falsy
+      - field: head
+        function: falsy
+      - field: options
+        function: falsy
+      - field: trace
+        function: falsy
+
+  fieldloop-operation-id-camel-case:
+    description: operationId is camelCase, so generated client method names are stable.
+    message: "operationId `{{value}}` must be camelCase."
+    severity: error
+    given: "#Operation.operationId"
+    then:
+      function: casing
+      functionOptions:
+        type: camel
+
+  fieldloop-property-camel-case:
+    description: JSON property names are camelCase.
+    message: "Property `{{property}}` must be camelCase."
+    severity: error
+    given: "$..properties"
+    then:
+      field: "@key"
+      function: casing
+      functionOptions:
+        type: camel
+
+  fieldloop-query-camel-case:
+    description: Query parameter names are camelCase.
+    message: "Query parameter `{{value}}` must be camelCase."
+    severity: error
+    given: "$..parameters[?(@ && @.in === 'query')].name"
+    then:
+      function: casing
+      functionOptions:
+        type: camel
+
+  fieldloop-error-problem-json:
+    description: Every 4xx and 5xx response is RFC 9457 application/problem+json and nothing else.
+    message: "An error response must have exactly one media type, application/problem+json."
+    severity: error
+    given: "#ErrorResponse"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          required: [content]
+          properties:
+            content:
+              type: object
+              required: [application/problem+json]
+              additionalProperties: false
+              properties:
+                application/problem+json:
+                  type: object
+                  required: [schema]
+
+  fieldloop-error-problem-schema:
+    description: An error body is a $ref to the shared Problem schema, or an allOf that includes that $ref.
+    message: "An error body must be a $ref to #/components/schemas/Problem, or an allOf that includes it."
+    severity: error
+    # Follow response/schema aliases and verify canonical schema provenance.
+    given:
+      - "$.paths[*][*].responses[?(@property.match(/^[45]/))].content[application/problem+json].schema"
+      - "$.components.responses[*].content[application/problem+json].schema"
+    then:
+      function: shared-problem
+
+  fieldloop-no-default-response:
+    description: Responses list explicit status codes; `default` hides which errors a client must handle.
+    message: "Responses must not use `default`; list each status code."
+    severity: error
+    given: "#Operation.responses"
+    then:
+      field: default
+      function: falsy
+
+  fieldloop-session-cookie-scheme:
+    description: The session is an HttpOnly cookie named fl_session (ADR-0008).
+    message: "components.securitySchemes.sessionCookie must be an apiKey in the cookie `fl_session`."
+    severity: error
+    given: $.components.securitySchemes
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          required: [sessionCookie]
+          properties:
+            sessionCookie:
+              type: object
+              required: [type, in, name]
+              properties:
+                type: { const: apiKey }
+                in: { const: cookie }
+                name: { const: fl_session }
+
+  fieldloop-no-browser-token-scheme:
+    description: The browser holds no tokens, so the contract declares no OAuth 2, OpenID Connect or query-string key scheme (ADR-0008).
+    message: "OAuth 2, OpenID Connect and query-string key schemes are not allowed: use the session cookie."
+    severity: error
+    given: "$.components.securitySchemes[*]"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          not:
+            anyOf:
+              - properties: { type: { enum: [oauth2, openIdConnect] } }
+                required: [type]
+              - properties: { type: { const: apiKey }, in: { const: query } }
+                required: [type, in]
+
+  fieldloop-global-session-security:
+    description: The session cookie is the default security requirement, so an endpoint is public only when it says `security: []`.
+    message: "Top-level `security` must be exactly [{ sessionCookie: [] }]."
+    severity: error
+    given: $
+    then:
+      field: security
+      function: schema
+      functionOptions:
+        schema:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            type: object
+            required: [sessionCookie]
+            additionalProperties: false
+            properties:
+              sessionCookie: {}
+
+  fieldloop-csrf-on-unsafe-methods:
+    description: Every non-GET operation that uses the session takes the X-CSRF-Token header, declared on the operation (architecture §4.3).
+    message: "A non-GET operation on the session must include #/components/parameters/CsrfToken in its own `parameters`."
+    severity: error
+    given: "$.paths[*][put,post,patch,delete,head,options,trace]"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          if:
+            # Exempt only when the operation overrides security and no alternative uses the session.
+            required: [security]
+            properties:
+              security:
+                type: array
+                not:
+                  contains:
+                    type: object
+                    required: [sessionCookie]
+          else:
+            required: [parameters]
+            properties:
+              parameters:
+                type: array
+                contains:
+                  type: object
+                  required: [name, in, required]
+                  properties:
+                    name: { const: X-CSRF-Token }
+                    in: { const: header }
+                    required: { const: true }
+
+  fieldloop-command-idempotency:
+    description: Every POST command has Idempotency-Key unless a documented stateless exemption applies.
+    message: "A POST command needs required Idempotency-Key, or a nonempty x-idempotency-exempt reason for a stateless operation."
+    severity: error
+    given: "$.paths[?(@property.match(/:[^/]*$/))].post"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          anyOf:
+            - required: [parameters]
+              properties:
+                parameters:
+                  type: array
+                  contains:
+                    type: object
+                    required: [name, in, required]
+                    properties:
+                      name: { const: Idempotency-Key }
+                      in: { const: header }
+                      required: { const: true }
+            - required: [x-idempotency-exempt]
+              properties:
+                x-idempotency-exempt:
+                  type: string
+                  pattern: "\\S"

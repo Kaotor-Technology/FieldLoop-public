@@ -30,6 +30,7 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm lint:design
+pnpm lint:api
 pnpm build
 uv run --locked --all-packages ruff check .
 uv run --locked --all-packages mypy
@@ -46,6 +47,8 @@ PostgreSQL 16 with PostGIS and pgvector, then runs the SQL regression tests in `
 TypeScript app's `dist`, and declarations for the empty shared modules.
 The config package validates its source presets without emitting runtime code.
 `uv build --all-packages` emits wheels and source distributions in root `dist`.
+`pnpm lint:api` checks `packages/contracts/openapi.yaml` against the API conventions
+in [packages/contracts](packages/contracts/README.md).
 Empty shared packages currently allow zero tests; service probes and the Git path
 boundary have real tests. Domain and risk-engine tests arrive with their implementations.
 
@@ -81,10 +84,21 @@ update it when adding new build inputs.
 
 GitHub Actions runs on pull requests and pushes to `main`. It checks confidential
 paths before a redacted Gitleaks scan, then lint, types, Vitest, pytest, DESIGN.md
-lint, builds, the migration tests, and a six-app Linux amd64 container build/startup matrix. It publishes
-no images and provisions no cloud resources. Action references are pinned to commits.
+lint, OpenAPI lint, builds, the migration tests, and a six-app Linux amd64 container build/startup matrix. It publishes
+no images and provisions no cloud resources in the CI workflow. Action references are pinned to commits.
 
 The path checker inspects only Git metadata for the index, HEAD and fetched
 history. It rejects any `raw-data` path segment or `.kmz` extension, including
 case variants and additions removed in later commits. Tests use empty Git blobs
 and index metadata in temporary repositories, without opening prohibited files.
+
+## GCP infrastructure and releases
+
+See [the FL-58 operator handoff](infra/terraform/README.md) for the adopted resources,
+remote state, approved THB budget and release workflow, and
+[the FL-58 acceptance record](docs/reviews/FL-58-acceptance.md) for the work handed to other issues.
+Terraform checks run without cloud credentials on pull requests. The separate
+Deploy workflow publishes digest-pinned images through GitHub OIDC and updates
+dev after successful main CI, or demo for a `demo-*` tag. The private web-api
+remote probe is `GET /health`; `/healthz` remains available locally. Schema-bearing
+releases require a configured FL-60 dbmate job before application updates.
