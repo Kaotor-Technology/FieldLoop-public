@@ -1,4 +1,5 @@
 -- migrate:up
+SET search_path = app, public;
 CREATE TABLE app_user (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id text NOT NULL,

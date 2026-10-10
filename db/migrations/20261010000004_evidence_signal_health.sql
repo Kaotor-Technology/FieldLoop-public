@@ -1,4 +1,5 @@
 -- migrate:up
+SET search_path = app, public;
 CREATE TABLE evidence (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id text NOT NULL,
@@ -34,7 +35,7 @@ CREATE TABLE geo_reference (
 CREATE INDEX idx_geo_reference_geom ON geo_reference USING GIST (geom);
 
 CREATE TABLE signal (
-    id bigserial PRIMARY KEY,
+    id bigserial,
     org_id text NOT NULL,
     source text NOT NULL,
     observed_at timestamptz NOT NULL,
@@ -42,10 +43,14 @@ CREATE TABLE signal (
     simulated boolean NOT NULL DEFAULT false,
     classification text,
     created_at timestamptz NOT NULL DEFAULT now(),
-    created_by text
+    created_by text,
+    PRIMARY KEY (id, observed_at)
 ) PARTITION BY RANGE (observed_at);
 -- In production, create daily partitions. For demo, we just need a default partition or initial partition
 CREATE TABLE signal_default PARTITION OF signal DEFAULT;
+CREATE TABLE signal_y2026m10d10 PARTITION OF signal FOR VALUES FROM ('2026-10-10 00:00:00Z') TO ('2026-10-11 00:00:00Z');
+CREATE TABLE signal_y2026m10d11 PARTITION OF signal FOR VALUES FROM ('2026-10-11 00:00:00Z') TO ('2026-10-12 00:00:00Z');
+CREATE TABLE signal_y2026m10d12 PARTITION OF signal FOR VALUES FROM ('2026-10-12 00:00:00Z') TO ('2026-10-13 00:00:00Z');
 
 CREATE TABLE signal_rule (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

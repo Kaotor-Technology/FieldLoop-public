@@ -1,4 +1,5 @@
 -- migrate:up
+SET search_path = app, public;
 CREATE TABLE action_request (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id text NOT NULL,
@@ -52,8 +53,9 @@ EXECUTE FUNCTION check_approval_payload_hash();
 CREATE OR REPLACE FUNCTION reset_action_request_status()
 RETURNS TRIGGER AS $$
 BEGIN
-    IF NEW.payload_hash != OLD.payload_hash THEN
+    IF NEW.payload IS DISTINCT FROM OLD.payload THEN
         NEW.status := 'open';
+        -- Optional: you might want to recalculate payload_hash here or require client to update it
     END IF;
     RETURN NEW;
 END;
@@ -107,7 +109,7 @@ CREATE TABLE audit_event (
 );
 
 -- Revoke UPDATE and DELETE from audit_event
-REVOKE UPDATE, DELETE ON audit_event FROM public;
+REVOKE UPDATE, DELETE ON audit_event FROM fieldloop_app;
 CREATE OR REPLACE FUNCTION prevent_audit_modification()
 RETURNS TRIGGER AS $$
 BEGIN

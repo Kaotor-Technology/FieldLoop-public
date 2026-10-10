@@ -1,4 +1,5 @@
 -- migrate:up
+SET search_path = app, public;
 CREATE TABLE asset (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id text NOT NULL,
@@ -33,11 +34,22 @@ CREATE TABLE threat_category (
     org_id text NOT NULL,
     pack text NOT NULL,
     code text NOT NULL,
-    susceptibility text,
     simulated boolean NOT NULL DEFAULT false,
     classification text,
     created_at timestamptz NOT NULL DEFAULT now(),
     created_by text
+);
+
+CREATE TABLE asset_threat_category (
+    asset_id uuid NOT NULL REFERENCES app.asset(id),
+    threat_category_id uuid NOT NULL REFERENCES app.threat_category(id),
+    susceptibility text,
+    org_id text NOT NULL,
+    simulated boolean NOT NULL DEFAULT false,
+    classification text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    created_by text,
+    PRIMARY KEY (asset_id, threat_category_id)
 );
 
 CREATE TABLE bowtie (
@@ -55,8 +67,13 @@ CREATE TABLE bowtie (
 );
 
 CREATE TABLE bowtie_asset (
-    bowtie_id uuid NOT NULL REFERENCES bowtie(id),
-    asset_id uuid NOT NULL REFERENCES asset(id),
+    bowtie_id uuid NOT NULL REFERENCES app.bowtie(id),
+    asset_id uuid NOT NULL REFERENCES app.asset(id),
+    org_id text NOT NULL,
+    simulated boolean NOT NULL DEFAULT false,
+    classification text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    created_by text,
     PRIMARY KEY (bowtie_id, asset_id)
 );
 
@@ -101,6 +118,7 @@ DROP TABLE consequence;
 DROP TABLE threat;
 DROP TABLE bowtie_asset;
 DROP TABLE bowtie;
+DROP TABLE asset_threat_category;
 DROP TABLE threat_category;
 DROP TABLE segment;
 DROP TABLE asset;

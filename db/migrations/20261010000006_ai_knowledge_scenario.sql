@@ -1,4 +1,5 @@
 -- migrate:up
+SET search_path = app, public;
 CREATE TABLE ai_system (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id text NOT NULL,
@@ -68,6 +69,7 @@ CREATE TABLE stakeholder (
     created_at timestamptz NOT NULL DEFAULT now(),
     created_by text
 );
+CREATE INDEX idx_stakeholder_geom ON stakeholder USING GIST (geom);
 
 CREATE TABLE controlled_document (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -90,6 +92,7 @@ CREATE TABLE document_chunk (
     org_id text NOT NULL,
     document_id uuid NOT NULL REFERENCES controlled_document(id),
     embedding vector(768),
+    content text,
     clause text,
     page int,
     simulated boolean NOT NULL DEFAULT false,
@@ -118,7 +121,7 @@ CREATE TABLE assistant_session (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id text NOT NULL,
     agent_id text NOT NULL,
-    app_user_id uuid REFERENCES app_user(id),
+    app_user_id uuid REFERENCES app.app_user(id),
     context jsonb,
     status text NOT NULL,
     token_budget_used int,
@@ -143,7 +146,7 @@ CREATE TABLE agent_step (
     tokens_in int,
     tokens_out int,
     latency_ms int,
-    action_request_id uuid REFERENCES action_request(id),
+    action_request_id uuid REFERENCES app.action_request(id),
     intercept_id uuid REFERENCES intercept(id),
     simulated boolean NOT NULL DEFAULT false,
     classification text,
@@ -176,6 +179,7 @@ CREATE TABLE kml_import_item (
     created_at timestamptz NOT NULL DEFAULT now(),
     created_by text
 );
+CREATE INDEX idx_kml_import_item_geom ON kml_import_item USING GIST (geom);
 
 CREATE TABLE scenario (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
