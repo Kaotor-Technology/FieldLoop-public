@@ -64,4 +64,17 @@ for test_file in db/test/*.sql; do
   run_psql -o /dev/null < "${test_file}"
 done
 
+# Cloud SQL shape: the extensions already exist and the migrating role is not a superuser.
+echo "==> dbmate up as a non-superuser with pre-installed extensions"
+docker exec -i "${DB_CONTAINER}" psql -X -q -v ON_ERROR_STOP=1 -U postgres -d postgres <<'SQL'
+CREATE ROLE fieldloop_migrator LOGIN PASSWORD 'migrator' CREATEROLE;
+CREATE DATABASE fieldloop_restricted OWNER fieldloop_migrator;
+\connect fieldloop_restricted
+CREATE EXTENSION postgis;
+CREATE EXTENSION vector;
+SQL
+docker run --rm --network "${NETWORK}" \
+  -e DATABASE_URL="postgres://fieldloop_migrator:migrator@${DB_CONTAINER}:5432/fieldloop_restricted?sslmode=disable" \
+  "${MIGRATE_IMAGE}" up
+
 echo "Migration tests passed"
