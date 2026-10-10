@@ -15,7 +15,7 @@
     "test": "turbo run test && vitest run --config vitest.config.ts",
     "lint:design": "design.md lint DESIGN.md",
     "check:safety": "node scripts/check-confidential-paths.mjs",
-    "db:migrate": "dbmate up"
+    "db:migrate": "dbmate --migrations-table public.schema_migrations up"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",
