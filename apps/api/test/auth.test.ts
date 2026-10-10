@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
-import { BffAuthService, csrfMatches, hash, safeReturnPath, type AuthServicePort } from "../src/auth/service.js";
+import { AuthError, BffAuthService, csrfMatches, hash, safeReturnPath, type AuthServicePort } from "../src/auth/service.js";
 import {
   OidcRejectedError,
   type AuthStore,
@@ -130,6 +130,89 @@ describe("BFF auth routes", () => {
     expect(response.statusCode).toBe(403);
     expect(response.json().code).toBe("reauthentication_required");
     expect(response.json().title).toBe("Recent reauthentication is required");
+  });
+
+  it("requires a session when the /api prefix is percent-encoded", async () => {
+    const getCurrentUser = vi.fn(async () => { throw new AuthError("Session required", 401); });
+    const app = makeApp(routeAuth({ getCurrentUser }));
+    app.get("/api/v1/assets", async () => ({ leaked: true }));
+
+    const response = await app.inject({ method: "GET", url: "/%61pi/v1/assets" });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.body).not.toContain("leaked");
+  });
+
+  it("does not treat a path that merely starts like a public auth route as public", async () => {
+    const getCurrentUser = vi.fn(async () => { throw new AuthError("Session required", 401); });
+    const app = makeApp(routeAuth({ getCurrentUser }));
+    app.get("/api/auth/login-history", async () => ({ leaked: true }));
+
+    const response = await app.inject({ method: "GET", url: "/api/auth/login-history" });
+
+    expect(response.statusCode).toBe(401);
+  });
+
+  it.each([
+    ["an encoded verb separator", "/api/v1/action-requests/action-1%3Aapprove", "/api/v1/action-requests/action-1:approve"],
+    ["the approvals sub-resource", "/api/v1/action-requests/action-1/approvals", "/api/v1/action-requests/:id/approvals"],
+    ["a query string", "/api/v1/held-requests/held-1:reject?x=1", "/api/v1/held-requests/held-1:reject"],
+  ])("requires fresh reauthentication for a decision sent with %s", async (_label, url, route) => {
+    const getCurrentUser = vi.fn(async () => ({
+      sub: "synthetic-subject",
+      roles: ["fieldloop.manager"],
+      persona: "Technical Authority",
+      orgId: "fieldloop-demo",
+      clearance: "INTERNAL",
+      csrfToken: "csrf-value",
+      authTime: new Date(Date.now() - 60 * 60 * 1000),
+    }));
+    const app = makeApp(routeAuth({ getCurrentUser }));
+    app.post(route, async () => ({ approved: true }));
+
+    const response = await app.inject({
+      method: "POST",
+      url,
+      cookies: { fl_session: "opaque-session-value" },
+      headers: { "x-csrf-token": "csrf-value" },
+    });
+
+    expect(getCurrentUser).toHaveBeenCalledWith("opaque-session-value", true);
+    expect(response.statusCode).toBe(403);
+    expect(response.json().code).toBe("reauthentication_required");
+  });
+
+  it("falls back to the root return path when the return parameter is repeated", async () => {
+    const startLogin = vi.fn(async () => new URL("https://auth.example.com/authorize"));
+    const response = await makeApp(routeAuth({ startLogin })).inject({ method: "GET", url: "/api/auth/login?return=/a&return=/b" });
+
+    expect(response.statusCode).toBe(302);
+    expect(startLogin).toHaveBeenCalledWith("/");
+  });
+
+  it("answers 400 for a back-channel logout token that fails verification", async () => {
+    const backchannelLogout = vi.fn(async () => { throw new AuthError("Invalid back-channel logout token", 400); });
+    const response = await makeApp(routeAuth({ backchannelLogout })).inject({
+      method: "POST",
+      url: "/api/auth/backchannel-logout",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      payload: "logout_token=forged",
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().code).toBe("validation_failed");
+  });
+
+  it("answers 400, not 503, for a back-channel logout body it cannot parse", async () => {
+    const response = await makeApp(routeAuth()).inject({
+      method: "POST",
+      url: "/api/auth/backchannel-logout",
+      headers: { "content-type": "application/json" },
+      payload: "{not json",
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().code).toBe("validation_failed");
   });
 
   it("leaves health probes available without a session", async () => {

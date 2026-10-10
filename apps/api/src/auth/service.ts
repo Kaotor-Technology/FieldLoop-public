@@ -14,6 +14,8 @@ const SESSION_ABSOLUTE_MS = 12 * 60 * 60 * 1000;
 const INTROSPECTION_INTERVAL_MS = 60 * 1000;
 const TOKEN_REFRESH_WINDOW_MS = 60 * 1000;
 const TRANSACTION_TTL_MS = 10 * 60 * 1000;
+const REAUTH_MAX_AGE_MS = 5 * 60 * 1000;
+const CLOCK_SKEW_MS = 30 * 1000;
 const DEFAULT_CLIENT_ID = "kaotor-fieldloop";
 const ALLOWED_ROLES = new Set(["fieldloop.viewer", "fieldloop.operator", "fieldloop.manager"]);
 const DEFAULT_PERSONA: Record<string, string> = {
@@ -130,11 +132,8 @@ export class BffAuthService implements AuthServicePort {
         throw error;
       });
     const identity = identityFrom(tokens, this.options.clientId ?? DEFAULT_CLIENT_ID, reauth);
-    if (reauth) {
-      const authAgeMs = now.getTime() - identity.authTime.getTime();
-      if (authAgeMs < -30_000 || authAgeMs >= 5 * 60 * 1000) {
-        throw new AuthError("Keycloak did not confirm a recent reauthentication", 401);
-      }
+    if (reauth && !isRecentAuthTime(identity.authTime, now)) {
+      throw new AuthError("Keycloak did not confirm a recent reauthentication", 401);
     }
     if (reauth) {
       const previous = await this.options.store.findSession(sessionHash);
@@ -344,6 +343,11 @@ export function safeReturnPath(value: string | null | undefined): string {
   } catch {
     return "/";
   }
+}
+
+export function isRecentAuthTime(authTime: Date, now: Date): boolean {
+  const authAgeMs = now.getTime() - authTime.getTime();
+  return authAgeMs >= -CLOCK_SKEW_MS && authAgeMs < REAUTH_MAX_AGE_MS;
 }
 
 export function csrfMatches(expected: string, received: string | undefined): boolean {

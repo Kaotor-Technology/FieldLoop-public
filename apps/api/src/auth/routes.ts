@@ -1,11 +1,22 @@
 import cookie from "@fastify/cookie";
 import formbody from "@fastify/formbody";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { AuthError, csrfMatches, safeReturnPath, type AuthServicePort, type CurrentUser } from "./service.js";
+import { AuthError, csrfMatches, isRecentAuthTime, safeReturnPath, type AuthServicePort, type CurrentUser } from "./service.js";
 
 const SESSION_COOKIE = "fl_session";
 const SESSION_MAX_AGE_SECONDS = 12 * 60 * 60;
 const PROBLEM_TYPE = "application/problem+json";
+const RETURN_PATH_MAX_LENGTH = 2048;
+const PUBLIC_ROUTES = new Set([
+  "GET /healthz",
+  "GET /health",
+  "GET /api/auth/login",
+  "GET /api/auth/callback",
+  "POST /api/auth/backchannel-logout",
+  "GET /api/internal/auth/jwks",
+]);
+const CONSEQUENTIAL_DECISION =
+  /^\/api\/v1\/(?:(?:held-requests|drafts)\/[^/]+:(?:approve|reject)|action-requests\/[^/]+(?:\/approvals|:(?:approve|reject|release|execute)))\/?$/;
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -17,93 +28,31 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthServicePort, 
   app.register(cookie);
   app.register(formbody);
   app.addHook("preHandler", async (request, reply) => {
-    if (isPublicAuthRoute(request)) return;
+    if (isPublicRoute(request)) return;
+    const consequential = isConsequentialDecision(request);
     try {
-      const currentUser = await auth.getCurrentUser(
-        request.cookies[SESSION_COOKIE],
-        isConsequentialDecision(request),
-      );
+      const currentUser = await auth.getCurrentUser(request.cookies[SESSION_COOKIE], consequential);
       request.fieldLoopCurrentUser = currentUser;
-      if (isConsequentialDecision(request)) {
-        const authAgeMs = Date.now() - currentUser.authTime.getTime();
-        if (authAgeMs < -30_000 || authAgeMs >= 5 * 60 * 1000) {
-          return reply
-            .code(403)
-            .type(PROBLEM_TYPE)
-            .send({
-              type: "about:blank",
-              title: "Recent reauthentication is required",
-              status: 403,
-              code: "reauthentication_required",
-              traceId: request.id,
-            });
-        }
+      if (consequential && !isRecentAuthTime(currentUser.authTime, new Date())) {
+        return sendProblem(request, reply, 403, "reauthentication_required", "Recent reauthentication is required");
       }
       if (request.method !== "GET") {
         const csrfToken = request.headers["x-csrf-token"];
         if (Array.isArray(csrfToken) || !csrfMatches(currentUser.csrfToken, csrfToken)) {
-          return reply
-            .code(403)
-            .type(PROBLEM_TYPE)
-            .send({
-              type: "about:blank",
-              title: "CSRF token is missing or invalid",
-              status: 403,
-              code: "csrf_token_invalid",
-              traceId: request.id,
-            });
+          return sendProblem(request, reply, 403, "csrf_token_invalid", "CSRF token is missing or invalid");
         }
       }
     } catch (error) {
-      if (error instanceof AuthError) {
-        return reply
-          .code(error.statusCode)
-          .type(PROBLEM_TYPE)
-          .send({ type: "about:blank", title: error.message, status: error.statusCode, code: error.code, traceId: request.id });
-      }
-      request.log.error({ err: error }, "BFF authentication pre-handler failed");
-      return reply
-        .code(503)
-        .type(PROBLEM_TYPE)
-        .send({
-          type: "about:blank",
-          title: "Authentication service unavailable",
-          status: 503,
-          code: "service_unavailable",
-          traceId: request.id,
-        });
+      return sendAuthFailure(request, reply, error, "BFF authentication pre-handler failed");
     }
   });
   app.register(async (routes) => {
-    routes.setErrorHandler((error: Error, request: FastifyRequest, reply: FastifyReply) => {
-      if (error instanceof AuthError) {
-        return reply
-          .code(error.statusCode)
-          .type(PROBLEM_TYPE)
-          .send({
-            type: "about:blank",
-            title: error.message,
-            status: error.statusCode,
-            code: error.code,
-            traceId: request.id,
-          });
-      }
-      request.log.error({ err: error }, "BFF authentication request failed");
-      return reply
-        .code(503)
-        .type(PROBLEM_TYPE)
-        .send({
-          type: "about:blank",
-          title: "Authentication service unavailable",
-          status: 503,
-          code: "service_unavailable",
-          traceId: request.id,
-        });
-    });
+    routes.setErrorHandler((error: Error, request: FastifyRequest, reply: FastifyReply) =>
+      sendAuthFailure(request, reply, error, "BFF authentication request failed"),
+    );
 
     routes.get("/api/auth/login", async (request, reply) => {
-      const query = request.query as { return?: string };
-      const authorizationUrl = await auth.startLogin(safeReturnPath(query.return));
+      const authorizationUrl = await auth.startLogin(safeReturnPath(returnParameter(request)));
       return reply.header("cache-control", "no-store").redirect(authorizationUrl.toString(), 302);
     });
 
@@ -131,10 +80,9 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthServicePort, 
     });
 
     routes.get("/api/auth/reauth", async (request, reply) => {
-      const query = request.query as { return?: string };
       const authorizationUrl = await auth.startReauthentication(
         request.cookies[SESSION_COOKIE],
-        safeReturnPath(query.return),
+        safeReturnPath(returnParameter(request)),
       );
       return reply.header("cache-control", "no-store").redirect(authorizationUrl.toString(), 302);
     });
@@ -144,22 +92,41 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthServicePort, 
   });
 }
 
-function isPublicAuthRoute(request: FastifyRequest): boolean {
-  return (
-    (request.method === "GET" && !request.url.startsWith("/api/")) ||
-    (request.method === "GET" && (request.url.startsWith("/api/auth/login") || request.url.startsWith("/api/auth/callback"))) ||
-    (request.method === "POST" && request.url.startsWith("/api/auth/backchannel-logout")) ||
-    (request.method === "GET" && request.url.startsWith("/api/internal/auth/jwks"))
-  );
+// Decided on the matched route pattern, never the raw URL: the router decodes before matching, so "/%61pi/..." reaches an /api handler.
+function isPublicRoute(request: FastifyRequest): boolean {
+  const routePattern = request.routeOptions.url;
+  if (routePattern === undefined) return true;
+  if (PUBLIC_ROUTES.has(`${request.method} ${routePattern}`)) return true;
+  return request.method === "GET" && routePattern !== "/api" && !routePattern.startsWith("/api/");
 }
 
 function isConsequentialDecision(request: FastifyRequest): boolean {
-  return (
-    request.method === "POST" &&
-    /\/api\/v1\/(?:held-requests|drafts)\/[^/]+:(?:approve|reject)(?:\?|$)|\/api\/v1\/action-requests\/[^/]+:(?:approve|reject|release|execute)(?:\?|$)/.test(
-      request.url,
-    )
-  );
+  if (request.method !== "POST") return false;
+  const rawPath = request.url.split("?", 1)[0] ?? "";
+  try {
+    return CONSEQUENTIAL_DECISION.test(decodeURIComponent(rawPath));
+  } catch {
+    return true;
+  }
+}
+
+function returnParameter(request: FastifyRequest): string | undefined {
+  const value = (request.query as Record<string, unknown>)["return"];
+  return typeof value === "string" && value.length <= RETURN_PATH_MAX_LENGTH ? value : undefined;
+}
+
+function sendProblem(request: FastifyRequest, reply: FastifyReply, status: number, code: string, title: string) {
+  return reply.code(status).type(PROBLEM_TYPE).send({ type: "about:blank", title, status, code, traceId: request.id });
+}
+
+function sendAuthFailure(request: FastifyRequest, reply: FastifyReply, error: unknown, logMessage: string) {
+  if (error instanceof AuthError) return sendProblem(request, reply, error.statusCode, error.code, error.message);
+  const frameworkStatus = (error as { statusCode?: unknown } | null)?.statusCode;
+  if (typeof frameworkStatus === "number" && frameworkStatus >= 400 && frameworkStatus < 500) {
+    return sendProblem(request, reply, 400, "validation_failed", "Request could not be processed");
+  }
+  request.log.error({ err: error }, logMessage);
+  return sendProblem(request, reply, 503, "service_unavailable", "Authentication service unavailable");
 }
 
 function sessionCookieOptions() {
