@@ -1,0 +1,115 @@
+# Test fixture: breaks each FieldLoop convention once. Not a product contract.
+# openapi-lint.test.ts lists the rule each part must trigger.
+openapi: 3.0.3
+info:
+  title: Violations fixture
+  version: 0.0.0
+  description: Breaks each FieldLoop API convention once.
+  contact:
+    name: FieldLoop engineering
+  license:
+    name: Proprietary
+    url: https://github.com/Kaotor-Technology/FieldLoop-v2
+servers:
+  - url: /
+security:
+  - oauth: []
+tags:
+  - name: things
+    description: Things.
+paths:
+  # fieldloop-path-prefix
+  /api/things:
+    get:
+      operationId: listApiThings
+      description: Wrong root.
+      tags: [things]
+      responses:
+        "200":
+          description: OK.
+  # fieldloop-path-kebab-case
+  /v1/Health_Proposals:
+    get:
+      # fieldloop-operation-id-camel-case
+      operationId: List_Things
+      description: Wrong casing.
+      tags: [things]
+      parameters:
+        # fieldloop-query-camel-case
+        - name: asset_id
+          in: query
+          description: Wrong casing.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  # fieldloop-property-camel-case
+                  payload_hash:
+                    type: string
+        # fieldloop-error-problem-json
+        "404":
+          description: Wrong media type.
+          content:
+            application/json:
+              schema:
+                type: object
+        # fieldloop-error-problem-schema
+        "400":
+          description: Not the Problem schema.
+          content:
+            application/problem+json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message:
+                    type: string
+        # fieldloop-no-default-response
+        default:
+          description: Anything else.
+  # fieldloop-command-post-only
+  /v1/things/{thingId}:archive:
+    get:
+      operationId: archiveThing
+      description: A command that is not a POST.
+      tags: [things]
+      parameters:
+        - name: thingId
+          in: path
+          required: true
+          description: Thing ID.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK.
+  /v1/things:
+    # fieldloop-csrf-on-unsafe-methods
+    post:
+      operationId: createThing
+      description: No CSRF header.
+      tags: [things]
+      responses:
+        "201":
+          description: Created.
+components:
+  securitySchemes:
+    # fieldloop-session-cookie-scheme
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: session
+    # fieldloop-no-browser-token-scheme
+    oauth:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://auth.example.test/authorize
+          tokenUrl: https://auth.example.test/token
+          scopes: {}
