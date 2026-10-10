@@ -1,8 +1,14 @@
 import { buildApp } from "./app.js";
+import { createProductionAuthRuntime } from "./auth/runtime.js";
 import fastifyStatic from "@fastify/static";
 import { fileURLToPath } from "node:url";
 
-const app = buildApp();
+const authRuntime = await createProductionAuthRuntime();
+const app = buildApp({
+  auth: authRuntime.auth,
+  ...(process.env["FIELDLOOP_BASE_URL"] ? { baseUrl: process.env["FIELDLOOP_BASE_URL"] } : {}),
+});
+app.addHook("onClose", authRuntime.close);
 const port = Number(process.env["PORT"] ?? "8080");
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error("PORT must be an integer between 1 and 65535");

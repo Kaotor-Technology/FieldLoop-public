@@ -5,7 +5,7 @@ API and message contracts shared by the TypeScript and Python services
 
 | File | Holds |
 | --- | --- |
-| `openapi.yaml` | The OpenAPI 3.1 contract of the platform API. Today it is the base: shared components and no paths. |
+| `openapi.yaml` | The OpenAPI 3.1 contract of the platform API, including BFF auth/session routes and the shared components used by feature paths. |
 | `.spectral.yaml` | The Spectral ruleset that enforces the conventions below. |
 | `functions/shared-problem.js` | Checks resolved schema provenance against the canonical shared Problem, including cross-file response aliases. |
 | `test/` | Fixtures and a test that prove each rule fires, and that conforming paths pass. |

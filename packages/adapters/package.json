@@ -18,8 +18,15 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
+  "dependencies": {
+    "@google-cloud/cloud-sql-connector": "1.12.0",
+    "@google-cloud/kms": "6.2.1",
+    "@google-cloud/secret-manager": "7.1.1",
+    "pg": "8.23.1"
+  },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",
+    "@types/pg": "8.23.1",
     "typescript": "5.9.3",
     "vitest": "3.2.7"
   }

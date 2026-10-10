@@ -1,2 +1,3 @@
-// Reserved for the responsibility described in docs/architecture.md section 1.
-export {};
+export { createGoogleCloudSqlPool } from "./cloud-sql.js";
+export { GoogleCloudKmsEnvelopeKeyService, type EnvelopeKeyService } from "./kms-envelope-key.js";
+export { GoogleCloudSecretReader } from "./secret-manager.js";
