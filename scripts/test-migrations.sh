@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Runs the db-migrate image against an empty PostgreSQL 16 (PostGIS + pgvector):
+# up -> roll back every migration -> up, then the SQL regression tests in db/test.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+SUFFIX="$$"
+NETWORK="fieldloop-migrate-test-${SUFFIX}"
+DB_CONTAINER="fieldloop-migrate-test-db-${SUFFIX}"
+DB_IMAGE="fieldloop-db-test:pg16"
+MIGRATE_IMAGE="${MIGRATE_IMAGE:-fieldloop-db-migrate:test}"
+DATABASE_URL="postgres://postgres:postgres@${DB_CONTAINER}:5432/fieldloop_test?sslmode=disable"
+
+cleanup() {
+  docker rm -f "${DB_CONTAINER}" >/dev/null 2>&1 || true
+  docker network rm "${NETWORK}" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+
+dbmate() {
+  docker run --rm --network "${NETWORK}" -e DATABASE_URL="${DATABASE_URL}" "${MIGRATE_IMAGE}" "$@"
+}
+
+run_psql() {
+  docker exec -i "${DB_CONTAINER}" psql -X -q -v ON_ERROR_STOP=1 -U postgres -d fieldloop_test "$@"
+}
+
+echo "==> Building images"
+docker build -q -t "${DB_IMAGE}" - < db/test/Dockerfile
+docker build -q -t "${MIGRATE_IMAGE}" -f db/Dockerfile .
+
+echo "==> Starting PostgreSQL"
+docker network create "${NETWORK}" >/dev/null
+docker run -d --name "${DB_CONTAINER}" --network "${NETWORK}" \
+  -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=fieldloop_test "${DB_IMAGE}" >/dev/null
+# TCP only: the image's init phase listens on the Unix socket alone.
+for _ in $(seq 1 60); do
+  if docker exec "${DB_CONTAINER}" pg_isready -q -h 127.0.0.1 -U postgres; then break; fi
+  sleep 1
+done
+docker exec "${DB_CONTAINER}" pg_isready -q -h 127.0.0.1 -U postgres
+
+MIGRATION_COUNT="$(find db/migrations -name '*.sql' | wc -l | tr -d ' ')"
+
+echo "==> dbmate up (empty database)"
+dbmate up
+
+echo "==> dbmate rollback x${MIGRATION_COUNT}"
+for _ in $(seq 1 "${MIGRATION_COUNT}"); do
+  dbmate rollback
+done
+LEFTOVER="$(run_psql -At -c "SELECT (SELECT count(*) FROM public.schema_migrations) + (SELECT count(*) FROM pg_namespace WHERE nspname = 'app')")"
+if [ "${LEFTOVER}" != "0" ]; then
+  echo "Rollback left migrations or the app schema behind" >&2
+  exit 1
+fi
+
+echo "==> dbmate up (after rollback)"
+dbmate up
+
+for test_file in db/test/*.sql; do
+  echo "==> ${test_file}"
+  run_psql -o /dev/null < "${test_file}"
+done
+
+echo "Migration tests passed"
