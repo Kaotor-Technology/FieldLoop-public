@@ -39,6 +39,24 @@ For `dev` and `demo`, **FIELDLOOP_ORG_ID** is the Terraform variable
 demo account as **FIELDLOOP_DEFAULT_ORG_ID**, so rows seeded under another key
 are not visible to them.
 
+After the load the command prints the row count of each seeded table for that
+Organisation and the Chainage the Segments span.
+
+**FIELDLOOP_DATABASE_URL** may name a Unix socket directory with an empty host
+and **?socket=** or **?host=**, the form dbmate and Cloud SQL use.
+
+## Load into dev or demo
+
+`dev` and `demo` are loaded by the Cloud Run job **db-seed-dl-01-<env>**, not
+from a workstation. The job runs the image built from **Dockerfile** in this
+directory as the migration identity of its environment, with the database URL
+from Secret Manager. Nothing runs it automatically. The operator steps are in
+[infra/terraform/README.md](../../../infra/terraform/README.md).
+
+```sh
+gcloud run jobs execute db-seed-dl-01-dev --region asia-southeast1 --wait
+```
+
 To inspect generated SQL and its parameter bindings without a database connection:
 
 ```sh
