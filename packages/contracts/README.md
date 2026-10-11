@@ -1,5 +1,34 @@
 # @fieldloop/contracts
 
+## API reference (FL-68 / FL-135)
+
+`pnpm --filter @fieldloop/contracts build:reference` generates `dist/reference/`
+from `openapi.yaml`, with linked operations/components, complete JSON definitions,
+downloadable YAML/JSON and a source SHA-256. The static renderer escapes all spec
+content. It supports local JSON Pointer references, including recursive schemas;
+unresolved or external `$ref` values fail the build rather than fetching content.
+Markdown in descriptions is displayed as text. There is no request execution UI.
+
+The CI **Build API reference** job lints the spec, builds the reference and retains
+the artifact for seven days. The contracts package build also generates the same
+files. `web-api` depends on contracts, so its existing Docker/Turbo build and pnpm
+production deployment carry the reference in the image. Spec-only changes affect
+`web-api` through that dependency, and the trusted release workflow deploys the
+new image to `dev` after successful CI on `main`.
+
+Open `https://fieldloop-dev.kaotor.com/api/reference/` after the release. Locally,
+build the workspace and start the BFF with its normal SSO configuration, then open
+`/api/reference/` on that origin. Vite's existing `/api` proxy serves it too.
+Signed-out document navigation redirects through the BFF login route. Every
+document, spec, script, stylesheet and font requires the opaque cookie session;
+revocation and IdP errors use the existing fail-closed BFF checks. Responses use
+`private, no-store`, `noindex` and a same-origin CSP. Fonts and design values come
+from the existing IBM Plex packages and `DESIGN.md`; no CDN is needed.
+
+The Cloud Run IAM/DNS/Keycloak origin prerequisites remain those of FL-59. This
+feature does not change public invoker access. Before claiming the dev page is
+delivered, verify the deployed image and a real SSO round trip on that environment.
+
 API and message contracts shared by the TypeScript and Python services
 ([architecture §1](../../docs/architecture.md#1-folder-structure)).
 

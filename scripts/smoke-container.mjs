@@ -35,6 +35,16 @@ try {
     const script = await fetch(`${origin}${asset}`);
     assert.equal(script.status, 200);
     assert.ok((await script.text()).length > 0);
+    if (app === "api") {
+      // Without auth configuration the reference must fail closed, not serve its
+      // document or source through the public SPA/static handler.
+      for (const path of ["/api/reference/", "/api/reference/openapi.json", "/api/reference/reference.css"]) {
+        const reference = await fetch(`${origin}${path}`, { redirect: "manual" });
+        assert.equal(reference.status, 503);
+        assert.equal(reference.headers.get("cache-control"), "private, no-store");
+        assert.equal((await reference.json()).code, "service_unavailable");
+      }
+    }
   }
   console.log(`${app}: container smoke test passed (non-root, HTTP${app === "api" ? ", SPA assets" : ""}).`);
 } catch (error) {
