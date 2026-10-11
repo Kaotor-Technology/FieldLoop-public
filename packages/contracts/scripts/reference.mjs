@@ -5,6 +5,11 @@ import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 
 const METHODS = new Set(["get", "put", "post", "delete", "options", "head", "patch", "trace"]);
+const FONTS = [
+  ["ibm-plex-mono", "ibm-plex-mono-latin-400-normal.woff2"],
+  ["ibm-plex-sans-thai", "ibm-plex-sans-thai-thai-400-normal.woff2"],
+  ["ibm-plex-sans-thai", "ibm-plex-sans-thai-latin-400-normal.woff2"],
+];
 const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]);
 const anchor = (value) => `ref-${Buffer.from(value).toString("hex")}`;
 
@@ -60,6 +65,20 @@ export function renderReference(spec, sourceHash) {
   const extraTargets = [...references].filter((reference) => !renderedTargets.has(anchor(reference))).map((reference) =>
     `<section id="${anchor(reference)}"><h3>${escapeHtml(reference)}</h3>${json(resolve(reference))}</section>`,
   ).join("\n");
+  function operationHtml({ label, id, operation }) {
+    const sections = [
+      `<h3>Authentication</h3>${json(operation.security)}`,
+      operation.parameters?.length ? `<h3>Parameters</h3>${json(operation.parameters)}` : "",
+      operation.requestBody ? `<h3>Request body</h3>${json(operation.requestBody)}` : "",
+      `<h3>Responses</h3>${Object.entries(operation.responses ?? {}).map(([status, value]) => {
+        const response = value.$ref ? resolve(value.$ref) : value;
+        return `<h4><code>${escapeHtml(status)}</code> — ${escapeHtml(response.description ?? "")}</h4>${json(value)}`;
+      }).join("")}`,
+    ];
+    return `<article id="${id}"><h2>${escapeHtml(label)}</h2><p>${escapeHtml(operation.summary ?? "")}</p>
+<p class="description">${escapeHtml(operation.description ?? "")}</p>${sections.join("\n")}
+<details><summary>Complete operation definition</summary>${json(operation)}</details></article>`;
+  }
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(spec.info.title)} · API reference</title><link rel="stylesheet" href="/api/reference/reference.css"><script src="/api/reference/reference.js" defer></script></head>
@@ -67,9 +86,9 @@ export function renderReference(spec, sourceHash) {
 <main id="content"><h1>${escapeHtml(spec.info.title)}</h1><p>Contract version <code>${escapeHtml(spec.info.version)}</code></p>
 <p>Read the contract, follow schema references, or download the source.</p><p><a href="/api/reference/openapi.yaml">Download OpenAPI YAML</a> · <a href="/api/reference/openapi.json">Download OpenAPI JSON</a></p>
 <p class="provenance">Source SHA-256: <code>${escapeHtml(sourceHash)}</code></p><p class="description">${escapeHtml(spec.info.description ?? "")}</p>
-<h2>Servers and default security</h2>${json({ servers: spec.servers ?? [], security: spec.security ?? [] })}
+<details><summary>Servers and default security</summary>${json({ servers: spec.servers ?? [], security: spec.security ?? [] })}</details>
 <nav aria-label="Operations"><h2>Operations</h2><ul>${operations.map(({ label, id, operation }) => `<li><a href="#${id}"><code>${escapeHtml(label)}</code> — ${escapeHtml(operation.summary ?? operation.operationId ?? "")}</a></li>`).join("")}</ul></nav>
-${operations.map(({ label, id, operation }) => `<article id="${id}"><h2>${escapeHtml(label)}</h2><p>${escapeHtml(operation.summary ?? "")}</p>${json(operation)}</article>`).join("\n")}
+${operations.map(operationHtml).join("\n")}
 <h2>Shared components</h2>${components}<details><summary>Complete OpenAPI document</summary>${json(spec)}</details>
 ${extraTargets}</main></body></html>\n`;
 }
@@ -93,10 +112,10 @@ export async function buildReference(root = new URL("../", import.meta.url)) {
   await writeFile(new URL("reference.css", output), `:root{${variables.join("")}}\n${await readFile(new URL("scripts/reference.css", root), "utf8")}`);
   await cp(new URL("scripts/reference.js", root), new URL("reference.js", output));
   const require = createRequire(new URL("package.json", root));
-  for (const [font, filename] of [["ibm-plex-mono", "ibm-plex-mono-latin-400-normal.woff2"], ["ibm-plex-sans-thai", "ibm-plex-sans-thai-thai-400-normal.woff2"]]) {
+  for (const [font, filename] of FONTS) {
     await cp(require.resolve(`@fontsource/${font}/files/${filename}`), new URL(filename, output));
   }
-  await writeFile(new URL("manifest.json", output), `${JSON.stringify({ sourceHash: createHash("sha256").update(source).digest("hex"), files: ["index.html", "openapi.yaml", "openapi.json", "reference.css", "reference.js", "ibm-plex-mono-latin-400-normal.woff2", "ibm-plex-sans-thai-thai-400-normal.woff2"] }, null, 2)}\n`);
+  await writeFile(new URL("manifest.json", output), `${JSON.stringify({ sourceHash: createHash("sha256").update(source).digest("hex"), files: ["index.html", "openapi.yaml", "openapi.json", "reference.css", "reference.js", ...FONTS.map(([, filename]) => filename)] }, null, 2)}\n`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) await buildReference();
