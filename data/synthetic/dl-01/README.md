@@ -39,8 +39,9 @@ For `dev` and `demo`, **FIELDLOOP_ORG_ID** is the Terraform variable
 demo account as **FIELDLOOP_DEFAULT_ORG_ID**, so rows seeded under another key
 are not visible to them.
 
-After the load the command prints the row count of each seeded table for that
-Organisation and the Chainage the Segments span.
+After the load the command reads the database back and prints the row count of
+each seeded table for that Organisation, the number of DL-01 pipeline Assets,
+and the Chainage its Segments cover with the number of gaps or overlaps.
 
 **FIELDLOOP_DATABASE_URL** may name a Unix socket directory with an empty host
 and **?socket=** or **?host=**, the form dbmate and Cloud SQL use.
