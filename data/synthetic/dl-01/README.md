@@ -30,7 +30,8 @@ creates the Asset, Facilities, Segments and Bowtie A records from
 parameter bindings and one transaction. Stable IDs make re-running it update the
 same records. In the same transaction it then removes rows that an earlier run
 of this seed loaded (**created_by** is **seed:dl-01**) and that are no longer in
-the seed files. It never removes a row it did not create. It also loads one
+the seed files. It never removes a row it did not create; if such a row still
+references a stale seed row, the load fails and changes nothing. It also loads one
 **organisation** row for the Organisation and never removes that row.
 
 ```sh
