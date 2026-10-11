@@ -534,15 +534,16 @@ export async function loadSeed(database, dataset, orgId, bowtieSeed = readBowtie
 }
 
 // dbmate and Cloud SQL name a Unix socket directory with an empty host and ?socket= or ?host=.
-// The WHATWG URL parser rejects an empty host, so the URL is read with a placeholder host.
-const EMPTY_HOST = "empty-host.invalid";
+// The WHATWG URL parser rejects an empty host, and the driver rejects one followed by a port, so
+// the URL is read and passed on with a placeholder host. The driver connects to ?host= instead.
+const EMPTY_HOST = "localhost";
 
 // Returns FIELDLOOP_DATABASE_URL in the form the PostgreSQL driver reads.
 export function driverConnectionString(connectionString) {
   if (!/^postgres(ql)?:\/\//.test(connectionString)) {
     throw new Error("FIELDLOOP_DATABASE_URL must use postgres:// or postgresql://.");
   }
-  const withHost = connectionString.replace(/^([a-z]+:\/\/(?:[^/?#@]*@)?)(?=\/)/, "$1" + EMPTY_HOST);
+  const withHost = connectionString.replace(/^([a-z]+:\/\/(?:[^/?#@]*@)?)(?=[:/])/, "$1" + EMPTY_HOST);
   const hostWasEmpty = withHost !== connectionString;
   let url;
   try {
@@ -563,8 +564,7 @@ export function driverConnectionString(connectionString) {
       "FIELDLOOP_DATABASE_URL must include a host, database name and user.",
     );
   }
-  // Only the placeholder this function put in is taken out; it follows the credentials.
-  return hostWasEmpty ? url.toString().replace("@" + EMPTY_HOST + "/", "@/") : url.toString();
+  return url.toString();
 }
 
 // Reads back what the Organisation now holds, so a job log is evidence of the load.
