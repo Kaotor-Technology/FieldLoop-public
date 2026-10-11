@@ -7,7 +7,7 @@ revision: "A"
 status: "draft"
 review_status: "pending"
 folder: "Integrity/Engineering Memos"
-classification: "internal"
+classification: "INTERNAL"
 licence: "synthetic"
 simulated: true
 label: "SYNTHETIC"

@@ -7,7 +7,7 @@ revision: "B"
 status: "draft"
 review_status: "pending"
 folder: "Integrity/ILI Reports"
-classification: "internal"
+classification: "INTERNAL"
 licence: "synthetic"
 simulated: true
 label: "SYNTHETIC"

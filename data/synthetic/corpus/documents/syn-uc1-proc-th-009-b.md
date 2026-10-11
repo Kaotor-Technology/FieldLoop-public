@@ -7,7 +7,7 @@ revision: "B"
 status: "draft"
 review_status: "pending"
 folder: "Company Standards/Procedures"
-classification: "internal"
+classification: "INTERNAL"
 licence: "synthetic"
 simulated: true
 label: "SYNTHETIC"

@@ -7,7 +7,7 @@ revision: "A"
 status: "draft"
 review_status: "pending"
 folder: "Maintenance/Patrol Logs"
-classification: "internal"
+classification: "INTERNAL"
 licence: "synthetic"
 simulated: true
 label: "SYNTHETIC"

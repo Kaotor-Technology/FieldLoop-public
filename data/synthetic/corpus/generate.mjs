@@ -640,7 +640,7 @@ export function buildCorpus(reviews = new Map()) {
       status: !passed ? "draft" : successorId && decisionFor(successorId) === DECISION_PASS ? "superseded" : "current",
       reviewStatus: passed ? REVIEW_PASSED : REVIEW_PENDING,
       folder: type.folder,
-      classification: "internal",
+      classification: "INTERNAL",
       licence: "synthetic",
       simulated: true,
       label: SYNTHETIC_LABEL,
