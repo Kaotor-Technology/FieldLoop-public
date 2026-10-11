@@ -92,6 +92,21 @@ function readDriverTarget(databaseUrl: string): DriverTarget {
   )) as DriverTarget;
 }
 
+function readDriverSsl(databaseUrl: string): unknown {
+  // Ask the PostgreSQL driver how it would encrypt the connection, without connecting.
+  const script = `
+    import pg from 'pg';
+    import { driverConnectionString } from './db/seed/dl-01/seed.mjs';
+    const client = new pg.Client({ connectionString: driverConnectionString(process.argv[1]) });
+    console.log(JSON.stringify(client.ssl));
+  `;
+  return JSON.parse(execFileSync(
+    process.execPath,
+    ["--input-type=module", "-e", script, databaseUrl],
+    { cwd: repositoryRoot, encoding: "utf8" },
+  ));
+}
+
 type LoadedPipeline = {
   assets: number;
   segments: number;
@@ -531,6 +546,16 @@ describe("synthetic DL-01 route generator", () => {
     ["postgres://seeder:pw@db.example.invalid/fieldloop_test?application_name=x@localhost/y", "db.example.invalid"],
   ])("gives the driver the host or socket directory of %s", (databaseUrl, host) => {
     expect(readDriverTarget(databaseUrl)).toEqual({ host, database: "fieldloop_test", user: "seeder" });
+  });
+
+  it.each([
+    ["postgres://seeder:pw@db.example.invalid:5432/fieldloop_test", false],
+    ["postgres://seeder:pw@db.example.invalid:5432/fieldloop_test?sslmode=disable", false],
+    ["postgres://seeder:pw@db.example.invalid:5432/fieldloop_test?sslmode=require", { rejectUnauthorized: false }],
+    ["postgres://seeder:pw@db.example.invalid:5432/fieldloop_test?sslmode=verify-full", {}],
+    ["postgres://seeder:pw@db.example.invalid:5432/fieldloop_test?sslmode=require&uselibpqcompat=false", {}],
+  ])("reads sslmode as dbmate does for %s", (databaseUrl, ssl) => {
+    expect(readDriverSsl(databaseUrl)).toEqual(ssl);
   });
 
   it.each([

@@ -640,6 +640,11 @@ export function driverConnectionString(connectionString) {
       url.searchParams.set("host", socket);
     }
   }
+  // dbmate reads the same URL and gives sslmode its libpq meaning, where "require" encrypts without
+  // checking the certificate. The driver does that only when asked.
+  if (url.searchParams.has("sslmode") && !url.searchParams.has("uselibpqcompat")) {
+    url.searchParams.set("uselibpqcompat", "true");
+  }
   const hasHost = Boolean(url.searchParams.get("host")) || !hostWasEmpty;
   if (!url.pathname.replace(/^\/+/, "") || !hasHost || !url.username) {
     throw new Error(
