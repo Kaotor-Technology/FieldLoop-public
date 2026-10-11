@@ -9,9 +9,9 @@ export async function createGoogleCloudSqlPool(input: {
   try {
     const clientOptions = await connector.getOptions({
       instanceConnectionName: input.instanceConnectionName,
-      // The shared instance has a public address only (architecture 6.2). The connector's TLS
-      // tunnel and IAM authentication protect the connection; no network is authorised on it.
-      ipType: IpAddressTypes.PUBLIC,
+      // The shared instance is reached at its private address, over the Direct VPC egress of the
+      // service (ADR-0009). The connector's TLS and IAM authentication still apply.
+      ipType: IpAddressTypes.PRIVATE,
       authType: AuthTypes.IAM,
     });
     const pool = new Pool({
