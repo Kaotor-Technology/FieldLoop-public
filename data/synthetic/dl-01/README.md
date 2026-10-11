@@ -53,8 +53,8 @@ and **?socket=** or **?host=**, the form dbmate and Cloud SQL use.
 ## Load into dev or demo
 
 `dev` and `demo` are loaded by the Cloud Run job **db-seed-dl-01-<env>**, not
-from a workstation. The job runs the image built from **Dockerfile** in this
-directory as the migration identity of its environment, with the database URL
+from a workstation. The job runs the image built from
+**db/seed/dl-01/Dockerfile** as the migration identity of its environment, with the database URL
 from Secret Manager. Nothing runs it automatically. The operator steps are in
 [infra/terraform/README.md](../../../infra/terraform/README.md).
 
@@ -65,7 +65,7 @@ gcloud run jobs execute db-seed-dl-01-dev --region asia-southeast1 --wait
 To inspect generated SQL and its parameter bindings without a database connection:
 
 ```sh
-node data/synthetic/dl-01/seed.mjs --print-sql --org-id demo-pipeline
+node db/seed/dl-01/seed.mjs --print-sql --org-id demo-pipeline
 ```
 
 **--print-sql** emits a JSON array of **sql** and **parameters** pairs. Values,

@@ -64,7 +64,7 @@ assert_empty() {
 
 seed() {
   FIELDLOOP_ORG_ID="${ORG_ID}" FIELDLOOP_DATABASE_URL="${SEED_DATABASE_URL}" \
-    node data/synthetic/dl-01/seed.mjs --output-dir "${OUTPUT_DIR}"
+    node db/seed/dl-01/seed.mjs --output-dir "${OUTPUT_DIR}"
 }
 
 # Loads changed seed data through the loader's own entry point. "bowtie" removes classification
@@ -77,7 +77,7 @@ seed_changed() {
       import { Kysely, PostgresDialect } from 'kysely';
       import pg from 'pg';
       import { buildDataset } from './data/synthetic/dl-01/generate.mjs';
-      import { driverConnectionString, loadSeed } from './data/synthetic/dl-01/seed.mjs';
+      import { driverConnectionString, loadSeed } from './db/seed/dl-01/seed.mjs';
       const bowtieSeed = JSON.parse(readFileSync('./data/synthetic/dl-01/bowtie-a.json', 'utf8'));
       const dataset = buildDataset();
       const firstSegment = dataset.segments.features[0].properties;

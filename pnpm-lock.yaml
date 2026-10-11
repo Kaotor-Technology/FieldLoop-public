@@ -155,7 +155,7 @@ importers:
         specifier: 3.2.7
         version: 3.2.7(@types/debug@4.1.13)(@types/node@22.20.5)(yaml@2.9.1)
 
-  data/synthetic/dl-01:
+  db/seed/dl-01:
     dependencies:
       kysely:
         specifier: 0.29.6

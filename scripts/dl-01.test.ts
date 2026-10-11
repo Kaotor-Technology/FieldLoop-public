@@ -55,7 +55,7 @@ type BowtieFixture = {
 
 const repositoryRoot = resolve(".");
 const generator = resolve("data/synthetic/dl-01/generate.mjs");
-const seeder = resolve("data/synthetic/dl-01/seed.mjs");
+const seeder = resolve("db/seed/dl-01/seed.mjs");
 const bowtieSeedFile = resolve("data/synthetic/dl-01/bowtie-a.json");
 const generatedDirectories: string[] = [];
 
@@ -77,7 +77,7 @@ function readDriverTarget(databaseUrl: string): DriverTarget {
   // Ask the PostgreSQL driver what it would connect to, without connecting.
   const script = `
     import pg from 'pg';
-    import { driverConnectionString } from './data/synthetic/dl-01/seed.mjs';
+    import { driverConnectionString } from './db/seed/dl-01/seed.mjs';
     try {
       const client = new pg.Client({ connectionString: driverConnectionString(process.argv[1]) });
       console.log(JSON.stringify({ host: client.host, database: client.database, user: client.user }));
@@ -102,7 +102,7 @@ type LoadedPipeline = {
 
 function readLoadedStateProblems(pipeline: LoadedPipeline): string[] {
   const script = `
-    import { loadedStateProblems } from './data/synthetic/dl-01/seed.mjs';
+    import { loadedStateProblems } from './db/seed/dl-01/seed.mjs';
     console.log(JSON.stringify(loadedStateProblems(JSON.parse(process.argv[1]), 180000)));
   `;
   return JSON.parse(execFileSync(
@@ -118,7 +118,7 @@ function runSeedTransaction(failAt: number, mutation = "none"): TransactionResul
     import { readFileSync } from 'node:fs';
     import { Kysely, PostgresDialect } from 'kysely';
     import { buildDataset } from './data/synthetic/dl-01/generate.mjs';
-    import { loadSeed } from './data/synthetic/dl-01/seed.mjs';
+    import { loadSeed } from './db/seed/dl-01/seed.mjs';
     const queries = [];
     let connections = 0, releases = 0, ended = false, error = null;
     const client = {

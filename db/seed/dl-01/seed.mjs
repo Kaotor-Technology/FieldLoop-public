@@ -4,13 +4,15 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Kysely, PostgresDialect, sql } from "kysely";
 import pg from "pg";
-import { buildDataset, writeDataset } from "./generate.mjs";
+import { buildDataset, writeDataset } from "../../../data/synthetic/dl-01/generate.mjs";
 
 const UUID_NAMESPACE_URL = Buffer.from(
   "6ba7b8119dad11d180b400c04fd430c8",
   "hex",
 );
-const DEFAULT_OUTPUT_DIR = new URL(".", import.meta.url);
+// The generator, the Bowtie A seed file and the generated GeoJSON live with the synthetic data.
+const SEED_DATA_URL = new URL("../../../data/synthetic/dl-01/", import.meta.url);
+const DEFAULT_OUTPUT_DIR = SEED_DATA_URL;
 const CREATED_BY = "seed:dl-01";
 const ORGANISATION_NAME = "FieldLoop Demo Organisation (SYNTHETIC)";
 // The PRD 9.1 classes, as the schema stores them. Asset geometry is Highly Restricted and
@@ -41,7 +43,7 @@ const OWNED_TABLES = [
   "app.degradation_control",
   "app.evidence",
 ];
-const BOWTIE_SEED_URL = new URL("./bowtie-a.json", import.meta.url);
+const BOWTIE_SEED_URL = new URL("bowtie-a.json", SEED_DATA_URL);
 
 function readBowtieSeed() {
   return JSON.parse(readFileSync(BOWTIE_SEED_URL, "utf8"));
@@ -740,8 +742,8 @@ function printUsage() {
   process.stdout.write(
     [
       "Usage:",
-      "  FIELDLOOP_ORG_ID=<org-id> FIELDLOOP_DATABASE_URL=<postgres-url> node data/synthetic/dl-01/seed.mjs",
-      "  node data/synthetic/dl-01/seed.mjs --print-sql --org-id <org-id>",
+      "  FIELDLOOP_ORG_ID=<org-id> FIELDLOOP_DATABASE_URL=<postgres-url> node db/seed/dl-01/seed.mjs",
+      "  node db/seed/dl-01/seed.mjs --print-sql --org-id <org-id>",
       "",
     ].join("\n"),
   );
