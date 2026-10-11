@@ -151,7 +151,7 @@ describe("legal corpus manifest and Controlled Document loader", () => {
       expect(query.sql).toContain('"app"."controlled_document"');
       expect(query.sql).toContain("on conflict");
       expect(query.parameters).toContain("demo'pipeline");
-      expect(query.parameters).toContain("public");
+      expect(query.parameters).toContain("PUBLIC");
       expect(query.parameters).toContain(false);
       expect(query.parameters).toContain(null);
       const updateClause = query.sql.split(" do update set ")[1];

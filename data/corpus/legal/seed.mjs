@@ -55,7 +55,7 @@ export function validateManifest(manifest) {
     if (typeof record.reviewRequired !== "boolean" || typeof record.simulated !== "boolean") {
       throw new Error(`Legal corpus record ${record.documentKey} requires reviewRequired and simulated booleans.`);
     }
-    if (record.classification !== "public" || record.simulated !== false) {
+    if (record.classification !== "PUBLIC" || record.simulated !== false) {
       throw new Error(`Legal corpus record ${record.documentKey} must remain public and non-simulated.`);
     }
     if (record.reviewRequired && (record.status !== STATUS_UNVERIFIED || record.contentPath !== null)) {
