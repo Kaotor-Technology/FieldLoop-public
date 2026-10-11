@@ -37,11 +37,18 @@ uv run --locked --all-packages mypy
 uv run --locked --all-packages pytest
 uv build --all-packages
 pnpm test:migrations
+pnpm test:seed
 ```
 
 `pnpm test:migrations` needs Docker. It builds the `db-migrate` image, runs
 `dbmate up`, rolls back every migration and runs `up` again on an empty
 PostgreSQL 16 with PostGIS and pgvector, then runs the SQL regression tests in `db/test`.
+
+`pnpm test:seed` needs Docker and installed dependencies. It migrates an empty
+database of the same kind and loads the DL-01 seed into it. Two failing loads
+must leave every table empty: a seed file without `classification`, and a
+database error on the last table. A load and a re-load must then pass
+`db/test/seed/dl_01_loaded.sql` with equal row counts.
 
 `pnpm build` emits the SPA in `apps/web/dist`, service JavaScript in each
 TypeScript app's `dist`, and declarations for the empty shared modules.
@@ -84,7 +91,7 @@ update it when adding new build inputs.
 
 GitHub Actions runs on pull requests and pushes to `main`. It checks confidential
 paths before a redacted Gitleaks scan, then lint, types, Vitest, pytest, DESIGN.md
-lint, OpenAPI lint, builds, the migration tests, and a six-app Linux amd64 container build/startup matrix. It publishes
+lint, OpenAPI lint, builds, the migration and seed tests, and a six-app Linux amd64 container build/startup matrix. It publishes
 no images and provisions no cloud resources in the CI workflow. Action references are pinned to commits.
 
 The path checker inspects only Git metadata for the index, HEAD and fetched

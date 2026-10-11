@@ -55,4 +55,10 @@ The fixture's simulation clock starts **2026-10-12**, so Scenario A's `T+3d`
 Evidence-ageing event occurs after that interval has passed. The older Evidence
 record remains in the history.
 
+## Test the load
+
+Run **pnpm test:seed** from the repository root. It needs Docker. It loads this
+seed twice into an empty, migrated PostgreSQL and checks the rows; the root
+README describes the cases.
+
 The route and Facility shape can be regenerated without database access.
