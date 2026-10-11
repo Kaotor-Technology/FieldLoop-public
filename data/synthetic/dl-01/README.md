@@ -31,9 +31,13 @@ parameter bindings and one transaction. Stable IDs make re-running it update the
 same records.
 
 ```sh
-FIELDLOOP_ORG_ID=<org-id> FIELDLOOP_DATABASE_URL=<postgres-url> \
-  node data/synthetic/dl-01/seed.mjs
+FIELDLOOP_ORG_ID=<org-id> FIELDLOOP_DATABASE_URL=<postgres-url> pnpm db:seed:dl-01
 ```
+
+For `dev` and `demo`, **FIELDLOOP_ORG_ID** is the Terraform variable
+**demo_org_id** (default `fieldloop-demo`). `web-api` gives that value to every
+demo account as **FIELDLOOP_DEFAULT_ORG_ID**, so rows seeded under another key
+are not visible to them.
 
 To inspect generated SQL and its parameter bindings without a database connection:
 

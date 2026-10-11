@@ -16,6 +16,7 @@
     "lint:design": "design.md lint DESIGN.md",
     "lint:api": "pnpm --filter @fieldloop/contracts lint:openapi",
     "check:safety": "node scripts/check-confidential-paths.mjs",
+    "db:seed:dl-01": "node data/synthetic/dl-01/seed.mjs",
     "db:migrate": "dbmate --migrations-table public.schema_migrations up",
     "test:migrations": "bash scripts/test-migrations.sh"
   },

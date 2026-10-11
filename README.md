@@ -43,6 +43,10 @@ pnpm test:migrations
 `dbmate up`, rolls back every migration and runs `up` again on an empty
 PostgreSQL 16 with PostGIS and pgvector, then runs the SQL regression tests in `db/test`.
 
+`pnpm db:seed:dl-01` loads the synthetic DL-01 pipeline and Bowtie A into the
+database named by `FIELDLOOP_DATABASE_URL` for the Organisation
+`FIELDLOOP_ORG_ID`; see [data/synthetic/dl-01/README.md](data/synthetic/dl-01/README.md).
+
 `pnpm build` emits the SPA in `apps/web/dist`, service JavaScript in each
 TypeScript app's `dist`, and declarations for the empty shared modules.
 The config package validates its source presets without emitting runtime code.
