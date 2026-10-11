@@ -3,6 +3,7 @@ WORKDIR /workspace
 ENV TURBO_TELEMETRY_DISABLED=1
 RUN npm install --global pnpm@10.34.6
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc turbo.json ./
+COPY DESIGN.md ./
 COPY packages ./packages
 COPY apps/web ./apps/web
 COPY apps/api ./apps/api

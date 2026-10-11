@@ -57,3 +57,9 @@
 **/service-account*.json
 **/credentials*.json
 **/*.confidential.*
+
+# Contract and token generators are build inputs.
+!DESIGN.md
+!packages/contracts/openapi.yaml
+!packages/ui/scripts/
+!packages/ui/scripts/**

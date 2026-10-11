@@ -13,15 +13,17 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "pnpm generate && tsc -p tsconfig.build.json",
     "lint": "eslint .",
     "lint:openapi": "spectral lint openapi.yaml --ruleset .spectral.yaml --fail-severity warn",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "generate": "openapi-typescript openapi.yaml -o src/generated/api.ts"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",
     "@stoplight/spectral-cli": "6.16.3",
+    "openapi-typescript": "7.13.0",
     "typescript": "5.9.3",
     "vitest": "3.2.7"
   }
