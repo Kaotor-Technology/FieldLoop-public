@@ -11,7 +11,7 @@ import { registerSpa } from "../dist/spa.js";
 import { BffAuthService, hash } from "../dist/auth/service.js";
 import { KmsEnvelopeCrypto } from "../dist/auth/envelope-crypto.js";
 
-const baseUrl = "https://localhost:4173";
+const baseUrl = process.env["FIELDLOOP_BROWSER_BASE_URL"] ?? "https://localhost:4173";
 const sessions = new Map();
 const transactions = new Map();
 const authorizations = new Map();
@@ -70,7 +70,7 @@ const app = buildApp({ auth, baseUrl });
 await registerSpa(app, fileURLToPath(new URL("../../web/dist/", import.meta.url)));
 await app.ready();
 
-const directory = await mkdtemp(join(tmpdir(), "fieldloop-browser-tls-"));
+export const directory = await mkdtemp(join(tmpdir(), "fieldloop-browser-tls-"));
 execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=localhost", "-keyout", join(directory, "key.pem"), "-out", join(directory, "cert.pem")], { stdio: "ignore" });
 const server = createServer({ key: await readFile(join(directory, "key.pem")), cert: await readFile(join(directory, "cert.pem")) }, async (request, response) => {
   try {
@@ -104,6 +104,23 @@ const server = createServer({ key: await readFile(join(directory, "key.pem")), c
   } catch { response.writeHead(500); response.end("Browser fixture failed"); }
 });
 server.listen(4173, "localhost");
-for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, async () => {
-  server.close(); await app.close(); await rm(directory, { recursive: true, force: true });
-});
+let closing;
+export function closeBrowserServer() {
+  return closing ??= (async () => {
+    try {
+      await new Promise((resolve, reject) => {
+        server.close((error) => { if (error) reject(error); else resolve(); });
+        server.closeAllConnections();
+      });
+      await app.close();
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  })();
+}
+// An importing dev harness owns shutdown and awaits cleanup before Vite exits.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, async () => {
+    await closeBrowserServer();
+  });
+}

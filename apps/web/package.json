@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test && playwright test --config playwright.dev.config.ts"
   },
   "dependencies": {
     "@fieldloop/contracts": "workspace:*",

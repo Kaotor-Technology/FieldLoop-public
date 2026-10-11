@@ -77,7 +77,40 @@ uv run --locked --package fieldloop-simulator uvicorn fieldloop_simulator.main:a
 Build before starting the API. The API serves the built SPA from the same origin.
 The five services expose `GET /healthz`; TypeScript services use `PORT` (default
 8080). These are process liveness probes, not readiness checks for future dependencies.
-The React entry point is intentionally blank; no demo screens exist yet.
+The React entry point protects `/map` with a BFF session and displays verified
+identity. Map layers are still pending FL-77.
+
+### Developing the authenticated SPA
+
+Vite proxies `/api` to `http://127.0.0.1:8080` by default. Start the configured
+BFF separately; set its `FIELDLOOP_BASE_URL` to the **browser origin**, rather
+than the upstream API address. For cookie/SSO development, use HTTPS:
+
+```sh
+mkdir -p apps/web/.local
+openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj /CN=localhost \
+  -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' \
+  -keyout apps/web/.local/key.pem -out apps/web/.local/cert.pem
+FIELDLOOP_DEV_TLS_CERT="$PWD/apps/web/.local/cert.pem" \
+FIELDLOOP_DEV_TLS_KEY="$PWD/apps/web/.local/key.pem" \
+pnpm --filter @fieldloop/web dev
+```
+
+Open `https://localhost:5173` and trust the local certificate. The key/certificate
+are ignored by Git. Set `FIELDLOOP_BASE_URL=https://localhost:5173` when starting
+the API with its existing database/KMS/SSO configuration. The Keycloak client must
+allow `https://localhost:5173/api/auth/callback` and post-logout return
+`https://localhost:5173/`; coordinate those additions with the client owner.
+
+`FIELDLOOP_DEV_API_TARGET` overrides the upstream address. Certificate verification
+is enabled for HTTPS upstreams; `FIELDLOOP_DEV_API_INSECURE=true` is an explicit
+local-only option for a self-signed upstream. These settings affect the dev server,
+not the browser bundle or production build.
+
+For credential-free verification, build first and run
+`pnpm --filter @fieldloop/web test:e2e`. The same 11 browser cases run against both
+the built SPA and Vite over HTTPS, using a scripted IdP and in-memory BFF store.
+Both fixtures shut down gracefully and delete their temporary TLS files.
 
 ## Containers and CI
 
