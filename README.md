@@ -53,7 +53,8 @@ then pass `db/test/seed/dl_01_loaded.sql` and leave identical rows.
 
 `pnpm db:seed:dl-01` loads the synthetic DL-01 pipeline and Bowtie A into the
 database named by `FIELDLOOP_DATABASE_URL` for the Organisation
-`FIELDLOOP_ORG_ID`; see [data/synthetic/dl-01/README.md](data/synthetic/dl-01/README.md).
+`FIELDLOOP_ORG_ID`. The loader is in [db/seed/dl-01/](db/seed/dl-01/); the data and the full
+instructions are in [data/synthetic/dl-01/README.md](data/synthetic/dl-01/README.md).
 
 `pnpm build` emits the SPA in `apps/web/dist`, service JavaScript in each
 TypeScript app's `dist`, and declarations for the empty shared modules.

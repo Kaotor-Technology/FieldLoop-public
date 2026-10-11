@@ -15,5 +15,5 @@ WORKDIR /app/db/seed/dl-01
 COPY --from=build --chown=node:node /output ./
 COPY --chown=node:node data/synthetic/dl-01/generate.mjs data/synthetic/dl-01/bowtie-a.json /app/data/synthetic/dl-01/
 USER node
-# The loader also writes the generated GeoJSON; the image's own copy stays read-only.
+# The loader also writes the generated GeoJSON; in the image that goes to a temporary directory.
 CMD ["node", "seed.mjs", "--output-dir", "/tmp/dl-01"]
