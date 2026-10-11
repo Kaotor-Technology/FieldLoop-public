@@ -71,6 +71,27 @@ function previewSeed(orgId: string): SeedQuery[] {
   )) as SeedQuery[];
 }
 
+type DriverTarget = { host?: string; database?: string; user?: string; error?: string };
+
+function readDriverTarget(databaseUrl: string): DriverTarget {
+  // Ask the PostgreSQL driver what it would connect to, without connecting.
+  const script = `
+    import pg from 'pg';
+    import { driverConnectionString } from './data/synthetic/dl-01/seed.mjs';
+    try {
+      const client = new pg.Client({ connectionString: driverConnectionString(process.argv[1]) });
+      console.log(JSON.stringify({ host: client.host, database: client.database, user: client.user }));
+    } catch (failure) {
+      console.log(JSON.stringify({ error: failure.message }));
+    }
+  `;
+  return JSON.parse(execFileSync(
+    process.execPath,
+    ["--input-type=module", "-e", script, databaseUrl],
+    { cwd: repositoryRoot, encoding: "utf8" },
+  )) as DriverTarget;
+}
+
 function runSeedTransaction(failAt: number, mutation = "none"): TransactionResult {
   // Exercise Kysely's PostgreSQL driver without connecting to a database.
   const script = `
@@ -424,5 +445,22 @@ describe("synthetic DL-01 route generator", () => {
     expect(result.connections).toBe(1);
     expect(result.queries.map(({ sql }) => sql)).toEqual(["begin", "rollback"]);
     expect(result.queries.some(({ sql }) => sql.startsWith("insert"))).toBe(false);
+  });
+  it.each([
+    ["postgres://seeder:pw@db.example.invalid:5432/fieldloop_test", "db.example.invalid"],
+    ["postgres://seeder:pw@/fieldloop_test?host=/cloudsql/project:region:instance", "/cloudsql/project:region:instance"],
+    ["postgres://seeder:pw@/fieldloop_test?socket=/cloudsql/project:region:instance", "/cloudsql/project:region:instance"],
+    ["postgresql://seeder:p%40w@/fieldloop_test?socket=/cloudsql/project:region:instance&sslmode=disable", "/cloudsql/project:region:instance"],
+  ])("gives the driver the host or socket directory of %s", (databaseUrl, host) => {
+    expect(readDriverTarget(databaseUrl)).toEqual({ host, database: "fieldloop_test", user: "seeder" });
+  });
+
+  it.each([
+    ["mysql://seeder:pw@db.example.invalid/fieldloop_test", "must use postgres:// or postgresql://"],
+    ["postgres://seeder:pw@/fieldloop_test", "must include a host, database name and user"],
+    ["postgres://seeder:pw@db.example.invalid/", "must include a host, database name and user"],
+    ["postgres://db.example.invalid/fieldloop_test", "must include a host, database name and user"],
+  ])("rejects the database URL %s", (databaseUrl, expectedError) => {
+    expect(readDriverTarget(databaseUrl).error).toContain(expectedError);
   });
 });

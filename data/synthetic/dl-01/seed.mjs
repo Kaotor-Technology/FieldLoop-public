@@ -533,21 +533,35 @@ export async function loadSeed(database, dataset, orgId, bowtieSeed = readBowtie
   });
 }
 
-function validateConnectionString(connectionString) {
+// dbmate and Cloud SQL name a Unix socket directory with an empty host and ?socket= or ?host=.
+// The WHATWG URL parser rejects an empty host, so the URL is read with a placeholder host.
+const EMPTY_HOST = "empty-host.invalid";
+
+// Returns FIELDLOOP_DATABASE_URL in the form the PostgreSQL driver reads.
+export function driverConnectionString(connectionString) {
+  if (!/^postgres(ql)?:\/\//.test(connectionString)) {
+    throw new Error("FIELDLOOP_DATABASE_URL must use postgres:// or postgresql://.");
+  }
   let url;
   try {
-    url = new URL(connectionString);
+    url = new URL(connectionString.replace(/^([a-z]+:\/\/(?:[^/?#@]*@)?)(?=\/)/, "$1" + EMPTY_HOST));
   } catch {
     throw new Error("FIELDLOOP_DATABASE_URL must be a valid PostgreSQL URL.");
   }
-  if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") {
-    throw new Error("FIELDLOOP_DATABASE_URL must use postgres:// or postgresql://.");
+  const socket = url.searchParams.get("socket");
+  if (socket !== null) {
+    url.searchParams.delete("socket");
+    if (!url.searchParams.has("host")) {
+      url.searchParams.set("host", socket);
+    }
   }
-  if (!url.pathname.replace(/^\/+/, "") || !(url.searchParams.get("host") ?? url.hostname) || !url.username) {
+  const hasHost = Boolean(url.searchParams.get("host")) || url.hostname !== EMPTY_HOST;
+  if (!url.pathname.replace(/^\/+/, "") || !hasHost || !url.username) {
     throw new Error(
       "FIELDLOOP_DATABASE_URL must include a host, database name and user.",
     );
   }
+  return url.toString().replace("@" + EMPTY_HOST + "/", "@/");
 }
 
 function parseArguments(argumentsList) {
@@ -606,13 +620,10 @@ async function main() {
       "Set FIELDLOOP_DATABASE_URL to the target database before loading the seed.",
     );
   }
-  if (!options.printSql) {
-    validateConnectionString(databaseUrl);
-  }
   const database = new Kysely({
     dialect: new PostgresDialect({
       pool: new pg.Pool({
-        connectionString: options.printSql ? undefined : databaseUrl,
+        connectionString: options.printSql ? undefined : driverConnectionString(databaseUrl),
         max: 1,
         connectionTimeoutMillis: 10_000,
       }),
