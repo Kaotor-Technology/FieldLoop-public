@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs the DL-01 seed against an empty, migrated PostgreSQL 16 (PostGIS + pgvector):
-# two failing loads that must leave nothing behind, then a load and a re-load whose
-# rows are checked by db/test/seed/dl_01_loaded.sql. Needs Docker and node_modules.
+# two failing loads that must leave nothing behind, then a load and a re-load that must
+# pass db/test/seed/dl_01_loaded.sql and leave identical rows. Needs Docker and node_modules.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -25,13 +25,14 @@ run_psql() {
   docker exec -i "${DB_CONTAINER}" psql -X -q -v ON_ERROR_STOP=1 -U postgres -d fieldloop_test "$@"
 }
 
-# One "<table> <row count>" line for every table in the app schema.
-row_counts() {
+# One "<table> <row count> <digest of its rows>" line for every table in the app schema.
+table_states() {
   run_psql -At -F ' ' -c "
-    SELECT table_name,
-           (xpath('/row/c/text()',
-                  query_to_xml(format('SELECT count(*) AS c FROM app.%I', table_name), false, true, '')))[1]
-    FROM information_schema.tables
+    SELECT table_name, (xpath('/row/c/text()', state))[1], (xpath('/row/d/text()', state))[1]
+    FROM information_schema.tables,
+         LATERAL query_to_xml(format(
+           'SELECT count(*) AS c, md5(coalesce(string_agg(t::text, chr(10) ORDER BY t::text), %L)) AS d FROM app.%I t',
+           '', table_name), false, true, '') AS state
     WHERE table_schema = 'app' AND table_type = 'BASE TABLE'
     ORDER BY table_name"
 }
@@ -53,7 +54,7 @@ expect_failure() {
 
 assert_empty() {
   local leftover
-  leftover="$(row_counts | awk '$2 != 0')"
+  leftover="$(table_states | awk '$2 != 0')"
   if [ -n "${leftover}" ]; then
     echo "$1 left rows behind:" >&2
     echo "${leftover}" >&2
@@ -103,6 +104,10 @@ done
 docker exec "${DB_CONTAINER}" pg_isready -q -h 127.0.0.1 -U postgres
 
 HOST_PORT="$(docker port "${DB_CONTAINER}" 5432/tcp | head -n 1 | sed 's/.*://')"
+if [ -z "${HOST_PORT}" ]; then
+  echo "PostgreSQL published no host port" >&2
+  exit 1
+fi
 SEED_DATABASE_URL="postgres://postgres:postgres@127.0.0.1:${HOST_PORT}/fieldloop_test"
 
 echo "==> dbmate up (empty database)"
@@ -112,10 +117,11 @@ docker run --rm --network "${NETWORK}" \
 assert_empty "The migrations"
 
 echo "==> Seed file without classification is rejected"
-expect_failure "metadata.classification" seed_without_classification
+expect_failure "Bowtie A seed requires metadata.classification" seed_without_classification
 assert_empty "The seed file without classification"
 
-# The last table the seed writes rejects its rows, so every earlier insert must roll back.
+# The database rejects the first Evidence row, which the seed writes after the Assets, Segments,
+# Bowtie, Threats, Consequences and a Barrier, so those inserts must roll back.
 echo "==> Database error late in the load rolls everything back"
 run_psql <<'SQL'
 CREATE FUNCTION app.reject_seed_test_row() RETURNS trigger LANGUAGE plpgsql AS $$
@@ -132,17 +138,17 @@ run_psql -c "DROP TRIGGER reject_seed_test_row ON app.evidence; DROP FUNCTION ap
 echo "==> Seed (empty database)"
 seed
 run_psql -o /dev/null -v org_id="${ORG_ID}" < db/test/seed/dl_01_loaded.sql
-FIRST_COUNTS="$(row_counts)"
+FIRST_STATES="$(table_states)"
 
 echo "==> Seed (second run)"
 seed
 run_psql -o /dev/null -v org_id="${ORG_ID}" < db/test/seed/dl_01_loaded.sql
-SECOND_COUNTS="$(row_counts)"
-if [ "${FIRST_COUNTS}" != "${SECOND_COUNTS}" ]; then
-  echo "Row counts changed on the second seed run" >&2
-  diff <(echo "${FIRST_COUNTS}") <(echo "${SECOND_COUNTS}") >&2 || true
+SECOND_STATES="$(table_states)"
+if [ "${FIRST_STATES}" != "${SECOND_STATES}" ]; then
+  echo "Row counts or row contents changed on the second seed run" >&2
+  diff <(echo "${FIRST_STATES}") <(echo "${SECOND_STATES}") >&2 || true
   exit 1
 fi
 
-echo "${SECOND_COUNTS}" | awk '$2 != 0'
+echo "${SECOND_STATES}" | awk '$2 != 0 { print $1, $2 }'
 echo "Seed tests passed"

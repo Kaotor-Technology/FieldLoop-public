@@ -46,9 +46,10 @@ PostgreSQL 16 with PostGIS and pgvector, then runs the SQL regression tests in `
 
 `pnpm test:seed` needs Docker and installed dependencies. It migrates an empty
 database of the same kind and loads the DL-01 seed into it. Two failing loads
-must leave every table empty: a seed file without `classification`, and a
-database error on the last table. A load and a re-load must then pass
-`db/test/seed/dl_01_loaded.sql` with equal row counts.
+must leave every table empty: a seed file without `classification`, which the
+loader rejects before it inserts, and a database error on the first Evidence
+row, which must roll back the rows already inserted. A load and a re-load must
+then pass `db/test/seed/dl_01_loaded.sql` and leave identical rows.
 
 `pnpm build` emits the SPA in `apps/web/dist`, service JavaScript in each
 TypeScript app's `dist`, and declarations for the empty shared modules.
