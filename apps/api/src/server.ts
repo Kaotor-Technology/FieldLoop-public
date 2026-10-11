@@ -1,6 +1,6 @@
 import { buildApp } from "./app.js";
 import { createProductionAuthRuntime } from "./auth/runtime.js";
-import fastifyStatic from "@fastify/static";
+import { registerSpa } from "./spa.js";
 import { fileURLToPath } from "node:url";
 
 const authRuntime = await createProductionAuthRuntime();
@@ -15,9 +15,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 }
 
 // The web-api image serves the built SPA from the same origin.
-await app.register(fastifyStatic, {
-  root: fileURLToPath(new URL("../../web/dist/", import.meta.url)),
-});
+await registerSpa(app, fileURLToPath(new URL("../../web/dist/", import.meta.url)));
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {
