@@ -1,8 +1,8 @@
 -- Regression tests for Signal columns and daily partitions (architecture 5.1 and 5.3, FL-60).
 BEGIN;
 
-INSERT INTO app.signal (org_id, source, tag, value, observed_at, simulated)
-VALUES ('org-test', 'simulator', 'rain_mm_per_h', 12.5, '2026-10-18 05:00:00+00', true);
+INSERT INTO app.signal (org_id, source, tag, value, observed_at, simulated, classification)
+VALUES ('org-test', 'simulator', 'rain_mm_per_h', 12.5, '2026-10-18 05:00:00+00', true, 'INTERNAL');
 
 DO $$
 BEGIN
