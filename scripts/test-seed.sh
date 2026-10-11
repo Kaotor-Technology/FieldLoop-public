@@ -67,10 +67,11 @@ seed() {
     node data/synthetic/dl-01/seed.mjs --output-dir "${OUTPUT_DIR}"
 }
 
-# Loads seed data with one classification removed, through the loader's own entry point:
-# "bowtie" removes it from the Bowtie A metadata, "segment" from the first generated Segment.
-seed_without_classification() {
-  FIELDLOOP_ORG_ID="${ORG_ID}" FIELDLOOP_DATABASE_URL="${SEED_DATABASE_URL}" WITHOUT_CLASSIFICATION="$1" \
+# Loads changed seed data through the loader's own entry point. "bowtie" removes classification
+# from the Bowtie A metadata, "segment" removes it from the first generated Segment, and
+# "reclassified-segment" gives that Segment a classification of its own.
+seed_changed() {
+  FIELDLOOP_ORG_ID="${ORG_ID}" FIELDLOOP_DATABASE_URL="${SEED_DATABASE_URL}" SEED_CHANGE="$1" \
     node --input-type=module -e "
       import { readFileSync } from 'node:fs';
       import { Kysely, PostgresDialect } from 'kysely';
@@ -79,8 +80,10 @@ seed_without_classification() {
       import { driverConnectionString, loadSeed } from './data/synthetic/dl-01/seed.mjs';
       const bowtieSeed = JSON.parse(readFileSync('./data/synthetic/dl-01/bowtie-a.json', 'utf8'));
       const dataset = buildDataset();
-      if (process.env.WITHOUT_CLASSIFICATION === 'bowtie') delete bowtieSeed.metadata.classification;
-      if (process.env.WITHOUT_CLASSIFICATION === 'segment') delete dataset.segments.features[0].properties.classification;
+      const firstSegment = dataset.segments.features[0].properties;
+      if (process.env.SEED_CHANGE === 'bowtie') delete bowtieSeed.metadata.classification;
+      if (process.env.SEED_CHANGE === 'segment') delete firstSegment.classification;
+      if (process.env.SEED_CHANGE === 'reclassified-segment') firstSegment.classification = 'seed-test-class';
       const connectionString = driverConnectionString(process.env.FIELDLOOP_DATABASE_URL);
       const pool = new pg.Pool({ connectionString, max: 1 });
       const database = new Kysely({ dialect: new PostgresDialect({ pool }) });
@@ -121,9 +124,9 @@ docker run --rm --network "${NETWORK}" \
 assert_empty "The migrations"
 
 echo "==> Seed file without classification is rejected"
-expect_failure "Bowtie A seed requires metadata.classification" seed_without_classification bowtie
+expect_failure "Bowtie A seed requires metadata.classification" seed_changed bowtie
 assert_empty "The seed file without classification"
-expect_failure "Feature dl-01-segment-001 requires classification." seed_without_classification segment
+expect_failure "Feature dl-01-segment-001 requires classification." seed_changed segment
 assert_empty "The Segment without classification"
 
 # The database rejects the first Evidence row, which the seed writes after the Assets, Segments,
@@ -183,6 +186,36 @@ fi
 run_psql -c "DELETE FROM app.evidence WHERE id = '${OTHER_EVIDENCE_ID}'"
 if [ "$(table_states)" != "${SECOND_STATES}" ]; then
   echo "The database did not return to the seeded state after the stale row was removed" >&2
+  exit 1
+fi
+
+# A stale seed row that a row from somebody else still references cannot be removed: the load
+# fails and changes nothing.
+echo "==> Seed fails and changes nothing when another row references a stale seed row"
+STALE_BARRIER_ID="00000000-0000-4000-8000-000000000005"
+run_psql -c "INSERT INTO app.barrier (id, org_id, name, type, side, simulated, classification, created_by)
+  VALUES ('${STALE_BARRIER_ID}', '${ORG_ID}', 'Stale Barrier', 'technical', 'preventive', true, 'internal', 'seed:dl-01');
+  INSERT INTO app.evidence (id, org_id, barrier_id, kind, source, observed_at, simulated, classification, created_by)
+  VALUES ('${OTHER_EVIDENCE_ID}', '${ORG_ID}', '${STALE_BARRIER_ID}', 'performance_check', 'manual', now(), true, 'internal', 'seed-test:other')"
+BLOCKED_STATES="$(table_states)"
+expect_failure "violates foreign key constraint" seed
+if [ "$(table_states)" != "${BLOCKED_STATES}" ]; then
+  echo "The failed seed changed the database" >&2
+  exit 1
+fi
+run_psql -c "DELETE FROM app.evidence WHERE id = '${OTHER_EVIDENCE_ID}'; DELETE FROM app.barrier WHERE id = '${STALE_BARRIER_ID}'"
+
+# A Segment row takes its classification from its own feature, not from the Bowtie A metadata.
+echo "==> Segment takes the classification of its own feature"
+seed_changed reclassified-segment
+RECLASSIFIED="$(run_psql -At -F ' ' -c "SELECT chainage_from::int, classification FROM app.segment WHERE classification <> 'internal'")"
+if [ "${RECLASSIFIED}" != "0 seed-test-class" ]; then
+  echo "Expected only the first Segment to carry its own classification, found: ${RECLASSIFIED:-none}" >&2
+  exit 1
+fi
+seed >/dev/null
+if [ "$(table_states)" != "${SECOND_STATES}" ]; then
+  echo "The database did not return to the seeded state after the reclassified load" >&2
   exit 1
 fi
 
