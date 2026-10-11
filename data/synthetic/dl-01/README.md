@@ -28,7 +28,10 @@ set **FIELDLOOP_DATABASE_URL** from the approved local secret source. The loader
 creates the Asset, Facilities, Segments and Bowtie A records from
 **bowtie-a.json** in one command. It uses Kysely with the PostgreSQL driver,
 parameter bindings and one transaction. Stable IDs make re-running it update the
-same records.
+same records. In the same transaction it then removes rows that an earlier run
+of this seed loaded (**created_by** is **seed:dl-01**) and that are no longer in
+the seed files. It never removes a row it did not create. It also loads one
+**organisation** row for the Organisation and never removes that row.
 
 ```sh
 FIELDLOOP_ORG_ID=<org-id> FIELDLOOP_DATABASE_URL=<postgres-url> pnpm db:seed:dl-01
@@ -69,14 +72,18 @@ including Organisation IDs, GeoJSON and Asset attributes, stay outside the SQL
 text. This preview is for inspection; it is not a standalone SQL script for psql.
 
 Every loaded record is marked **simulated=true** and uses the **internal**
-classification. The Asset attributes, GeoJSON features and Bowtie A metadata
+classification. Route, Facility and Segment rows take both from their own
+generated feature, and Bowtie A rows from the seed file's metadata; the loader
+rejects a feature or seed file without them before it inserts. The Asset attributes, GeoJSON features and Bowtie A metadata
 carry the **SYNTHETIC** label. Bowtie A's rate and probability inputs are
 illustrative simulation values, not operating measurements or a QRA.
 
 Cathodic-protection Evidence is dated **2025-10-13** with a **12-month** interval.
 The fixture's simulation clock starts **2026-10-12**, so Scenario A's `T+3d`
 Evidence-ageing event occurs after that interval has passed. The older Evidence
-record remains in the history.
+record remains in the history. Every other Barrier has two Evidence records,
+dated **2025-09-15** and **2026-09-15**; the loader rejects a Barrier with
+fewer than two.
 
 ## Test the load
 
