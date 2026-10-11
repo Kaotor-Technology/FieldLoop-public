@@ -564,6 +564,31 @@ export function driverConnectionString(connectionString) {
   return url.toString().replace("@" + EMPTY_HOST + "/", "@/");
 }
 
+// Reads back what the Organisation now holds, so a job log is evidence of the load.
+async function readLoadedState(database, orgId, queries) {
+  const tables = [...new Set(
+    queries.map((query) => /^insert into "app"\."([a-z_]+)"/.exec(query.compile().sql)?.[1]),
+  )].filter((table) => table !== undefined);
+  const rowCounts = [];
+  for (const table of tables) {
+    const { count } = await database
+      .selectFrom(`app.${table}`)
+      .select((expression) => expression.fn.countAll().as("count"))
+      .where("org_id", "=", orgId)
+      .executeTakeFirstOrThrow();
+    rowCounts.push(`${table} ${count}`);
+  }
+  const chainage = await database
+    .selectFrom("app.segment")
+    .select((expression) => [
+      expression.fn.min("chainage_from").as("from"),
+      expression.fn.max("chainage_to").as("to"),
+    ])
+    .where("org_id", "=", orgId)
+    .executeTakeFirstOrThrow();
+  return { rowCounts, chainage };
+}
+
 function parseArguments(argumentsList) {
   const options = { printSql: false, orgId: undefined, outputDir: DEFAULT_OUTPUT_DIR };
   for (let index = 0; index < argumentsList.length; index += 1) {
@@ -620,6 +645,7 @@ async function main() {
       "Set FIELDLOOP_DATABASE_URL to the target database before loading the seed.",
     );
   }
+  let loadedState;
   const database = new Kysely({
     dialect: new PostgresDialect({
       pool: new pg.Pool({
@@ -640,6 +666,11 @@ async function main() {
     }
     await writeDataset(options.outputDir);
     await loadSeed(database, dataset, orgId, bowtieSeed);
+    loadedState = await readLoadedState(
+      database,
+      orgId,
+      buildSeedQueries(database, dataset, orgId, bowtieSeed),
+    );
   } finally {
     await database.destroy();
   }
@@ -650,7 +681,15 @@ async function main() {
       dataset.facilities.features.length +
       " Facilities, Bowtie A and its Threats, Consequences, Barriers, Evidence for Organisation " +
       orgId +
-      ".\n",
+      ".\n" +
+      "Rows for this Organisation: " +
+      loadedState.rowCounts.join(", ") +
+      ".\n" +
+      "Segments span Chainage " +
+      Number(loadedState.chainage.from) +
+      " to " +
+      Number(loadedState.chainage.to) +
+      " m.\n",
   );
 }
 
