@@ -75,10 +75,11 @@ seed_without_classification() {
       import { Kysely, PostgresDialect } from 'kysely';
       import pg from 'pg';
       import { buildDataset } from './data/synthetic/dl-01/generate.mjs';
-      import { loadSeed } from './data/synthetic/dl-01/seed.mjs';
+      import { driverConnectionString, loadSeed } from './data/synthetic/dl-01/seed.mjs';
       const bowtieSeed = JSON.parse(readFileSync('./data/synthetic/dl-01/bowtie-a.json', 'utf8'));
       delete bowtieSeed.metadata.classification;
-      const pool = new pg.Pool({ connectionString: process.env.FIELDLOOP_DATABASE_URL, max: 1 });
+      const connectionString = driverConnectionString(process.env.FIELDLOOP_DATABASE_URL);
+      const pool = new pg.Pool({ connectionString, max: 1 });
       const database = new Kysely({ dialect: new PostgresDialect({ pool }) });
       try {
         await loadSeed(database, buildDataset(), process.env.FIELDLOOP_ORG_ID, bowtieSeed);
