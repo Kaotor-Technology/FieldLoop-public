@@ -36,6 +36,7 @@
 !db/
 !db/migrations/
 !db/migrations/**
+!data/synthetic/dl-01/
 # These exclusions take precedence even inside an admitted source directory.
 **/node_modules
 **/dist
