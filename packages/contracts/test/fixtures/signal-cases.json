@@ -562,5 +562,35 @@
     "name": "string",
     "valid": false,
     "signal": "signal"
+  },
+  {
+    "name": "leap second unsupported",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T23:59:60Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "year zero unsupported",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "0000-01-01T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
   }
 ]

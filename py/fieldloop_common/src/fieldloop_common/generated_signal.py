@@ -43,7 +43,7 @@ class Signal(BaseModel):
         Field(
             alias="observedAt",
             description="RFC 3339 time with timezone; Scenario time when simulated.",
-            pattern="^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+            pattern="^([1-9][0-9]{3}|0[1-9][0-9]{2}|00[1-9][0-9]|000[1-9])-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$",
         ),
     ]
     simulated: Annotated[bool, Field(description="Explicit provenance; never default to false.")]
