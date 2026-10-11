@@ -451,6 +451,7 @@ describe("synthetic DL-01 route generator", () => {
     ["postgres://seeder:pw@/fieldloop_test?host=/cloudsql/project:region:instance", "/cloudsql/project:region:instance"],
     ["postgres://seeder:pw@/fieldloop_test?socket=/cloudsql/project:region:instance", "/cloudsql/project:region:instance"],
     ["postgresql://seeder:p%40w@/fieldloop_test?socket=/cloudsql/project:region:instance&sslmode=disable", "/cloudsql/project:region:instance"],
+    ["postgres://seeder:pw@db.example.invalid/fieldloop_test?application_name=x@empty-host.invalid/y", "db.example.invalid"],
   ])("gives the driver the host or socket directory of %s", (databaseUrl, host) => {
     expect(readDriverTarget(databaseUrl)).toEqual({ host, database: "fieldloop_test", user: "seeder" });
   });

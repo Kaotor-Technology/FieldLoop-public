@@ -542,9 +542,11 @@ export function driverConnectionString(connectionString) {
   if (!/^postgres(ql)?:\/\//.test(connectionString)) {
     throw new Error("FIELDLOOP_DATABASE_URL must use postgres:// or postgresql://.");
   }
+  const withHost = connectionString.replace(/^([a-z]+:\/\/(?:[^/?#@]*@)?)(?=\/)/, "$1" + EMPTY_HOST);
+  const hostWasEmpty = withHost !== connectionString;
   let url;
   try {
-    url = new URL(connectionString.replace(/^([a-z]+:\/\/(?:[^/?#@]*@)?)(?=\/)/, "$1" + EMPTY_HOST));
+    url = new URL(withHost);
   } catch {
     throw new Error("FIELDLOOP_DATABASE_URL must be a valid PostgreSQL URL.");
   }
@@ -555,13 +557,14 @@ export function driverConnectionString(connectionString) {
       url.searchParams.set("host", socket);
     }
   }
-  const hasHost = Boolean(url.searchParams.get("host")) || url.hostname !== EMPTY_HOST;
+  const hasHost = Boolean(url.searchParams.get("host")) || !hostWasEmpty;
   if (!url.pathname.replace(/^\/+/, "") || !hasHost || !url.username) {
     throw new Error(
       "FIELDLOOP_DATABASE_URL must include a host, database name and user.",
     );
   }
-  return url.toString().replace("@" + EMPTY_HOST + "/", "@/");
+  // Only the placeholder this function put in is taken out; it follows the credentials.
+  return hostWasEmpty ? url.toString().replace("@" + EMPTY_HOST + "/", "@/") : url.toString();
 }
 
 // Reads back what the Organisation now holds, so a job log is evidence of the load.
@@ -569,6 +572,9 @@ async function readLoadedState(database, orgId, queries) {
   const tables = [...new Set(
     queries.map((query) => /^insert into "app"\."([a-z_]+)"/.exec(query.compile().sql)?.[1]),
   )].filter((table) => table !== undefined);
+  if (tables.length === 0) {
+    throw new Error("No seeded table was recognised in the seed statements.");
+  }
   const rowCounts = [];
   for (const table of tables) {
     const { count } = await database
@@ -578,15 +584,26 @@ async function readLoadedState(database, orgId, queries) {
       .executeTakeFirstOrThrow();
     rowCounts.push(`${table} ${count}`);
   }
-  const chainage = await database
-    .selectFrom("app.segment")
-    .select((expression) => [
-      expression.fn.min("chainage_from").as("from"),
-      expression.fn.max("chainage_to").as("to"),
-    ])
-    .where("org_id", "=", orgId)
-    .executeTakeFirstOrThrow();
-  return { rowCounts, chainage };
+  // A Segment is broken when it has no Chainage, is empty, or does not start where the previous one ends.
+  const { rows: [pipeline] } = await sql`
+    WITH pipeline AS (
+      SELECT id FROM app.asset WHERE org_id = ${orgId} AND attributes->>'asset_code' = 'DL-01'
+    ), ordered AS (
+      SELECT chainage_from, chainage_to, lag(chainage_to) OVER (ORDER BY chainage_from) AS previous_to
+      FROM app.segment
+      WHERE org_id = ${orgId} AND asset_id IN (SELECT id FROM pipeline)
+    )
+    SELECT (SELECT count(*) FROM pipeline)::int AS assets,
+           count(*)::int AS segments,
+           (count(*) FILTER (
+             WHERE chainage_from IS NULL OR chainage_to IS NULL OR chainage_from >= chainage_to
+                OR chainage_from IS DISTINCT FROM coalesce(previous_to, chainage_from)
+           ))::int AS broken,
+           min(chainage_from)::float8 AS chainage_from,
+           max(chainage_to)::float8 AS chainage_to
+    FROM ordered
+  `.execute(database);
+  return { rowCounts, pipeline };
 }
 
 function parseArguments(argumentsList) {
@@ -666,11 +683,19 @@ async function main() {
     }
     await writeDataset(options.outputDir);
     await loadSeed(database, dataset, orgId, bowtieSeed);
-    loadedState = await readLoadedState(
-      database,
-      orgId,
-      buildSeedQueries(database, dataset, orgId, bowtieSeed),
-    );
+    try {
+      loadedState = await readLoadedState(
+        database,
+        orgId,
+        buildSeedQueries(database, dataset, orgId, bowtieSeed),
+      );
+    } catch (error) {
+      throw new Error(
+        "The seed was loaded and committed, but reading it back failed: " +
+          (error instanceof Error ? error.message : String(error)),
+        { cause: error },
+      );
+    }
   } finally {
     await database.destroy();
   }
@@ -685,11 +710,17 @@ async function main() {
       "Rows for this Organisation: " +
       loadedState.rowCounts.join(", ") +
       ".\n" +
-      "Segments span Chainage " +
-      Number(loadedState.chainage.from) +
+      "DL-01 pipeline Assets: " +
+      loadedState.pipeline.assets +
+      ". Segments: " +
+      loadedState.pipeline.segments +
+      ", from Chainage " +
+      loadedState.pipeline.chainage_from +
       " to " +
-      Number(loadedState.chainage.to) +
-      " m.\n",
+      loadedState.pipeline.chainage_to +
+      " m, with " +
+      loadedState.pipeline.broken +
+      " gaps or overlaps.\n",
   );
 }
 
