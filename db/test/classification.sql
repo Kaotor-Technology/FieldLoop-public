@@ -20,7 +20,7 @@ BEGIN
            OR NOT EXISTS (
                SELECT 1 FROM pg_constraint k
                WHERE k.conrelid = c.oid AND k.contype = 'c'
-                 AND pg_get_constraintdef(k.oid) LIKE '%classification%HIGHLY_RESTRICTED%'));
+                 AND pg_get_constraintdef(k.oid) = 'CHECK ((classification = ANY (ARRAY[''PUBLIC''::text, ''INTERNAL''::text, ''CONFIDENTIAL''::text, ''HIGHLY_RESTRICTED''::text])))'));
     IF unruly IS NOT NULL THEN
         RAISE EXCEPTION 'tables that do not enforce simulated and classification: %', unruly;
     END IF;
