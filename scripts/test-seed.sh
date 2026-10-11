@@ -67,9 +67,10 @@ seed() {
     node data/synthetic/dl-01/seed.mjs --output-dir "${OUTPUT_DIR}"
 }
 
-# Loads the seed file with metadata.classification removed, through the loader's own entry point.
+# Loads seed data with one classification removed, through the loader's own entry point:
+# "bowtie" removes it from the Bowtie A metadata, "segment" from the first generated Segment.
 seed_without_classification() {
-  FIELDLOOP_ORG_ID="${ORG_ID}" FIELDLOOP_DATABASE_URL="${SEED_DATABASE_URL}" \
+  FIELDLOOP_ORG_ID="${ORG_ID}" FIELDLOOP_DATABASE_URL="${SEED_DATABASE_URL}" WITHOUT_CLASSIFICATION="$1" \
     node --input-type=module -e "
       import { readFileSync } from 'node:fs';
       import { Kysely, PostgresDialect } from 'kysely';
@@ -77,12 +78,14 @@ seed_without_classification() {
       import { buildDataset } from './data/synthetic/dl-01/generate.mjs';
       import { driverConnectionString, loadSeed } from './data/synthetic/dl-01/seed.mjs';
       const bowtieSeed = JSON.parse(readFileSync('./data/synthetic/dl-01/bowtie-a.json', 'utf8'));
-      delete bowtieSeed.metadata.classification;
+      const dataset = buildDataset();
+      if (process.env.WITHOUT_CLASSIFICATION === 'bowtie') delete bowtieSeed.metadata.classification;
+      if (process.env.WITHOUT_CLASSIFICATION === 'segment') delete dataset.segments.features[0].properties.classification;
       const connectionString = driverConnectionString(process.env.FIELDLOOP_DATABASE_URL);
       const pool = new pg.Pool({ connectionString, max: 1 });
       const database = new Kysely({ dialect: new PostgresDialect({ pool }) });
       try {
-        await loadSeed(database, buildDataset(), process.env.FIELDLOOP_ORG_ID, bowtieSeed);
+        await loadSeed(database, dataset, process.env.FIELDLOOP_ORG_ID, bowtieSeed);
       } finally {
         await database.destroy();
       }
@@ -118,8 +121,10 @@ docker run --rm --network "${NETWORK}" \
 assert_empty "The migrations"
 
 echo "==> Seed file without classification is rejected"
-expect_failure "Bowtie A seed requires metadata.classification" seed_without_classification
+expect_failure "Bowtie A seed requires metadata.classification" seed_without_classification bowtie
 assert_empty "The seed file without classification"
+expect_failure "Feature dl-01-segment-001 requires classification." seed_without_classification segment
+assert_empty "The Segment without classification"
 
 # The database rejects the first Evidence row, which the seed writes after the Assets, Segments,
 # Bowtie, Threats, Consequences and a Barrier, so those inserts must roll back.
@@ -157,6 +162,27 @@ fi
 if [ "${FIRST_STATES}" != "${SECOND_STATES}" ]; then
   echo "Row counts or row contents changed on the second seed run" >&2
   diff <(echo "${FIRST_STATES}") <(echo "${SECOND_STATES}") >&2 || true
+  exit 1
+fi
+
+# A row an earlier run of this seed loaded, but which is no longer in the seed files, is removed.
+# A row somebody else created on the same Barrier stays.
+echo "==> Seed removes its own stale rows and leaves other rows alone"
+STALE_EVIDENCE_ID="00000000-0000-4000-8000-000000000003"
+OTHER_EVIDENCE_ID="00000000-0000-4000-8000-000000000004"
+run_psql -c "INSERT INTO app.evidence (id, org_id, barrier_id, kind, source, observed_at, simulated, classification, created_by)
+  SELECT stray.id, b.org_id, b.id, 'performance_check', 'manual', now(), true, 'internal', stray.created_by
+  FROM (SELECT id, org_id FROM app.barrier WHERE org_id = '${ORG_ID}' ORDER BY id LIMIT 1) b,
+       (VALUES ('${STALE_EVIDENCE_ID}'::uuid, 'seed:dl-01'), ('${OTHER_EVIDENCE_ID}'::uuid, 'seed-test:other')) AS stray(id, created_by)"
+seed >/dev/null
+REMAINING="$(run_psql -At -c "SELECT created_by FROM app.evidence WHERE id IN ('${STALE_EVIDENCE_ID}', '${OTHER_EVIDENCE_ID}')")"
+if [ "${REMAINING}" != "seed-test:other" ]; then
+  echo "Expected only the row the seed did not create to remain, found: ${REMAINING:-none}" >&2
+  exit 1
+fi
+run_psql -c "DELETE FROM app.evidence WHERE id = '${OTHER_EVIDENCE_ID}'"
+if [ "$(table_states)" != "${SECOND_STATES}" ]; then
+  echo "The database did not return to the seeded state after the stale row was removed" >&2
   exit 1
 fi
 

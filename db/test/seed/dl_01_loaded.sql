@@ -55,7 +55,7 @@ DECLARE
     row_count bigint;
 BEGIN
     FOREACH seeded_table IN ARRAY ARRAY[
-        'asset', 'segment', 'bowtie', 'bowtie_asset', 'threat', 'consequence',
+        'organisation', 'asset', 'segment', 'bowtie', 'bowtie_asset', 'threat', 'consequence',
         'independence_group', 'barrier', 'barrier_path', 'degradation_factor',
         'degradation_control', 'evidence'
     ]
@@ -65,6 +65,22 @@ BEGIN
             RAISE EXCEPTION 'the seed loaded no rows into app.%', seeded_table;
         END IF;
     END LOOP;
+END $$;
+
+-- One Organisation row, and an Evidence history of at least two records on every Barrier.
+DO $$
+DECLARE
+    thin_count bigint;
+BEGIN
+    IF (SELECT count(*) FROM organisation WHERE org_id = current_setting('fieldloop.seed_org_id')) <> 1 THEN
+        RAISE EXCEPTION 'expected exactly one organisation row for the seeded Organisation';
+    END IF;
+    SELECT count(*) INTO thin_count
+    FROM barrier b
+    WHERE (SELECT count(*) FROM evidence e WHERE e.barrier_id = b.id) < 2;
+    IF thin_count <> 0 THEN
+        RAISE EXCEPTION '% Barriers have fewer than two Evidence records', thin_count;
+    END IF;
 END $$;
 
 -- Every row in the app schema carries the seeded org_id, simulated = true and a classification.
