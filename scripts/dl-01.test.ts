@@ -552,9 +552,17 @@ describe("synthetic DL-01 route generator", () => {
     ["postgres://seeder:pw@db.example.invalid:5432/fieldloop_test", false],
     ["postgres://seeder:pw@db.example.invalid:5432/fieldloop_test?sslmode=disable", false],
     ["postgres://seeder:pw@db.example.invalid:5432/fieldloop_test?sslmode=require", { rejectUnauthorized: false }],
+    ["postgres://seeder:pw@/fieldloop_test?host=/cloudsql/project:region:instance&sslmode=require", { rejectUnauthorized: false }],
+  ])("reads sslmode=require as dbmate does for %s", (databaseUrl, ssl) => {
+    expect(readDriverSsl(databaseUrl)).toEqual(ssl);
+  });
+
+  it.each([
+    ["postgres://seeder:pw@db.example.invalid:5432/fieldloop_test?sslmode=prefer", {}],
     ["postgres://seeder:pw@db.example.invalid:5432/fieldloop_test?sslmode=verify-full", {}],
+    ["postgres://seeder:pw@db.example.invalid:5432/fieldloop_test?sslmode=no-verify", { rejectUnauthorized: false }],
     ["postgres://seeder:pw@db.example.invalid:5432/fieldloop_test?sslmode=require&uselibpqcompat=false", {}],
-  ])("reads sslmode as dbmate does for %s", (databaseUrl, ssl) => {
+  ])("leaves the driver's reading of %s alone", (databaseUrl, ssl) => {
     expect(readDriverSsl(databaseUrl)).toEqual(ssl);
   });
 
