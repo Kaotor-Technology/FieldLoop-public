@@ -1,0 +1,26 @@
+@font-face{font-family:"IBM Plex Mono";src:url("/api/reference/ibm-plex-mono-latin-400-normal.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"IBM Plex Sans Thai";src:url("/api/reference/ibm-plex-sans-thai-thai-400-normal.woff2") format("woff2");font-weight:400;font-display:swap}
+*{box-sizing:border-box}
+body{margin:var(--space-space-0);background:var(--color-neutral-50);color:var(--color-neutral-900);font-family:var(--type-body-md-fontFamily),sans-serif;font-size:var(--type-body-md-fontSize);line-height:var(--type-body-md-lineHeight)}
+header{display:flex;flex-wrap:wrap;gap:var(--space-space-6);padding:var(--space-space-4) var(--space-page-margin-desktop);background:var(--color-secondary);color:var(--color-on-secondary)}
+header a{color:var(--color-on-secondary)}
+main{max-width:var(--space-max-width-document);margin:auto;padding:var(--space-page-margin-desktop)}
+h1{font-size:var(--type-headline-lg-fontSize)}
+h2{font-size:var(--type-headline-md-fontSize)}
+h3{font-size:var(--type-headline-sm-fontSize)}
+article,section,details{padding:var(--space-space-4);margin-block:var(--space-space-4);background:var(--color-neutral-0);border-block-start:var(--space-border-hairline) solid var(--color-neutral-300)}
+a{color:var(--color-primary);overflow-wrap:anywhere}
+a:hover{color:var(--color-primary-hover)}
+header a:hover{color:var(--color-on-secondary-muted)}
+a,summary{display:inline-block;min-height:var(--space-touch-target);padding-block:var(--space-space-2)}
+summary{cursor:pointer}
+:focus-visible{outline:var(--space-focus-ring-width) solid var(--color-focus);outline-offset:var(--space-focus-ring-offset)}
+code,pre,article h2{font-family:var(--type-mono-md-fontFamily),monospace;font-size:var(--type-mono-md-fontSize);font-feature-settings:"tnum" 1,"zero" 1}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;line-height:var(--type-body-md-lineHeight)}
+pre a{min-height:unset;padding:var(--space-space-0)}
+.description{white-space:pre-wrap}
+.provenance{overflow-wrap:anywhere}
+ul{padding-inline-start:var(--space-space-6)}
+.skip{position:absolute;transform:translateY(-200%);background:var(--color-secondary)}
+.skip:focus{transform:none}
+@media(prefers-color-scheme:dark){body{background:var(--color-dark-canvas);color:var(--color-dark-on-surface)}article,section,details{background:var(--color-dark-surface);border-color:var(--color-dark-border)}a{color:var(--color-dark-primary)}a:hover{color:var(--color-dark-primary-hover)}:focus-visible{outline-color:var(--color-dark-focus)}}

@@ -14,10 +14,11 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "@fieldloop/adapters": "workspace:*",
     "@fastify/cookie": "11.1.3",
     "@fastify/formbody": "8.0.2",
     "@fastify/static": "10.1.6",
+    "@fieldloop/adapters": "workspace:*",
+    "@fieldloop/contracts": "workspace:*",
     "fastify": "5.12.5",
     "jose": "6.2.12",
     "kysely": "0.29.6",
