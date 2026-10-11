@@ -1,11 +1,12 @@
 import { execFileSync } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { parse } from "yaml";
+import { fileURLToPath } from "node:url";
 
 const designUrl = new URL("../../../DESIGN.md", import.meta.url);
 const design = await readFile(designUrl, "utf8");
 const tokens = parse(design.split("---")[1]);
-const css = execFileSync("design.md", ["export", designUrl.pathname, "--format", "css-vars"], { encoding: "utf8" });
+const css = execFileSync("design.md", ["export", fileURLToPath(designUrl), "--format", "css-vars"], { encoding: "utf8" });
 const properties = [];
 for (const [name, typography] of Object.entries(tokens.typography)) {
   for (const [property, value] of Object.entries(typography)) {
