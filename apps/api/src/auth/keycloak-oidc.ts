@@ -84,9 +84,10 @@ export class KeycloakOidcProvider implements OidcProvider {
     };
   }
 
-  async endSessionUrl(idToken: string, postLogoutRedirectUri: string): Promise<URL> {
+  async endSessionUrl(_idToken: string, postLogoutRedirectUri: string): Promise<URL> {
     return buildEndSessionUrl(await this.configuration(), {
-      id_token_hint: idToken,
+      // Keycloak asks for confirmation without an ID-token hint. No token reaches JavaScript.
+      client_id: this.clientId,
       post_logout_redirect_uri: postLogoutRedirectUri,
     });
   }

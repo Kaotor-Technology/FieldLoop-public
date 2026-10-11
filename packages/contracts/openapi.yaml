@@ -83,11 +83,20 @@ paths:
     post:
       operationId: logout
       summary: End the BFF session
-      description: Deletes the server-side session, clears `fl_session` and redirects to Keycloak RP-initiated logout. Repeated session deletion is safe.
+      description: Deletes the server-side session and clears `fl_session`. With Accept application/json, returns a token-free Keycloak logout URL for top-level navigation; otherwise redirects. Keycloak confirms logout because no ID-token hint is sent. Repeated session deletion is safe.
       tags: [Auth]
       parameters:
         - $ref: "#/components/parameters/CsrfToken"
       responses:
+        "200":
+          description: Token-free logout destination for a browser requesting application/json.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [redirectUrl]
+                properties:
+                  redirectUrl: { type: string, format: uri }
         "303":
           description: Redirect to Keycloak's logout endpoint and clear the session cookie.
           headers:

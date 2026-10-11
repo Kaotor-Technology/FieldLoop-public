@@ -66,6 +66,9 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthServicePort, 
     routes.post("/api/auth/logout", async (request, reply) => {
       const endSessionUrl = await auth.logout(request.cookies[SESSION_COOKIE]);
       reply.clearCookie(SESSION_COOKIE, { path: "/", secure: true, httpOnly: true, sameSite: "lax" });
+      if (request.headers.accept?.includes("application/json")) {
+        return reply.header("cache-control", "no-store").send({ redirectUrl: endSessionUrl.toString() });
+      }
       return reply.header("cache-control", "no-store").redirect(endSessionUrl.toString(), 303);
     });
 
