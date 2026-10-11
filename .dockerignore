@@ -39,6 +39,11 @@
 !db/seed/
 !db/seed/dl-01/
 !data/synthetic/dl-01/
+# Contract and token generators are build inputs.
+!DESIGN.md
+!packages/contracts/openapi.yaml
+!packages/ui/scripts/
+!packages/ui/scripts/**
 # These exclusions take precedence even inside an admitted source directory.
 **/node_modules
 **/dist
@@ -57,9 +62,3 @@
 **/service-account*.json
 **/credentials*.json
 **/*.confidential.*
-
-# Contract and token generators are build inputs.
-!DESIGN.md
-!packages/contracts/openapi.yaml
-!packages/ui/scripts/
-!packages/ui/scripts/**
