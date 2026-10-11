@@ -83,6 +83,31 @@ BEGIN
     END IF;
 END $$;
 
+-- PRD 9.1: Asset geometry is Highly Restricted, Bowtie and Barrier records are Confidential,
+-- and the Organisation row is Internal.
+DO $$
+DECLARE
+    seeded record;
+    wrong_count bigint;
+BEGIN
+    FOR seeded IN
+        SELECT * FROM (VALUES
+            ('organisation', 'INTERNAL'),
+            ('asset', 'HIGHLY_RESTRICTED'), ('segment', 'HIGHLY_RESTRICTED'),
+            ('bowtie', 'CONFIDENTIAL'), ('bowtie_asset', 'CONFIDENTIAL'), ('threat', 'CONFIDENTIAL'),
+            ('consequence', 'CONFIDENTIAL'), ('independence_group', 'CONFIDENTIAL'), ('barrier', 'CONFIDENTIAL'),
+            ('barrier_path', 'CONFIDENTIAL'), ('degradation_factor', 'CONFIDENTIAL'),
+            ('degradation_control', 'CONFIDENTIAL'), ('evidence', 'CONFIDENTIAL')
+        ) AS expected(table_name, classification)
+    LOOP
+        EXECUTE format('SELECT count(*) FROM app.%I WHERE classification <> %L', seeded.table_name, seeded.classification)
+        INTO wrong_count;
+        IF wrong_count <> 0 THEN
+            RAISE EXCEPTION '% rows in app.% are not classified %', wrong_count, seeded.table_name, seeded.classification;
+        END IF;
+    END LOOP;
+END $$;
+
 -- Every row in the app schema carries the seeded org_id, simulated = true and a classification.
 DO $$
 DECLARE

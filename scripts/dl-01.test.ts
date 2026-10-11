@@ -143,6 +143,7 @@ function runSeedTransaction(failAt: number, mutation = "none"): TransactionResul
       bowtieSeed.paths = bowtieSeed.paths.filter((path) => path.targetId !== 'third-party-excavation');
     }
     if (process.argv[2] === 'single-evidence') bowtieSeed.barriers[0].evidence.length = 1;
+    if (process.argv[2] === 'unknown-classification') bowtieSeed.metadata.classification = 'internal';
     if (process.argv[2] === 'no-degradation-factors') {
       for (const barrier of bowtieSeed.barriers) delete barrier.degradationFactors;
     }
@@ -271,7 +272,7 @@ describe("synthetic DL-01 route generator", () => {
     expect(route.properties.nominal_diameter_in).toBe(30);
     expect(route.properties.label).toBe("SYNTHETIC");
     expect(route.properties.simulated).toBe(true);
-    expect(route.properties.classification).toBe("internal");
+    expect(route.properties.classification).toBe("HIGHLY_RESTRICTED");
     expect(route.geometry.type).toBe("LineString");
     if (route.geometry.type !== "LineString") {
       throw new Error("Route must be a LineString.");
@@ -337,7 +338,7 @@ describe("synthetic DL-01 route generator", () => {
     expect(bowtie.metadata).toMatchObject({
       label: "SYNTHETIC",
       simulated: true,
-      classification: "internal",
+      classification: "CONFIDENTIAL",
     });
     expect(bowtie.threats.map(({ name }) => name)).toEqual([
       "Third-party excavation",
@@ -418,8 +419,19 @@ describe("synthetic DL-01 route generator", () => {
       expect(query.sql).toContain("on conflict");
       expect(query.parameters).toContain(orgId);
       expect(query.parameters).toContain(true);
-      expect(query.parameters).toContain("internal");
     }
+    // PRD 9.1: Asset geometry is Highly Restricted, Bowtie and Barrier records are Confidential.
+    const classOf = (table: string) => new Set(inserts
+      .filter(({ sql }) => sql.startsWith(`insert into "app"."${table}"`))
+      .flatMap(({ parameters }) => parameters.filter((parameter) =>
+        ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED", "internal"].includes(parameter as string))));
+    for (const table of ["asset", "segment"]) {
+      expect([...classOf(table)]).toEqual(["HIGHLY_RESTRICTED"]);
+    }
+    for (const table of ["bowtie", "bowtie_asset", "threat", "consequence", "independence_group", "barrier", "barrier_path", "degradation_factor", "degradation_control", "evidence"]) {
+      expect([...classOf(table)]).toEqual(["CONFIDENTIAL"]);
+    }
+    expect([...classOf("organisation")]).toEqual(["INTERNAL"]);
     const geometryQueries = queries.filter(({ sql }) => sql.includes("ST_GeomFromGeoJSON"));
     expect(geometryQueries).toHaveLength(10);
     for (const query of geometryQueries) {
@@ -502,6 +514,7 @@ describe("synthetic DL-01 route generator", () => {
     ["single-evidence", "requires an Evidence history of at least two records"],
     ["missing-segment-classification", "Feature dl-01-segment-001 requires classification."],
     ["unlabelled-facility", "Feature dl-01-bvs-001 must be labelled SYNTHETIC and simulated."],
+    ["unknown-classification", "Bowtie A seed metadata classification must be one of PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED."],
   ])("rejects invalid Bowtie A data before inserting records (%s)", (mutation, expectedError) => {
     const result = runSeedTransaction(0, mutation);
     expect(result.error).toContain(expectedError);

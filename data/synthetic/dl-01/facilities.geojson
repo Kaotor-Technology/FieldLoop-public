@@ -17,7 +17,7 @@
         "chainage_m": 45000,
         "label": "SYNTHETIC",
         "simulated": true,
-        "classification": "internal"
+        "classification": "HIGHLY_RESTRICTED"
       }
     },
     {
@@ -36,7 +36,7 @@
         "chainage_m": 90000,
         "label": "SYNTHETIC",
         "simulated": true,
-        "classification": "internal"
+        "classification": "HIGHLY_RESTRICTED"
       }
     },
     {
@@ -55,7 +55,7 @@
         "chainage_m": 135000,
         "label": "SYNTHETIC",
         "simulated": true,
-        "classification": "internal"
+        "classification": "HIGHLY_RESTRICTED"
       }
     }
   ]

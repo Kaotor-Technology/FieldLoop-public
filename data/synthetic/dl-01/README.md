@@ -72,10 +72,13 @@ node data/synthetic/dl-01/seed.mjs --print-sql --org-id demo-pipeline
 including Organisation IDs, GeoJSON and Asset attributes, stay outside the SQL
 text. This preview is for inspection; it is not a standalone SQL script for psql.
 
-Every loaded record is marked **simulated=true** and uses the **internal**
-classification. Route, Facility and Segment rows take both from their own
+Every loaded record is marked **simulated=true** and classified by PRD §9.1:
+Asset and Segment rows are **HIGHLY_RESTRICTED** (Asset geometry), Bowtie A,
+Barrier and Evidence rows are **CONFIDENTIAL**, and the Organisation row is
+**INTERNAL**. Route, Facility and Segment rows take both values from their own
 generated feature, and Bowtie A rows from the seed file's metadata; the loader
-rejects a feature or seed file without them before it inserts. The Asset attributes, GeoJSON features and Bowtie A metadata
+rejects a feature or seed file without them, or with a class outside the four
+PRD classes, before it inserts. The Asset attributes, GeoJSON features and Bowtie A metadata
 carry the **SYNTHETIC** label. Bowtie A's rate and probability inputs are
 illustrative simulation values, not operating measurements or a QRA.
 

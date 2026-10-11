@@ -9,7 +9,7 @@
   "metadata": {
     "label": "SYNTHETIC",
     "simulated": true,
-    "classification": "internal",
+    "classification": "CONFIDENTIAL",
     "parameterBasis": "Illustrative simulation inputs only; these are not measured operating rates or a QRA. PFD values use the demo defaults in PRD AS-4.",
     "simulationStartsAt": "2026-10-12T00:00:00.000Z",
     "scenarioReference": "cp-rectifier-failure"

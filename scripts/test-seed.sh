@@ -83,7 +83,7 @@ seed_changed() {
       const firstSegment = dataset.segments.features[0].properties;
       if (process.env.SEED_CHANGE === 'bowtie') delete bowtieSeed.metadata.classification;
       if (process.env.SEED_CHANGE === 'segment') delete firstSegment.classification;
-      if (process.env.SEED_CHANGE === 'reclassified-segment') firstSegment.classification = 'seed-test-class';
+      if (process.env.SEED_CHANGE === 'reclassified-segment') firstSegment.classification = 'CONFIDENTIAL';
       const connectionString = driverConnectionString(process.env.FIELDLOOP_DATABASE_URL);
       const pool = new pg.Pool({ connectionString, max: 1 });
       const database = new Kysely({ dialect: new PostgresDialect({ pool }) });
@@ -174,7 +174,7 @@ echo "==> Seed removes its own stale rows and leaves other rows alone"
 STALE_EVIDENCE_ID="00000000-0000-4000-8000-000000000003"
 OTHER_EVIDENCE_ID="00000000-0000-4000-8000-000000000004"
 run_psql -c "INSERT INTO app.evidence (id, org_id, barrier_id, kind, source, observed_at, simulated, classification, created_by)
-  SELECT stray.id, b.org_id, b.id, 'performance_check', 'manual', now(), true, 'internal', stray.created_by
+  SELECT stray.id, b.org_id, b.id, 'performance_check', 'manual', now(), true, 'CONFIDENTIAL', stray.created_by
   FROM (SELECT id, org_id FROM app.barrier WHERE org_id = '${ORG_ID}' ORDER BY id LIMIT 1) b,
        (VALUES ('${STALE_EVIDENCE_ID}'::uuid, 'seed:dl-01'), ('${OTHER_EVIDENCE_ID}'::uuid, 'seed-test:other')) AS stray(id, created_by)"
 seed >/dev/null
@@ -194,9 +194,9 @@ fi
 echo "==> Seed fails and changes nothing when another row references a stale seed row"
 STALE_BARRIER_ID="00000000-0000-4000-8000-000000000005"
 run_psql -c "INSERT INTO app.barrier (id, org_id, name, type, side, simulated, classification, created_by)
-  VALUES ('${STALE_BARRIER_ID}', '${ORG_ID}', 'Stale Barrier', 'technical', 'preventive', true, 'internal', 'seed:dl-01');
+  VALUES ('${STALE_BARRIER_ID}', '${ORG_ID}', 'Stale Barrier', 'technical', 'preventive', true, 'CONFIDENTIAL', 'seed:dl-01');
   INSERT INTO app.evidence (id, org_id, barrier_id, kind, source, observed_at, simulated, classification, created_by)
-  VALUES ('${OTHER_EVIDENCE_ID}', '${ORG_ID}', '${STALE_BARRIER_ID}', 'performance_check', 'manual', now(), true, 'internal', 'seed-test:other')"
+  VALUES ('${OTHER_EVIDENCE_ID}', '${ORG_ID}', '${STALE_BARRIER_ID}', 'performance_check', 'manual', now(), true, 'CONFIDENTIAL', 'seed-test:other')"
 BLOCKED_STATES="$(table_states)"
 expect_failure "violates foreign key constraint" seed
 if [ "$(table_states)" != "${BLOCKED_STATES}" ]; then
@@ -208,8 +208,8 @@ run_psql -c "DELETE FROM app.evidence WHERE id = '${OTHER_EVIDENCE_ID}'; DELETE 
 # A Segment row takes its classification from its own feature, not from the Bowtie A metadata.
 echo "==> Segment takes the classification of its own feature"
 seed_changed reclassified-segment
-RECLASSIFIED="$(run_psql -At -F ' ' -c "SELECT chainage_from::int, classification FROM app.segment WHERE classification <> 'internal'")"
-if [ "${RECLASSIFIED}" != "0 seed-test-class" ]; then
+RECLASSIFIED="$(run_psql -At -F ' ' -c "SELECT chainage_from::int, classification FROM app.segment WHERE classification <> 'HIGHLY_RESTRICTED'")"
+if [ "${RECLASSIFIED}" != "0 CONFIDENTIAL" ]; then
   echo "Expected only the first Segment to carry its own classification, found: ${RECLASSIFIED:-none}" >&2
   exit 1
 fi
@@ -223,14 +223,14 @@ fi
 echo "==> Loader fails when the database holds more than the seed loads"
 STRAY_ASSET_ID="00000000-0000-4000-8000-000000000001"
 run_psql -c "INSERT INTO app.asset (id, org_id, type, attributes, simulated, classification)
-  VALUES ('${STRAY_ASSET_ID}', '${ORG_ID}', 'linear', '{\"asset_code\": \"DL-01\"}', true, 'internal')"
+  VALUES ('${STRAY_ASSET_ID}', '${ORG_ID}', 'linear', '{\"asset_code\": \"DL-01\"}', true, 'HIGHLY_RESTRICTED')"
 expect_failure "2 DL-01 pipeline Assets instead of 1" seed
 run_psql -c "DELETE FROM app.asset WHERE id = '${STRAY_ASSET_ID}'"
 
 # A Segment the seed did not load, past the end of the route, leaves a gap and a wrong end.
 STRAY_SEGMENT_ID="00000000-0000-4000-8000-000000000002"
 run_psql -c "INSERT INTO app.segment (id, org_id, asset_id, chainage_from, chainage_to, simulated, classification)
-  SELECT '${STRAY_SEGMENT_ID}', org_id, id, 200000, 210000, true, 'internal'
+  SELECT '${STRAY_SEGMENT_ID}', org_id, id, 200000, 210000, true, 'HIGHLY_RESTRICTED'
   FROM app.asset WHERE org_id = '${ORG_ID}' AND attributes->>'asset_code' = 'DL-01'"
 expect_failure "Segments end at Chainage 210000 m instead of 180000; 1 gaps or overlaps between Segments" seed
 run_psql -c "DELETE FROM app.segment WHERE id = '${STRAY_SEGMENT_ID}'"

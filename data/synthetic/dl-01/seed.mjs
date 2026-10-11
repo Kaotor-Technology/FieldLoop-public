@@ -13,6 +13,19 @@ const UUID_NAMESPACE_URL = Buffer.from(
 const DEFAULT_OUTPUT_DIR = new URL(".", import.meta.url);
 const CREATED_BY = "seed:dl-01";
 const ORGANISATION_NAME = "FieldLoop Demo Organisation (SYNTHETIC)";
+// The PRD 9.1 classes, as the schema stores them. Asset geometry is Highly Restricted and
+// Bowtie and Barrier records are Confidential; the seed data states its class itself.
+const CLASSIFICATIONS = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"];
+const ORGANISATION_CLASSIFICATION = "INTERNAL";
+
+function requireClassification(value, fieldName) {
+  if (value === undefined || value === null || value === "") {
+    throw new Error(`${fieldName} requires classification.`);
+  }
+  if (!CLASSIFICATIONS.includes(value)) {
+    throw new Error(`${fieldName} classification must be one of ${CLASSIFICATIONS.join(", ")}.`);
+  }
+}
 // Tables whose rows this seed owns, parents before children. bowtie_asset has no id and is
 // handled apart; organisation is shared with other seeds and never cleaned.
 const OWNED_TABLES = [
@@ -58,6 +71,7 @@ function validateBowtieSeed(seed) {
     throw new Error("Bowtie A seed metadata must label the data SYNTHETIC and simulated.");
   }
   requireString(seed.metadata.classification, "metadata.classification");
+  requireClassification(seed.metadata.classification, "Bowtie A seed metadata");
   requireString(seed.metadata.parameterBasis, "metadata.parameterBasis");
   if (!Number.isFinite(Date.parse(seed.metadata.simulationStartsAt))) {
     throw new Error("Bowtie A seed requires a valid metadata.simulationStartsAt.");
@@ -319,9 +333,7 @@ function featureLabelling(feature) {
   if (label !== "SYNTHETIC" || simulated !== true) {
     throw new Error(`Feature ${feature.id} must be labelled SYNTHETIC and simulated.`);
   }
-  if (typeof classification !== "string" || classification.trim().length === 0) {
-    throw new Error(`Feature ${feature.id} requires classification.`);
-  }
+  requireClassification(classification, `Feature ${feature.id}`);
   return { simulated, classification };
 }
 
@@ -416,7 +428,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
     org_id: orgId,
     name: ORGANISATION_NAME,
     simulated,
-    classification,
+    classification: ORGANISATION_CLASSIFICATION,
     created_by: CREATED_BY,
   }));
 
