@@ -143,6 +143,9 @@ function runSeedTransaction(failAt: number, mutation = "none"): TransactionResul
       bowtieSeed.paths = bowtieSeed.paths.filter((path) => path.targetId !== 'third-party-excavation');
     }
     if (process.argv[2] === 'single-evidence') bowtieSeed.barriers[0].evidence.length = 1;
+    if (process.argv[2] === 'no-degradation-factors') {
+      for (const barrier of bowtieSeed.barriers) delete barrier.degradationFactors;
+    }
     const dataset = buildDataset();
     if (process.argv[2] === 'missing-segment-classification') delete dataset.segments.features[0].properties.classification;
     if (process.argv[2] === 'unlabelled-facility') dataset.facilities.features[0].properties.label = 'REAL';
@@ -448,7 +451,7 @@ describe("synthetic DL-01 route generator", () => {
     expect(queries.slice(0, firstDelete).every(({ sql }) => sql.startsWith("insert into"))).toBe(true);
     // Children are removed before the tables they reference.
     expect(deletes.map(({ sql }) => /^delete from "app"\."([a-z_]+)"/.exec(sql)?.[1])).toEqual([
-      "bowtie_asset", "degradation_control", "degradation_factor", "evidence", "barrier_path", "barrier",
+      "bowtie_asset", "evidence", "degradation_control", "degradation_factor", "barrier_path", "barrier",
       "independence_group", "consequence", "threat", "bowtie", "segment", "asset",
     ]);
     for (const query of deletes) {
@@ -456,6 +459,16 @@ describe("synthetic DL-01 route generator", () => {
       expect(query.parameters.slice(0, 2)).toEqual(["demo-pipeline", "seed:dl-01"]);
     }
     expect(queries.some(({ sql }) => sql.startsWith('delete from "app"."organisation"'))).toBe(false);
+  });
+
+  it("empties a table of this seed's rows when the seed files no longer fill it", () => {
+    const result = runSeedTransaction(0, "no-degradation-factors");
+    expect(result.error).toBeNull();
+    const emptied = result.queries.filter(({ sql }) => /^delete from "app"\."degradation_(factor|control)"/.test(sql));
+    expect(emptied.map(({ sql }) => sql)).toEqual([
+      'delete from "app"."degradation_control" where "org_id" = $1 and "created_by" = $2',
+      'delete from "app"."degradation_factor" where "org_id" = $1 and "created_by" = $2',
+    ]);
   });
 
   it("executes bound queries on one connection and commits the seed", () => {

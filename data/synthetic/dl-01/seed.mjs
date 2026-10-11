@@ -13,6 +13,21 @@ const UUID_NAMESPACE_URL = Buffer.from(
 const DEFAULT_OUTPUT_DIR = new URL(".", import.meta.url);
 const CREATED_BY = "seed:dl-01";
 const ORGANISATION_NAME = "FieldLoop Demo Organisation (SYNTHETIC)";
+// Tables whose rows this seed owns, parents before children. bowtie_asset has no id and is
+// handled apart; organisation is shared with other seeds and never cleaned.
+const OWNED_TABLES = [
+  "app.asset",
+  "app.segment",
+  "app.bowtie",
+  "app.threat",
+  "app.consequence",
+  "app.independence_group",
+  "app.barrier",
+  "app.barrier_path",
+  "app.degradation_factor",
+  "app.degradation_control",
+  "app.evidence",
+];
 const BOWTIE_SEED_URL = new URL("./bowtie-a.json", import.meta.url);
 
 function readBowtieSeed() {
@@ -324,10 +339,13 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
   const features = [routeFeature, ...dataset.facilities.features, ...dataset.segments.features];
   const labelling = new Map(features.map((feature) => [feature.id, featureLabelling(feature)]));
 
-  // IDs this run loads, per table, in the order the tables are first written.
-  const loadedIds = new Map();
+  // IDs this run loads, per owned table.
+  const loadedIds = new Map(OWNED_TABLES.map((table) => [table, []]));
   const track = (table, id) => {
-    loadedIds.set(table, [...(loadedIds.get(table) ?? []), id]);
+    if (!loadedIds.has(table)) {
+      throw new Error(`${table} is not a table this seed owns.`);
+    }
+    loadedIds.get(table).push(id);
     return id;
   };
   const upsert = (table, values) => {
@@ -392,7 +410,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
     );
   }
 
-  // One row per Organisation, whichever seed loads it first; no seed removes it.
+  // One row per Organisation: every seed for it upserts this same ID, and none removes it.
   statements.push(insertById(database, "app.organisation", {
     id: deterministicUuid("fieldloop:organisation:" + orgId),
     org_id: orgId,
@@ -566,8 +584,10 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
     expression("bowtie_id", "=", bowtieId),
     expression("asset_id", "=", pipelineId),
   ]))));
-  for (const [table, ids] of [...loadedIds].reverse()) {
-    statements.push(stale(table).where("id", "not in", ids));
+  for (const table of [...OWNED_TABLES].reverse()) {
+    const ids = loadedIds.get(table);
+    // A table the seed files no longer fill is emptied of this seed's rows.
+    statements.push(ids.length === 0 ? stale(table) : stale(table).where("id", "not in", ids));
   }
 
   return statements;
