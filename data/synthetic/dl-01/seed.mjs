@@ -12,6 +12,7 @@ const UUID_NAMESPACE_URL = Buffer.from(
 );
 const DEFAULT_OUTPUT_DIR = new URL(".", import.meta.url);
 const CREATED_BY = "seed:dl-01";
+const ORGANISATION_NAME = "FieldLoop Demo Organisation (SYNTHETIC)";
 const BOWTIE_SEED_URL = new URL("./bowtie-a.json", import.meta.url);
 
 function readBowtieSeed() {
@@ -124,8 +125,8 @@ function validateBowtieSeed(seed) {
       }
       requireString(check.justification, `Barrier ${barrier.id} ${checkName} justification`);
     }
-    if (!Array.isArray(barrier.evidence) || barrier.evidence.length === 0) {
-      throw new Error(`Barrier ${barrier.id} requires at least one Evidence record.`);
+    if (!Array.isArray(barrier.evidence) || barrier.evidence.length < 2) {
+      throw new Error(`Barrier ${barrier.id} requires an Evidence history of at least two records.`);
     }
     for (const evidence of barrier.evidence) {
       requireString(evidence.id, `Barrier ${barrier.id} Evidence.id`);
@@ -297,6 +298,18 @@ function insertSegment(database, { id, orgId, assetId, geometry, properties, sim
     })));
 }
 
+// A generated feature states its own labelling; the loader does not assume it.
+function featureLabelling(feature) {
+  const { label, simulated, classification } = feature.properties;
+  if (label !== "SYNTHETIC" || simulated !== true) {
+    throw new Error(`Feature ${feature.id} must be labelled SYNTHETIC and simulated.`);
+  }
+  if (typeof classification !== "string" || classification.trim().length === 0) {
+    throw new Error(`Feature ${feature.id} requires classification.`);
+  }
+  return { simulated, classification };
+}
+
 export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowtieSeed()) {
   if (typeof orgId !== "string" || orgId.trim().length === 0) {
     throw new Error("An Organisation ID is required.");
@@ -308,7 +321,21 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
   if (bowtieSeed.assetCode !== routeFeature.properties.asset_code) {
     throw new Error("Bowtie A seed assetCode must match the generated DL-01 Asset.");
   }
-  const pipelineId = databaseId(orgId, "asset:dl-01");
+  const features = [routeFeature, ...dataset.facilities.features, ...dataset.segments.features];
+  const labelling = new Map(features.map((feature) => [feature.id, featureLabelling(feature)]));
+
+  // IDs this run loads, per table, in the order the tables are first written.
+  const loadedIds = new Map();
+  const track = (table, id) => {
+    loadedIds.set(table, [...(loadedIds.get(table) ?? []), id]);
+    return id;
+  };
+  const upsert = (table, values) => {
+    track(table, values.id);
+    return insertById(database, table, values);
+  };
+
+  const pipelineId = track("app.asset", databaseId(orgId, "asset:dl-01"));
   const statements = [
     insertAsset(database, {
       id: pipelineId,
@@ -317,8 +344,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
       parentId: null,
       domainPack: "pipeline-integrity",
       geometry: routeFeature.geometry,
-      simulated,
-      classification,
+      ...labelling.get(routeFeature.id),
       attributes: {
         asset_code: routeFeature.properties.asset_code,
         name: routeFeature.properties.name,
@@ -333,7 +359,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
   ];
 
   for (const facility of dataset.facilities.features) {
-    const facilityId = databaseId(orgId, "asset:" + facility.id);
+    const facilityId = track("app.asset", databaseId(orgId, "asset:" + facility.id));
     statements.push(
       insertAsset(database, {
         id: facilityId,
@@ -342,8 +368,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
         parentId: pipelineId,
         domainPack: "pipeline-integrity",
         geometry: facility.geometry,
-        simulated,
-        classification,
+        ...labelling.get(facility.id),
         attributes: {
           name: facility.properties.name,
           facility_type: facility.properties.facility_type,
@@ -357,20 +382,29 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
   for (const segment of dataset.segments.features) {
     statements.push(
       insertSegment(database, {
-        id: databaseId(orgId, "segment:" + segment.id),
+        id: track("app.segment", databaseId(orgId, "segment:" + segment.id)),
         orgId,
         assetId: pipelineId,
         geometry: segment.geometry,
         properties: segment.properties,
-        simulated,
-        classification,
+        ...labelling.get(segment.id),
       }),
     );
   }
 
+  // One row per Organisation, whichever seed loads it first; no seed removes it.
+  statements.push(insertById(database, "app.organisation", {
+    id: deterministicUuid("fieldloop:organisation:" + orgId),
+    org_id: orgId,
+    name: ORGANISATION_NAME,
+    simulated,
+    classification,
+    created_by: CREATED_BY,
+  }));
+
   const bowtieId = databaseId(orgId, `bowtie:${bowtieSeed.id}`);
   const databaseIdFor = (entityType, entityId) => databaseId(orgId, `${entityType}:${entityId}`);
-  statements.push(insertById(database, "app.bowtie", {
+  statements.push(upsert("app.bowtie", {
     id: bowtieId,
     org_id: orgId,
     hazard: bowtieSeed.hazard,
@@ -403,7 +437,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
     ));
 
   for (const threat of bowtieSeed.threats) {
-    statements.push(insertById(database, "app.threat", {
+    statements.push(upsert("app.threat", {
       id: databaseIdFor("threat", threat.id),
       org_id: orgId,
       bowtie_id: bowtieId,
@@ -416,7 +450,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
   }
 
   for (const consequence of bowtieSeed.consequences) {
-    statements.push(insertById(database, "app.consequence", {
+    statements.push(upsert("app.consequence", {
       id: databaseIdFor("consequence", consequence.id),
       org_id: orgId,
       bowtie_id: bowtieId,
@@ -430,7 +464,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
   }
 
   for (const group of bowtieSeed.independenceGroups) {
-    statements.push(insertById(database, "app.independence_group", {
+    statements.push(upsert("app.independence_group", {
       id: databaseIdFor("independence_group", group.id),
       org_id: orgId,
       bowtie_id: bowtieId,
@@ -443,7 +477,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
 
   for (const barrier of bowtieSeed.barriers) {
     const barrierId = databaseIdFor("barrier", barrier.id);
-    statements.push(insertById(database, "app.barrier", {
+    statements.push(upsert("app.barrier", {
       id: barrierId,
       org_id: orgId,
       name: barrier.name,
@@ -468,7 +502,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
       const pathTargetId = path.side === "preventive"
         ? databaseIdFor("threat", path.targetId)
         : databaseIdFor("consequence", path.targetId);
-      statements.push(insertById(database, "app.barrier_path", {
+      statements.push(upsert("app.barrier_path", {
         id: databaseIdFor("barrier_path", `${path.id}:${barrierKey}`),
         org_id: orgId,
         barrier_id: databaseIdFor("barrier", barrierKey),
@@ -485,7 +519,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
   for (const barrier of bowtieSeed.barriers) {
     for (const factor of barrier.degradationFactors ?? []) {
       const factorId = databaseIdFor("degradation_factor", factor.id);
-      statements.push(insertById(database, "app.degradation_factor", {
+      statements.push(upsert("app.degradation_factor", {
         id: factorId,
         org_id: orgId,
         barrier_id: databaseIdFor("barrier", barrier.id),
@@ -495,7 +529,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
         created_by: CREATED_BY,
       }));
       for (const control of factor.controls) {
-        statements.push(insertById(database, "app.degradation_control", {
+        statements.push(upsert("app.degradation_control", {
           id: databaseIdFor("degradation_control", control.id),
           org_id: orgId,
           degradation_factor_id: factorId,
@@ -507,7 +541,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
       }
     }
     for (const evidence of barrier.evidence) {
-      statements.push(insertById(database, "app.evidence", {
+      statements.push(upsert("app.evidence", {
         id: databaseIdFor("evidence", evidence.id),
         org_id: orgId,
         barrier_id: databaseIdFor("barrier", barrier.id),
@@ -520,6 +554,20 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
         created_by: CREATED_BY,
       }));
     }
+  }
+
+  // Rows an earlier run of this seed loaded that are no longer in the seed files are removed,
+  // children before parents. Rows the seed did not create are left alone.
+  const stale = (table) => database
+    .deleteFrom(table)
+    .where("org_id", "=", orgId)
+    .where("created_by", "=", CREATED_BY);
+  statements.push(stale("app.bowtie_asset").where((expression) => expression.not(expression.and([
+    expression("bowtie_id", "=", bowtieId),
+    expression("asset_id", "=", pipelineId),
+  ]))));
+  for (const [table, ids] of [...loadedIds].reverse()) {
+    statements.push(stale(table).where("id", "not in", ids));
   }
 
   return statements;

@@ -78,6 +78,7 @@
         "auditable": { "pass": true, "justification": "Survey and marker inspection records provide reviewable evidence." }
       },
       "evidence": [
+        { "id": "cover-survey-2025", "kind": "performance_check", "source": "manual", "observedAt": "2025-09-15T00:00:00.000Z" },
         { "id": "cover-survey-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
       ]
     },
@@ -105,6 +106,7 @@
         }
       ],
       "evidence": [
+        { "id": "patrol-record-2025", "kind": "performance_check", "source": "manual", "observedAt": "2025-09-15T00:00:00.000Z" },
         { "id": "patrol-record-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
       ]
     },
@@ -123,6 +125,7 @@
         "auditable": { "pass": true, "justification": "Permit decisions and notifications are recorded." }
       },
       "evidence": [
+        { "id": "permit-audit-2025", "kind": "performance_check", "source": "manual", "observedAt": "2025-09-15T00:00:00.000Z" },
         { "id": "permit-audit-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
       ]
     },
@@ -141,6 +144,7 @@
         "auditable": { "pass": true, "justification": "Coating inspection and repair records can be reviewed." }
       },
       "evidence": [
+        { "id": "coating-check-2025", "kind": "performance_check", "source": "manual", "observedAt": "2025-09-15T00:00:00.000Z" },
         { "id": "coating-check-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
       ]
     },
@@ -187,6 +191,7 @@
         "auditable": { "pass": true, "justification": "Inspection reports and response records are retained." }
       },
       "evidence": [
+        { "id": "ili-review-2025", "kind": "performance_check", "source": "manual", "observedAt": "2025-09-15T00:00:00.000Z" },
         { "id": "ili-review-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
       ]
     },
@@ -205,6 +210,7 @@
         "auditable": { "pass": true, "justification": "Inspection records document the condition of the synthetic protection works." }
       },
       "evidence": [
+        { "id": "slope-check-2025", "kind": "performance_check", "source": "manual", "observedAt": "2025-09-15T00:00:00.000Z" },
         { "id": "slope-check-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
       ]
     },
@@ -223,6 +229,7 @@
         "auditable": { "pass": true, "justification": "Instrument checks and readings are retained with observation times." }
       },
       "evidence": [
+        { "id": "slope-monitor-check-2025", "kind": "performance_check", "source": "manual", "observedAt": "2025-09-15T00:00:00.000Z" },
         { "id": "slope-monitor-check-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
       ]
     },
@@ -250,6 +257,7 @@
         }
       ],
       "evidence": [
+        { "id": "post-rain-drill-2025", "kind": "performance_check", "source": "manual", "observedAt": "2025-09-15T00:00:00.000Z" },
         { "id": "post-rain-drill-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
       ]
     },
@@ -277,6 +285,7 @@
         }
       ],
       "evidence": [
+        { "id": "pressure-control-check-2025", "kind": "performance_check", "source": "manual", "observedAt": "2025-09-15T00:00:00.000Z" },
         { "id": "pressure-control-check-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
       ]
     },
@@ -295,6 +304,7 @@
         "auditable": { "pass": true, "justification": "Test and maintenance records document its availability." }
       },
       "evidence": [
+        { "id": "overpressure-test-2025", "kind": "performance_check", "source": "manual", "observedAt": "2025-09-15T00:00:00.000Z" },
         { "id": "overpressure-test-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
       ]
     },
@@ -313,6 +323,7 @@
         "auditable": { "pass": true, "justification": "Revision and review records show which procedure was current." }
       },
       "evidence": [
+        { "id": "operating-procedure-review-2025", "kind": "performance_check", "source": "manual", "observedAt": "2025-09-15T00:00:00.000Z" },
         { "id": "operating-procedure-review-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
       ]
     },
@@ -332,6 +343,7 @@
         "auditable": { "pass": true, "justification": "Alarm tests and event records provide reviewable evidence." }
       },
       "evidence": [
+        { "id": "leak-detection-test-2025", "kind": "performance_check", "source": "manual", "observedAt": "2025-09-15T00:00:00.000Z" },
         { "id": "leak-detection-test-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
       ]
     },
@@ -351,6 +363,7 @@
         "auditable": { "pass": true, "justification": "Valve function tests and maintenance records are retained." }
       },
       "evidence": [
+        { "id": "valve-closure-test-2025", "kind": "performance_check", "source": "manual", "observedAt": "2025-09-15T00:00:00.000Z" },
         { "id": "valve-closure-test-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
       ]
     },
@@ -369,6 +382,7 @@
         "auditable": { "pass": true, "justification": "Plan revisions, exercise records and actions can be reviewed." }
       },
       "evidence": [
+        { "id": "response-plan-exercise-2025", "kind": "performance_check", "source": "manual", "observedAt": "2025-09-15T00:00:00.000Z" },
         { "id": "response-plan-exercise-2026", "kind": "performance_check", "source": "manual", "observedAt": "2026-09-15T00:00:00.000Z" }
       ]
     }

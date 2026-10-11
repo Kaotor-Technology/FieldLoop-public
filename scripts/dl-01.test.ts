@@ -142,8 +142,12 @@ function runSeedTransaction(failAt: number, mutation = "none"): TransactionResul
     if (process.argv[2] === 'missing-threat-path') {
       bowtieSeed.paths = bowtieSeed.paths.filter((path) => path.targetId !== 'third-party-excavation');
     }
+    if (process.argv[2] === 'single-evidence') bowtieSeed.barriers[0].evidence.length = 1;
+    const dataset = buildDataset();
+    if (process.argv[2] === 'missing-segment-classification') delete dataset.segments.features[0].properties.classification;
+    if (process.argv[2] === 'unlabelled-facility') dataset.facilities.features[0].properties.label = 'REAL';
     try {
-      await loadSeed(database, buildDataset(), "demo'pipeline", bowtieSeed);
+      await loadSeed(database, dataset, "demo'pipeline", bowtieSeed);
     } catch (failure) {
       error = failure.message;
     } finally {
@@ -365,7 +369,7 @@ describe("synthetic DL-01 route generator", () => {
       expect(usedBarrierIds.has(barrier.id)).toBe(true);
       expect(barrier.performanceStandard.trim().length).toBeGreaterThan(0);
       expect(Object.values(barrier.triad).map(({ pass }) => pass)).toEqual([true, true, true]);
-      expect(barrier.evidence.length).toBeGreaterThan(0);
+      expect(barrier.evidence.length).toBeGreaterThanOrEqual(2);
       expect(barrier.pfdBand).toBeGreaterThanOrEqual(barrier.type === "technical" ? 0.01 : 0.1);
     }
 
@@ -386,6 +390,8 @@ describe("synthetic DL-01 route generator", () => {
     const orgId = "demo'pipeline\\'); DROP TABLE app.asset; --";
     const queries = previewSeed(orgId);
     const insertCount = (table: string) => queries.filter(({ sql }) => sql.startsWith(`insert into "app"."${table}"`)).length;
+    const inserts = queries.filter(({ sql }) => sql.startsWith("insert into"));
+    expect(insertCount("organisation")).toBe(1);
     expect(insertCount("asset")).toBe(4);
     expect(insertCount("segment")).toBe(6);
     expect(insertCount("bowtie")).toBe(1);
@@ -397,8 +403,12 @@ describe("synthetic DL-01 route generator", () => {
     expect(insertCount("independence_group")).toBe(1);
     expect(insertCount("degradation_factor")).toBe(4);
     expect(insertCount("degradation_control")).toBe(4);
-    expect(insertCount("evidence")).toBe(16);
+    expect(insertCount("evidence")).toBe(30);
     for (const query of queries) {
+      expect(query.sql).not.toContain(orgId);
+      expect(query.parameters).toContain(orgId);
+    }
+    for (const query of inserts) {
       expect(query.sql).not.toContain(orgId);
       expect(query.sql).not.toContain("SYNTHETIC");
       expect(query.sql).not.toContain("coordinates");
@@ -431,6 +441,23 @@ describe("synthetic DL-01 route generator", () => {
     }
   });
 
+  it("removes only rows this seed loaded earlier and that are no longer in the seed files", () => {
+    const queries = previewSeed("demo-pipeline");
+    const firstDelete = queries.findIndex(({ sql }) => sql.startsWith("delete from"));
+    const deletes = queries.slice(firstDelete);
+    expect(queries.slice(0, firstDelete).every(({ sql }) => sql.startsWith("insert into"))).toBe(true);
+    // Children are removed before the tables they reference.
+    expect(deletes.map(({ sql }) => /^delete from "app"\."([a-z_]+)"/.exec(sql)?.[1])).toEqual([
+      "bowtie_asset", "degradation_control", "degradation_factor", "evidence", "barrier_path", "barrier",
+      "independence_group", "consequence", "threat", "bowtie", "segment", "asset",
+    ]);
+    for (const query of deletes) {
+      expect(query.sql).toContain('where "org_id" = $1 and "created_by" = $2 and');
+      expect(query.parameters.slice(0, 2)).toEqual(["demo-pipeline", "seed:dl-01"]);
+    }
+    expect(queries.some(({ sql }) => sql.startsWith('delete from "app"."organisation"'))).toBe(false);
+  });
+
   it("executes bound queries on one connection and commits the seed", () => {
     const result = runSeedTransaction(0);
     expect(result.error).toBeNull();
@@ -459,6 +486,9 @@ describe("synthetic DL-01 route generator", () => {
     ["missing-classification", "metadata.classification"],
     ["mismatched-asset", "Bowtie A seed assetCode must match the generated DL-01 Asset."],
     ["missing-threat-path", "Every Threat must have a Preventive path to the Top Event."],
+    ["single-evidence", "requires an Evidence history of at least two records"],
+    ["missing-segment-classification", "Feature dl-01-segment-001 requires classification."],
+    ["unlabelled-facility", "Feature dl-01-bvs-001 must be labelled SYNTHETIC and simulated."],
   ])("rejects invalid Bowtie A data before inserting records (%s)", (mutation, expectedError) => {
     const result = runSeedTransaction(0, mutation);
     expect(result.error).toContain(expectedError);
