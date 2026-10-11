@@ -18,7 +18,8 @@
     "check:safety": "node scripts/check-confidential-paths.mjs",
     "db:seed:dl-01": "node data/synthetic/dl-01/seed.mjs",
     "db:migrate": "dbmate --migrations-table public.schema_migrations up",
-    "test:migrations": "bash scripts/test-migrations.sh"
+    "test:migrations": "bash scripts/test-migrations.sh",
+    "test:seed": "bash scripts/test-seed.sh"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",
