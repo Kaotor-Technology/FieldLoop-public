@@ -1,0 +1,566 @@
+[
+  {
+    "name": "rectifier failure",
+    "valid": true,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "production format",
+    "valid": true,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": false,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "pump power lost",
+    "valid": true,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-pumps",
+      "tag": "pump.power",
+      "value": "lost",
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "flood observation",
+    "valid": true,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-hydro",
+      "tag": "rain.rate",
+      "value": 60,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "unit": "mm/h",
+      "payload": {
+        "zone": "Z3",
+        "label": "SIMULATION",
+        "detail": "พายุจำลอง"
+      }
+    }
+  },
+  {
+    "name": "boolean",
+    "valid": true,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": true,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "unavailable",
+    "valid": true,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": null,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "offset time",
+    "valid": true,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T07:00:00.123+07:00",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "targets",
+    "valid": true,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "assetId": "00000000-0000-4000-8000-000000000073",
+      "barrierId": "00000000-0000-4000-8000-000000000073",
+      "simulationRunId": "00000000-0000-4000-8000-000000000073"
+    }
+  },
+  {
+    "name": "missing schemaVersion",
+    "valid": false,
+    "signal": {
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "missing id",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "missing orgId",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "missing source",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "missing tag",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "missing value",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "missing observedAt",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "missing simulated",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "missing classification",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true
+    }
+  },
+  {
+    "name": "unknown version",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v2",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "bad id",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "DL-01",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "bad target",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "assetId": "pump-1"
+    }
+  },
+  {
+    "name": "string provenance",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": "true",
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "lowercase class",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "confidential"
+    }
+  },
+  {
+    "name": "unknown class",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "SECRET"
+    }
+  },
+  {
+    "name": "extra envelope",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "environment": "demo"
+    }
+  },
+  {
+    "name": "blank org",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "blank source",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": " ",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "blank tag",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "long tag",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "no timezone",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T07:00:00",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "invalid calendar",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-02-30T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "invalid hour",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T25:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "array value",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": [
+        1
+      ],
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "object value",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": {
+        "a": 1
+      },
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "array detail",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "payload": []
+    }
+  },
+  {
+    "name": "null detail",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "payload": null
+    }
+  },
+  {
+    "name": "blank unit",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "unit": ""
+    }
+  },
+  {
+    "name": "null",
+    "valid": false,
+    "signal": null
+  },
+  {
+    "name": "array",
+    "valid": false,
+    "signal": []
+  },
+  {
+    "name": "string",
+    "valid": false,
+    "signal": "signal"
+  }
+]

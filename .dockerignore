@@ -42,6 +42,7 @@
 # Contract and token generators are build inputs.
 !DESIGN.md
 !packages/contracts/openapi.yaml
+!packages/contracts/signal.v1.schema.json
 !packages/contracts/scripts/
 !packages/contracts/scripts/**
 !packages/ui/scripts/

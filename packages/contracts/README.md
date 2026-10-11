@@ -40,8 +40,34 @@ API and message contracts shared by the TypeScript and Python services
 | `test/` | Fixtures and a test that prove each rule fires, and that conforming paths pass. |
 
 Clients are generated from `openapi.yaml`, never written by hand (AGENTS.md §2).
-Client generation and the JSON Schemas for Signals and Scenarios arrive with
-their own issues.
+Scenario contracts arrive with their own issue.
+
+## Signal contract (FL-73 / FL-148)
+
+`signal.v1.schema.json` is the canonical Draft 2020-12 wire contract. Real
+connectors and simulated sources use the same camelCase envelope. Every message
+states `schemaVersion`, producer-assigned UUID `id`, `orgId`, `source`, `tag`,
+`value`, RFC 3339 `observedAt`, `simulated` and uppercase `classification`.
+There are no provenance defaults. Optional Asset/Barrier/run IDs are UUIDs.
+`value` supports numeric measurements, status strings, flags and null for an
+unavailable observation. Source-specific detail (including GeoJSON) lives in
+`payload`, and the consumer validates the Domain Pack's detail. A message
+does not authorise a Health change. The worker persists numeric observations
+in `signal.value` and preserves the entire envelope in `signal.payload`.
+
+`pnpm --filter @fieldloop/contracts generate:signal` generates TypeScript types
+and the bundled schema; build runs it automatically. Import `Signal`,
+`signalSchema` and `isSignal` from `@fieldloop/contracts`.
+
+`uv run --locked --all-packages python scripts/generate-signal.py` generates
+`fieldloop_common.generated_signal.Signal` with snake_case field names and wire
+aliases, plus a packaged copy of the schema. Python outputs are committed so
+wheels and containers need no generator at runtime. CI regenerates them and
+rejects drift. Use `fieldloop_common.signal.parse_signal` on wire input before
+Pydantic coercion; serialize models with `model_dump(mode="json", by_alias=True,
+exclude_unset=True)`. Both languages validate with the canonical schema without
+defaults, coercion or field removal and run the same JSON acceptance fixtures.
+Environment routing is transport metadata, rather than part of the Signal.
 
 ## Checks
 
