@@ -135,20 +135,37 @@ expect_failure "seed test: evidence rejected" seed
 assert_empty "The failed seed"
 run_psql -c "DROP TRIGGER reject_seed_test_row ON app.evidence; DROP FUNCTION app.reject_seed_test_row();"
 
+# The loader reads the database back after the load; this is the line a seed job log is judged by.
+LOADED_SUMMARY="DL-01 pipeline Assets: 1. Segments: 6, from Chainage 0 to 180000 m, with 0 gaps or overlaps."
+
 echo "==> Seed (empty database)"
-seed
+FIRST_OUTPUT="$(seed)"
+echo "${FIRST_OUTPUT}"
 run_psql -o /dev/null -v org_id="${ORG_ID}" < db/test/seed/dl_01_loaded.sql
 FIRST_STATES="$(table_states)"
 
 echo "==> Seed (second run)"
-seed
+SECOND_OUTPUT="$(seed)"
 run_psql -o /dev/null -v org_id="${ORG_ID}" < db/test/seed/dl_01_loaded.sql
 SECOND_STATES="$(table_states)"
+if [[ "${FIRST_OUTPUT}" != *"${LOADED_SUMMARY}"* ]] || [ "${FIRST_OUTPUT}" != "${SECOND_OUTPUT}" ]; then
+  echo "The loader's summary is wrong or differs between the two runs" >&2
+  diff <(echo "${FIRST_OUTPUT}") <(echo "${SECOND_OUTPUT}") >&2 || true
+  exit 1
+fi
 if [ "${FIRST_STATES}" != "${SECOND_STATES}" ]; then
   echo "Row counts or row contents changed on the second seed run" >&2
   diff <(echo "${FIRST_STATES}") <(echo "${SECOND_STATES}") >&2 || true
   exit 1
 fi
+
+# A second DL-01 pipeline that the seed did not load must make the loader fail after its read-back.
+echo "==> Loader fails when the database holds more than the seed loads"
+STRAY_ASSET_ID="00000000-0000-4000-8000-000000000001"
+run_psql -c "INSERT INTO app.asset (id, org_id, type, attributes, simulated, classification)
+  VALUES ('${STRAY_ASSET_ID}', '${ORG_ID}', 'linear', '{\"asset_code\": \"DL-01\"}', true, 'internal')"
+expect_failure "2 DL-01 pipeline Assets instead of 1" seed
+run_psql -c "DELETE FROM app.asset WHERE id = '${STRAY_ASSET_ID}'"
 
 echo "${SECOND_STATES}" | awk '$2 != 0 { print $1, $2 }'
 echo "Seed tests passed"

@@ -584,7 +584,8 @@ async function readLoadedState(database, orgId, queries) {
       .executeTakeFirstOrThrow();
     rowCounts.push(`${table} ${count}`);
   }
-  // A Segment is broken when it has no Chainage, is empty, or does not start where the previous one ends.
+  // A Segment is broken when it has no Chainage, is empty, or does not start where the previous one
+  // ends; the first one must start at 0. db/test/seed/dl_01_loaded.sql applies the same rule.
   const { rows: [pipeline] } = await sql`
     WITH pipeline AS (
       SELECT id FROM app.asset WHERE org_id = ${orgId} AND attributes->>'asset_code' = 'DL-01'
@@ -597,13 +598,36 @@ async function readLoadedState(database, orgId, queries) {
            count(*)::int AS segments,
            (count(*) FILTER (
              WHERE chainage_from IS NULL OR chainage_to IS NULL OR chainage_from >= chainage_to
-                OR chainage_from IS DISTINCT FROM coalesce(previous_to, chainage_from)
+                OR chainage_from IS DISTINCT FROM coalesce(previous_to, 0)
            ))::int AS broken,
            min(chainage_from)::float8 AS chainage_from,
            max(chainage_to)::float8 AS chainage_to
     FROM ordered
   `.execute(database);
   return { rowCounts, pipeline };
+}
+
+// Lists where the read-back differs from what the seed loads. An empty list means the
+// Organisation holds one DL-01 pipeline whose Segments cover its whole length.
+export function loadedStateProblems(pipeline, routeLengthM) {
+  const problems = [];
+  if (pipeline.assets !== 1) {
+    problems.push(`${pipeline.assets} DL-01 pipeline Assets instead of 1`);
+  }
+  if (pipeline.segments === 0) {
+    problems.push("no Segments on the DL-01 pipeline");
+    return problems;
+  }
+  if (pipeline.chainage_from !== 0) {
+    problems.push(`Segments start at Chainage ${pipeline.chainage_from} m instead of 0`);
+  }
+  if (pipeline.chainage_to !== routeLengthM) {
+    problems.push(`Segments end at Chainage ${pipeline.chainage_to} m instead of ${routeLengthM}`);
+  }
+  if (pipeline.broken !== 0) {
+    problems.push(`${pipeline.broken} gaps or overlaps between Segments`);
+  }
+  return problems;
 }
 
 function parseArguments(argumentsList) {
@@ -722,6 +746,18 @@ async function main() {
       loadedState.pipeline.broken +
       " gaps or overlaps.\n",
   );
+  // The summary above is printed first, so a failing job still logs what the database holds.
+  const problems = loadedStateProblems(
+    loadedState.pipeline,
+    dataset.route.features[0].properties.length_m,
+  );
+  if (problems.length > 0) {
+    throw new Error(
+      "The seed was loaded and committed, but the database does not hold what it loads: " +
+        problems.join("; ") +
+        ".",
+    );
+  }
 }
 
 const invokedAsScript =

@@ -92,6 +92,26 @@ function readDriverTarget(databaseUrl: string): DriverTarget {
   )) as DriverTarget;
 }
 
+type LoadedPipeline = {
+  assets: number;
+  segments: number;
+  broken: number;
+  chainage_from: number | null;
+  chainage_to: number | null;
+};
+
+function readLoadedStateProblems(pipeline: LoadedPipeline): string[] {
+  const script = `
+    import { loadedStateProblems } from './data/synthetic/dl-01/seed.mjs';
+    console.log(JSON.stringify(loadedStateProblems(JSON.parse(process.argv[1]), 180000)));
+  `;
+  return JSON.parse(execFileSync(
+    process.execPath,
+    ["--input-type=module", "-e", script, JSON.stringify(pipeline)],
+    { cwd: repositoryRoot, encoding: "utf8" },
+  )) as string[];
+}
+
 function runSeedTransaction(failAt: number, mutation = "none"): TransactionResult {
   // Exercise Kysely's PostgreSQL driver without connecting to a database.
   const script = `
@@ -463,5 +483,18 @@ describe("synthetic DL-01 route generator", () => {
     ["postgres://db.example.invalid/fieldloop_test", "must include a host, database name and user"],
   ])("rejects the database URL %s", (databaseUrl, expectedError) => {
     expect(readDriverTarget(databaseUrl).error).toContain(expectedError);
+  });
+  it("finds no problem when one DL-01 pipeline is covered from 0 to its length", () => {
+    expect(readLoadedStateProblems({ assets: 1, segments: 6, broken: 0, chainage_from: 0, chainage_to: 180000 })).toEqual([]);
+  });
+
+  it.each([
+    [{ assets: 0, segments: 0, broken: 0, chainage_from: null, chainage_to: null }, ["0 DL-01 pipeline Assets instead of 1", "no Segments on the DL-01 pipeline"]],
+    [{ assets: 2, segments: 6, broken: 0, chainage_from: 0, chainage_to: 180000 }, ["2 DL-01 pipeline Assets instead of 1"]],
+    [{ assets: 1, segments: 5, broken: 1, chainage_from: 30000, chainage_to: 180000 }, ["Segments start at Chainage 30000 m instead of 0", "1 gaps or overlaps between Segments"]],
+    [{ assets: 1, segments: 5, broken: 0, chainage_from: 0, chainage_to: 150000 }, ["Segments end at Chainage 150000 m instead of 180000"]],
+    [{ assets: 1, segments: 6, broken: 2, chainage_from: 0, chainage_to: 180000 }, ["2 gaps or overlaps between Segments"]],
+  ])("reports what the read-back %j does not match", (pipeline, problems) => {
+    expect(readLoadedStateProblems(pipeline)).toEqual(problems);
   });
 });
