@@ -17,7 +17,8 @@
     "lint:api": "pnpm --filter @fieldloop/contracts lint:openapi",
     "check:safety": "node scripts/check-confidential-paths.mjs",
     "db:migrate": "dbmate --migrations-table public.schema_migrations up",
-    "test:migrations": "bash scripts/test-migrations.sh"
+    "test:migrations": "bash scripts/test-migrations.sh",
+    "test:seed": "bash scripts/test-seed.sh"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",
