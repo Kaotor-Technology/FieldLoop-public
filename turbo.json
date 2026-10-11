@@ -10,7 +10,8 @@
         "^build"
       ],
       "outputs": [
-        "dist/**"
+        "dist/**",
+        "src/generated/**"
       ]
     },
     "lint": {
@@ -19,6 +20,12 @@
     "typecheck": {
       "dependsOn": [
         "^build"
+      ],
+      "outputs": []
+    },
+    "@fieldloop/contracts#typecheck": {
+      "dependsOn": [
+        "build"
       ],
       "outputs": []
     },
