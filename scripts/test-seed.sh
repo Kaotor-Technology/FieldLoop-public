@@ -151,7 +151,7 @@ run_psql -o /dev/null -v org_id="${ORG_ID}" < db/test/seed/dl_01_loaded.sql
 SECOND_STATES="$(table_states)"
 if [[ "${FIRST_OUTPUT}" != *"${LOADED_SUMMARY}"* ]] || [ "${FIRST_OUTPUT}" != "${SECOND_OUTPUT}" ]; then
   echo "The loader's summary is wrong or differs between the two runs" >&2
-  diff <(echo "${FIRST_OUTPUT}") <(echo "${SECOND_OUTPUT}") >&2 || true
+  printf 'First run:\n%s\nSecond run:\n%s\n' "${FIRST_OUTPUT}" "${SECOND_OUTPUT}" >&2
   exit 1
 fi
 if [ "${FIRST_STATES}" != "${SECOND_STATES}" ]; then
@@ -167,6 +167,14 @@ run_psql -c "INSERT INTO app.asset (id, org_id, type, attributes, simulated, cla
   VALUES ('${STRAY_ASSET_ID}', '${ORG_ID}', 'linear', '{\"asset_code\": \"DL-01\"}', true, 'internal')"
 expect_failure "2 DL-01 pipeline Assets instead of 1" seed
 run_psql -c "DELETE FROM app.asset WHERE id = '${STRAY_ASSET_ID}'"
+
+# A Segment the seed did not load, past the end of the route, leaves a gap and a wrong end.
+STRAY_SEGMENT_ID="00000000-0000-4000-8000-000000000002"
+run_psql -c "INSERT INTO app.segment (id, org_id, asset_id, chainage_from, chainage_to, simulated, classification)
+  SELECT '${STRAY_SEGMENT_ID}', org_id, id, 200000, 210000, true, 'internal'
+  FROM app.asset WHERE org_id = '${ORG_ID}' AND attributes->>'asset_code' = 'DL-01'"
+expect_failure "Segments end at Chainage 210000 m instead of 180000; 1 gaps or overlaps between Segments" seed
+run_psql -c "DELETE FROM app.segment WHERE id = '${STRAY_SEGMENT_ID}'"
 
 echo "${SECOND_STATES}" | awk '$2 != 0 { print $1, $2 }'
 echo "Seed tests passed"
