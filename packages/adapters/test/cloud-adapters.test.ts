@@ -50,7 +50,7 @@ describe("Google Cloud adapters", () => {
     await expect(adapter.unwrapKey(Buffer.from("wrapped-key"))).resolves.toEqual(Buffer.from("session-key"));
   });
 
-  it("uses the private-IP, automatic-IAM Cloud SQL connector", async () => {
+  it("uses the public-address, automatic-IAM Cloud SQL connector", async () => {
     const getOptions = vi.fn(async () => ({ host: "127.0.0.1", port: 5432 }));
     const close = vi.fn();
     const connector = { getOptions, close } as unknown as Connector;
@@ -61,7 +61,7 @@ describe("Google Cloud adapters", () => {
 
     expect(getOptions).toHaveBeenCalledWith({
       instanceConnectionName: "project:region:instance",
-      ipType: IpAddressTypes.PRIVATE,
+      ipType: IpAddressTypes.PUBLIC,
       authType: AuthTypes.IAM,
     });
     await connection.close();
