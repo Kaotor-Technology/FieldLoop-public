@@ -482,6 +482,7 @@ describe("synthetic DL-01 route generator", () => {
     ["postgres://seeder:pw@/fieldloop_test", "must include a host, database name and user"],
     ["postgres://seeder:pw@db.example.invalid/", "must include a host, database name and user"],
     ["postgres://db.example.invalid/fieldloop_test", "must include a host, database name and user"],
+    ["postgres://:pw@db.example.invalid/fieldloop_test?host=/cloudsql/project:region:instance", "must include a host, database name and user"],
   ])("rejects the database URL %s", (databaseUrl, expectedError) => {
     expect(readDriverTarget(databaseUrl).error).toContain(expectedError);
   });

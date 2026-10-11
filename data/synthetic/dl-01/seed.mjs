@@ -543,7 +543,7 @@ export function driverConnectionString(connectionString) {
   if (!/^postgres(ql)?:\/\//.test(connectionString)) {
     throw new Error("FIELDLOOP_DATABASE_URL must use postgres:// or postgresql://.");
   }
-  const withHost = connectionString.replace(/^([a-z]+:\/\/(?:[^/?#@]*@)?)(?=[:/])/, "$1" + EMPTY_HOST);
+  const withHost = connectionString.replace(/^([a-z]+:\/\/(?:[^/?#@]*@)?)(?=\/|:\d+\/)/, "$1" + EMPTY_HOST);
   const hostWasEmpty = withHost !== connectionString;
   let url;
   try {
