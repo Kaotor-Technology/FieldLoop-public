@@ -40,8 +40,8 @@ interface UserSessionTable {
 interface OidcLoginTransactionTable {
   id: Generated<string>;
   org_id: string;
-  simulated: Generated<boolean>;
-  classification: Generated<string>;
+  simulated: boolean;
+  classification: string;
   state_hash: string;
   nonce: string;
   pkce_verifier: Buffer;
