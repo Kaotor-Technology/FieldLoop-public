@@ -43,6 +43,12 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthServicePort, 
         }
       }
     } catch (error) {
+      // Only a top-level reference navigation starts SSO. Assets/spec stay 401,
+      // and an IdP outage remains 503 rather than creating a redirect loop.
+      if (error instanceof AuthError && error.statusCode === 401 && request.method === "GET" &&
+          ["/api/reference", "/api/reference/", "/api/reference/index.html"].includes(request.routeOptions.url ?? "")) {
+        return reply.header("cache-control", "private, no-store").redirect("/api/auth/login?return=%2Fapi%2Freference%2F", 302);
+      }
       return sendAuthFailure(request, reply, error, "BFF authentication pre-handler failed");
     }
   });

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { buildApp } from "../dist/app.js";
 import { registerSpa } from "../dist/spa.js";
+import { registerReference } from "../dist/reference.js";
 import { BffAuthService, hash } from "../dist/auth/service.js";
 import { KmsEnvelopeCrypto } from "../dist/auth/envelope-crypto.js";
 
@@ -67,6 +68,7 @@ const auth = new BffAuthService({
   },
 });
 const app = buildApp({ auth, baseUrl });
+await registerReference(app, fileURLToPath(new URL("reference/", import.meta.resolve("@fieldloop/contracts"))));
 await registerSpa(app, fileURLToPath(new URL("../../web/dist/", import.meta.url)));
 await app.ready();
 
