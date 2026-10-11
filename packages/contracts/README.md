@@ -49,11 +49,13 @@ connectors and simulated sources use the same camelCase envelope. Every message
 states `schemaVersion`, producer-assigned UUID `id`, `orgId`, `source`, `tag`,
 `value`, RFC 3339 `observedAt`, `simulated` and uppercase `classification`.
 There are no provenance defaults. Optional Asset/Barrier/run IDs are UUIDs.
+Observation timestamps use years 0001–9999 and seconds 00–59; leap seconds and
+year zero are rejected consistently by both validators.
 `value` supports numeric measurements, status strings, flags and null for an
 unavailable observation. Source-specific detail (including GeoJSON) lives in
 `payload`, and the consumer validates the Domain Pack's detail. A message
-does not authorise a Health change. The worker persists numeric observations
-in `signal.value` and preserves the entire envelope in `signal.payload`.
+does not authorise a Health change. Consumers should persist numeric observations
+in `signal.value` and preserve the entire envelope in `signal.payload` (FL-76).
 
 `pnpm --filter @fieldloop/contracts generate:signal` generates TypeScript types
 and the bundled schema; build runs it automatically. Import `Signal`,
@@ -68,6 +70,61 @@ Pydantic coercion; serialize models with `model_dump(mode="json", by_alias=True,
 exclude_unset=True)`. Both languages validate with the canonical schema without
 defaults, coercion or field removal and run the same JSON acceptance fixtures.
 Environment routing is transport metadata, rather than part of the Signal.
+
+### Validating publishers (FL-149)
+
+TypeScript: compose `SignalPublisher` and `GooglePubSubTransport` from
+`@fieldloop/adapters`, passing an SDK `PubSub` client configured for the project
+(ADC in Cloud Run, `PUBSUB_EMULATOR_HOST` locally). Python: compose
+`fieldloop_common.signal_publisher.SignalPublisher` and
+`fieldloop_common.google_pubsub.GooglePubSubTransport`, passing an SDK
+`PublisherClient` and `project_id`. The injected `MessageTransport` port also
+supports an on-premise queue implementation without changing the wire contract.
+
+Both publishers require the deployment's Organisation key, environment
+(`dev`, `demo` or `local`) and explicit `simulationOnly` / `simulation_only`.
+Mock sources and the Scenario player must set it to true; real connectors set
+it to false. Environment and Organisation attributes come from configuration,
+and cannot be overwritten by message input. Match the environment to the
+existing Terraform subscription filter. Signals default to topic `signals`;
+quarantine defaults to `fieldloop-v2-dead-letter`. Python topic options are short
+topic names. Give the runtime identity `roles/pubsub.publisher` on both topics;
+the existing Pub/Sub service-agent DLQ grant only covers subscription forwarding.
+The adapter creates no topics, subscriptions, credentials or IAM grants.
+
+Valid input is sent unchanged as UTF-8 JSON, with `schemaVersion`, `signalId`,
+`orgId`, `environment`, `classification` and `simulated` attributes. Invalid
+JSON-shaped input, a foreign Organisation or a real-labelled mock observation
+is sent **only** to quarantine, preserving its serialized body and adding
+`failureReason` (`validation_failed`, `org_mismatch`, `simulation_required`).
+Malformed provenance is not trusted: quarantine metadata is always
+`HIGHLY_RESTRICTED`, and must be reviewed in the same private boundary. The
+result reports `published` or `dead_lettered` with the acknowledged message ID;
+callers must handle both outcomes. The library never logs bodies or values.
+
+Non-JSON values (including non-finite numbers, cycles, tuples/Date objects,
+undefined and non-string keys), nesting beyond 64 levels, and bodies larger
+than 256 KiB raise before transport. They cannot be safely quarantined as this
+wire format; callers must report the input error without logging sensitive
+values. Pub/Sub failures on either destination propagate: failed sends are not
+reclassified as validation failures. The Python SDK acknowledgement wait has
+a configurable 30-second timeout. Cancellation/timeouts may leave a send in
+flight; retry with the same producer `id`. Delivery is at least once, so the
+consumer must deduplicate by environment + Organisation + Signal ID (FL-76).
+Shutdown belongs to the caller: await publishes, then close/stop SDK clients.
+
+After building adapters, run the credential-free integration check with a
+loopback Pub/Sub emulator:
+
+```sh
+PUBSUB_EMULATOR_HOST=127.0.0.1:8685 uv run --locked --all-packages python scripts/test-signal-publisher.py
+```
+
+The script refuses real-cloud endpoints, creates unique test topics and
+subscriptions, sends valid/invalid messages with both SDKs, verifies the
+received bodies and attributes, and deletes its emulator resources. CI runs
+the same check using a digest-pinned Docker emulator with a random loopback
+port. Unit tests additionally cover SDK acknowledgement errors and timeouts.
 
 ## Checks
 

@@ -205,12 +205,18 @@ importers:
 
   packages/adapters:
     dependencies:
+      '@fieldloop/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@google-cloud/cloud-sql-connector':
         specifier: 1.12.0
         version: 1.12.0
       '@google-cloud/kms':
         specifier: 6.2.1
         version: 6.2.1
+      '@google-cloud/pubsub':
+        specifier: 6.2.0
+        version: 6.2.0
       '@google-cloud/secret-manager':
         specifier: 7.1.1
         version: 7.1.1
@@ -709,6 +715,30 @@ packages:
     resolution: {integrity: sha512-xX71A9l3Q5zOId+hhmFqdT7IfM3kE/HlhJtl5NLfffcPYoj8m4qFSFYilLGCd/EMUCEyPHdpjP0k3YAhSeSy3A==}
     engines: {node: '>=22'}
 
+  '@google-cloud/paginator@7.1.0':
+    resolution: {integrity: sha512-PNCXdAQgNoQODZuqyhmkN2nUpB2q9UFzawZ1oyCDyEyhcheRoCKJJhSKhEIeKpM/NCLnC6Q4We4HEkGCwNDnCA==}
+    engines: {node: '>=22'}
+
+  '@google-cloud/precise-date@6.1.0':
+    resolution: {integrity: sha512-Tz39EQeR6uku5G9tVvuCUNcreR7qfg7qAkWFaTqC/7KOIlDR0gCB5BaNPWnTzow1N2PqjyET+xNbdc+q22di0g==}
+    engines: {node: '>=22'}
+
+  '@google-cloud/projectify@6.1.0':
+    resolution: {integrity: sha512-tKAx9q6vTtbgZcqCojKWK8k6Dy2XBsE7BkNrrBsblxNXrKImYnljqeGfYh9qnTrlTjC9F19pTyCkGcl3pFMW/w==}
+    engines: {node: '>=22'}
+
+  '@google-cloud/promisify@6.1.0':
+    resolution: {integrity: sha512-H+Rytzi5zYMyoAmU/zgYLgq7fJ9FY4QQEg4k6gfFx/RY1COJ2xxyIfe8bZ62lqEbWM1DJH7IYETqTFmqNtuUhQ==}
+    engines: {node: '>=22'}
+
+  '@google-cloud/pubsub-api@0.3.0':
+    resolution: {integrity: sha512-x1L+lrIHgaMwN5fAhnNVS7rh0BZn9eKmqOBXnOUM3jkilF4GE4ooETS9SYnCtPCVHwQtByDTh5b7KIMUW7XAHQ==}
+    engines: {node: '>=22'}
+
+  '@google-cloud/pubsub@6.2.0':
+    resolution: {integrity: sha512-E9mJwt+j5HuQTkK1aJXnNmuXgG5hPRbSqRHisOm+N55Fm2RAxDCpX4ii2Hws7te3FMENpcmDS0BqQv+GIjQcXw==}
+    engines: {node: '>=22'}
+
   '@google-cloud/secret-manager@7.1.1':
     resolution: {integrity: sha512-unNIepgnJexSa2No/QYXkQriYsduNk3hYu8puuAVm2d7RiooraJKGI54Jo5YDPcM9OmNeZAtvEplvWaDP9mV3Q==}
     engines: {node: '>=22'}
@@ -834,6 +864,16 @@ packages:
   '@opentelemetry/api@1.9.1':
     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
     engines: {node: '>=8.0.0'}
+
+  '@opentelemetry/core@2.12.0':
+    resolution: {integrity: sha512-1HsSAuvT4/my0QrXWsyXFdWjKaPeCHsismKZgEEIb8NK13LP6DrMRlsUbvD/0F9mDWK3xDom9AMv3IscxgOnOQ==}
+    engines: {node: ^18.19.0 || >=20.6.0}
+    peerDependencies:
+      '@opentelemetry/api': '>=1.0.0 <1.10.0'
+
+  '@opentelemetry/semantic-conventions@1.39.0':
+    resolution: {integrity: sha512-R5R9tb2AXs2IRLNKLBJDynhkfmx7mX0vi8NkhZb3gUkPWHn6HXk5J8iQ/dql0U3ApfWym4kXXmBDRGO+oeOfjg==}
+    engines: {node: '>=14'}
 
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
@@ -1455,6 +1495,10 @@ packages:
   arraybuffer.prototype.slice@1.0.4:
     resolution: {integrity: sha512-BNoCY6SXXPQ7gF2opIP4GBE+Xw7U+pHMYKuzjgCN3GwiaIR09UUeKfheyIry77QtrCBlC0KK0q5/TER/tYh3PQ==}
     engines: {node: '>= 0.4'}
+
+  arrify@2.0.1:
+    resolution: {integrity: sha512-3duEwti880xqi4eAMN8AyR4a0ByT90zoYdLlevfrvU43vb0YZwZVfxOgxWrLXXXpyugL0hNZc9G6BiB5B3nUug==}
+    engines: {node: '>=8'}
 
   as-table@1.0.55:
     resolution: {integrity: sha512-xvsWESUJn0JN421Xb9MQw6AsMHRCUknCe0Wjlxvjud80mU4E6hQf1A6NzQKcYNmYw62MfzEtXc+badstZP3JpQ==}
@@ -2120,6 +2164,10 @@ packages:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
 
+  heap-js@2.7.1:
+    resolution: {integrity: sha512-EQfezRg0NCZGNlhlDR3Evrw1FVL2G3LhU7EgPoxufQKruNBSYA8MiRPHeWbU+36o+Fhel0wMwM+sLEiBAlNLJA==}
+    engines: {node: '>=10.0.0'}
+
   hookified@1.15.1:
     resolution: {integrity: sha512-MvG/clsADq1GPM2KGo2nyfaWVyn9naPiXrqIe4jYjXNZQt238kWyOGrsyc/DmRAQ+Re6yeo6yX/yoNCG5KAEVg==}
 
@@ -2290,6 +2338,9 @@ packages:
     resolution: {integrity: sha512-ISWac8drv4ZGfwKl5slpHG9OwPNty4jOWPRIhBpxOoD+hqITiwuipOQ2bNthAzwA3B4fIjO4Nln74N0S9byq8A==}
     engines: {node: '>= 0.4'}
 
+  is-stream-ended@0.1.4:
+    resolution: {integrity: sha512-xj0XPvmr7bQFTvirqnFr50o0hQIh6ZItDqloxt5aJrR4NQsYeSsyFQERYGCAzfindAcnKjINnwEEgLx4IqVzQw==}
+
   is-string@1.1.1:
     resolution: {integrity: sha512-BtEeSsoaQjlSPBemMQIrY1MY0uM6vnS1g5fmufYOtnxLGUZM2178PKbhsk7Ffv58IX+ZtcvoGwccYsh0PglkAA==}
     engines: {node: '>= 0.4'}
@@ -2427,6 +2478,9 @@ packages:
 
   lodash.camelcase@4.3.0:
     resolution: {integrity: sha512-TwuEnCnxbc3rAvhf/LbG7tJUDzhqXyFnv3dtzLOPgCG/hODL7WFnsbwktkD7yUV0RrreP/l1PALq/YSg6VvjlA==}
+
+  lodash.snakecase@4.1.1:
+    resolution: {integrity: sha512-QZ1d4xoBHYUeuouhEq3lk3Uq7ldgyFXGBhg04+oRLnIz8o9T65Eh+8YdroUwn846zchkA9yDsDl5CVVaV2nqYw==}
 
   lodash.topath@4.5.2:
     resolution: {integrity: sha512-1/W4dM+35DwvE/iEd1M9ekewOSTlpFekhw9mhAtrwjVqUr83/ilQiyAvmg4tVX7Unkcfl1KC+i9WdaT4B6aQcg==}
@@ -2707,6 +2761,10 @@ packages:
   own-keys@1.0.2:
     resolution: {integrity: sha512-19YVAg7T+WTrxggPukVq7DjTv6+PJ867TmhCvBsYwmbFCsZd344rq2Ld1p0wo8f8Qrrhgp82c6FJRqdXWtSEhg==}
     engines: {node: '>= 0.4'}
+
+  p-defer@3.0.0:
+    resolution: {integrity: sha512-ugZxsxmtTln604yeYd29EGrNhazN2lywetzpKhfmQjW/VJmhpDmWbiX+h0zL8V91R0UXkhb3KtPmyq9PZw3aYw==}
+    engines: {node: '>=8'}
 
   p-limit@3.1.0:
     resolution: {integrity: sha512-TYOanM3wGwNGsZN2cVTYPArw454xnXj5qmWF1bEoAc4+cU/ol7GVh7odevjp1FNHduHc3KZMcFduxU5Xc6uJRQ==}
@@ -3908,6 +3966,45 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@google-cloud/paginator@7.1.0':
+    dependencies:
+      extend: 3.0.2
+
+  '@google-cloud/precise-date@6.1.0': {}
+
+  '@google-cloud/projectify@6.1.0': {}
+
+  '@google-cloud/promisify@6.1.0': {}
+
+  '@google-cloud/pubsub-api@0.3.0':
+    dependencies:
+      google-gax: 6.12.1
+    transitivePeerDependencies:
+      - supports-color
+
+  '@google-cloud/pubsub@6.2.0':
+    dependencies:
+      '@google-cloud/paginator': 7.1.0
+      '@google-cloud/precise-date': 6.1.0
+      '@google-cloud/projectify': 6.1.0
+      '@google-cloud/promisify': 6.1.0
+      '@google-cloud/pubsub-api': 0.3.0
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/core': 2.12.0(@opentelemetry/api@1.9.1)
+      '@opentelemetry/semantic-conventions': 1.39.0
+      arrify: 2.0.1
+      extend: 3.0.2
+      google-auth-library: 11.2.0
+      google-gax: 6.12.1
+      google-logging-utils: 2.0.1
+      heap-js: 2.7.1
+      is-stream-ended: 0.1.4
+      lodash.snakecase: 4.1.1
+      long: 5.3.2
+      p-defer: 3.0.0
+    transitivePeerDependencies:
+      - supports-color
+
   '@google-cloud/secret-manager@7.1.1':
     dependencies:
       google-gax: 6.12.1
@@ -4038,6 +4135,13 @@ snapshots:
       fastq: 1.20.3
 
   '@opentelemetry/api@1.9.1': {}
+
+  '@opentelemetry/core@2.12.0(@opentelemetry/api@1.9.1)':
+    dependencies:
+      '@opentelemetry/api': 1.9.1
+      '@opentelemetry/semantic-conventions': 1.39.0
+
+  '@opentelemetry/semantic-conventions@1.39.0': {}
 
   '@pinojs/redact@0.4.0': {}
 
@@ -4799,6 +4903,8 @@ snapshots:
       es-errors: 1.3.0
       get-intrinsic: 1.3.0
       is-array-buffer: 3.0.5
+
+  arrify@2.0.1: {}
 
   as-table@1.0.55:
     dependencies:
@@ -5657,6 +5763,8 @@ snapshots:
     dependencies:
       function-bind: 1.1.2
 
+  heap-js@2.7.1: {}
+
   hookified@1.15.1: {}
 
   hookified@2.2.0: {}
@@ -5821,6 +5929,8 @@ snapshots:
     dependencies:
       call-bound: 1.0.4
 
+  is-stream-ended@0.1.4: {}
+
   is-string@1.1.1:
     dependencies:
       call-bound: 1.0.4
@@ -5957,6 +6067,8 @@ snapshots:
       p-locate: 5.0.0
 
   lodash.camelcase@4.3.0: {}
+
+  lodash.snakecase@4.1.1: {}
 
   lodash.topath@4.5.2: {}
 
@@ -6430,6 +6542,8 @@ snapshots:
       get-intrinsic: 1.3.0
       object-keys: 1.1.1
       safe-push-apply: 1.0.0
+
+  p-defer@3.0.0: {}
 
   p-limit@3.1.0:
     dependencies:
