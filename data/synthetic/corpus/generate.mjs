@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -19,6 +20,7 @@ const CHECKLIST_HEADER = [
   "document_type",
   "revision",
   "folder",
+  "review_hash",
   "reviewer",
   "decision",
   "reviewed_at",
@@ -366,6 +368,15 @@ const DOCUMENT_TEXT = {
   },
 };
 
+function reviewedContentHash(content) {
+  // Exclude lifecycle annotations; keep authored text and all other metadata.
+  const authored = content.split("\n").filter((line) =>
+    !/^(status|review_status|supersedes|superseded_by):/.test(line)
+    && !line.startsWith("> SYNTHETIC — ")
+    && !/^- (Status|Review|สถานะ|การทบทวน):/.test(line)).join("\n");
+  return createHash("sha256").update(authored).digest("hex");
+}
+
 function escapeYaml(value) {
   return JSON.stringify(value);
 }
@@ -557,6 +568,7 @@ export function parseReviewChecklist(text) {
   };
   const columns = {
     documentId: column("document_id"),
+    reviewHash: header.indexOf("review_hash"),
     reviewer: column("reviewer"),
     decision: column("decision"),
     reviewedAt: column("reviewed_at"),
@@ -566,6 +578,7 @@ export function parseReviewChecklist(text) {
   for (const row of rows) {
     const documentId = (row[columns.documentId] ?? "").trim();
     const review = {
+      reviewHash: (row[columns.reviewHash] ?? "").trim(),
       reviewer: (row[columns.reviewer] ?? "").trim(),
       decision: (row[columns.decision] ?? "").trim().toLowerCase(),
       reviewedAt: (row[columns.reviewedAt] ?? "").trim(),
@@ -622,12 +635,10 @@ export function buildCorpus(reviews = new Map()) {
   }
 
   const decisionFor = (documentId) => reviews.get(documentId)?.decision ?? "";
+  const reviewHashes = new Map();
   const documents = [];
   for (const candidate of candidates) {
     const { seriesId, documentId, revision, type, language, subject } = candidate;
-    if (decisionFor(documentId) === DECISION_FAIL) {
-      continue;
-    }
     const predecessorId = revision === "B" ? `${seriesId}-A` : null;
     const successorId = revision === "A" ? `${seriesId}-B` : null;
     const passed = decisionFor(documentId) === DECISION_PASS;
@@ -649,6 +660,18 @@ export function buildCorpus(reviews = new Map()) {
       supersedes: predecessorId && decisionFor(predecessorId) !== DECISION_FAIL ? predecessorId : null,
       supersededBy: successorId && decisionFor(successorId) !== DECISION_FAIL ? successorId : null,
     };
+    // Review binds to the authored text and immutable metadata. Lifecycle
+    // annotations change after review without changing the reviewed material.
+    const reviewHash = reviewedContentHash(renderDocument(metadata, type, subject));
+    reviewHashes.set(documentId, reviewHash);
+    const review = reviews.get(documentId);
+    if (review?.decision && review.reviewHash !== reviewHash) {
+      throw new Error(`The reviewed content of ${documentId} changed or has no bound hash. Archive the old checklist, clear its decision, regenerate and review the new content.`);
+    }
+    if (decisionFor(documentId) === DECISION_FAIL) {
+      continue;
+    }
+    metadata.reviewHash = reviewHash;
     const document = {
       metadata,
       filename: filenameFor(documentId),
@@ -661,7 +684,7 @@ export function buildCorpus(reviews = new Map()) {
   const countReviewStatus = (reviewStatus) =>
     documents.filter(({ metadata }) => metadata.reviewStatus === reviewStatus).length;
   const manifest = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedBy: "data/synthetic/corpus/generate.mjs",
     recordedOn: SYNTHETIC_RECORD_DATE,
     label: SYNTHETIC_LABEL,
@@ -690,6 +713,7 @@ export function buildCorpus(reviews = new Map()) {
         type.key,
         revision,
         type.folder,
+        reviewHashes.get(documentId),
         review?.reviewer ?? "",
         review?.decision ?? "",
         review?.reviewedAt ?? "",
@@ -700,7 +724,7 @@ export function buildCorpus(reviews = new Map()) {
     .map((row) => row.map(escapeCsv).join(","))
     .join("\n");
 
-  return { documents, manifest, checklist: `${checklist}\n` };
+  return { documents, manifest, reviewHashes, checklist: `${checklist}\n` };
 }
 
 async function readRecordedReviews(checklistPath) {
@@ -719,7 +743,21 @@ export async function writeCorpus(outputDir = DEFAULT_OUTPUT_DIR) {
   const documentsPath = resolve(outputPath, "documents");
   const checklistPath = resolve(outputPath, "review-checklist.csv");
   // Decisions already recorded in the checklist survive a rerun.
-  const { documents, manifest, checklist } = buildCorpus(await readRecordedReviews(checklistPath));
+  const reviews = await readRecordedReviews(checklistPath);
+  const { documents, manifest, reviewHashes, checklist } = buildCorpus(reviews);
+  // A reviewer may have edited a candidate file. Never replace those edits and
+  // claim the generated replacement passed the review of the edited file.
+  for (const [documentId, review] of reviews) {
+    if (!review.decision) continue;
+    try {
+      const existing = await readFile(resolve(documentsPath, filenameFor(documentId)), "utf8");
+      if (reviewedContentHash(existing) !== reviewHashes.get(documentId)) {
+        throw new Error(`The reviewed content of ${documentId} differs from the generated content. Archive the checklist and review a regenerated candidate.`);
+      }
+    } catch (error) {
+      if (error.code !== "ENOENT" || review.decision !== DECISION_FAIL) throw error;
+    }
+  }
   await mkdir(documentsPath, { recursive: true });
   const retained = new Set(documents.map(({ filename }) => filename));
   const stale = (await readdir(documentsPath)).filter(

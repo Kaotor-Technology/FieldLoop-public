@@ -29,7 +29,12 @@ Folders follow the Pipeline Domain Pack structure in PRD KL-2.
 A reviewer must inspect every document and fill in `reviewer`, `decision`
 (`pass` or `fail`), `reviewed_at` and `notes` in the checklist. Generation does
 not perform or simulate that human-only review, and it rejects a decision that
-has no reviewer or date.
+has no reviewer or date. Each row also carries a `review_hash` binding the
+authored text and metadata; do not edit that hash. Lifecycle annotations do not
+change the hash. A changed template or edited candidate causes regeneration to
+fail before overwriting files or decisions. Archive the old checklist, clear the
+affected decision, regenerate, and have a person review the new candidate.
+Legacy decisions without a bound hash must be reviewed again.
 
 Run the generator again after recording decisions. It keeps what the checklist
 records and applies it:

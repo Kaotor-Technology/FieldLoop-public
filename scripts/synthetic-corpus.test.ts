@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -59,13 +59,15 @@ function documentBody(directory: string, contentPath: string) {
 
 function recordDecisions(directory: string, decisions: Record<string, string[]>) {
   const checklistFile = join(directory, "review-checklist.csv");
-  const rows = readFileSync(checklistFile, "utf8").trimEnd().split("\n").map((row) => {
+  const source = readFileSync(checklistFile, "utf8");
+  const controlColumnCount = source.split("\n")[0]?.split(",").indexOf('"reviewer"') ?? 0;
+  const rows = source.trimEnd().split("\n").map((row) => {
     const documentId = row.split(",")[0]?.replaceAll('"', "") ?? "";
     const decision = decisions[documentId];
     if (!decision) {
       return row;
     }
-    const cells = row.split('","').slice(0, 6).join('","');
+    const cells = row.split('","').slice(0, controlColumnCount).join('","');
     return `${cells}","${decision.join('","')}"`;
   });
   writeFileSync(checklistFile, `${rows.join("\n")}\n`, "utf8");
@@ -78,6 +80,37 @@ afterEach(() => {
 });
 
 describe("synthetic document corpus generator", () => {
+  it("rejects a changed template before replacing reviewed content or decisions", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    recordDecisions(directory, {
+      "SYN-UC1-PROC-EN-001-A": ["Fixture reviewer", "pass", "2026-10-12", ""],
+    });
+    const checklist = readFileSync(join(directory, "review-checklist.csv"), "utf8");
+    const documentPath = join(directory, "documents/syn-uc1-proc-en-001-a.md");
+    const document = readFileSync(documentPath, "utf8");
+    const changedGenerator = join(realpathSync(temporaryDirectory()), "generate.mjs");
+    writeFileSync(changedGenerator, readFileSync(generator, "utf8").replace(
+      "surface rust at a coating defect on an exposed girth weld",
+      "a changed fictional finding that has not been reviewed",
+    ));
+    expect(() => execFileSync(process.execPath, [changedGenerator, "--output-dir", directory], {
+      cwd: repositoryRoot, stdio: "pipe",
+    })).toThrow(/reviewed content/);
+    expect(readFileSync(documentPath, "utf8")).toBe(document);
+    expect(readFileSync(join(directory, "review-checklist.csv"), "utf8")).toBe(checklist);
+  });
+
+  it("rejects a review of an edited candidate rather than replacing its text", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    const documentPath = join(directory, "documents/syn-uc1-proc-en-001-a.md");
+    writeFileSync(documentPath, readFileSync(documentPath, "utf8").replace("surface rust", "edited fictional finding"));
+    recordDecisions(directory, { "SYN-UC1-PROC-EN-001-A": ["Fixture reviewer", "pass", "2026-10-12", ""] });
+    expect(() => generateInto(directory)).toThrow(/reviewed content/);
+    expect(readFileSync(documentPath, "utf8")).toContain("edited fictional finding");
+  });
+
   it("generates 240 documents with every document type in both languages", () => {
     const directory = temporaryDirectory();
     generateInto(directory);
