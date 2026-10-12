@@ -25,6 +25,12 @@ is documented with that change.
 - **Signals, not pushes.** A source reaches the platform only as `signal.v1`
   messages on the `signals` topic, published in process by the Scenario player
   (SIM-3). There is no HTTP trigger because the APIs are read-only.
+- **What a Signal is.** The glossary defines it as Evidence that arrives
+  automatically from a connected source system. That says nothing about the
+  content: a measurement (a historian tag), a status (a pump) and a report (a
+  patrol finding, an ILI report arriving) are all Signals. A Signal is stored as
+  Evidence and may trigger a Signal rule, which creates a Health Proposal; it
+  never changes Barrier Health by itself (LS-3).
 
 ## Mock historian (FL-141)
 
@@ -137,12 +143,24 @@ else is `400`. The list is small and bounded, so it is not paginated.
 - **Classification.** Findings are `HIGHLY_RESTRICTED` because a run of GPS
   fixes along the pipeline reveals Asset geometry (PRD 9.1). This is more
   conservative than the `CONFIDENTIAL` Evidence rows of the DL-01 seed.
-- **No Signal, by design.** A patrol app yields reports and photographs, not a
-  telemetry feed, so this source publishes nothing to `signals`; its findings
-  reach the platform as Evidence (GEO-8), linked to the Right-of-Way patrol
-  Barrier. The pipeline pack rule `encroachment-detected` (FL-78) names a
-  `mock-patrol` Signal and should be revisited with its owner. Findings carry no
-  photographs yet.
+- **Findings arrive as Signals.** `SimulatedPatrol.observe(finding_id, at)`
+  returns the Observation for `SimulatedSignalEmitter` (source `mock-patrol`,
+  classification `HIGHLY_RESTRICTED`):
+
+  | Member | Value |
+  | --- | --- |
+  | `tag` | `DL-01.<kind>.detected`, for example `DL-01.encroachment.detected` |
+  | `value`, `unit` | `1` while the finding is open, `0` once it is closed; `boolean` |
+  | `observedAt` | the Scenario time `at` |
+  | `payload` | the report: `findingId`, `kind`, `severity`, `status`, `summary`, `foundAt` (when the patroller found it), `gps`, `label` |
+
+  The encroachment Signal is the shape FL-78's `encroachment-detected` rule
+  matches (`mock-patrol`, `DL-01.encroachment.detected`, `eq 1`, unit
+  `boolean`). The finding is the subject of the Signal's identity, so two
+  findings of one kind at one instant stay distinct and a replay keeps its ID.
+- **No photographs yet.** A patrol report also carries images in the owner's
+  description; none are modelled. Doing so needs a contract field, synthetic
+  image files and a place to serve them.
 
 ## Mock ILI report drop (FL-144)
 
@@ -194,12 +212,8 @@ publishes the raw object event, which is not `signal.v1`; sent to `signals` it
 would be quarantined, and no other topic has a consumer for it yet. The Signal
 travels the validated path that SIM-3 requires and a rule can match it later
 without infrastructure change. A bucket notification is an additive follow-up
-once an ingestion consumer exists.
-
-**Open.** The owner's clarification that a patrol app is a report and image
-source, not a signalling source (2026-10-12), puts this choice back to review: a
-report file may not be a Signal at all. The alternatives are to drop the Signal
-and keep only the file and this API, or to replace it with a bucket notification.
+once an ingestion consumer exists. A report file that arrives from a connected
+source is a Signal by the glossary's definition, as a patrol finding is.
 
 ### Deployment prerequisite
 
