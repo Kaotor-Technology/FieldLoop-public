@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MockHistorianSeries",
+  "description": "Read-only synthetic SCADA historian readings for one DL-01 tag (SIM-2). Values are simulated, not observations of a real asset.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "tag",
+    "unit",
+    "description",
+    "from",
+    "to",
+    "intervalSeconds",
+    "points",
+    "total",
+    "source",
+    "orgId",
+    "assetCode",
+    "label",
+    "simulated",
+    "classification"
+  ],
+  "properties": {
+    "tag": {
+      "type": "string",
+      "enum": [
+        "DL-01.pressure.line",
+        "DL-01.flow.line",
+        "DL-01.rectifier.output"
+      ]
+    },
+    "unit": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1
+    },
+    "from": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Requested window start, normalised to UTC."
+    },
+    "to": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Requested window end, normalised to UTC."
+    },
+    "intervalSeconds": {
+      "type": "integer",
+      "const": 60,
+      "description": "Samples sit on a UTC clock grid, not on the requested start."
+    },
+    "points": {
+      "type": "array",
+      "maxItems": 1441,
+      "items": {
+        "$ref": "#/$defs/SeriesPoint"
+      }
+    },
+    "total": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "source": {
+      "type": "string",
+      "const": "mock-historian"
+    },
+    "orgId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "assetCode": {
+      "type": "string",
+      "const": "DL-01"
+    },
+    "label": {
+      "type": "string",
+      "const": "SYNTHETIC"
+    },
+    "simulated": {
+      "type": "boolean",
+      "const": true
+    },
+    "classification": {
+      "type": "string",
+      "const": "CONFIDENTIAL"
+    }
+  },
+  "$defs": {
+    "SeriesPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "t",
+        "v",
+        "quality"
+      ],
+      "properties": {
+        "t": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "v": {
+          "type": "number"
+        },
+        "quality": {
+          "type": "string",
+          "const": "good"
+        }
+      }
+    }
+  }
+}
