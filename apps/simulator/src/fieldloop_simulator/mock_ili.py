@@ -11,8 +11,7 @@ from datetime import datetime
 from importlib.resources import files
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Response
 from fieldloop_common.generated_mock_ili import MockIliReport
 
 from fieldloop_simulator.mock_http import app_state, problem
@@ -24,14 +23,16 @@ REPORT_PREFIX = "reports/"
 _BUCKET = re.compile(r"[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]")
 
 
-def _load_reports() -> dict[str, MockIliReport]:
+def _load_reports() -> dict[str, tuple[MockIliReport, bytes]]:
+    """Each fixture as its validated model and its exact bytes, which are what Terraform drops."""
     folder = files("fieldloop_simulator").joinpath("fixtures", "ili")
-    reports = [
-        MockIliReport.model_validate_json(item.read_text())
-        for item in folder.iterdir()
-        if item.name.endswith(".json")
-    ]
-    return {report.report_id: report for report in reports}
+    reports: dict[str, tuple[MockIliReport, bytes]] = {}
+    for item in folder.iterdir():
+        if item.name.endswith(".json"):
+            document = item.read_bytes()
+            report = MockIliReport.model_validate_json(document)
+            reports[report.report_id] = (report, document)
+    return reports
 
 
 _REPORTS = _load_reports()
@@ -44,11 +45,15 @@ class SimulatedIliDrop:
         self.bucket = bucket
 
     def report(self, report_id: str) -> MockIliReport:
-        return _REPORTS[report_id]
+        return _REPORTS[report_id][0]
+
+    def document(self, report_id: str) -> bytes:
+        """The file as dropped, byte for byte."""
+        return _REPORTS[report_id][1]
 
     def observe(self, report_id: str, at: datetime) -> Observation:
         """The Signal that announces the report; it locates the file, it does not copy it."""
-        report = _REPORTS[report_id]
+        report = self.report(report_id)
         payload: dict[str, object] = {
             "assetCode": report.asset_code,
             "reportId": report.report_id,
@@ -77,11 +82,10 @@ router = APIRouter(prefix="/mock/ili", tags=["mock-ili"])
 get_drop = app_state("ili", SimulatedIliDrop)
 
 
-@router.get("/reports/{id}", response_model=MockIliReport)
-def read_report(
-    id: str, drop: Annotated[SimulatedIliDrop, Depends(get_drop)]
-) -> MockIliReport | JSONResponse:
+@router.get("/reports/{id}")
+def read_report(id: str, drop: Annotated[SimulatedIliDrop, Depends(get_drop)]) -> Response:
+    # The bytes of the dropped file, not a re-serialisation of the model.
     try:
-        return drop.report(id)
+        return Response(content=drop.document(id), media_type="application/json")
     except KeyError:
         return problem(404, "Unknown ILI report", "not_found")

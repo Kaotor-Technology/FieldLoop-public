@@ -28,7 +28,8 @@ def test_report_is_the_dropped_document_and_a_deterministic_synthetic_read() -> 
         assert first.status_code == 200
         assert first.headers["content-type"].startswith("application/json")
         assert first.json() == client.get(URL).json()
-    # One document is both the file in the bucket and the API response.
+    # One document is both the file in the bucket and the API response, byte for byte.
+    assert first.content == FIXTURE.read_bytes()
     assert first.json() == json.loads(FIXTURE.read_text())
     data = first.json()
     assert data["label"] == "SYNTHETIC"
