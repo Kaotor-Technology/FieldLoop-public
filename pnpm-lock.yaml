@@ -302,6 +302,10 @@ importers:
         version: 2.9.1
 
   packages/domain:
+    dependencies:
+      '@fieldloop/contracts':
+        specifier: workspace:*
+        version: link:../contracts
     devDependencies:
       '@fieldloop/config':
         specifier: workspace:*
