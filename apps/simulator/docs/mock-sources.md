@@ -37,8 +37,9 @@ is documented with that change.
 | `DL-01.rectifier.output` | `A` | 11.55 to 12.45 |
 
 - `from` and `to` are required, timezone-aware RFC 3339 (lowercase `t`/`z`
-  accepted, numeric epochs and naive times rejected). `to` must be after `from`
-  and at most 24 hours later; otherwise `400`. An unknown tag is `404`.
+  accepted, numeric epochs and naive times rejected). A timestamp whose UTC
+  instant falls outside years 1 to 9999 is rejected too. `to` must be after
+  `from` and at most 24 hours later; otherwise `400`. An unknown tag is `404`.
 - Samples sit on a **60 second UTC clock grid**, inclusive of both ends, not on
   the requested start. A window therefore has at most 1441 points.
 - The series is a daily triangle wave plus hash-derived jitter. It avoids
