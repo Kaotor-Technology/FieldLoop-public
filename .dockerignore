@@ -39,6 +39,11 @@
 !db/seed/
 !db/seed/common.mjs
 !db/seed/dl-01/
+!db/seed/legal-corpus/
+!data/
+!data/corpus/
+!data/corpus/legal/
+!data/corpus/legal/**
 !db/seed/bangkok/
 !data/synthetic/dl-01/
 !data/synthetic/bangkok/
