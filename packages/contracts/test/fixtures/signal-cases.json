@@ -787,5 +787,95 @@
       "simulated": true,
       "classification": "CONFIDENTIAL"
     }
+  },
+  {
+    "name": "observedAt UTC trailing LF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z\n",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "observedAt UTC trailing CR",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z\r",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "observedAt UTC trailing CRLF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z\r\n",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "observedAt offset trailing LF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T07:00:00+07:00\n",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "observedAt offset trailing CR",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T07:00:00+07:00\r",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "observedAt offset trailing CRLF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T07:00:00+07:00\r\n",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
   }
 ]

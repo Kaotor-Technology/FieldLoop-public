@@ -51,7 +51,8 @@ states `schemaVersion`, producer-assigned UUID `id`, `orgId`, `source`, `tag`,
 There are no provenance defaults. Optional Asset/Barrier/run IDs are UUIDs.
 Observation timestamps use years 0001–9999 and seconds 00–59; leap seconds and
 year zero are rejected consistently by both validators.
-Organisation, source and tag identifiers reject all carriage returns and line feeds.
+Organisation, source and tag identifiers and observation timestamps reject all
+carriage returns and line feeds.
 `value` supports numeric measurements, status strings, flags and null for an
 unavailable observation. Numbers must be in the finite binary64 interval
 [-1.7976931348623157e308, 1.7976931348623157e308], including Python integers.
