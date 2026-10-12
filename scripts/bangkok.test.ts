@@ -59,3 +59,25 @@ describe("Bangkok static OSM extract (FL-136)", () => {
     expect(errors).toEqual(["OSM geometry has a missing or invalid coordinate.", "OSM source is empty or reports an error."]);
   });
 });
+
+describe("Bangkok simulated Assets (FL-137)", () => {
+  it("reproduces labelled zones and Facilities and keeps each Facility inside its zone", () => {
+    const result = runModule<{ codes: string[]; types: string[]; valid: boolean }>(`
+      import { buildDataset } from './data/synthetic/bangkok/generate.mjs';
+      import { pointInArea } from './data/synthetic/bangkok/extract.mjs';
+      const { zones,facilities }=buildDataset();
+      console.log(JSON.stringify({codes:facilities.features.map(f=>f.id),types:facilities.features.map(f=>f.properties.facility_type),
+        valid:facilities.features.every(f=>f.properties.simulated===true && f.properties.label==='SYNTHETIC'
+          && f.properties.classification==='HIGHLY_RESTRICTED' && pointInArea(f.geometry.coordinates,zones.features.find(z=>z.id===f.properties.zone_code).geometry))}));
+    `);
+    expect(result).toEqual({ codes: ["P-1", "P-3", "P-2", "G-1", "G-2", "S-R1", "S-L1", "S-T1"],
+      types: ["pump", "pump", "pump", "gate", "gate", "rain_sensor", "level_sensor", "tide_sensor"], valid: true });
+    const directory = mkdtempSync(join(tmpdir(), "fieldloop-bangkok-assets-"));
+    try {
+      execFileSync(process.execPath, [`${dataDirectory}/generate.mjs`, "--output-dir", directory]);
+      for (const file of ["zones.geojson", "facilities.geojson"]) {
+        expect(readFileSync(join(directory, file), "utf8")).toBe(readFileSync(`${dataDirectory}/${file}`, "utf8"));
+      }
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
+});

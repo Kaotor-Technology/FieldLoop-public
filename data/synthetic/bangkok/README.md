@@ -43,3 +43,21 @@ The source data is available in `sources/` for redistribution/reproduction.
 These source features carry `simulated=false`, `classification=PUBLIC` and
 `PUBLIC BASE MAP`. Future flood Health, Signals and artificial Facility locations
 must carry SIMULATION/SYNTHETIC labels independently of this public geometry.
+
+## Simulated Assets (FL-137)
+
+`zones.geojson` uses the two district footprints as illustrative Area Assets:
+Z3 (Huai Khwang) and Z4 (Bang Kapi). Both carry `SIMULATION`; no drainage
+connectivity or catchment delineation is asserted. OSM attribution stays on the
+derived geometry.
+
+`facilities.geojson` contains three pumps (P-1/P-2/P-3), two gates (G-1/G-2),
+and rain, level and tide sensors (S-R1/S-L1/S-T1). All positions are authored,
+labelled `SYNTHETIC`, with `simulated=true` and `HIGHLY_RESTRICTED`. The tide
+sensor is a mock source target, not a claim that a real tide gauge exists there.
+P-3 is reserved for the simulated pump-power-loss storyline. The generator
+checks that each Point falls within its assigned zone.
+
+```sh
+node data/synthetic/bangkok/generate.mjs
+```
