@@ -9,13 +9,14 @@ import json
 import uuid
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, Literal
 
 from fieldloop_common.google_pubsub import GooglePubSubTransport
 from fieldloop_common.signal_publisher import SignalPublisher, SignalPublishResult
 
 from fieldloop_simulator.organisation import org_id_from_environment
+from fieldloop_simulator.timestamps import to_utc
 
 # Fixed, so that replaying a Scenario run derives the same Signal IDs (consumer deduplication).
 SIGNAL_ID_NAMESPACE = uuid.UUID("5a3f0c9e-2b6d-4c41-9a57-3f1d8e7b2c64")
@@ -39,11 +40,7 @@ class Observation:
 def utc_text(at: datetime) -> str:
     if at.tzinfo is None:
         raise ValueError("Observation time needs a timezone")
-    try:
-        utc = at.astimezone(UTC)
-    except OverflowError as error:
-        raise ValueError("Observation time is outside the supported range") from error
-    return utc.isoformat().removesuffix("+00:00") + "Z"
+    return to_utc(at).isoformat().removesuffix("+00:00") + "Z"
 
 
 def _canonical_value(value: SignalValue) -> str:

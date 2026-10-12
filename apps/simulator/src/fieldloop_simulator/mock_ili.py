@@ -11,11 +11,11 @@ from datetime import datetime
 from importlib.resources import files
 from typing import Annotated
 
-from fastapi import Depends, Request
+from fastapi import Depends
 from fastapi.responses import JSONResponse
 from fieldloop_common.generated_mock_ili import MockIliReport
 
-from fieldloop_simulator.mock_http import ReadOnlyRouter, problem
+from fieldloop_simulator.mock_http import ReadOnlyRouter, app_state, problem
 from fieldloop_simulator.mock_signals import Observation
 
 REPORT_PREFIX = "reports/"
@@ -71,11 +71,7 @@ class SimulatedIliDrop:
 router = ReadOnlyRouter(prefix="/mock/ili", tag="mock-ili")
 
 
-def get_drop(request: Request) -> SimulatedIliDrop:
-    drop = request.app.state.ili
-    if not isinstance(drop, SimulatedIliDrop):
-        raise RuntimeError("The simulator has no ILI drop configured")
-    return drop
+get_drop = app_state("ili", SimulatedIliDrop)
 
 
 @router.read("/reports/{id}", response_model=MockIliReport)

@@ -1,14 +1,14 @@
 """The Organisation that the mock sources and their Signals belong to."""
 
-import re
 from collections.abc import Mapping
 
+from fieldloop_common.signal_publisher import ORG_ID_PATTERN
+
 DEMO_ORG_ID = "fieldloop-demo"
-_ORG_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 
 
 def require_org_id(org_id: str) -> str:
-    if _ORG_ID.fullmatch(org_id) is None:
+    if ORG_ID_PATTERN.fullmatch(org_id) is None:
         raise ValueError("Invalid Organisation ID")
     return org_id
 

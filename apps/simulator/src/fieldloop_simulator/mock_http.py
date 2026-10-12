@@ -2,7 +2,7 @@
 
 import re
 from collections.abc import Callable, Coroutine
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Request, Response
@@ -11,6 +11,8 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from fastapi.types import DecoratedCallable
 from pydantic import AfterValidator, AwareDatetime, BeforeValidator
+
+from fieldloop_simulator.timestamps import to_utc
 
 PROBLEM_JSON = "application/problem+json"
 
@@ -33,15 +35,6 @@ def require_rfc3339(value: object) -> object:
     return value
 
 
-def to_utc(value: datetime) -> datetime:
-    # A valid offset timestamp near year 1 or 9999 has no UTC datetime; reject it as input
-    # instead of letting the OverflowError surface as a 500.
-    try:
-        return value.astimezone(UTC)
-    except OverflowError as error:
-        raise ValueError("Timestamp is outside the supported range.") from error
-
-
 # Normalised to UTC at the boundary, so handlers never convert (and never overflow).
 Rfc3339 = Annotated[AwareDatetime, BeforeValidator(require_rfc3339), AfterValidator(to_utc)]
 
@@ -56,6 +49,18 @@ def problem(
         headers=headers,
         content={"type": "about:blank", "title": title, "status": status, "code": code},
     )
+
+
+def app_state[T](name: str, kind: type[T]) -> Callable[[Request], T]:
+    """A dependency that returns ``app.state.<name>``, which must be a ``kind``."""
+
+    def provide(request: Request) -> T:
+        value = getattr(request.app.state, name, None)
+        if not isinstance(value, kind):
+            raise RuntimeError(f"The simulator has no {name} configured")
+        return value
+
+    return provide
 
 
 class ProblemRoute(APIRoute):

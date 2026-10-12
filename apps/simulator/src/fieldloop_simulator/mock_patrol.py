@@ -10,10 +10,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from fastapi import Depends, Query, Request
+from fastapi import Depends, Query
 from fieldloop_common.generated_mock_patrol import MockPatrolPage
 
-from fieldloop_simulator.mock_http import ReadOnlyRouter, Rfc3339
+from fieldloop_simulator.mock_http import ReadOnlyRouter, Rfc3339, app_state
 from fieldloop_simulator.mock_signals import Observation, utc_text
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
 
@@ -177,11 +177,7 @@ class SimulatedPatrol:
 router = ReadOnlyRouter(prefix="/mock/patrol", tag="mock-patrol")
 
 
-def get_patrol(request: Request) -> SimulatedPatrol:
-    patrol = request.app.state.patrol
-    if not isinstance(patrol, SimulatedPatrol):
-        raise RuntimeError("The simulator has no patrol app configured")
-    return patrol
+get_patrol = app_state("patrol", SimulatedPatrol)
 
 
 @router.read("/findings", response_model=MockPatrolPage)
