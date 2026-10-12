@@ -16,7 +16,7 @@ from starlette.middleware.base import RequestResponseEndpoint
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 
 ORG_ID = os.getenv("FIELDLOOP_ORG_ID", "fieldloop-demo")
-ENVIRONMENT = os.getenv("FIELDLOOP_ENVIRONMENT", "local")
+ENVIRONMENT = os.getenv("FIELDLOOP_ENV", "local")
 SIMULATION_RUN_NAMESPACE = UUID("d97db000-2a89-4d59-b3ac-0e0c193b8b6d")
 
 
