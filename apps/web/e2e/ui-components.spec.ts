@@ -339,3 +339,55 @@ test("Health markers use distinct triangle cross and hatched-square anchors in b
   expect(await failed.locator("span").evaluate(element => getComputedStyle(element, "::after").animationName)).toBe("none");
   await markers.screenshot({ path: "e2e/evidence/ui-kit-markers-dark.png" });
 });
+
+test("menus and tooltips use fast motion and respect reduced motion", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  for (const trigger of [page.getByRole("combobox", { name: "Evidence type", exact: true }), page.getByRole("button", { name: "Source", exact: true }), page.getByRole("button", { name: "Sources", exact: true })]) {
+    await trigger.click();
+    await expect(page.locator(".fl-select-menu")).toHaveCSS("animation-duration", "0.15s");
+    await expect(page.locator(".fl-select-menu")).toHaveCSS("animation-timing-function", "cubic-bezier(0.2, 0, 0, 1)");
+    await page.keyboard.press("Escape");
+  }
+  const railLink = page.getByRole("navigation", { name: "Component groups", exact: true }).getByRole("link", { name: "Controls", exact: true });
+  await railLink.hover();
+  await expect(page.locator(".fl-tooltip")).toBeVisible();
+  await expect(page.locator(".fl-tooltip")).toHaveCSS("animation-duration", "0.15s");
+  await expect(page.locator(".fl-tooltip")).toHaveCSS("animation-timing-function", "cubic-bezier(0.2, 0, 0, 1)");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(page.locator(".fl-tooltip")).toHaveCSS("animation-name", "none");
+  await page.keyboard.press("Escape");
+  await page.getByRole("combobox", { name: "Evidence type", exact: true }).click();
+  await expect(page.locator(".fl-select-menu")).toHaveCSS("animation-name", "none");
+});
+
+test("Failed marker boundaries exceed three-to-one contrast on system and explicit dark surfaces", async ({ page }) => {
+  function luminance(color: string) {
+    const values = color.match(/[\d.]+/g)?.slice(0, 3);
+    if (!values || values.length !== 3) throw new Error(`Unsupported colour: ${color}`);
+    const [red = 0, green = 0, blue = 0] = values.map(value => {
+      const channel = Number(value) / 255;
+      return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue;
+  }
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  for (const explicit of [false, true]) {
+    if (explicit) await page.getByRole("button", { name: "Night shift", exact: true }).click();
+    const colours = await page.getByRole("button", { name: "failed Barrier marker", exact: true }).evaluate(element => {
+      const shape = element.querySelector("svg");
+      const card = element.closest(".fl-card");
+      if (!shape || !card) throw new Error("Missing marker or surface fixture");
+      const probe = document.createElement("span");
+      probe.style.backgroundColor = "var(--color-dark-surface-raised)";
+      document.body.append(probe);
+      const raised = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return { outline: getComputedStyle(shape).stroke, surface: getComputedStyle(card).backgroundColor, raised };
+    });
+    for (const background of [colours.surface, colours.raised]) {
+      const outline = luminance(colours.outline);
+      const surface = luminance(background);
+      expect((Math.max(outline, surface) + 0.05) / (Math.min(outline, surface) + 0.05)).toBeGreaterThanOrEqual(3);
+    }
+  }
+});
