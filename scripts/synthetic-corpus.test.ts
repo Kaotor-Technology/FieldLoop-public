@@ -111,6 +111,15 @@ describe("synthetic document corpus generator", () => {
     expect(readFileSync(documentPath, "utf8")).toContain("edited fictional finding");
   });
 
+  it("includes authored status-like lines in the review hash", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    const documentPath = join(directory, "documents/syn-uc1-proc-en-001-a.md");
+    writeFileSync(documentPath, readFileSync(documentPath, "utf8").replace("## Purpose", "review_status: unreviewed authored material\n\n## Purpose"));
+    recordDecisions(directory, { "SYN-UC1-PROC-EN-001-A": ["Fixture reviewer", "pass", "2026-10-12", ""] });
+    expect(() => generateInto(directory)).toThrow(/reviewed content/);
+  });
+
   it("generates 240 documents with every document type in both languages", () => {
     const directory = temporaryDirectory();
     generateInto(directory);

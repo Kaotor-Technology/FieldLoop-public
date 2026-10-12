@@ -369,12 +369,17 @@ const DOCUMENT_TEXT = {
 };
 
 function reviewedContentHash(content) {
-  // Exclude lifecycle annotations; keep authored text and all other metadata.
-  const authored = content.split("\n").filter((line) =>
-    !/^(status|review_status|supersedes|superseded_by):/.test(line)
-    && !line.startsWith("> SYNTHETIC — ")
-    && !/^- (Status|Review|สถานะ|การทบทวน):/.test(line)).join("\n");
-  return createHash("sha256").update(authored).digest("hex");
+  const separator = content.indexOf("\n---\n");
+  if (separator < 0) throw new Error("A reviewed document requires front matter.");
+  const frontMatter = content.slice(0, separator).split("\n").filter((line) =>
+    !/^(status|review_status|supersedes|superseded_by):/.test(line)).join("\n");
+  const body = content.slice(separator + 5).split("\n");
+  // The generated banner is the fourth body line, before authored sections.
+  if (body[3]?.startsWith("> SYNTHETIC — ")) body.splice(3, 1);
+  const control = Math.max(body.lastIndexOf("## Document control"), body.lastIndexOf("## การควบคุมเอกสาร"));
+  const authored = body.filter((line, index) => index <= control || control < 0
+    || !/^- (Status|Review|สถานะ|การทบทวน):/.test(line)).join("\n");
+  return createHash("sha256").update(frontMatter + "\n---\n" + authored).digest("hex");
 }
 
 function escapeYaml(value) {
