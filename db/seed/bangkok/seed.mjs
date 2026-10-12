@@ -62,6 +62,9 @@ export function buildSeedQueries(database, dataset, orgId, bowtie = readBowtieSe
   const queries = [];
   const metadata = { org_id: orgId, simulated: true, classification: bowtie.metadata.classification, created_by: CREATED_BY };
   const id = (type, key) => databaseId(orgId, `${type}:${key}`);
+  // Public OSM source features become restricted operational Assets in the demo database.
+  const assetClassification = (feature) => dataset.canals.features.includes(feature)
+    ? "HIGHLY_RESTRICTED" : feature.properties.classification;
   const upsert = (table, values) => database.insertInto(`app.${table}`).values(values)
     .onConflict((conflict) => conflict.column("id").doUpdateSet((expression) => Object.fromEntries(
       Object.keys(values).filter((key) => key !== "id").map((key) => [key, expression.ref(`excluded.${key}`)]))));
@@ -87,7 +90,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtie = readBowtieSe
       type: dataset.zones.features.includes(feature) ? "area" : isCanal ? "linear" : "facility",
       parent_id: feature.properties.zone_code ? id("asset", feature.properties.zone_code) : null,
       domain_pack: "flood-water", geom: geometry(feature.geometry), attributes: jsonb(attributes),
-      classification: isCanal ? "HIGHLY_RESTRICTED" : feature.properties.classification,
+      classification: assetClassification(feature),
     });
   }
   add("bowtie", bowtie.id, { hazard: bowtie.hazard, top_event: bowtie.topEvent,
@@ -131,7 +134,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtie = readBowtieSe
       add("geo_reference", evidence.id, {
         evidence_id: id("evidence", evidence.id), target_type: "asset", target_id: id("asset", asset.id),
         kind: "asset", geom: geometry(asset.geometry), status: "confirmed", confidence: 1,
-        classification: asset.properties.classification,
+        classification: assetClassification(asset),
       });
     }
   }

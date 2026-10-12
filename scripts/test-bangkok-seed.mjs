@@ -67,6 +67,26 @@ try {
       (["asset", "geo_reference"].includes(table) ? "HIGHLY_RESTRICTED" : "CONFIDENTIAL")));
   }
 
+  // Evidence on a public-source canal must inherit the restricted database Asset class.
+  const canal = dataset.canals.features[0];
+  const canalBowtie = readBowtieSeed();
+  canalBowtie.barriers[0].assetCode = canal.id;
+  await loadSeed(database, dataset, orgId, canalBowtie);
+  const { rows: canalReferences } = await sql`
+    SELECT g.classification, a.classification AS asset_classification,
+      g.simulated, ST_Equals(g.geom, a.geom) AS same_geometry
+    FROM app.geo_reference g JOIN app.asset a ON a.id = g.target_id AND a.org_id = g.org_id
+    WHERE g.org_id = ${orgId} AND g.created_by = 'seed:bangkok'
+      AND a.id = ${databaseId(orgId, `asset:${canal.id}`)}
+  `.execute(database);
+  assert.equal(canalReferences.length, 2);
+  assert(canalReferences.every(row => row.classification === "HIGHLY_RESTRICTED"
+    && row.asset_classification === row.classification && row.simulated && row.same_geometry),
+  "Geo References must not downgrade the classification of their operational Asset");
+  assert.equal(canal.properties.classification, "PUBLIC", "source provenance stays public");
+  await loadSeed(database, dataset, orgId);
+  assert.equal(await state(), first, "restoring the Bowtie retains the original seed state");
+
   // A stale seed row is removed; a row somebody else added on a live Barrier stays.
   const evidenceValues = { org_id: orgId, barrier_id: databaseId(orgId, "barrier:pumping-stations"),
     kind: "performance_check", source: "manual", observed_at: "2026-10-12T00:00:00Z", simulated: true, classification: "CONFIDENTIAL" };
