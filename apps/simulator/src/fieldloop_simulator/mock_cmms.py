@@ -1,13 +1,26 @@
 """Read-only synthetic CMMS data; no CMMS connector, publisher or write operation."""
 
+import re
 from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Query
 from fieldloop_common.generated_mock_cmms import MockCmmsPage, WorkOrder
-from pydantic import AwareDatetime
+from pydantic import AwareDatetime, BeforeValidator
 
 router = APIRouter(prefix="/mock/cmms", tags=["mock-cmms"])
+
+
+def require_rfc3339(value: object) -> object:
+    # FastAPI validates the trusted datetime default too; HTTP query input is a string.
+    if isinstance(value, datetime):
+        return value
+    # Pydantic also accepts numeric epoch strings; the wire contract does not.
+    if not isinstance(value, str) or not re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})", value
+    ):
+        raise ValueError("asOf must be a timezone-aware RFC 3339 string.")
+    return value
 
 
 def fixture_orders() -> list[WorkOrder]:
@@ -64,7 +77,9 @@ def fixture_orders() -> list[WorkOrder]:
 @router.get("/work-orders", response_model=MockCmmsPage)
 def work_orders(
     pm_due: Annotated[bool, Query(alias="pmDue")] = False,
-    as_of: Annotated[AwareDatetime, Query(alias="asOf")] = datetime(2026, 10, 10, tzinfo=UTC),
+    as_of: Annotated[
+        AwareDatetime, BeforeValidator(require_rfc3339), Query(alias="asOf")
+    ] = datetime(2026, 10, 10, tzinfo=UTC),
 ) -> MockCmmsPage:
     orders = fixture_orders()
     if pm_due:

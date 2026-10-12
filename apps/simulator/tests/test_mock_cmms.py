@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 from fieldloop_simulator.main import app
@@ -73,6 +75,7 @@ def test_mock_cmms_rejects_writes_without_mutating_fixtures(method: str) -> None
         {"asOf": "not-a-date"},
         {"asOf": "2026-10-10T00:00:00"},
         {"asOf": "2026-02-31T00:00:00Z"},
+        {"asOf": "1760000000"},
         {"pmDue": "invalid"},
     ],
 )
@@ -83,3 +86,84 @@ def test_invalid_queries_fail_as_problem_json(params: dict[str, str]) -> None:
         assert result.headers["content-type"].startswith("application/problem+json")
         assert result.json()["code"] == "validation_failed"
         assert result.json()["status"] == 400
+
+
+def test_responses_match_the_canonical_wire_schema() -> None:
+    import json
+    from pathlib import Path
+
+    from jsonschema import Draft202012Validator, FormatChecker, ValidationError
+
+    schema_path = (
+        Path(__file__).resolve().parents[3] / "packages/contracts/mock-cmms.v1.schema.json"
+    )
+    validator = Draft202012Validator(
+        json.loads(schema_path.read_text()), format_checker=FormatChecker()
+    )
+    with TestClient(app) as client:
+        for params in ({}, {"pmDue": "true"}, {"pmDue": "true", "asOf": "2020-01-01T00:00:00Z"}):
+            data = client.get("/mock/cmms/work-orders", params=params).json()
+            validator.validate(data)
+            for item in data["items"]:
+                item["simulated"] = False
+                with pytest.raises(ValidationError):
+                    validator.validate(data)
+                item["simulated"] = True
+
+
+def test_generated_response_model_has_no_contract_drift(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    output = tmp_path / "generated.py"
+    subprocess.run(
+        [sys.executable, str(root / "scripts/generate-mock-cmms.py"), "--output", str(output)],
+        check=True,
+    )
+    assert (
+        output.read_bytes()
+        == (root / "py/fieldloop_common/src/fieldloop_common/generated_mock_cmms.py").read_bytes()
+    )
+
+
+def test_internal_openapi_contract_documents_only_read_operations() -> None:
+    import json
+
+    root = Path(__file__).resolve().parents[3]
+    contract = json.loads((root / "packages/contracts/mock-cmms.v1.openapi.json").read_text())
+    assert contract["openapi"] == "3.1.0"
+    path = contract["paths"]["/mock/cmms/work-orders"]
+    assert set(path) == {"get"}
+    operation = path["get"]
+    assert {p["name"] for p in operation["parameters"]} == {"pmDue", "asOf"}
+    assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "mock-cmms.v1.schema.json",
+    }
+    for status in ("400", "405"):
+        assert operation["responses"][status]["content"]["application/problem+json"]["schema"] == {
+            "$ref": "openapi.yaml#/components/schemas/Problem",
+        }
+
+
+@pytest.mark.parametrize(
+    "timestamp",
+    [
+        "2026-10-10t00:00:00z",
+        "2026-10-10T00:00:00z",
+        "2026-10-10t00:00:00Z",
+    ],
+)
+def test_rfc3339_lowercase_separators_match_the_uppercase_snapshot(timestamp: str) -> None:
+    with TestClient(app) as client:
+        expected = client.get(
+            "/mock/cmms/work-orders",
+            params={
+                "pmDue": "true",
+                "asOf": "2026-10-10T00:00:00Z",
+            },
+        )
+        actual = client.get("/mock/cmms/work-orders", params={"pmDue": "true", "asOf": timestamp})
+        assert actual.status_code == 200
+        assert actual.json() == expected.json()
