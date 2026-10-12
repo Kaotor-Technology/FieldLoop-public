@@ -96,7 +96,8 @@ function validateMatrix(matrix: RiskMatrix): void {
       const cell = matrix.cells[row]?.[column];
       if (!cell) throw new RiskInputError(`Missing Risk Matrix cell ${row + 1}/${column + 1}`);
       for (const previous of [matrix.cells[row - 1]?.[column], matrix.cells[row]?.[column - 1]]) {
-        if (previous && (cell.rank < previous.rank || ZONE_ORDER[cell.zone] < ZONE_ORDER[previous.zone])) {
+        if (previous && (ZONE_ORDER[cell.zone] < ZONE_ORDER[previous.zone] ||
+          (cell.zone === previous.zone && cell.rank < previous.rank))) {
           throw new RiskInputError(`Risk Matrix cell ${row + 1}/${column + 1} improves as frequency or severity increases`);
         }
       }

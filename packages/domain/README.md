@@ -27,7 +27,8 @@ or persisted snapshot is introduced here. API, snapshot storage and events are F
   severity to the Organisation's bands; the engine does not guess definitions.
 - The Organisation must provide all 25 matrix cells, their zones and integer
   ranks. Rows are frequency bands 1–5; columns are severity bands 1–5. Increasing
-  either band must not improve rank or zone. No product-score/colour calibration
+  either band must not improve the zone, or the rank within the same zone. Ranks
+  may restart when the zone worsens. No product-score/colour calibration
   is silently installed by this module.
 - The worst Consequence orders red > amber > green, then rank, severity band,
   frequency band, then the lexically smallest Consequence ID. Rank is supplied

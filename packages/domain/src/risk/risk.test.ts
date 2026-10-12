@@ -120,6 +120,17 @@ describe("Risk Matrix", () => {
     value.consequences.reverse();
     expect(calculateRisk(value).worstConsequenceId).toBe("a");
   });
+
+  it("allows ranks to restart when the tolerability zone worsens", () => {
+    const value = basicInput();
+    // Red rank 1 is still worse than green rank 20.
+    value.matrix.cells = value.matrix.cells.map(row => row.map((_, column) => ({
+      zone: column === 4 ? "red" : "green", rank: column === 4 ? 1 : 20,
+    })));
+    value.consequences = [{ id: "consequence", conditionalProbability: 1, severity: { people: 5 } }];
+    expect(calculateRisk(value).cell.zone).toBe("red");
+    expect(calculateRisk(value).cell.rank).toBe(1);
+  });
 });
 
 describe("invalid input fails as a whole", () => {

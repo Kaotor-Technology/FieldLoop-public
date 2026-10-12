@@ -258,7 +258,7 @@
           },
           "minItems": 5,
           "maxItems": 5,
-          "description": "Rows are frequency bands 1–5; columns are severity bands 1–5. Rank and zone must not improve as either band increases."
+          "description": "Rows are frequency bands 1–5; columns are severity bands 1–5. Zone, then rank within that zone, must not improve as either band increases."
         }
       }
     },
