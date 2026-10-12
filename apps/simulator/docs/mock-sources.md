@@ -115,7 +115,7 @@ Terraform grants each environment's simulator identity
 two variables above. **That change is not applied**; an operator must plan and
 apply it before the simulator can publish in dev or demo. The grants are
 topic-wide, so the `environment` attribute that the signal subscriptions filter
-on is set by the publisher configuration and is not enforced by IAM.
+on is set by the publisher configuration and is not enforced by IAM. [Verifying a deployment](#verifying-a-deployment-operator) lists the checks.
 
 ### Tests
 
@@ -234,3 +234,96 @@ source is a Signal by the glossary's definition, as a patrol finding is.
 
 The bucket, the object and `FIELDLOOP_ILI_DROP_BUCKET` come from the Terraform
 change, which is **not applied**; nothing here has run against real storage.
+
+## Verifying a deployment (operator)
+
+Nothing in this change is applied, so none of this is automated. Run it as the human
+infrastructure operator, in this order, and record the results in `docs/contexts/FL-71.md`.
+
+1. **Plan and apply from `main`, not from a feature branch.** A branch that is behind `main`
+   plans to destroy resources that `main` added. For each environment the FL-71 part of the
+   plan is: create the `ili_drop` bucket and the `ili_report` object, create two
+   `simulator_signal_publisher` grants (`signals` and `dead_letter`), and update
+   `app["simulator-<env>"]` (three new variables, at most one instance). Nothing else may
+   mention the simulator. On 2026-10-13 a plan of this branch against the live project showed
+   exactly that and was not applied.
+2. **The report is in the bucket**, byte for byte what the API serves, and the bucket is private:
+
+   ```sh
+   P=example-project; ENV=dev
+   gcloud storage cat "gs://$P-fieldloop-$ENV-ili-drop/reports/SYN-ILI-2026-001.json" | shasum -a 256
+   shasum -a 256 apps/simulator/src/fieldloop_simulator/fixtures/ili/SYN-ILI-2026-001.json   # same digest
+   gcloud storage buckets describe "gs://$P-fieldloop-$ENV-ili-drop" \
+     --format='value(public_access_prevention,uniform_bucket_level_access,location)'   # enforced True ASIA-SOUTHEAST1
+   ```
+
+3. **The grant exists** on both topics, for this environment's simulator only:
+
+   ```sh
+   gcloud pubsub topics get-iam-policy signals --project=$P --format=json
+   gcloud pubsub topics get-iam-policy fieldloop-v2-dead-letter --project=$P --format=json
+   # roles/pubsub.publisher: serviceAccount:fl-v2-simulator-$ENV@$P.iam.gserviceaccount.com
+   ```
+
+4. **The release replaced the image.** Until it has, the service answers `/mock/*` with
+   FastAPI's 404. A `run.app` URL answers `/healthz` from Google's front end (404, HTML), as the
+   README notes, so probe a `/mock/` path. The caller needs `roles/run.invoker`:
+
+   ```sh
+   URL="$(gcloud run services describe simulator-$ENV --project=$P --region=asia-southeast1 --format='value(status.url)')"
+   TOKEN="$(gcloud auth print-identity-token)"
+   curl -s -H "Authorization: Bearer $TOKEN" "$URL/mock/ili/reports/SYN-ILI-2026-001" | shasum -a 256   # same digest
+   curl -s -o /dev/null -w '%{http_code} %{content_type}\n' -X POST -H "Authorization: Bearer $TOKEN" "$URL/mock/patrol/findings"   # 405 application/problem+json
+   ```
+
+5. **A Signal reaches the topic.** No HTTP trigger exists, so publish one by hand as the
+   simulator's own identity (the operator needs `roles/iam.serviceAccountTokenCreator` on it).
+   This prints a `gcloud` command whose body and attributes are exactly what the publisher sends:
+
+   ```sh
+   uv run --locked --all-packages python - <<'PY'
+   import asyncio, shlex
+   from datetime import UTC, datetime
+   from fieldloop_common.memory_transport import InMemoryTransport
+   from fieldloop_common.signal_publisher import SignalPublisher
+   from fieldloop_simulator.mock_historian import SimulatedHistorian
+   from fieldloop_simulator.mock_signals import SimulatedSignalEmitter
+
+   ENV, PROJECT, ORG = "dev", "example-project", "fieldloop-demo"
+   transport = InMemoryTransport()
+   publisher = SignalPublisher(transport, environment=ENV, org_id=ORG, simulation_only=True)
+   historian, at = SimulatedHistorian(), datetime.now(UTC).replace(microsecond=0)
+   historian.add_override("DL-01.rectifier.output", start=at, value=0.0)
+   asyncio.run(SimulatedSignalEmitter(publisher, org_id=ORG).emit(historian.observe("DL-01.rectifier.output", at)))
+   ((topic, data, attributes),) = transport.messages
+   print("gcloud pubsub topics publish", topic, f"--project={PROJECT}",
+         f"--impersonate-service-account=fl-v2-simulator-{ENV}@{PROJECT}.iam.gserviceaccount.com",
+         "--attribute=" + shlex.quote(",".join(f"{k}={v}" for k, v in attributes.items())),
+         "--message=" + shlex.quote(data.decode()))
+   PY
+   ```
+
+   Run the printed command. A `PERMISSION_DENIED` before the apply is the expected proof that the
+   grant is absent. After it, the signal worker has no `/internal/pubsub/signals` handler until
+   FL-76, so the push is refused and retried five times, and the message lands in the dead-letter
+   review subscription after a few minutes. That is the expected result, and it shows the grant,
+   the `environment` filter and the push attempt together:
+
+   ```sh
+   gcloud pubsub subscriptions pull fieldloop-v2-dead-letter-review --project=$P --limit=5 --format=json
+   ```
+
+## What the Scenario player must account for (FL-74)
+
+- **The sources are on the app.** `app.state.historian`, `app.state.patrol` and `app.state.ili` are
+  the objects that the routes read. `tests/test_scenario_contract.py` is the executable form of
+  what a player may rely on: a read follows an override, a read never publishes, a replay keeps
+  its Signal ID, and a Signal is not labelled below its source's classification.
+- **State is per process.** Overrides and the run's seed live in the instance, so Terraform caps
+  the service at one instance.
+- **An idle instance forgets.** The service has `min_instance_count = 0` and request-based CPU
+  (`cpu_idle = true`; `cpu-throttling: true` on the live service). Scale-to-zero drops the
+  overrides and the seed, and CPU is throttled between requests, so a player that advances
+  Scenario time from a background timer is not reliable. FL-74 must either advance time from
+  requests it receives, or hold one warm instance with CPU always allocated for the demo window,
+  which has a cost against the US$100 budget and needs a deliberate Terraform change.
