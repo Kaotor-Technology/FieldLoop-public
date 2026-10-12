@@ -16,7 +16,7 @@
     "build": "pnpm generate && pnpm build:reference && tsc -p tsconfig.build.json",
     "build:reference": "node scripts/reference.mjs",
     "lint": "eslint .",
-    "lint:openapi": "spectral lint openapi.yaml --ruleset .spectral.yaml --fail-severity warn",
+    "lint:openapi": "spectral lint openapi.yaml --ruleset .spectral.yaml --fail-severity warn && spectral lint \"mock-*.openapi.json\" --ruleset .spectral.mock.yaml --fail-severity warn",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "generate": "openapi-typescript openapi.yaml -o src/generated/api.ts && pnpm generate:signal",
