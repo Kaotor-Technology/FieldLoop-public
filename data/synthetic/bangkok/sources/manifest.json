@@ -1,0 +1,26 @@
+{
+  "retrievedAt": "2026-10-11T23:56:11.550Z",
+  "attribution": "© OpenStreetMap contributors",
+  "licence": "ODbL-1.0",
+  "sources": [
+    {
+      "file": "canals.json",
+      "url": "https://overpass.private.coffee/api/interpreter?data=%5Bout%3Ajson%5D%5Btimeout%3A40%5D%3B%28rel%5B%22boundary%22%3D%22administrative%22%5D%5B%22name%3Aen%22%3D%22Huai+Khwang%22%5D%2813.65%2C100.4%2C13.95%2C100.8%29%3Brel%5B%22boundary%22%3D%22administrative%22%5D%5B%22name%3Aen%22%3D%22Bang+Kapi%22%5D%2813.65%2C100.4%2C13.95%2C100.8%29%3Bway%5B%22waterway%22%3D%22canal%22%5D%2813.74%2C100.56%2C13.81%2C100.65%29%3B%29%3Bout+geom%3B",
+      "query": "[out:json][timeout:40];(rel[\"boundary\"=\"administrative\"][\"name:en\"=\"Huai Khwang\"](13.65,100.4,13.95,100.8);rel[\"boundary\"=\"administrative\"][\"name:en\"=\"Bang Kapi\"](13.65,100.4,13.95,100.8);way[\"waterway\"=\"canal\"](13.74,100.56,13.81,100.65););out geom;",
+      "sha256": "c9b74a0b6577a5d63bea22b35ba402069f8fe6ec29a9a1f0fe1ddda51fbacca9",
+      "osmBaseTimestamp": "2026-06-01T08:52:28Z"
+    },
+    {
+      "file": "district-2938032.json",
+      "url": "https://www.openstreetmap.org/api/0.6/relation/2938032/full.json",
+      "sha256": "df92c3e4fe4618d9f112abbb436fe861096ea0e949eaa5aa817093d95ac0abd2",
+      "osmBaseTimestamp": null
+    },
+    {
+      "file": "district-2939952.json",
+      "url": "https://www.openstreetmap.org/api/0.6/relation/2939952/full.json",
+      "sha256": "132627bea920e3f30415ce9539aa56410ba2b100059340ce9c5612df09d1546c",
+      "osmBaseTimestamp": null
+    }
+  ]
+}
