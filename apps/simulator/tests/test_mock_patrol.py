@@ -104,52 +104,6 @@ def test_every_gps_fix_sits_inside_the_right_of_way_at_its_intended_chainage() -
         assert gps["accuracyM"] > 0
 
 
-def test_kind_and_since_filter_the_list() -> None:
-    with TestClient(app) as client:
-        encroachments = client.get(URL, params={"kind": "encroachment"}).json()
-        assert [item["id"] for item in encroachments["items"]] == [
-            "SYN-PATROL-001",
-            "SYN-PATROL-004",
-        ]
-        assert encroachments["total"] == 2
-        recent = client.get(URL, params={"since": "2026-10-11T03:05:00Z"}).json()
-        # since is inclusive: the finding observed exactly then is returned.
-        assert [item["id"] for item in recent["items"]] == [
-            "SYN-PATROL-002",
-            "SYN-PATROL-003",
-            "SYN-PATROL-004",
-        ]
-        combined = client.get(
-            URL, params={"kind": "marker_damage", "since": "2026-10-10T00:00:00+07:00"}
-        ).json()
-        assert [item["id"] for item in combined["items"]] == ["SYN-PATROL-002"]
-        assert client.get(URL, params={"since": "2027-01-01T00:00:00Z"}).json()["items"] == []
-
-
-@pytest.mark.parametrize(
-    "params",
-    [
-        {"kind": "leak"},
-        {"kind": ""},
-        {"since": "not-a-date"},
-        {"since": "2026-10-11T03:00:00"},
-        {"since": "2026-02-31T00:00:00Z"},
-        {"since": "1760000000"},
-        {"since": "0001-01-01T00:00:00+05:00"},
-        {"since": "9999-12-31T23:59:59-05:00"},
-    ],
-)
-def test_invalid_queries_fail_as_problem_json(params: dict[str, str]) -> None:
-    with TestClient(app) as client:
-        response = client.get(URL, params=params)
-    assert response.status_code == 400
-    assert response.headers["content-type"].startswith("application/problem+json")
-    assert response.json()["code"] == "validation_failed"
-    for value in params.values():
-        if value:
-            assert value not in response.text
-
-
 @pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE", "TRACE", "CONNECT"])
 def test_writes_are_rejected_without_mutating_findings(method: str) -> None:
     with TestClient(app) as client:
@@ -266,9 +220,8 @@ def test_responses_match_the_canonical_wire_schema() -> None:
     schema = json.loads((ROOT / "packages/contracts/mock-patrol.v1.schema.json").read_text())
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
     with TestClient(app) as client:
-        for params in ({}, {"kind": "erosion"}, {"since": "2030-01-01T00:00:00Z"}):
-            validator.validate(client.get(URL, params=params).json())
         data = client.get(URL).json()
+    validator.validate(data)
     data["items"][0]["gps"]["latitude"] = 91
     with pytest.raises(ValidationError):
         validator.validate(data)
@@ -300,11 +253,11 @@ def test_internal_openapi_contract_documents_only_read_operations() -> None:
     path = contract["paths"]["/mock/patrol/findings"]
     assert set(path) == {"get"}
     operation = path["get"]
-    assert {p["name"] for p in operation["parameters"]} == {"kind", "since"}
+    assert "parameters" not in operation
     assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
         "$ref": "mock-patrol.v1.schema.json",
     }
-    for status in ("400", "405"):
+    for status in ("405",):
         assert operation["responses"][status]["content"]["application/problem+json"]["schema"] == {
             "$ref": "openapi.yaml#/components/schemas/Problem",
         }

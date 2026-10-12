@@ -124,12 +124,12 @@ publishers on Pub/Sub emulator" job.
 
 ## Mock patrol app (FL-143)
 
-`GET /mock/patrol/findings[?kind=<kind>][&since=<RFC 3339>]`
+`GET /mock/patrol/findings`
 
 Five authored right-of-way findings for DL-01, oldest first, each with a GPS fix.
-`kind` is `encroachment`, `marker_damage` or `erosion`; `since` is a
-timezone-aware RFC 3339 time and is inclusive. The filters combine; anything
-else is `400`. The list is small and bounded, so it is not paginated.
+`kind` is `encroachment`, `marker_damage` or `erosion`. The endpoint takes no
+parameters, as architecture §4.2 lists it, and the list is small and bounded, so
+it is not paginated.
 
 | Finding | Kind | Severity | Status | Observed (UTC) | Intended Chainage |
 | --- | --- | --- | --- | --- | --- |
