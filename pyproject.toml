@@ -7,7 +7,7 @@ requires-python = ">=3.12,<3.13"
 package = false
 
 [tool.uv.workspace]
-members = ["apps/assistant", "apps/simulator", "py/fieldloop_common"]
+members = ["apps/assistant", "apps/simulator", "py/fieldloop_common", "packages/adapters/python"]
 
 [dependency-groups]
 dev = [
@@ -22,7 +22,7 @@ dev = [
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-include = ["apps/assistant/**/*.py", "apps/simulator/**/*.py", "py/**/*.py"]
+include = ["apps/assistant/**/*.py", "apps/simulator/**/*.py", "py/**/*.py", "packages/adapters/python/**/*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
@@ -30,8 +30,8 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["apps/assistant/src", "apps/simulator/src", "py/fieldloop_common/src"]
+files = ["apps/assistant/src", "apps/simulator/src", "py/fieldloop_common/src", "packages/adapters/python/src"]
 
 [tool.pytest.ini_options]
-testpaths = ["apps/assistant/tests", "apps/simulator/tests", "py/fieldloop_common/tests"]
+testpaths = ["apps/assistant/tests", "apps/simulator/tests", "py/fieldloop_common/tests", "packages/adapters/python/tests"]
 addopts = "--import-mode=importlib"

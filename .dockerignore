@@ -25,6 +25,10 @@
 !packages/*/tsconfig.build.json
 !packages/*/src/
 !packages/*/src/**
+!packages/adapters/python/
+!packages/adapters/python/pyproject.toml
+!packages/adapters/python/src/
+!packages/adapters/python/src/**
 !packages/config/eslint.config.mjs
 !packages/config/vitest.config.ts
 !packages/config/turbo.json
