@@ -1,4 +1,5 @@
-import { GoogleCloudKmsEnvelopeKeyService, GoogleCloudSecretReader } from "@fieldloop/adapters";
+import { GoogleCloudKmsEnvelopeKeyService, GoogleCloudSecretReader, type LoadedDomainPack } from "@fieldloop/adapters";
+import { registerDomainPackRecords } from "../domain-packs.js";
 import { AuthError, BffAuthService, type AuthServicePort } from "./service.js";
 import { KmsEnvelopeCrypto } from "./envelope-crypto.js";
 import { SecretManagerInternalTokenService } from "./internal-tokens.js";
@@ -23,6 +24,7 @@ export class UnavailableAuthService implements AuthServicePort {
 export async function createProductionAuthRuntime(): Promise<{
   auth: AuthServicePort;
   close: () => Promise<void>;
+  registerPacks?: (packs: LoadedDomainPack[]) => Promise<void>;
 }> {
   const baseUrl = process.env["FIELDLOOP_BASE_URL"];
   const defaultOrgId = process.env["FIELDLOOP_DEFAULT_ORG_ID"];
@@ -37,7 +39,7 @@ export async function createProductionAuthRuntime(): Promise<{
       ? { instanceConnectionName: cloudSqlConnection, database: cloudSqlDatabase, user: cloudSqlUser }
       : undefined;
 
-  if (!baseUrl || !defaultOrgId || !kmsKeyName || !projectId || (!databaseUrl && !cloudSqlConfig)) {
+  if (!defaultOrgId || (!databaseUrl && !cloudSqlConfig)) {
     return { auth: new UnavailableAuthService(), close: async () => {} };
   }
 
@@ -47,6 +49,16 @@ export async function createProductionAuthRuntime(): Promise<{
       ? await createCloudSqlAuthDatabase(cloudSqlConfig)
       : undefined;
   if (!database) return { auth: new UnavailableAuthService(), close: async () => {} };
+  const packRuntime = {
+    registerPacks: (packs: LoadedDomainPack[]) => registerDomainPackRecords(database.db, defaultOrgId, packs),
+    close: async () => {
+      if ("close" in database && typeof database.close === "function") await database.close();
+      else await database.db.destroy();
+    },
+  };
+  if (!baseUrl || !kmsKeyName || !projectId) {
+    return { auth: new UnavailableAuthService(), ...packRuntime };
+  }
   const secrets = new GoogleCloudSecretReader(projectId);
   const oidc = new KeycloakOidcProvider(
     process.env["KEYCLOAK_ISSUER"] ?? "https://auth.example.com/realms/example-realm",
@@ -70,9 +82,6 @@ export async function createProductionAuthRuntime(): Promise<{
 
   return {
     auth,
-    close: async () => {
-      if ("close" in database && typeof database.close === "function") await database.close();
-      else await database.db.destroy();
-    },
+    ...packRuntime,
   };
 }

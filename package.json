@@ -21,7 +21,8 @@
     "db:migrate": "dbmate --migrations-table public.schema_migrations up",
     "test:migrations": "bash scripts/test-migrations.sh",
     "test:seed": "bash scripts/test-seed.sh",
-    "test:seed:bangkok": "bash scripts/test-bangkok-seed.sh"
+    "test:seed:bangkok": "bash scripts/test-bangkok-seed.sh",
+    "test:domain-packs": "pnpm exec turbo run build --filter=@fieldloop/api... && bash scripts/test-domain-packs.sh"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",
