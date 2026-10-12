@@ -1,0 +1,519 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fieldloop.kaotor.com/contracts/risk.v1.schema.json",
+  "title": "RiskContract",
+  "description": "Pure Risk Score calculation contracts (AS-3–AS-9). No API route, approval or persistent Health change is authorised. Frequency and severity inputs are calibrated by the Organisation.",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/RiskInput"
+    },
+    {
+      "$ref": "#/$defs/RiskSnapshot"
+    }
+  ],
+  "$defs": {
+    "RiskBand": {
+      "title": "RiskBand",
+      "type": "integer",
+      "enum": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    "BarrierHealth": {
+      "title": "BarrierHealth",
+      "type": "string",
+      "enum": [
+        "healthy",
+        "degraded",
+        "failed",
+        "unverified"
+      ]
+    },
+    "BarrierType": {
+      "title": "BarrierType",
+      "type": "string",
+      "enum": [
+        "technical",
+        "organisational",
+        "human"
+      ]
+    },
+    "BarrierSide": {
+      "title": "BarrierSide",
+      "type": "string",
+      "enum": [
+        "preventive",
+        "mitigative"
+      ]
+    },
+    "RiskZone": {
+      "title": "RiskZone",
+      "type": "string",
+      "enum": [
+        "green",
+        "amber",
+        "red"
+      ]
+    },
+    "RiskSeverity": {
+      "title": "RiskSeverity",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "people": {
+          "$ref": "#/$defs/RiskBand"
+        },
+        "environment": {
+          "$ref": "#/$defs/RiskBand"
+        },
+        "financial": {
+          "$ref": "#/$defs/RiskBand"
+        },
+        "serviceContinuity": {
+          "$ref": "#/$defs/RiskBand"
+        },
+        "reputation": {
+          "$ref": "#/$defs/RiskBand"
+        },
+        "legalRegulatory": {
+          "$ref": "#/$defs/RiskBand"
+        }
+      },
+      "minProperties": 1
+    },
+    "RiskBarrier": {
+      "title": "RiskBarrier",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "side",
+        "pfdBand",
+        "health"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "$ref": "#/$defs/BarrierType"
+        },
+        "side": {
+          "$ref": "#/$defs/BarrierSide"
+        },
+        "pfdBand": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "health": {
+          "$ref": "#/$defs/BarrierHealth"
+        },
+        "certified": {
+          "type": "boolean",
+          "description": "Explicit certification permits a Technical PFD below 0.01. The caller must verify the certification."
+        },
+        "independenceGroupId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceExpired": {
+          "type": "boolean",
+          "description": "Caller-supplied expiry of qualifying Evidence at an explicit evaluation time. Projects Healthy/Degraded to Unverified for calculation; never changes stored Health."
+        }
+      }
+    },
+    "RiskThreat": {
+      "title": "RiskThreat",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "frequencyPerYear"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "frequencyPerYear": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1.7976931348623157e+308
+        }
+      }
+    },
+    "RiskConsequence": {
+      "title": "RiskConsequence",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "conditionalProbability",
+        "severity"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conditionalProbability": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "severity": {
+          "$ref": "#/$defs/RiskSeverity"
+        }
+      }
+    },
+    "RiskPath": {
+      "title": "RiskPath",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "side",
+        "targetId",
+        "barrierIds"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "side": {
+          "$ref": "#/$defs/BarrierSide"
+        },
+        "targetId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "barrierIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "RiskMatrixCell": {
+      "title": "RiskMatrixCell",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "zone",
+        "rank"
+      ],
+      "properties": {
+        "zone": {
+          "$ref": "#/$defs/RiskZone"
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 25,
+          "description": "Organisation-defined ordering: larger is worse. Ties are resolved by severity, then frequency band."
+        }
+      }
+    },
+    "RiskMatrix": {
+      "title": "RiskMatrix",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "frequencyThresholds",
+        "cells"
+      ],
+      "properties": {
+        "frequencyThresholds": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 1.7976931348623157e+308
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "description": "Increasing lower bounds for bands 2–5. Exact thresholds enter the higher band."
+        },
+        "cells": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/RiskMatrixCell"
+            },
+            "minItems": 5,
+            "maxItems": 5
+          },
+          "minItems": 5,
+          "maxItems": 5,
+          "description": "Rows are frequency bands 1–5; columns are severity bands 1–5. Rank and zone must not improve as either band increases."
+        }
+      }
+    },
+    "RiskInput": {
+      "title": "RiskInput",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bowtieId",
+        "barriers",
+        "threats",
+        "consequences",
+        "independenceGroups",
+        "paths",
+        "matrix"
+      ],
+      "properties": {
+        "bowtieId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "barriers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RiskBarrier"
+          }
+        },
+        "threats": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RiskThreat"
+          },
+          "minItems": 1
+        },
+        "consequences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RiskConsequence"
+          },
+          "minItems": 1
+        },
+        "independenceGroups": {
+          "type": "array",
+          "items": {
+            "title": "RiskIndependenceGroup",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "paths": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RiskPath"
+          },
+          "minItems": 1
+        },
+        "matrix": {
+          "$ref": "#/$defs/RiskMatrix"
+        }
+      }
+    },
+    "RiskBarrierCredit": {
+      "title": "RiskBarrierCredit",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "barrierId",
+        "health",
+        "effectivePfd",
+        "credited"
+      ],
+      "properties": {
+        "barrierId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "health": {
+          "$ref": "#/$defs/BarrierHealth"
+        },
+        "effectivePfd": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "credited": {
+          "type": "boolean"
+        }
+      }
+    },
+    "RiskPathResult": {
+      "title": "RiskPathResult",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pathId",
+        "targetId",
+        "pfd",
+        "barriers"
+      ],
+      "properties": {
+        "pathId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "targetId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pfd": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "barriers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RiskBarrierCredit"
+          }
+        }
+      }
+    },
+    "RiskThreatResult": {
+      "title": "RiskThreatResult",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "threatId",
+        "frequencyPerYear",
+        "path"
+      ],
+      "properties": {
+        "threatId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "frequencyPerYear": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1.7976931348623157e+308
+        },
+        "path": {
+          "$ref": "#/$defs/RiskPathResult"
+        }
+      }
+    },
+    "RiskCell": {
+      "title": "RiskCell",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "frequencyBand",
+        "severityBand",
+        "zone",
+        "rank"
+      ],
+      "properties": {
+        "frequencyBand": {
+          "$ref": "#/$defs/RiskBand"
+        },
+        "severityBand": {
+          "$ref": "#/$defs/RiskBand"
+        },
+        "zone": {
+          "$ref": "#/$defs/RiskZone"
+        },
+        "rank": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 25
+        }
+      }
+    },
+    "RiskConsequenceResult": {
+      "title": "RiskConsequenceResult",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "consequenceId",
+        "frequencyPerYear",
+        "severityBand",
+        "path",
+        "cell"
+      ],
+      "properties": {
+        "consequenceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "frequencyPerYear": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1.7976931348623157e+308
+        },
+        "severityBand": {
+          "$ref": "#/$defs/RiskBand"
+        },
+        "path": {
+          "$ref": "#/$defs/RiskPathResult"
+        },
+        "cell": {
+          "$ref": "#/$defs/RiskCell"
+        }
+      }
+    },
+    "RiskSnapshot": {
+      "title": "RiskSnapshot",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bowtieId",
+        "topEventFrequencyPerYear",
+        "threats",
+        "consequences",
+        "worstConsequenceId",
+        "cell"
+      ],
+      "properties": {
+        "bowtieId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "topEventFrequencyPerYear": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1.7976931348623157e+308
+        },
+        "threats": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RiskThreatResult"
+          }
+        },
+        "consequences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RiskConsequenceResult"
+          }
+        },
+        "worstConsequenceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cell": {
+          "$ref": "#/$defs/RiskCell"
+        }
+      }
+    }
+  }
+}

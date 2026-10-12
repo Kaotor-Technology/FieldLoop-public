@@ -19,8 +19,9 @@
     "lint:openapi": "spectral lint openapi.yaml --ruleset .spectral.yaml --fail-severity warn",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "generate": "openapi-typescript openapi.yaml -o src/generated/api.ts && pnpm generate:signal",
-    "generate:signal": "node scripts/generate-signal.mjs"
+    "generate": "openapi-typescript openapi.yaml -o src/generated/api.ts && pnpm generate:signal && pnpm generate:risk",
+    "generate:signal": "node scripts/generate-signal.mjs",
+    "generate:risk": "node scripts/generate-risk.mjs"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",
