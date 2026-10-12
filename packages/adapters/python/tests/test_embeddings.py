@@ -68,3 +68,46 @@ def test_vertex_fails_closed_on_bad_response(response: types.EmbedContentRespons
 def test_invalid_vectors_are_rejected(vector: list[float]) -> None:
     with pytest.raises(ValueError):
         validate_embedding(vector)
+
+
+def test_actual_sdk_wire_contract_for_multilingual_vertex_model() -> None:
+    import json
+
+    import httpx
+
+    async def exercise() -> None:
+        requests: list[httpx.Request] = []
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(
+                200,
+                json={
+                    "predictions": [
+                        {"embeddings": {"values": [0.1] * 768, "statistics": {"truncated": False}}}
+                    ]
+                },
+            )
+
+        credentials = AnonymousCredentials()
+        credentials.token = "fixture"
+        async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as transport:
+            client = genai.Client(
+                vertexai=True,
+                project="fixture",
+                location="asia-southeast1",
+                credentials=credentials,
+                http_options=types.HttpOptions(httpx_async_client=transport),
+            )
+            adapter = VertexEmbeddings(client)
+            vectors = await adapter.embed(["การป้องกันการกัดกร่อน"], "RETRIEVAL_QUERY")
+            assert len(vectors[0]) == 768
+            assert requests[0].url.path.endswith("/text-multilingual-embedding-002:predict")
+            body = json.loads(requests[0].content)
+            assert body["instances"][0]["task_type"] == "RETRIEVAL_QUERY"
+            assert body["parameters"]["autoTruncate"] is False
+            assert body["parameters"]["outputDimensionality"] == 768
+            await client.aio.aclose()
+            client.close()
+
+    asyncio.run(exercise())
