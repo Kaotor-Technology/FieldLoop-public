@@ -28,3 +28,11 @@ def test_model_is_generated_and_schema_packaged() -> None:
     assert (ROOT / "packages/contracts/signal.v1.schema.json").read_bytes() == (
         ROOT / "py/fieldloop_common/src/fieldloop_common/signal.v1.schema.json"
     ).read_bytes()
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf"), json.loads("1e309")])
+def test_exported_validators_reject_nonfinite_observations(value: float) -> None:
+    signal = {**CASES[0]["signal"], "value": value}
+    assert not is_signal(signal)
+    with pytest.raises(ValidationError):
+        parse_signal(signal)

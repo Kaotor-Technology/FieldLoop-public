@@ -12,4 +12,10 @@ describe("signal.v1 shared wire cases (FL-148 / SIM-3)", () => {
     expect(isSignal(signal)).toBe(valid);
     expect(JSON.stringify(signal)).toBe(before);
   });
+
+  it.each([NaN, Infinity, -Infinity, JSON.parse("1e309")])("rejects nonfinite observations: %s", (value) => {
+    const signal = signalCases[0]?.signal;
+    if (!isSignal(signal)) throw new Error("Missing synthetic Signal fixture");
+    expect(isSignal({ ...signal, value })).toBe(false);
+  });
 });
