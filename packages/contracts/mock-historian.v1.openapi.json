@@ -31,12 +31,9 @@
             "required": true,
             "schema": {
               "type": "string",
-              "enum": [
-                "DL-01.pressure.line",
-                "DL-01.flow.line",
-                "DL-01.rectifier.output"
-              ]
-            }
+              "pattern": "^DL-01\\.[a-z0-9_]+(\\.[a-z0-9_]+)*$"
+            },
+            "description": "Served tags: DL-01.pressure.line, DL-01.flow.line and DL-01.rectifier.output. Any other tag is 404."
           },
           {
             "in": "query",

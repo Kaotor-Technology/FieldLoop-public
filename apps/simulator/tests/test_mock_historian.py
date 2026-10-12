@@ -23,9 +23,9 @@ def series_url(tag: str = RECTIFIER) -> str:
 @pytest.fixture
 def historian() -> Iterator[SimulatedHistorian]:
     instance = app.state.historian
-    instance.clear_overrides()
+    instance.reset()
     yield instance
-    instance.clear_overrides()
+    instance.reset()
 
 
 def test_series_is_a_deterministic_synthetic_read() -> None:
@@ -46,7 +46,7 @@ def test_series_is_a_deterministic_synthetic_read() -> None:
         assert data["to"] == "2026-10-12T00:05:00Z"
         assert data["intervalSeconds"] == 60
         assert data["total"] == len(data["points"]) == 6
-        assert [point["t"] for point in data["points"]] == [
+        assert [point["timestamp"] for point in data["points"]] == [
             f"2026-10-12T00:0{minute}:00Z" for minute in range(6)
         ]
         assert {point["quality"] for point in data["points"]} == {"good"}
@@ -68,8 +68,8 @@ def test_each_demo_a_tag_reports_its_unit_inside_a_synthetic_band(
         data = client.get(series_url(tag), params=window).json()
     assert data["unit"] == unit
     assert data["total"] == 1441
-    assert all(low <= point["v"] <= high for point in data["points"])
-    assert len({point["v"] for point in data["points"]}) > 100
+    assert all(low <= point["value"] <= high for point in data["points"])
+    assert len({point["value"] for point in data["points"]}) > 100
 
 
 def test_offset_and_lowercase_timestamps_match_the_utc_snapshot() -> None:
@@ -88,7 +88,7 @@ def test_points_follow_the_clock_grid_not_the_requested_start() -> None:
     window = {"from": "2026-10-12T00:00:30Z", "to": "2026-10-12T00:03:30Z"}
     with TestClient(app) as client:
         data = client.get(series_url(), params=window).json()
-    assert [point["t"] for point in data["points"]] == [
+    assert [point["timestamp"] for point in data["points"]] == [
         "2026-10-12T00:01:00Z",
         "2026-10-12T00:02:00Z",
         "2026-10-12T00:03:00Z",
@@ -137,7 +137,7 @@ def test_invalid_windows_fail_as_problem_json(params: dict[str, str]) -> None:
 def test_writes_are_rejected_without_mutating_the_series(method: str) -> None:
     with TestClient(app) as client:
         before = client.get(series_url(), params=WINDOW).json()
-        rejected = client.request(method, series_url(), json={"v": 0})
+        rejected = client.request(method, series_url(), json={"value": 0})
         assert rejected.status_code == 405
         assert rejected.headers["allow"] == "GET"
         assert rejected.headers["content-type"].startswith("application/problem+json")
@@ -152,36 +152,46 @@ def test_scenario_override_changes_reads_until_it_is_cleared(
     historian.add_override(RECTIFIER, start=datetime(2026, 10, 12, 0, 2, tzinfo=UTC), value=0.0)
     with TestClient(app) as client:
         failed = {
-            point["t"]: point["v"]
+            point["timestamp"]: point["value"]
             for point in client.get(series_url(), params=WINDOW).json()["points"]
         }
         assert failed["2026-10-12T00:01:00Z"] > 0
         assert failed["2026-10-12T00:02:00Z"] == 0
         assert failed["2026-10-12T00:05:00Z"] == 0
-        historian.clear_overrides()
+        historian.reset()
         restored = client.get(series_url(), params=WINDOW).json()["points"]
-    assert all(point["v"] > 0 for point in restored)
+    assert all(point["value"] > 0 for point in restored)
 
 
-def test_override_resolution_prefers_the_latest_start_and_honours_its_end() -> None:
+def test_the_latest_override_wins_and_a_tie_goes_to_the_last_added() -> None:
     historian = SimulatedHistorian(seed=1)
-    base = historian.value_at(RECTIFIER, datetime(2026, 10, 12, 1, tzinfo=UTC))
+    before = historian.value_at(RECTIFIER, datetime(2026, 10, 11, 23, tzinfo=UTC))
     historian.add_override(RECTIFIER, start=datetime(2026, 10, 12, 0, tzinfo=UTC), value=5.0)
-    historian.add_override(
-        RECTIFIER,
-        start=datetime(2026, 10, 12, 2, tzinfo=UTC),
-        end=datetime(2026, 10, 12, 4, tzinfo=UTC),
-        value=0.0,
-    )
-    assert historian.value_at(RECTIFIER, datetime(2026, 10, 11, 23, tzinfo=UTC)) != 5.0
+    historian.add_override(RECTIFIER, start=datetime(2026, 10, 12, 2, tzinfo=UTC), value=0.0)
+    historian.add_override(RECTIFIER, start=datetime(2026, 10, 12, 2, tzinfo=UTC), value=7.0)
+    assert historian.value_at(RECTIFIER, datetime(2026, 10, 11, 23, tzinfo=UTC)) == before
     assert historian.value_at(RECTIFIER, datetime(2026, 10, 12, 1, tzinfo=UTC)) == 5.0
-    assert historian.value_at(RECTIFIER, datetime(2026, 10, 12, 3, tzinfo=UTC)) == 0.0
-    assert historian.value_at(RECTIFIER, datetime(2026, 10, 12, 4, tzinfo=UTC)) == 5.0
-    assert base != 5.0
+    assert historian.value_at(RECTIFIER, datetime(2026, 10, 12, 2, tzinfo=UTC)) == 7.0
+    # An override holds until a reset: there is no end to hold it to.
+    assert historian.value_at(RECTIFIER, datetime(2026, 10, 13, 12, tzinfo=UTC)) == 7.0
     with pytest.raises(KeyError):
         historian.add_override("DL-01.unknown", start=datetime(2026, 10, 12, tzinfo=UTC), value=1)
     with pytest.raises(ValueError, match="timezone"):
         historian.add_override(RECTIFIER, start=datetime(2026, 10, 12), value=1)  # noqa: DTZ001
+
+
+def test_reset_forgets_overrides_and_can_take_the_seed_of_the_next_run() -> None:
+    at = datetime(2026, 10, 12, 6, 30, tzinfo=UTC)
+    historian = SimulatedHistorian(seed=7)
+    baseline = historian.value_at(RECTIFIER, at)
+    historian.add_override(RECTIFIER, start=at, value=0.0)
+    assert historian.value_at(RECTIFIER, at) == 0.0
+    historian.reset()
+    assert historian.value_at(RECTIFIER, at) == baseline
+    historian.reset(seed=8)
+    assert historian.seed == 8
+    assert historian.value_at(RECTIFIER, at) == SimulatedHistorian(seed=8).value_at(RECTIFIER, at)
+    assert historian.value_at(RECTIFIER, at) != baseline
 
 
 def test_reading_a_time_without_a_timezone_is_a_clear_error() -> None:
@@ -221,12 +231,6 @@ def test_override_rejects_values_that_are_not_finite(value: float) -> None:
         SimulatedHistorian().add_override(
             RECTIFIER, start=datetime(2026, 10, 12, tzinfo=UTC), value=value
         )
-
-
-def test_override_must_end_after_it_starts() -> None:
-    start = datetime(2026, 10, 12, tzinfo=UTC)
-    with pytest.raises(ValueError, match="end after"):
-        SimulatedHistorian().add_override(RECTIFIER, start=start, end=start, value=0.0)
 
 
 @pytest.mark.parametrize("org_id", ["", "-bad", "has space", "line\nbreak", "x" * 129])

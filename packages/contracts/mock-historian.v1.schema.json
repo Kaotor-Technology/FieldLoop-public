@@ -23,11 +23,8 @@
   "properties": {
     "tag": {
       "type": "string",
-      "enum": [
-        "DL-01.pressure.line",
-        "DL-01.flow.line",
-        "DL-01.rectifier.output"
-      ]
+      "pattern": "^DL-01\\.[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+      "description": "A DL-01 historian tag, such as DL-01.rectifier.output."
     },
     "unit": {
       "type": "string",
@@ -96,16 +93,16 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "t",
-        "v",
+        "timestamp",
+        "value",
         "quality"
       ],
       "properties": {
-        "t": {
+        "timestamp": {
           "type": "string",
           "format": "date-time"
         },
-        "v": {
+        "value": {
           "type": "number"
         },
         "quality": {

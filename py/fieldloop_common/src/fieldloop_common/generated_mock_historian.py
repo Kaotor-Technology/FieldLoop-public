@@ -12,8 +12,8 @@ class SeriesPoint(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    t: AwareDatetime
-    v: float
+    timestamp: AwareDatetime
+    value: float
     quality: Literal["good"]
 
 
@@ -21,7 +21,13 @@ class MockHistorianSeries(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
     )
-    tag: Literal["DL-01.pressure.line", "DL-01.flow.line", "DL-01.rectifier.output"]
+    tag: Annotated[
+        str,
+        Field(
+            description="A DL-01 historian tag, such as DL-01.rectifier.output.",
+            pattern="^DL-01\\.[a-z0-9_]+(\\.[a-z0-9_]+)*$",
+        ),
+    ]
     unit: Annotated[str, Field(max_length=64, min_length=1)]
     description: Annotated[str, Field(min_length=1)]
     from_: Annotated[

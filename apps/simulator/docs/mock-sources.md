@@ -62,7 +62,7 @@ The Scenario player (FL-74) changes it and publishes from the same process:
 
 ```python
 historian = app.state.historian
-# T+0: the rectifier output drops to zero until cleared.
+# T+0: the rectifier output drops to zero and stays there until the run is reset.
 historian.add_override("DL-01.rectifier.output", start=scenario_time, value=0.0)
 
 publisher = signal_publisher_from_environment(os.environ)  # when a run starts
@@ -70,9 +70,15 @@ emitter = SimulatedSignalEmitter(publisher, org_id=historian.org_id)
 await emitter.emit(historian.observe("DL-01.rectifier.output", scenario_time), run_id=run_id)
 ```
 
-- `add_override(tag, start, value, end=None)` holds a tag at `value` from `start`
-  (inclusive) to `end` (exclusive). The latest `start` wins. `clear_overrides()`
-  is the reset hook (SIM-5).
+- `add_override(tag, start, value)` holds a tag at `value` from `start` on. The
+  latest `start` wins; among equal starts the override added last does.
+  `reset(seed=None)` forgets every override and, given a seed, takes the next
+  run's seed (SIM-5). The seed is otherwise the default `DEMO_SEED`.
+- **One process.** Overrides are state of the running process, and so is
+  everything a Scenario player will hold. Terraform therefore caps the
+  `simulator` service at one instance; a second instance would answer reads
+  without the override. If the player ever needs more, its state has to move to a
+  shared store first.
 - The emitted Signal is `source: mock-historian`, `tag`, finite `value`, `unit`,
   `observedAt` in UTC, `simulated: true`, `classification: CONFIDENTIAL`, an
   optional `simulationRunId`, and `payload: {assetCode, label, quality}`. A

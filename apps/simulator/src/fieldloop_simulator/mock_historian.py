@@ -69,7 +69,6 @@ TAG_PROFILES: Mapping[str, TagProfile] = {
 @dataclass(frozen=True)
 class _Override:
     start: datetime
-    end: datetime | None
     value: float
 
 
@@ -82,32 +81,27 @@ class SimulatedHistorian:
     def profile(self, tag: str) -> TagProfile:
         return TAG_PROFILES[tag]
 
-    def add_override(
-        self, tag: str, *, start: datetime, value: float, end: datetime | None = None
-    ) -> None:
-        """Hold a tag at ``value`` from ``start`` (inclusive) until ``end`` (exclusive)."""
+    def add_override(self, tag: str, *, start: datetime, value: float) -> None:
+        """Hold a tag at ``value`` from ``start`` on, until the next reset."""
         if tag not in TAG_PROFILES:
             raise KeyError(tag)
-        if start.tzinfo is None or (end is not None and end.tzinfo is None):
+        if start.tzinfo is None:
             raise ValueError("Override times need a timezone")
-        if end is not None and end <= start:
-            raise ValueError("Override must end after it starts")
         if not math.isfinite(value):
             raise ValueError("Override value must be finite")
         # Copy on write: readers on other threads never see a half-updated list.
-        self._overrides[tag] = [*self._overrides.get(tag, []), _Override(start, end, float(value))]
+        self._overrides[tag] = [*self._overrides.get(tag, []), _Override(start, float(value))]
 
-    def clear_overrides(self) -> None:
+    def reset(self, seed: int | None = None) -> None:
+        """Forget every override, and take a new seed for the next run if one is given (SIM-5)."""
         self._overrides = {}
+        if seed is not None:
+            self.seed = seed
 
     def value_at(self, tag: str, at: datetime) -> float:
         if at.tzinfo is None:
             raise ValueError("Reading times need a timezone")
-        held = [
-            item
-            for item in self._overrides.get(tag, [])
-            if item.start <= at and (item.end is None or at < item.end)
-        ]
+        held = [item for item in self._overrides.get(tag, []) if item.start <= at]
         if held:
             # The latest start wins; among equal starts, the override added last.
             return max(reversed(held), key=lambda item: item.start).value
@@ -132,12 +126,43 @@ class SimulatedHistorian:
             payload={"assetCode": "DL-01", "label": "SYNTHETIC", "quality": "good"},
         )
 
-    def series(self, tag: str, start: datetime, end: datetime) -> list[tuple[datetime, float]]:
-        """Samples on the UTC clock grid inside ``start``..``end`` inclusive."""
+    def read(self, tag: str, start: datetime, end: datetime) -> MockHistorianSeries:
+        """The series as the API serves it: samples on the UTC clock grid, ends inclusive.
+
+        ``KeyError`` for an unknown tag and ``ValueError`` for a window that is empty, runs
+        backwards or is longer than 24 hours.
+        """
+        profile = TAG_PROFILES[tag]
+        if end <= start or end - start > MAX_WINDOW:
+            raise ValueError("The window must be positive and at most 24 hours")
         first = -((_EPOCH - start) // SAMPLE_INTERVAL)
         last = (end - _EPOCH) // SAMPLE_INTERVAL
-        times = [_EPOCH + index * SAMPLE_INTERVAL for index in range(first, last + 1)]
-        return [(at, self.value_at(tag, at)) for at in times]
+        points = [
+            {
+                "timestamp": at,
+                "value": self.value_at(tag, at),
+                "quality": "good",
+            }
+            for at in (_EPOCH + index * SAMPLE_INTERVAL for index in range(first, last + 1))
+        ]
+        return MockHistorianSeries.model_validate(
+            {
+                "tag": tag,
+                "unit": profile.unit,
+                "description": profile.description,
+                "from": start,
+                "to": end,
+                "intervalSeconds": int(SAMPLE_INTERVAL.total_seconds()),
+                "points": points,
+                "total": len(points),
+                "source": SOURCE_ID,
+                "orgId": self.org_id,
+                "assetCode": "DL-01",
+                "label": "SYNTHETIC",
+                "simulated": True,
+                "classification": CLASSIFICATION,
+            }
+        )
 
 
 router = APIRouter(prefix="/mock/historian", tags=["mock-historian"])
@@ -153,29 +178,9 @@ def read_tag(
     end: Annotated[Rfc3339, Query(alias="to")],
     historian: Annotated[SimulatedHistorian, Depends(get_historian)],
 ) -> MockHistorianSeries | JSONResponse:
-    if tag not in TAG_PROFILES:
+    try:
+        return historian.read(tag, start, end)
+    except KeyError:
         return problem(404, "Unknown historian tag", "not_found")
-    if end <= start or end - start > MAX_WINDOW:
+    except ValueError:
         return problem(400, "Invalid historian window", "validation_failed")
-    profile = historian.profile(tag)
-    points = [
-        {"t": at, "v": value, "quality": "good"} for at, value in historian.series(tag, start, end)
-    ]
-    return MockHistorianSeries.model_validate(
-        {
-            "tag": tag,
-            "unit": profile.unit,
-            "description": profile.description,
-            "from": start,
-            "to": end,
-            "intervalSeconds": int(SAMPLE_INTERVAL.total_seconds()),
-            "points": points,
-            "total": len(points),
-            "source": SOURCE_ID,
-            "orgId": historian.org_id,
-            "assetCode": "DL-01",
-            "label": "SYNTHETIC",
-            "simulated": True,
-            "classification": CLASSIFICATION,
-        }
-    )
