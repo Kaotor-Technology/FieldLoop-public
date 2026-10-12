@@ -6,7 +6,7 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("source", choices=("historian",))
+parser.add_argument("source", choices=("historian", "patrol"))
 parser.add_argument("--output", type=Path)
 args = parser.parse_args()
 output = args.output or (

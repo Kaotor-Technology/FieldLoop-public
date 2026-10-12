@@ -1,0 +1,106 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FieldLoop internal mock patrol app",
+    "version": "1.0.0",
+    "description": "Synthetic read-only simulator endpoint from architecture section 4.2. Not a web-api/BFF endpoint. Run behind Cloud Run invoker IAM in dev/demo; local reads need no credentials. No real patrol-app connector, no write operation and no Signal publication."
+  },
+  "tags": [
+    {
+      "name": "mock-patrol",
+      "description": "Internal SYNTHETIC findings"
+    }
+  ],
+  "security": [
+    {
+      "serviceIdentity": []
+    }
+  ],
+  "paths": {
+    "/mock/patrol/findings": {
+      "get": {
+        "operationId": "listMockPatrolFindings",
+        "description": "Return the deterministic synthetic right-of-way findings for DL-01, oldest first, each with a GPS fix. Optional filters narrow by kind and by observation time. This bounded internal fixture list is not the paginated public platform list API.",
+        "tags": [
+          "mock-patrol"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "description": "Only findings of this kind.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "encroachment",
+                "marker_damage",
+                "erosion"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "description": "Timezone-aware RFC 3339 time; only findings observed at or after it.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deterministic synthetic findings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "mock-patrol.v1.schema.json"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query; code validation_failed, input values are not echoed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Only GET is allowed; code validation_failed. No state mutation.",
+            "headers": {
+              "Allow": {
+                "schema": {
+                  "type": "string",
+                  "const": "GET"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "serviceIdentity": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Google OIDC",
+        "description": "Verified by Cloud Run invoker IAM, not proxy headers. The handler does not implement browser auth or independently validate IAM."
+      }
+    }
+  }
+}
