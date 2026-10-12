@@ -15,6 +15,19 @@ These copies do not certify subsequent amendments or a consolidated current
 legal opinion. A person must check legal currency and text-extraction quality
 before using them in the demo.
 
+### Known extraction limitation (FL-65 review)
+
+The Water Resources native-text snapshot contains unmapped private-use glyphs
+and replacement characters, including whole unreadable lines. The Energy
+Industry snapshot also contains font-specific private-use marks. Matching a
+SHA-256 proves byte identity, not searchable text quality. These snapshots are
+not approved indexing inputs: FL-70 must hold affected text out of retrieval
+until source-PDF comparison, font mapping/re-extraction and human verification
+are complete. Do not silently rewrite immutable text or storage bindings, or
+treat the retained original PDF as proof that the extracted text is usable.
+OCR remains outside FL-65 scope; any OCR or revised snapshot requires its own
+reviewed change and refreshed provenance/handoff.
+
 Eight flagged Thai records remain `status unverified`, metadata-only, without
 source URIs. The ETDA draft reference remains `draft` and metadata-only; this
 batch does not substitute its press release for the draft legal instrument.
