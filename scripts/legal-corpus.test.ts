@@ -20,6 +20,10 @@ type LegalRecord = {
   reviewRequired: boolean;
   simulated: boolean;
   classification: string;
+  revision: string;
+  legalStatus: string;
+  contentSha256?: string;
+  sourceSha256?: string;
   contentPath: string | null;
   contentState: string;
 };
@@ -27,7 +31,7 @@ type LegalManifest = { recordCount: number; records: LegalRecord[] };
 
 const repositoryRoot = resolve(".");
 const manifestFile = resolve("data/corpus/legal/manifest.json");
-const seeder = resolve("data/corpus/legal/seed.mjs");
+const seeder = resolve("db/seed/legal-corpus/seed.mjs");
 
 function readManifest(): LegalManifest {
   return JSON.parse(readFileSync(manifestFile, "utf8")) as LegalManifest;
@@ -45,7 +49,7 @@ function runSeedTransaction(failAt: number, zeroRowsAt = 0): TransactionResult {
   // Exercise Kysely's PostgreSQL driver without connecting to a database.
   const script = `
     import { Kysely, PostgresDialect } from 'kysely';
-    import { loadSeed, readManifest } from './data/corpus/legal/seed.mjs';
+    import { loadSeed, readManifest } from './db/seed/legal-corpus/seed.mjs';
     const queries = [];
     let connections = 0, releases = 0, ended = false, error = null;
     const client = {
@@ -64,7 +68,16 @@ function runSeedTransaction(failAt: number, zeroRowsAt = 0): TransactionResult {
     };
     const database = new Kysely({ dialect: new PostgresDialect({ pool }) });
     try {
-      await loadSeed(database, readManifest(), "demo'pipeline");
+      const manifest = readManifest();
+      const storage = { bucket: 'fixture-docs', records: manifest.records.filter(r => r.contentPath).map(r => ({
+        documentKey: r.documentKey, revision: r.revision, contentSha256: r.contentSha256,
+        sourceSha256: r.sourceSha256,
+        textBlobUri: 'gs://fixture-docs/legal/' + r.documentKey + '/' + r.contentSha256 + '/text',
+        blobUri: r.sourceSha256
+          ? 'gs://fixture-docs/legal/' + r.documentKey + '/' + r.sourceSha256 + '/source.pdf'
+          : 'gs://fixture-docs/legal/' + r.documentKey + '/' + r.contentSha256 + '/text',
+      })) };
+      await loadSeed(database, manifest, "demo'pipeline", storage);
     } catch (failure) {
       error = failure.message;
     } finally {
@@ -90,6 +103,16 @@ function validationError(manifest: LegalManifest): string {
 }
 
 describe("legal corpus manifest and Controlled Document loader", () => {
+  it("uses lifecycle statuses separately from legal force and stages text for all current records", () => {
+    const manifest = readManifest();
+    expect(manifest.records.filter((record) => record.status === "current")).toHaveLength(9);
+    for (const record of manifest.records) {
+      expect(["current", "superseded", "withdrawn", "draft", "status unverified"]).toContain(record.status);
+      expect(record.legalStatus).toBeTruthy();
+      if (record.status === "current") expect(record.contentState).toBe("full_text_snapshot");
+    }
+  });
+
   it("contains the 16 Thai research records and both requested CFR parts", () => {
     const manifest = readManifest();
 
@@ -160,10 +183,10 @@ describe("legal corpus manifest and Controlled Document loader", () => {
       }
       // Only a record that is still unverified takes its status from the manifest.
       expect(updateClause).toContain(
-        '"status" = case when "controlled_document"."status" = $13 then "excluded"."status" else "controlled_document"."status" end',
+        '"status" = case when "controlled_document"."status" in ($13, $14, $15) then "excluded"."status" else "controlled_document"."status" end',
       );
-      expect(query.parameters[12]).toBe("status unverified");
-      expect(updateClause).not.toContain('"blob_uri"');
+      expect(query.parameters).toContain("status unverified");
+      expect(updateClause).toContain('"blob_uri" = coalesce');
       expect(updateClause).not.toContain('"superseded_by"');
     }
 
@@ -178,7 +201,7 @@ describe("legal corpus manifest and Controlled Document loader", () => {
     if (!flagged) {
       throw new Error("Expected at least one flagged legal record.");
     }
-    flagged.status = "in force";
+    flagged.status = "current";
     flagged.contentPath = "documents/incorrectly-current.xml";
     flagged.contentState = "full_text_snapshot";
 

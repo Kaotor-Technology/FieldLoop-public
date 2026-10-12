@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { Storage, type SaveOptions } from "@google-cloud/storage";
+import type { SaveOptions } from "@google-cloud/storage";
 import type { BlobStore } from "./blob-store.js";
 
 interface BlobFile {
@@ -11,7 +11,8 @@ interface StorageClient {
   bucket(name: string): { file(name: string): BlobFile };
 }
 
-export function createGoogleCloudBlobStore(bucket: string): BlobStore {
+export async function createGoogleCloudBlobStore(bucket: string): Promise<BlobStore> {
+  const { Storage } = await import("@google-cloud/storage");
   return new GoogleCloudBlobStore(new Storage(), bucket);
 }
 

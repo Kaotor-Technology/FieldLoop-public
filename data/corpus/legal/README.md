@@ -1,40 +1,73 @@
-# Legal source records for the Knowledge Library
+# Legal source snapshots for the Knowledge Library
 
-`manifest.json` contains 16 Thai legal or planning records and the two
-requested 49 CFR parts. It records source links, revision, status, folder,
-classification, licence note and whether a full text snapshot is present.
+`manifest.json` lists 16 Thai legal/planning records and 49 CFR Parts 192/195.
+`status` is the document lifecycle (`current`, `superseded`, `withdrawn`, `draft`,
+or the required `status unverified` exception). `legalStatus` records the
+research label separately, such as `in force` or `current plan period`.
 
-The Thai records are metadata-only in this batch. Items marked `status
-unverified` remain in that status and have no body file. The Thai-law research
-note calls out these items for human status review. Other Thai statuses reflect
-that research note and linked agency sources; they are not a consolidated legal
-opinion. The ETDA item is explicitly a draft. Legal text reuse rights should be
-confirmed before copying or publishing the Thai material.
+Nine current records have source snapshots: seven Thai PDFs captured on
+12 October 2026, and two CFR XML snapshots dated 6 October 2026. The Thai `.txt`
+files retain native PDF text and PDF page boundaries. No OCR was performed;
+figures and scanned-only content remain in the original PDFs in the private
+object store. The Water Resources source is the ONWR July 2023 compilation,
+including subordinate legislation; its source pages are compilation pages.
+These copies do not certify subsequent amendments or a consolidated current
+legal opinion. A person must check legal currency and text-extraction quality
+before using them in the demo.
 
-The 49 CFR Part 192 and Part 195 files are extracted from the official GovInfo
-current eCFR Title 49 XML snapshot updated 2026-10-06. They are full XML
-documents, with the source URL and snapshot date stored in the manifest. ASME
-and API standards named by reference remain outside this corpus. The records
-can be seeded into `controlled_document` without connecting to a database by
-running:
+Eight flagged Thai records remain `status unverified`, metadata-only, without
+source URIs. The ETDA draft reference remains `draft` and metadata-only; this
+batch does not substitute its press release for the draft legal instrument.
+ASME/API copyrighted text is not ingested.
+
+## Upload immutable sources
+
+Build the adapters first, then upload to the existing private docs bucket:
 
 ```sh
-node data/corpus/legal/seed.mjs --print-sql --org-id demo-pipeline
+pnpm exec turbo run build --filter=@fieldloop/adapters...
+node db/seed/legal-corpus/upload.mjs \
+  --bucket example-project-fieldloop-dev-docs \
+  --output data/corpus/legal/storage/dev.json
 ```
 
-The seed creates metadata records. `blob_uri` remains null because this repo
-has no object-storage uploader; the full-text XML remains in this directory
-until a deployment uploads it to the approved document store. The FL-70 indexer
-owns chunk creation and retrieval indexing. Do not mark a Thai item current
-until its status and source text have been reviewed by a person.
+For demo, substitute `fieldloop-demo-docs` and `storage/demo.json`. The uploader
+checks source SHA-256, uses create-only content-addressed objects, downloads
+stored bytes to verify them, and emits the handoff only after every source
+succeeds. `--source-directory <directory>` uses verified cached PDFs named
+`<documentKey>.pdf`, avoiding government-site availability during reruns.
+It never creates a bucket or grants public access. Credentials use ADC.
 
-Re-running the seed refreshes source metadata while preserving the
-`superseded_by` link and `blob_uri` once a person or storage step has set them.
-A record that is still `status unverified` takes its status from the manifest,
-so a verified status recorded there reaches the database on the next run. Any
-other stored status is kept. A changed revision is rejected transactionally;
-create a new document key and supersede the old record through the document
-workflow. This prevents a new revision label from pointing to an old blob.
+## Load Controlled Documents
 
-Source links point to public agencies only. Do not link to an Organisation's
-website.
+```sh
+node db/seed/legal-corpus/seed.mjs --print-sql --org-id fieldloop-demo \
+  --storage-manifest data/corpus/legal/storage/dev.json
+
+FIELDLOOP_ORG_ID=fieldloop-demo FIELDLOOP_DATABASE_URL=<postgres-url> \
+  node db/seed/legal-corpus/seed.mjs \
+  --storage-manifest data/corpus/legal/storage/dev.json
+```
+
+A real load requires a complete storage handoff matching source hashes,
+revision and URI. Use the manifest of the same environment as the database.
+Seed reruns preserve human-managed lifecycle status, supersession and existing
+source bindings. Legacy `in force` / `current plan period` labels are migrated
+to lifecycle status. Changing a revision or replacing its existing source is
+rejected and rolls back every write. A new revision needs a new document key
+and the normal supersession workflow.
+
+The dev/demo database load runs through the project's migration-identity job
+workflow after merge; do not retrieve the migration secret on a workstation.
+Object-store handoffs do not prove a Cloud SQL load or retrieval/indexing.
+FL-70 owns chunk creation and indexing, using `textBlobUri` for native text and
+`blobUri` for the original source. Source URLs, legal labels, PDF page metadata
+and SHA-256 values remain in the versioned corpus manifest.
+
+## Verification
+
+- `pnpm test` covers manifest, storage binding, upload failure and review hashes.
+- `pnpm test:seed:legal` uses isolated PostgreSQL 16 with the current migrations
+  to check reruns, source URIs, revision rollback and human lifecycle preservation.
+- Storage reports under `storage/` contain no credentials and can be inspected
+  without querying a database. They record uploads, not human legal verification.
