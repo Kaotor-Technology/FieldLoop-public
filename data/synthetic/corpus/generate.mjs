@@ -798,6 +798,9 @@ function outputDirectoryFromArgs(args) {
 async function main() {
   const outputDir = outputDirectoryFromArgs(process.argv.slice(2));
   const manifest = await writeCorpus(outputDir);
+  if (manifest.documentCount < 200 || manifest.documentCount > 300) {
+    process.stdout.write(`Delivery target unmet: ${manifest.documentCount} retained documents; requires 200–300 after removals. Human review remains required.\n`);
+  }
   process.stdout.write(`Wrote ${manifest.documentCount} synthetic documents to ${outputDir} (${manifest.review.pending} pending human review, ${manifest.review.passed} passed, ${manifest.review.failedAndRemoved} failed and removed).\n`);
 }
 

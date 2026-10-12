@@ -232,6 +232,27 @@ describe("synthetic document corpus generator", () => {
     }
   });
 
+  it.each([40, 41])("diagnoses the retained delivery-count boundary after %i fixture failures", (failedCount) => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    const failures = Object.fromEntries(readManifest(directory).documents.slice(0, failedCount).map(({ documentId }) => [
+      documentId, ["Fixture reviewer", "fail", "2026-10-12", "Test only"],
+    ]));
+    recordDecisions(directory, failures);
+    const result = execFileSync(process.execPath, [generator, "--output-dir", directory], {
+      cwd: repositoryRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    });
+    const manifest = readManifest(directory);
+    expect(manifest.documentCount).toBe(240 - failedCount);
+    expect(manifest.review.failedAndRemoved).toBe(failedCount);
+    expect(readdirSync(join(directory, "documents"))).toHaveLength(240 - failedCount);
+    if (failedCount === 41) {
+      expect(result).toContain("Delivery target unmet: 199 retained documents; requires 200–300 after removals. Human review remains required.");
+    } else {
+      expect(result).not.toContain("Delivery target unmet");
+    }
+  });
+
   it("keeps recorded review decisions and removes failed documents on a rerun", () => {
     const directory = temporaryDirectory();
     generateInto(directory);
