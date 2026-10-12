@@ -19,7 +19,8 @@
     "lint:openapi": "spectral lint openapi.yaml --ruleset .spectral.yaml --fail-severity warn",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "generate": "openapi-typescript openapi.yaml -o src/generated/api.ts && pnpm generate:signal",
+    "generate": "openapi-typescript openapi.yaml -o src/generated/api.ts && pnpm generate:signal && pnpm generate:domain-packs",
+    "generate:domain-packs": "node scripts/generate-domain-packs.mjs",
     "generate:signal": "node scripts/generate-signal.mjs"
   },
   "devDependencies": {
