@@ -1,0 +1,205 @@
+import { expect, test } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+
+test.beforeEach(async ({ page }) => { await page.goto("/ui-preview.html"); });
+
+for (const theme of ["light", "dark"] as const) {
+  for (const width of [390, 1280]) {
+    test(`components pass axe in ${theme} at ${width} with keyboard-operable portals`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
+      await expect(page.getByRole("heading", { name: "FieldLoop component library" })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      const audit = async () => expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+      await audit();
+      await page.getByRole("combobox", { name: "Evidence type", exact: true }).click();
+      await audit();
+      await page.keyboard.press("Escape");
+      await page.getByRole("button", { name: "Source", exact: true }).click();
+      await audit();
+      await page.keyboard.press("Escape");
+      await page.getByRole("button", { name: "Sources", exact: true }).click();
+      await audit();
+      await page.keyboard.press("Escape");
+      await page.getByRole("button", { name: "Open modal", exact: true }).click();
+      await audit();
+      await page.keyboard.press("Escape");
+      await page.getByRole("button", { name: "Open approval layout" }).click();
+      await audit();
+      await page.keyboard.press("Escape");
+      for (const variant of ["info", "success", "warning", "error"]) {
+        await page.getByRole("button", { name: `Show ${variant}`, exact: true }).click();
+        await expect(page.getByText(`${variant}: SYNTHETIC preview notification`, { exact: true })).toBeVisible();
+        // Keep the live notification visible while axe inspects it; timing has its own test.
+        await page.getByText(`${variant}: SYNTHETIC preview notification`, { exact: true }).hover();
+        await audit();
+        await page.getByRole("button", { name: "Dismiss notification" }).click();
+      }
+      await page.getByRole("button", { name: "ภาษาไทย", exact: true }).click();
+      await expect(page.locator("html")).toHaveAttribute("lang", "th");
+      await audit();
+      await page.getByRole("button", { name: "English", exact: true }).click();
+      await page.evaluate(() => scrollTo(0, 0));
+      await page.screenshot({ path: `e2e/evidence/ui-kit-${theme}-${width}.png` });
+    });
+  }
+}
+
+test("forms link errors and selects support keyboard search and multi-selection", async ({ page }) => {
+  const reason = page.getByRole("textbox", { name: "Required reason" });
+  await expect(reason).toHaveAttribute("aria-invalid", "true");
+  await expect(reason).toHaveAccessibleDescription("Enter a reason.");
+  const select = page.getByRole("combobox", { name: "Evidence type", exact: true });
+  await select.focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByRole("option", { name: "Evidence", exact: true })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.getByRole("option", { name: "Barrier", exact: true })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(select).toHaveText(/Barrier/);
+  await expect(select).toBeFocused();
+  await expect(page.locator("#root")).not.toHaveAttribute("inert", "");
+  const source = page.getByRole("button", { name: "Source", exact: true });
+  await source.click();
+  const search = page.getByRole("combobox", { name: "Search options" });
+  await expect(search).toBeFocused();
+  await search.fill("zzzz");
+  await expect(page.getByRole("status").filter({ hasText: "No matching options" })).toBeVisible();
+  await search.press("ArrowDown");
+  await search.fill("water");
+  await search.press("Enter");
+  await expect(source).toHaveText(/Water level/);
+  await expect(source).toBeFocused();
+  await page.getByRole("button", { name: "Sources", exact: true }).click();
+  await page.getByRole("textbox", { name: "Search options" }).fill("rain");
+  await page.getByRole("checkbox", { name: "Rain", exact: true }).check();
+  await page.getByRole("textbox", { name: "Search options" }).fill("pump");
+  await page.getByRole("checkbox", { name: "Pump", exact: true }).check();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Sources", exact: true })).toHaveText(/Rain, Pump/);
+});
+
+test("tabs skip disabled items, modal traps and restores focus, approval layout ignores scrim and Enter", async ({ page }) => {
+  const evidence = page.getByRole("tab", { name: "Evidence", exact: true });
+  await evidence.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByRole("tab", { name: "History", exact: true })).toBeFocused();
+  await expect(page.getByRole("tab", { name: "History", exact: true })).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowRight");
+  await expect(evidence).toBeFocused();
+  const trigger = page.getByRole("button", { name: "Open approval layout" });
+  await trigger.click();
+  const dialog = page.getByRole("dialog", { name: "Consequential action layout" });
+  await expect(dialog.getByRole("heading")).toBeFocused();
+  await dialog.getByRole("textbox", { name: "Action reason" }).fill("Synthetic reason");
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Activate preview action" }).focus();
+  await page.keyboard.press("Tab");
+  await expect(dialog.getByRole("textbox")).toBeFocused();
+  await page.mouse.click(5, 5);
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+});
+
+test("toast timing pauses on hover and warnings persist until dismissed", async ({ page }) => {
+  await page.clock.install();
+  await page.getByRole("button", { name: "Show info", exact: true }).click();
+  const info = page.getByText("info: SYNTHETIC preview notification", { exact: true });
+  await info.hover();
+  await page.clock.fastForward(7000);
+  await expect(info).toBeVisible();
+  await page.mouse.move(0, 0);
+  await page.clock.fastForward(6100);
+  await expect(info).not.toBeVisible();
+  await page.getByRole("button", { name: "Show warning", exact: true }).click();
+  await page.mouse.move(0, 0);
+  await page.clock.fastForward(60000);
+  await expect(page.getByText("warning: SYNTHETIC preview notification", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Dismiss notification" }).click();
+  await expect(page.getByText("warning: SYNTHETIC preview notification", { exact: true })).not.toBeVisible();
+});
+
+test("markers are reachable by keyboard and reduced motion, Thai text and narrow layouts remain usable", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const marker = page.getByRole("button", { name: "failed Barrier marker", exact: true });
+  await marker.focus();
+  await marker.press("Enter");
+  await expect(page.getByRole("status").filter({ hasText: "Selected failed" })).toBeVisible();
+  expect(await marker.locator("span").evaluate(element => getComputedStyle(element).animationName)).toBe("none");
+  expect(await page.locator(".fl-skeleton > span").first().evaluate(element => getComputedStyle(element).animationName)).toBe("none");
+  await page.getByRole("button", { name: "ภาษาไทย", exact: true }).click();
+  const thai = page.getByRole("textbox", { name: "หมายเหตุ" });
+  const style = await thai.evaluate(element => { const css = getComputedStyle(element); return { lineHeight: parseFloat(css.lineHeight) / parseFloat(css.fontSize), spacing: css.letterSpacing }; });
+  expect(style.lineHeight).toBeGreaterThanOrEqual(1.5);
+  expect(["normal", "0px"]).toContain(style.spacing);
+  for (const width of [320, 640]) {
+    await page.setViewportSize({ width, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  expect((await marker.boundingBox())?.width).toBeGreaterThanOrEqual(44);
+  expect((await page.getByRole("button", { name: "Field button" }).boundingBox())?.height).toBeGreaterThanOrEqual(48);
+});
+
+test("system theme follows OS and manual light mode overrides it", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  const readCanvas = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const dark = await readCanvas();
+  await page.getByRole("button", { name: "Night shift" }).click();
+  await page.getByRole("button", { name: "Night shift" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  expect(await readCanvas()).not.toBe(dark);
+});
+
+test("Select nested in a modal restores the active dialog", async ({ page }) => {
+  await page.getByRole("button", { name: "Open modal", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Inspect Evidence", exact: true });
+  const select = dialog.getByRole("combobox", { name: "Modal category", exact: true });
+  await select.click();
+  await expect(page.getByRole("option", { name: "Evidence", exact: true })).toBeFocused();
+  expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+  await page.getByRole("option", { name: "Barrier", exact: true }).click();
+  await expect(select).toHaveText(/Barrier/);
+  await expect(select).toBeFocused();
+  await select.click();
+  await expect(page.getByRole("option", { name: "Barrier", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(select).toBeFocused();
+  await expect(dialog).toBeVisible();
+  await expect(dialog).not.toHaveAttribute("inert", "");
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Open modal", exact: true })).toBeFocused();
+});
+
+test.describe("touch devices", () => {
+  test.use({ hasTouch: true, viewport: { width: 390, height: 900 } });
+  test("compact controls preserve 44-unit targets and field controls preserve 48-unit targets", async ({ page }) => {
+    for (const name of ["Compact button", "View Evidence", "Night shift"]) {
+      expect((await page.getByRole("button", { name, exact: true }).boundingBox())?.height).toBeGreaterThanOrEqual(44);
+    }
+    expect((await page.getByRole("button", { name: "Field button", exact: true }).boundingBox())?.height).toBeGreaterThanOrEqual(48);
+    expect((await page.getByRole("textbox", { name: "Field input", exact: true }).boundingBox())?.height).toBeGreaterThanOrEqual(48);
+  });
+});
+
+test("disabled variants retain disabled colours in both themes and expose a visible focus ring", async ({ page }) => {
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
+    await expect.poll(() => page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches)).toBe(colorScheme === "dark");
+    for (const variant of ["secondary", "ghost", "danger"]) {
+      const button = page.getByRole("button", { name: `Unavailable ${variant}`, exact: true });
+      await expect(button).toBeDisabled();
+    }
+    await expect.poll(() => page.evaluate(() => {
+      const colors = Array.from(document.querySelectorAll('.fl-button:disabled:not([aria-busy="true"])')).map(element => { const css = getComputedStyle(element); return `${css.backgroundColor}|${css.color}`; });
+      return colors.length === 4 && new Set(colors).size === 1;
+    })).toBe(true);
+    const button = page.getByRole("button", { name: "View Evidence", exact: true });
+    await button.focus();
+    const focus = await button.evaluate(element => { const css = getComputedStyle(element); return { style: css.outlineStyle, width: parseFloat(css.outlineWidth) }; });
+    expect(focus.style).toBe("solid");
+    expect(focus.width).toBeGreaterThan(0);
+  }
+});
