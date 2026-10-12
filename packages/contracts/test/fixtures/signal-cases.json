@@ -592,5 +592,140 @@
       "simulated": true,
       "classification": "CONFIDENTIAL"
     }
+  },
+  {
+    "name": "orgId trailing LF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo\n",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "orgId trailing CR",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo\r",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "orgId trailing CRLF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo\r\n",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "source trailing LF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian\n",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "source trailing CR",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian\r",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "source trailing CRLF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian\r\n",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "tag trailing LF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output\n",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "tag trailing CR",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output\r",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "tag trailing CRLF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output\r\n",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
   }
 ]
