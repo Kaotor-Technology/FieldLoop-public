@@ -37,6 +37,7 @@ export async function uploadCorpus(store, bucket, manifest = readManifest(), sou
       blobUri = await store.put(`legal/${record.documentKey}/${record.sourceSha256}/source.pdf`, bytes, "application/pdf");
     }
     records.push({ documentKey: record.documentKey, revision: record.revision, contentSha256: record.contentSha256,
+      indexingEligibility: record.indexingEligibility,
       ...(record.sourceSha256 ? { sourceSha256: record.sourceSha256 } : {}), blobUri, textBlobUri });
   }
   return { schemaVersion: 1, bucket, records };

@@ -26,6 +26,8 @@ type LegalRecord = {
   sourceSha256?: string;
   contentPath: string | null;
   contentState: string;
+  indexingEligibility: string;
+  indexingHoldReason?: string;
 };
 type LegalManifest = { recordCount: number; records: LegalRecord[] };
 
@@ -71,6 +73,7 @@ function runSeedTransaction(failAt: number, zeroRowsAt = 0): TransactionResult {
       const manifest = readManifest();
       const storage = { bucket: 'fixture-docs', records: manifest.records.filter(r => r.contentPath).map(r => ({
         documentKey: r.documentKey, revision: r.revision, contentSha256: r.contentSha256,
+        indexingEligibility: r.indexingEligibility,
         sourceSha256: r.sourceSha256,
         textBlobUri: 'gs://fixture-docs/legal/' + r.documentKey + '/' + r.contentSha256 + '/text',
         blobUri: r.sourceSha256
@@ -103,9 +106,50 @@ function validationError(manifest: LegalManifest): string {
 }
 
 describe("legal corpus manifest and Controlled Document loader", () => {
+  it("quarantines every snapshot containing unmapped or replacement glyphs", () => {
+    const manifest = readManifest();
+    const quarantined = manifest.records.filter((record) => record.indexingEligibility === "quarantined");
+    expect(quarantined.map((record) => record.documentKey).sort()).toEqual([
+      "TH-BANGKOK-DISASTER-PLAN-2564-2570", "TH-ENERGY-INDUSTRY-2550",
+      "TH-NATIONAL-DISASTER-PLAN-2564-2570", "TH-WATER-RESOURCES-2561",
+    ]);
+    for (const record of quarantined) {
+      expect(record.status).toBe("draft");
+      expect(record.indexingHoldReason).toBeTruthy();
+    }
+  });
+
+  it("rejects missing eligibility and promotion of corrupted native text", () => {
+    const missing = readManifest();
+    delete (missing.records[0] as Partial<LegalRecord>).indexingEligibility;
+    expect(validationError(missing)).toContain("indexingEligibility");
+    const corrupted = readManifest();
+    const water = corrupted.records.find((record) => record.documentKey === "TH-WATER-RESOURCES-2561");
+    if (!water) throw new Error("Expected the Water Resources source.");
+    water.indexingEligibility = "eligible";
+    water.status = "current";
+    expect(validationError(corrupted)).toContain("unmapped or replacement glyphs");
+  });
+
+  it.each(["dev", "demo"])("exports only eligible current text for %s indexing", (environment) => {
+    const handoff = JSON.parse(execFileSync(process.execPath, [
+      seeder, "--print-indexing-handoff", "--org-id", "legal-fixture",
+      "--storage-manifest", `data/corpus/legal/storage/${environment}.json`,
+    ], { cwd: repositoryRoot, encoding: "utf8" })) as {
+      records: { documentKey: string; textBlobUri: string }[];
+    };
+    expect(handoff.records).toHaveLength(5);
+    const manifest = readManifest();
+    for (const entry of handoff.records) {
+      expect(manifest.records.find((record) => record.documentKey === entry.documentKey))
+        .toMatchObject({ status: "current", indexingEligibility: "eligible" });
+      expect(entry.textBlobUri).toContain(`fieldloop-${environment}-docs/legal/`);
+    }
+  });
+
   it("uses lifecycle statuses separately from legal force and stages text for all current records", () => {
     const manifest = readManifest();
-    expect(manifest.records.filter((record) => record.status === "current")).toHaveLength(9);
+    expect(manifest.records.filter((record) => record.status === "current")).toHaveLength(5);
     for (const record of manifest.records) {
       expect(["current", "superseded", "withdrawn", "draft", "status unverified"]).toContain(record.status);
       expect(record.legalStatus).toBeTruthy();
@@ -170,7 +214,7 @@ describe("legal corpus manifest and Controlled Document loader", () => {
     const queries = previewSeed("demo'pipeline");
 
     expect(queries).toHaveLength(manifest.recordCount);
-    for (const query of queries) {
+    for (const [index, query] of queries.entries()) {
       expect(query.sql).toContain('"app"."controlled_document"');
       expect(query.sql).toContain("on conflict");
       expect(query.parameters).toContain("demo'pipeline");
@@ -181,10 +225,15 @@ describe("legal corpus manifest and Controlled Document loader", () => {
       if (!updateClause) {
         throw new Error("Seed query must update metadata on conflict.");
       }
-      // Only a record that is still unverified takes its status from the manifest.
-      expect(updateClause).toContain(
-        '"status" = case when "controlled_document"."status" in ($13, $14, $15) then "excluded"."status" else "controlled_document"."status" end',
-      );
+      if (manifest.records[index]?.indexingEligibility === "quarantined") {
+        expect(updateClause).toMatch(/"status" = case when "controlled_document"\."status" = \$\d+ then \$\d+ when "controlled_document"\."status" in/);
+        expect(query.parameters).toContain("current");
+        expect(query.parameters).toContain("draft");
+      } else {
+        expect(updateClause).toContain(
+          '"status" = case when "controlled_document"."status" in ($13, $14, $15) then "excluded"."status" else "controlled_document"."status" end',
+        );
+      }
       expect(query.parameters).toContain("status unverified");
       expect(updateClause).toContain('"blob_uri" = coalesce');
       expect(updateClause).not.toContain('"superseded_by"');

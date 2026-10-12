@@ -5,7 +5,7 @@
 or the required `status unverified` exception). `legalStatus` records the
 research label separately, such as `in force` or `current plan period`.
 
-Nine current records have source snapshots: seven Thai PDFs captured on
+Nine records have source snapshots (five current, four quarantined drafts): seven Thai PDFs captured on
 12 October 2026, and two CFR XML snapshots dated 6 October 2026. The Thai `.txt`
 files retain native PDF text and PDF page boundaries. No OCR was performed;
 figures and scanned-only content remain in the original PDFs in the private
@@ -19,11 +19,16 @@ before using them in the demo.
 
 The Water Resources native-text snapshot contains unmapped private-use glyphs
 and replacement characters, including whole unreadable lines. The Energy
-Industry snapshot also contains font-specific private-use marks. Matching a
-SHA-256 proves byte identity, not searchable text quality. These snapshots are
-not approved indexing inputs: FL-70 must hold affected text out of retrieval
-until source-PDF comparison, font mapping/re-extraction and human verification
-are complete. Do not silently rewrite immutable text or storage bindings, or
+Industry, national disaster plan and Bangkok disaster plan snapshots also contain
+private-use marks. Matching a SHA-256 proves byte identity, not searchable text
+quality. These four snapshots have `indexingEligibility: quarantined`, an
+`indexingHoldReason` and lifecycle `draft`. The loader retracts previously
+`current` records to `draft` while preserving withdrawn/superseded decisions.
+Their original PDFs, text bytes, revisions, hashes and object URIs are retained.
+They must remain outside retrieval until source-PDF comparison, font
+mapping/re-extraction and human verification are complete. An `eligible` text
+containing private-use or replacement characters is rejected by validation.
+Do not silently rewrite immutable text or storage bindings, or
 treat the retained original PDF as proof that the extracted text is usable.
 OCR remains outside FL-65 scope; any OCR or revised snapshot requires its own
 reviewed change and refreshed provenance/handoff.
@@ -64,7 +69,7 @@ FIELDLOOP_ORG_ID=fieldloop-demo FIELDLOOP_DATABASE_URL=<postgres-url> \
 
 A real load requires a complete storage handoff matching source hashes,
 revision and URI. Use the manifest of the same environment as the database.
-Seed reruns preserve human-managed lifecycle status, supersession and existing
+Seed reruns preserve human-managed withdrawn/superseded status, supersession and existing
 source bindings. Legacy `in force` / `current plan period` labels are migrated
 to lifecycle status. Changing a revision or replacing its existing source is
 rejected and rolls back every write. A new revision needs a new document key
@@ -73,8 +78,20 @@ and the normal supersession workflow.
 The dev/demo database load runs through the project's migration-identity job
 workflow after merge; do not retrieve the migration secret on a workstation.
 Object-store handoffs do not prove a Cloud SQL load or retrieval/indexing.
-FL-70 owns chunk creation and indexing, using `textBlobUri` for native text and
-`blobUri` for the original source. Source URLs, legal labels, PDF page metadata
+FL-70 owns chunk creation and indexing. Export its input with:
+
+```sh
+node db/seed/legal-corpus/seed.mjs --print-indexing-handoff --org-id fieldloop-demo \
+  --storage-manifest data/corpus/legal/storage/demo.json > /tmp/legal-indexing-demo.json
+```
+
+This read-only command validates provenance and emits only `current` / `eligible`
+native-text inputs (five in this batch). Use the matching environment report.
+Raw storage reports include quarantined artifacts for provenance and must not
+be used as indexing input. Before chunking, FL-70 must also check that each
+`documentId` is still `current` in the target Organisation's database, preserving
+subsequent human lifecycle changes. Eligibility is not human legal approval.
+Source URLs, legal labels, PDF page metadata
 and SHA-256 values remain in the versioned corpus manifest.
 
 ## Verification

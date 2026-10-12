@@ -29,9 +29,18 @@ try {
   const rows = () => database.selectFrom("app.controlled_document").selectAll().orderBy("id").execute();
   const loaded = await rows();
   assert.equal(loaded.length, 18);
-  assert.equal(loaded.filter((row) => row.status === "current").length, 9);
+  assert.equal(loaded.filter((row) => row.status === "current").length, 5);
   assert.equal(loaded.filter((row) => row.blob_uri !== null).length, 9);
   assert.equal(loaded.filter((row) => row.status === "status unverified" && row.blob_uri === null).length, 8);
+
+  // Reproduce a previous load that admitted text before the quality hold existed.
+  const water = manifest.records.find((record) => record.documentKey === "TH-WATER-RESOURCES-2561");
+  const waterRow = loaded.find((row) => row.title.includes(water.titleEn));
+  assert.ok(waterRow);
+  await database.updateTable("app.controlled_document").set({ status: "current" }).where("id", "=", waterRow.id).execute();
+  await loadSeed(database, manifest, "legal-fixture", storage);
+  assert.deepEqual(await rows(), loaded);
+  assert.equal(loaded.filter((row) => row.status === "draft" && row.blob_uri !== null).length, 4);
 
   const changed = structuredClone(manifest), changedStorage = structuredClone(storage);
   changed.records[0].titleEn = "Changed fixture title that must roll back";
@@ -43,7 +52,7 @@ try {
   await database.updateTable("app.controlled_document").set({ status: "withdrawn" }).where("id", "=", loaded[0].id).execute();
   await loadSeed(database, manifest, "legal-fixture", storage);
   assert.equal((await database.selectFrom("app.controlled_document").select("status").where("id", "=", loaded[0].id).executeTakeFirstOrThrow()).status, "withdrawn");
-  console.log("Legal seed: 18 records, 9 current source URIs, rerun, revision rollback and human lifecycle preservation passed.");
+  console.log("Legal seed: 18 records, 9 stored sources, 5 current, 4 quarantined drafts; current-text retraction, rerun, revision rollback and human lifecycle preservation passed.");
 } finally {
   if (database) await database.destroy();
   try { docker("rm", "-f", container); } catch { /* The container may not have started. */ }

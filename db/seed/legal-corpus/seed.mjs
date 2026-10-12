@@ -11,6 +11,7 @@ const CREATED_BY = "seed:fl-65-legal-corpus";
 const STATUS_UNVERIFIED = "status unverified";
 const CONTENT_FULL_TEXT = "full_text_snapshot";
 const CONTENT_METADATA_ONLY = "metadata_only";
+const UNMAPPED_GLYPHS = /[\uE000-\uF8FF\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}\uFFFD]/u;
 
 export function readManifest() {
   return JSON.parse(readFileSync(MANIFEST_URL, "utf8"));
@@ -70,6 +71,17 @@ export function validateManifest(manifest) {
     if (record.contentState !== CONTENT_FULL_TEXT && record.contentState !== CONTENT_METADATA_ONLY) {
       throw new Error(`Legal corpus record ${record.documentKey} has an unknown contentState.`);
     }
+    if (!["eligible", "quarantined", "metadata_only"].includes(record.indexingEligibility)) {
+      throw new Error(`Legal corpus record ${record.documentKey} requires a valid indexingEligibility.`);
+    }
+    if ((record.contentState === CONTENT_METADATA_ONLY && record.indexingEligibility !== "metadata_only")
+      || (record.contentState === CONTENT_FULL_TEXT && record.indexingEligibility === "metadata_only")) {
+      throw new Error(`Indexing eligibility does not match contentState for ${record.documentKey}.`);
+    }
+    if (record.indexingEligibility === "quarantined") {
+      requireString(record.indexingHoldReason, `record.${record.documentKey}.indexingHoldReason`);
+      if (record.status === "current") throw new Error(`Quarantined text ${record.documentKey} cannot be current.`);
+    }
     if (record.status === "current" && record.contentState !== CONTENT_FULL_TEXT) {
       throw new Error(`Current record ${record.documentKey} requires a full source snapshot.`);
     }
@@ -88,6 +100,9 @@ export function validateManifest(manifest) {
       const bytes = readFileSync(new URL(record.contentPath, MANIFEST_URL));
       if (createHash("sha256").update(bytes).digest("hex") !== record.contentSha256) {
         throw new Error(`Source content hash mismatch for ${record.documentKey}.`);
+      }
+      if (record.indexingEligibility === "eligible" && UNMAPPED_GLYPHS.test(bytes.toString("utf8"))) {
+        throw new Error(`Eligible text ${record.documentKey} contains unmapped or replacement glyphs.`);
       }
     }
     if (record.contentState === CONTENT_METADATA_ONLY && record.contentPath !== null) {
@@ -111,7 +126,8 @@ export function validateStorage(manifest, storage) {
       ? `gs://${storage.bucket}/legal/${record.documentKey}/${record.sourceSha256}/source.pdf` : textUri;
     if (!record || record.contentState !== CONTENT_FULL_TEXT || blob.revision !== record.revision
       || blob.contentSha256 !== record.contentSha256 || (record.sourceSha256 && blob.sourceSha256 !== record.sourceSha256)
-      || blob.blobUri !== sourceUri || blob.textBlobUri !== textUri) {
+      || blob.blobUri !== sourceUri || blob.textBlobUri !== textUri
+      || blob.indexingEligibility !== record.indexingEligibility) {
       throw new Error(`Storage binding mismatch for ${blob.documentKey}.`);
     }
     blobs.set(blob.documentKey, blob);
@@ -122,6 +138,17 @@ export function validateStorage(manifest, storage) {
     }
   }
   return blobs;
+}
+
+/** Storage provenance is not permission to index every retained snapshot. */
+export function buildIndexingHandoff(manifest, storage, orgId) {
+  requireString(orgId, "orgId");
+  const blobs = validateStorage(manifest, storage);
+  return { schemaVersion: 1, orgId, bucket: storage.bucket, records: manifest.records
+    .filter((record) => record.status === "current" && record.indexingEligibility === "eligible")
+    .map((record) => ({ documentKey: record.documentKey, documentId: databaseId(orgId, record.documentKey),
+      revision: record.revision, contentSha256: record.contentSha256,
+      textBlobUri: blobs.get(record.documentKey).textBlobUri })) };
 }
 
 function deterministicUuid(name) {
@@ -170,10 +197,10 @@ export function buildSeedQueries(database, manifest, orgId, storage = null) {
       title: expression.ref("excluded.title"),
       revision: expression.ref("excluded.revision"),
       blob_uri: expression.fn.coalesce("controlled_document.blob_uri", "excluded.blob_uri"),
-      // Preserve lifecycle decisions; migrate legacy legal-force labels.
-      // Only unverified records follow subsequent manifest verification.
-      status: expression
-        .case()
+      // A quality hold retracts current text; preserve withdrawn/superseded decisions.
+      status: (record.indexingEligibility === "quarantined"
+        ? expression.case().when("controlled_document.status", "=", "current").then("draft")
+        : expression.case())
         .when("controlled_document.status", "in", [STATUS_UNVERIFIED, "in force", "current plan period"])
         .then(expression.ref("excluded.status"))
         .else(expression.ref("controlled_document.status"))
@@ -220,11 +247,13 @@ function validateConnectionString(connectionString) {
 }
 
 function parseArguments(argumentsList) {
-  const options = { printSql: false, orgId: undefined, storageManifest: undefined, help: false };
+  const options = { printSql: false, printIndexingHandoff: false, orgId: undefined, storageManifest: undefined, help: false };
   for (let index = 0; index < argumentsList.length; index += 1) {
     const argument = argumentsList[index];
     if (argument === "--print-sql") {
       options.printSql = true;
+    } else if (argument === "--print-indexing-handoff") {
+      options.printIndexingHandoff = true;
     } else if (argument === "--org-id") {
       const value = argumentsList[index + 1];
       if (!value || value.startsWith("--")) {
@@ -242,6 +271,7 @@ function parseArguments(argumentsList) {
       throw new Error(`Unknown argument: ${argument}`);
     }
   }
+  if (options.printSql && options.printIndexingHandoff) throw new Error("Choose one output mode.");
   return options;
 }
 
@@ -250,6 +280,7 @@ function printUsage() {
     "Usage:",
     "  FIELDLOOP_ORG_ID=<org-id> FIELDLOOP_DATABASE_URL=<postgres-url> node db/seed/legal-corpus/seed.mjs",
     "  node db/seed/legal-corpus/seed.mjs --print-sql --org-id <org-id>",
+    "  node db/seed/legal-corpus/seed.mjs --print-indexing-handoff --org-id <org-id> --storage-manifest <file>",
     "",
   ].join("\n"));
 }
@@ -267,6 +298,10 @@ async function main() {
   const manifest = validateManifest(readManifest());
   const storagePath = options.storageManifest ?? process.env.FIELDLOOP_STORAGE_MANIFEST;
   const storage = storagePath ? JSON.parse(readFileSync(storagePath, "utf8")) : null;
+  if (options.printIndexingHandoff) {
+    process.stdout.write(`${JSON.stringify(buildIndexingHandoff(manifest, storage, orgId), null, 2)}\n`);
+    return;
+  }
   const databaseUrl = process.env.FIELDLOOP_DATABASE_URL;
   if (!options.printSql && !databaseUrl) {
     throw new Error("Set FIELDLOOP_DATABASE_URL to the target database before loading the seed.");

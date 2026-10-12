@@ -30,7 +30,8 @@
       "sourcePages": 25,
       "capturedAt": "2026-10-12",
       "extraction": "Native PDF text, page boundaries retained; no OCR. Original PDF is stored alongside this text snapshot.",
-      "contentSha256": "f17590de19dd4c5a49551b8ef3145ff993693e59d9207f66f74023de1ba58ee7"
+      "contentSha256": "f17590de19dd4c5a49551b8ef3145ff993693e59d9207f66f74023de1ba58ee7",
+      "indexingEligibility": "eligible"
     },
     {
       "documentKey": "TH-GAS-PIPELINE-REGULATION-2556",
@@ -51,7 +52,8 @@
       ],
       "contentPath": null,
       "contentState": "metadata_only",
-      "legalStatus": "status unverified"
+      "legalStatus": "status unverified",
+      "indexingEligibility": "metadata_only"
     },
     {
       "documentKey": "TH-ENERGY-INDUSTRY-2550",
@@ -60,7 +62,7 @@
       "titleEn": "Energy Industry Act B.E. 2550",
       "documentType": "act",
       "revision": "B.E. 2550",
-      "status": "current",
+      "status": "draft",
       "statusBasis": "The Energy Regulatory Commission publishes this Act in its legal-resource collection; consolidated amendment text was not captured in this batch. Lifecycle status is separate from legalStatus; this snapshot does not certify subsequent amendments.",
       "reviewRequired": false,
       "folder": "Regulatory/Thailand",
@@ -79,7 +81,9 @@
       "sourcePages": 53,
       "capturedAt": "2026-10-12",
       "extraction": "Native PDF text, page boundaries retained; no OCR. Original PDF is stored alongside this text snapshot.",
-      "contentSha256": "88dab340173f2ac6d4093fcff2774e1ec6a20f77a81e392fde98acfc7964d93a"
+      "contentSha256": "88dab340173f2ac6d4093fcff2774e1ec6a20f77a81e392fde98acfc7964d93a",
+      "indexingEligibility": "quarantined",
+      "indexingHoldReason": "Native PDF text contains unmapped private-use glyphs. Hold until PDF comparison, font mapping/re-extraction and human verification."
     },
     {
       "documentKey": "TH-OCCUPATIONAL-SAFETY-2554",
@@ -100,7 +104,8 @@
       ],
       "contentPath": null,
       "contentState": "metadata_only",
-      "legalStatus": "status unverified"
+      "legalStatus": "status unverified",
+      "indexingEligibility": "metadata_only"
     },
     {
       "documentKey": "TH-ENVIRONMENT-QUALITY-2535",
@@ -121,7 +126,8 @@
       ],
       "contentPath": null,
       "contentState": "metadata_only",
-      "legalStatus": "status unverified"
+      "legalStatus": "status unverified",
+      "indexingEligibility": "metadata_only"
     },
     {
       "documentKey": "TH-HIGHWAY-2535",
@@ -142,7 +148,8 @@
       ],
       "contentPath": null,
       "contentState": "metadata_only",
-      "legalStatus": "status unverified"
+      "legalStatus": "status unverified",
+      "indexingEligibility": "metadata_only"
     },
     {
       "documentKey": "TH-CYBERSECURITY-2562",
@@ -163,7 +170,8 @@
       ],
       "contentPath": null,
       "contentState": "metadata_only",
-      "legalStatus": "status unverified"
+      "legalStatus": "status unverified",
+      "indexingEligibility": "metadata_only"
     },
     {
       "documentKey": "TH-PDPA-2562",
@@ -190,7 +198,8 @@
       "sourcePages": 44,
       "capturedAt": "2026-10-12",
       "extraction": "Native PDF text, page boundaries retained; no OCR. Original PDF is stored alongside this text snapshot.",
-      "contentSha256": "8d2f87a1962a21b66af5b44edb2c3fc089b3940b4be517002694e04ba49e1c76"
+      "contentSha256": "8d2f87a1962a21b66af5b44edb2c3fc089b3940b4be517002694e04ba49e1c76",
+      "indexingEligibility": "eligible"
     },
     {
       "documentKey": "TH-ELECTRONIC-TRANSACTIONS-2544",
@@ -212,7 +221,8 @@
       ],
       "contentPath": null,
       "contentState": "metadata_only",
-      "legalStatus": "status unverified"
+      "legalStatus": "status unverified",
+      "indexingEligibility": "metadata_only"
     },
     {
       "documentKey": "TH-ETDA-AI-DRAFT",
@@ -233,7 +243,8 @@
       ],
       "contentPath": null,
       "contentState": "metadata_only",
-      "legalStatus": "draft"
+      "legalStatus": "draft",
+      "indexingEligibility": "metadata_only"
     },
     {
       "documentKey": "TH-DISASTER-PREVENTION-2550",
@@ -254,7 +265,8 @@
       ],
       "contentPath": null,
       "contentState": "metadata_only",
-      "legalStatus": "status unverified"
+      "legalStatus": "status unverified",
+      "indexingEligibility": "metadata_only"
     },
     {
       "documentKey": "TH-NATIONAL-DISASTER-PLAN-2564-2570",
@@ -263,7 +275,7 @@
       "titleEn": "National Disaster Prevention and Mitigation Plan 2021–2027",
       "documentType": "plan",
       "revision": "B.E. 2564–2570",
-      "status": "current",
+      "status": "draft",
       "statusBasis": "The Department of Disaster Prevention and Mitigation catalog identifies the 2564–2570 plan as the national master plan. Native text is captured in this batch and the original PDF is referenced by the private storage handoff. Lifecycle status is separate from legalStatus; legal currency, consolidation and extraction quality still require human verification.",
       "reviewRequired": false,
       "folder": "Regulatory/Thailand/Plans",
@@ -282,7 +294,9 @@
       "sourcePages": 259,
       "capturedAt": "2026-10-12",
       "extraction": "Native PDF text, page boundaries retained; no OCR. Original PDF is stored alongside this text snapshot.",
-      "contentSha256": "1aab2f8b65acd16d362e6dea0ff1b55a20cda541e67b7ab99ae005c59b46e520"
+      "contentSha256": "1aab2f8b65acd16d362e6dea0ff1b55a20cda541e67b7ab99ae005c59b46e520",
+      "indexingEligibility": "quarantined",
+      "indexingHoldReason": "Native PDF text contains private-use glyphs. Hold until PDF comparison, font mapping/re-extraction and human verification."
     },
     {
       "documentKey": "TH-BANGKOK-DISASTER-PLAN-2564-2570",
@@ -291,7 +305,7 @@
       "titleEn": "Bangkok Disaster Prevention and Mitigation Plan 2021–2027",
       "documentType": "plan",
       "revision": "B.E. 2564–2570",
-      "status": "current",
+      "status": "draft",
       "statusBasis": "Bangkok Metropolitan Administration source identifies the plan period. Native text is captured in this batch and the original PDF is referenced by the private storage handoff, not committed to the repository. Lifecycle status is separate from legalStatus; legal currency, consolidation and extraction quality still require human verification.",
       "reviewRequired": false,
       "folder": "Regulatory/Thailand/Plans",
@@ -309,7 +323,9 @@
       "sourcePages": 142,
       "capturedAt": "2026-10-12",
       "extraction": "Native PDF text, page boundaries retained; no OCR. Original PDF is stored alongside this text snapshot.",
-      "contentSha256": "05f4f00d6f0016122ffa84f873677814bcfd06fc70f19b03d046badbf7187c3f"
+      "contentSha256": "05f4f00d6f0016122ffa84f873677814bcfd06fc70f19b03d046badbf7187c3f",
+      "indexingEligibility": "quarantined",
+      "indexingHoldReason": "Native PDF text contains private-use glyphs. Hold until PDF comparison, font mapping/re-extraction and human verification."
     },
     {
       "documentKey": "TH-WATER-RESOURCES-2561",
@@ -318,7 +334,7 @@
       "titleEn": "Water Resources Act B.E. 2561",
       "documentType": "act",
       "revision": "B.E. 2561",
-      "status": "current",
+      "status": "draft",
       "statusBasis": "The Department of Water Resources legal collection is linked; consolidated amendment text was not captured in this batch. Lifecycle status is separate from legalStatus; this snapshot does not certify subsequent amendments.",
       "reviewRequired": false,
       "folder": "Regulatory/Thailand",
@@ -337,7 +353,9 @@
       "sourcePages": 272,
       "capturedAt": "2026-10-12",
       "extraction": "Native PDF text, page boundaries retained; no OCR. Original PDF is stored alongside this text snapshot.",
-      "contentSha256": "516a40e02de7c700b17769f93d999d5ec46cad97dbb9626684a5aba7f687d647"
+      "contentSha256": "516a40e02de7c700b17769f93d999d5ec46cad97dbb9626684a5aba7f687d647",
+      "indexingEligibility": "quarantined",
+      "indexingHoldReason": "Native PDF text contains unmapped private-use glyphs and replacement characters. Hold until PDF comparison, font mapping/re-extraction and human verification."
     },
     {
       "documentKey": "TH-BANGKOK-ADMINISTRATION-2528",
@@ -359,7 +377,8 @@
       ],
       "contentPath": null,
       "contentState": "metadata_only",
-      "legalStatus": "status unverified"
+      "legalStatus": "status unverified",
+      "indexingEligibility": "metadata_only"
     },
     {
       "documentKey": "TH-TOWN-PLANNING-2562",
@@ -387,7 +406,8 @@
       "sourcePages": 44,
       "capturedAt": "2026-10-12",
       "extraction": "Native PDF text, page boundaries retained; no OCR. Original PDF is stored alongside this text snapshot.",
-      "contentSha256": "46b9e051caa51d435d54326e5ca9dfc18692ca28a63353eb5629051a59333a02"
+      "contentSha256": "46b9e051caa51d435d54326e5ca9dfc18692ca28a63353eb5629051a59333a02",
+      "indexingEligibility": "eligible"
     },
     {
       "documentKey": "US-49-CFR-192",
@@ -410,7 +430,8 @@
       "contentPath": "documents/49-cfr-part-192.xml",
       "contentState": "full_text_snapshot",
       "legalStatus": "in force",
-      "contentSha256": "d7f30ef02911a249f37ef165b706326214fa832ba3a06f79cdcfed52a65422c2"
+      "contentSha256": "d7f30ef02911a249f37ef165b706326214fa832ba3a06f79cdcfed52a65422c2",
+      "indexingEligibility": "eligible"
     },
     {
       "documentKey": "US-49-CFR-195",
@@ -433,7 +454,8 @@
       "contentPath": "documents/49-cfr-part-195.xml",
       "contentState": "full_text_snapshot",
       "legalStatus": "in force",
-      "contentSha256": "427cfcab1eb637fa9447570f6a24653b0308042854ceb4a2aef6033205b9bbc4"
+      "contentSha256": "427cfcab1eb637fa9447570f6a24653b0308042854ceb4a2aef6033205b9bbc4",
+      "indexingEligibility": "eligible"
     }
   ]
 }

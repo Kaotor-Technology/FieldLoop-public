@@ -21,6 +21,7 @@ function runCase(mode: string) {
       report = await uploadCorpus(store, 'fixture-docs', manifest);
       if (process.argv[1] === 'revision') report.records[0].revision = 'wrong revision';
       if (process.argv[1] === 'hash') report.records[0].contentSha256 = 'wrong hash';
+      if (process.argv[1] === 'eligibility') report.records[0].indexingEligibility = 'quarantined';
       if (process.argv[1] === 'missing') report.records.pop();
       validateStorage(manifest, report);
     } catch (failure) { error = failure.message; }
@@ -41,7 +42,7 @@ describe("legal source storage handoff", () => {
     expect(result.report?.records).toHaveLength(2);
   });
 
-  it.each(["revision", "hash", "missing"])("rejects a %s mismatch before DB loading", (mode) => {
+  it.each(["revision", "hash", "eligibility", "missing"])("rejects a %s mismatch before DB loading", (mode) => {
     expect(runCase(mode).error).toMatch(/mismatch|Missing stored full text/);
   });
 
