@@ -13,13 +13,14 @@ export interface ModalProps {
   closeLabel?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  lang?: string;
 }
 
-export function Modal({ trigger, title, description, children, footer, approval = false, closeLabel = "Cancel", open, onOpenChange }: ModalProps) {
+export function Modal({ trigger, title, description, children, footer, approval = false, closeLabel = "Cancel", open, onOpenChange, lang }: ModalProps) {
   const heading = useRef<HTMLHeadingElement>(null);
   return <Dialog.Root open={open} onOpenChange={onOpenChange}>
     <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>
-    <Dialog.Portal><Dialog.Overlay className="fl-scrim" /><Dialog.Content className="fl-modal" data-approval={approval || undefined}
+    <Dialog.Portal><Dialog.Overlay className="fl-scrim" /><Dialog.Content className="fl-modal" lang={lang} data-approval={approval || undefined}
       onOpenAutoFocus={event => { event.preventDefault(); heading.current?.focus(); }}
       onPointerDownOutside={event => { if (approval) event.preventDefault(); }}
       onInteractOutside={event => { if (approval) event.preventDefault(); }}

@@ -15,11 +15,12 @@ export interface ToastProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   closeLabel?: string;
+  lang?: string;
   action?: { label: string; altText: string; onClick: () => void };
 }
 
-export function Toast({ variant, message, open, onOpenChange, closeLabel = "Dismiss notification", action }: ToastProps) {
-  return <Primitive.Root className="fl-toast" data-variant={variant} open={open} onOpenChange={onOpenChange}
+export function Toast({ variant, message, open, onOpenChange, closeLabel = "Dismiss notification", action, lang }: ToastProps) {
+  return <Primitive.Root className="fl-toast" lang={lang} data-variant={variant} open={open} onOpenChange={onOpenChange}
     type={variant === "error" || variant === "warning" ? "foreground" : "background"}
     duration={variant === "warning" || variant === "error" ? Infinity : 6000}>
     <Primitive.Title className="fl-toast-message">{message}</Primitive.Title>

@@ -37,6 +37,10 @@ for (const theme of ["light", "dark"] as const) {
       }
       await page.getByRole("button", { name: "ภาษาไทย", exact: true }).click();
       await expect(page.locator("html")).toHaveAttribute("lang", "th");
+      await expect(page.locator(".preview-heading")).toHaveAttribute("lang", "th");
+      await page.getByRole("button", { name: "Open modal", exact: true }).click();
+      await expect(page.getByRole("dialog", { name: "Inspect Evidence", exact: true })).toHaveAttribute("lang", "en");
+      await page.keyboard.press("Escape");
       await audit();
       await page.getByRole("button", { name: "English", exact: true }).click();
       await page.evaluate(() => scrollTo(0, 0));
