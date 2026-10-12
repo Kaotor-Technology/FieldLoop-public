@@ -6,9 +6,11 @@ is documented with that change.
 
 ## Rules every source follows
 
-- **Read-only.** Each path answers `GET`; every other method returns `405` with
-  `Allow: GET` and `application/problem+json`. Nothing a request carries changes
-  what a later read returns.
+- **Read-only.** Each path serves `GET` only. Every other method, `POST`, `PUT`,
+  `PATCH`, `DELETE` and the rest, returns `405` with `Allow: GET` and
+  `application/problem+json`. A path with a trailing slash is first redirected
+  (`307`) to its canonical form, so a write there is refused on the second
+  request. Nothing a request carries changes what a later read returns.
 - **Synthetic and labelled.** Every response carries `label: SYNTHETIC`,
   `simulated: true` and a `classification` (PRD §9.1). Values are illustrative,
   not operating figures of any real asset.
@@ -18,10 +20,11 @@ is documented with that change.
 - **Internal.** These routes are not part of the web-api/BFF. In dev and demo
   they sit behind Cloud Run invoker IAM; the handlers do not authenticate
   callers themselves.
-- **Errors** are RFC 9457 problem details using the shared `ErrorCode` values
-  (`validation_failed`, `not_found`); request values are never echoed. The
-  shared enum has no method-specific code, so a `405` also uses
-  `validation_failed`.
+- **Errors** under `/mock/` are RFC 9457 problem details using the shared
+  `ErrorCode` values: `validation_failed` (400), `not_found` (404, including an
+  unknown path) and `method_not_allowed` (405). Request values are never echoed.
+  The handlers are installed on the app (`install_problem_handlers`), so any
+  route added under `/mock/` gets them; paths elsewhere keep FastAPI's defaults.
 - **Signals, not pushes.** A source reaches the platform only as `signal.v1`
   messages on the `signals` topic, published in process by the Scenario player
   (SIM-3). There is no HTTP trigger because the APIs are read-only.

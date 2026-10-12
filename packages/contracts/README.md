@@ -185,6 +185,7 @@ so the reviewer does.
 | `csrf_token_invalid` | 403 | `X-CSRF-Token` is missing or wrong. |
 | `reauthentication_required` | 403 | An approval needs a login newer than the allowed `authTime` age. |
 | `not_found` | 404 | The resource does not exist, or the user may not know that it does. |
+| `method_not_allowed` | 405 | The path does not serve this method; `Allow` lists the ones it does. |
 | `conflict` | 409 | The resource is not in a state that allows this. |
 | `idempotency_key_reused` | 409 | The `Idempotency-Key` was used before with a different body. |
 | `payload_hash_mismatch` | 409 | The `payloadHash` sent with an approval is not the current payload's hash. |

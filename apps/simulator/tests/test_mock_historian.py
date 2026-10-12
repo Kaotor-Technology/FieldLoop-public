@@ -141,6 +141,7 @@ def test_writes_are_rejected_without_mutating_the_series(method: str) -> None:
         assert rejected.status_code == 405
         assert rejected.headers["allow"] == "GET"
         assert rejected.headers["content-type"].startswith("application/problem+json")
+        assert rejected.json()["code"] == "method_not_allowed"
         assert rejected.json()["status"] == 405
         assert client.get(series_url(), params=WINDOW).json() == before
 

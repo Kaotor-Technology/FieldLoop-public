@@ -12,11 +12,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import Depends, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from fieldloop_common.generated_mock_historian import MockHistorianSeries
 
-from fieldloop_simulator.mock_http import ReadOnlyRouter, Rfc3339, app_state, problem
+from fieldloop_simulator.mock_http import Rfc3339, app_state, problem
 from fieldloop_simulator.mock_signals import Classification, Observation
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
 
@@ -140,13 +140,13 @@ class SimulatedHistorian:
         return [(at, self.value_at(tag, at)) for at in times]
 
 
-router = ReadOnlyRouter(prefix="/mock/historian", tag="mock-historian")
+router = APIRouter(prefix="/mock/historian", tags=["mock-historian"])
 
 
 get_historian = app_state("historian", SimulatedHistorian)
 
 
-@router.read("/tags/{tag}", response_model=MockHistorianSeries)
+@router.get("/tags/{tag}", response_model=MockHistorianSeries)
 def read_tag(
     tag: str,
     start: Annotated[Rfc3339, Query(alias="from")],

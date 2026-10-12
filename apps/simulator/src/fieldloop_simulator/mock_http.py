@@ -1,28 +1,27 @@
 """Shared HTTP plumbing for the read-only mock source systems (SIM-2)."""
 
 import re
-from collections.abc import Callable, Coroutine
+from collections.abc import Callable
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated
 
-from fastapi import APIRouter, Request, Response
+from fastapi import FastAPI, Request, Response
+from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from fastapi.routing import APIRoute
-from fastapi.types import DecoratedCallable
 from pydantic import AfterValidator, AwareDatetime, BeforeValidator
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from fieldloop_simulator.timestamps import to_utc
 
 PROBLEM_JSON = "application/problem+json"
+MOCK_PREFIX = "/mock/"
 
 # RFC 3339 allows lowercase t and z. [0-9] is explicit because \d also matches other scripts.
 _RFC3339 = re.compile(
     r"[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?"
     r"(?:[Zz]|[+-][0-9]{2}:[0-9]{2})"
 )
-# Every method except GET is refused, so a mock source has no write path to forget about.
-_REFUSED_METHODS = ["POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD", "TRACE", "CONNECT"]
 
 
 def require_rfc3339(value: object) -> object:
@@ -63,32 +62,27 @@ def app_state[T](name: str, kind: type[T]) -> Callable[[Request], T]:
     return provide
 
 
-class ProblemRoute(APIRoute):
-    """Report request validation failures as 400 problem+json."""
+def install_problem_handlers(app: FastAPI) -> None:
+    """Answer every error under ``/mock/`` as RFC 9457 problem+json.
 
-    def get_route_handler(self) -> Callable[[Request], Coroutine[Any, Any, Response]]:
-        handler = super().get_route_handler()
+    That covers a bad query (400), an unknown path (404) and a method the path does not serve
+    (405 with ``Allow: GET``, from the router's own partial match), whichever route raised it.
+    Other paths keep FastAPI's defaults.
+    """
 
-        async def route_handler(request: Request) -> Response:
-            try:
-                return await handler(request)
-            except RequestValidationError:
-                return problem(400, "Invalid mock source request", "validation_failed")
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(request: Request, error: RequestValidationError) -> Response:
+        if not request.url.path.startswith(MOCK_PREFIX):
+            return await request_validation_exception_handler(request, error)
+        return problem(400, "Invalid mock source request", "validation_failed")
 
-        return route_handler
-
-
-async def _refuse_write() -> JSONResponse:
-    # The shared ErrorCode enum has no method-specific code; validation_failed is the closest.
-    return problem(405, "Only GET is allowed", "validation_failed", headers={"Allow": "GET"})
-
-
-class ReadOnlyRouter(APIRouter):
-    """A router that answers every method except GET with 405 on each path it serves."""
-
-    def __init__(self, *, prefix: str, tag: str) -> None:
-        super().__init__(prefix=prefix, tags=[tag], route_class=ProblemRoute)
-
-    def read(self, path: str, **kwargs: Any) -> Callable[[DecoratedCallable], DecoratedCallable]:
-        self.add_api_route(path, _refuse_write, methods=_REFUSED_METHODS, include_in_schema=False)
-        return self.get(path, **kwargs)
+    @app.exception_handler(StarletteHTTPException)
+    async def failed_request(request: Request, error: StarletteHTTPException) -> Response:
+        if not request.url.path.startswith(MOCK_PREFIX):
+            return await http_exception_handler(request, error)
+        if error.status_code == 404:
+            return problem(404, "Unknown mock source path", "not_found")
+        if error.status_code == 405:
+            allow = {"Allow": error.headers["Allow"]} if error.headers else None
+            return problem(405, "Only GET is allowed", "method_not_allowed", headers=allow)
+        return await http_exception_handler(request, error)

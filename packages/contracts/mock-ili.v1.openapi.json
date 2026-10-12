@@ -57,7 +57,7 @@
             }
           },
           "405": {
-            "description": "Only GET is allowed; code validation_failed. No state mutation.",
+            "description": "Only GET is served, so every other method is refused; code method_not_allowed, and Allow names the methods the path serves. No state mutation.",
             "headers": {
               "Allow": {
                 "schema": {

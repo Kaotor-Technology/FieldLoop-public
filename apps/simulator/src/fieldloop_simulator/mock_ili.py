@@ -11,11 +11,11 @@ from datetime import datetime
 from importlib.resources import files
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from fieldloop_common.generated_mock_ili import MockIliReport
 
-from fieldloop_simulator.mock_http import ReadOnlyRouter, app_state, problem
+from fieldloop_simulator.mock_http import app_state, problem
 from fieldloop_simulator.mock_signals import Observation
 
 SOURCE_ID = "mock-ili"
@@ -71,13 +71,13 @@ class SimulatedIliDrop:
         )
 
 
-router = ReadOnlyRouter(prefix="/mock/ili", tag="mock-ili")
+router = APIRouter(prefix="/mock/ili", tags=["mock-ili"])
 
 
 get_drop = app_state("ili", SimulatedIliDrop)
 
 
-@router.read("/reports/{id}", response_model=MockIliReport)
+@router.get("/reports/{id}", response_model=MockIliReport)
 def read_report(
     id: str, drop: Annotated[SimulatedIliDrop, Depends(get_drop)]
 ) -> MockIliReport | JSONResponse:

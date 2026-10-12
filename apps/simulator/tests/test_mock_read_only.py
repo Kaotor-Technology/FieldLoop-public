@@ -7,8 +7,15 @@ from fieldloop_simulator.main import app
 
 # The methods that would change a source system. Every mock endpoint must refuse them.
 WRITE_METHODS = ["POST", "PUT", "PATCH", "DELETE"]
+# These sources are GET-only, so any other method is refused too, an unregistered one included.
+OTHER_METHODS = ["HEAD", "OPTIONS", "TRACE", "CONNECT", "PROPFIND"]
 # A sample for each path parameter, so templated routes can be called.
 SAMPLES = {"tag": "DL-01.flow.line", "id": "SYN-ILI-2026-001"}
+SERVED = [
+    "/mock/historian/tags/DL-01.flow.line",
+    "/mock/patrol/findings",
+    "/mock/ili/reports/SYN-ILI-2026-001",
+]
 
 
 def mock_paths() -> list[str]:
@@ -25,10 +32,7 @@ def mock_paths() -> list[str]:
 
 def test_every_mock_endpoint_is_discovered() -> None:
     # A router added without being included, or renamed, must not silently shrink the guard.
-    paths = mock_paths()
-    assert "/mock/historian/tags/DL-01.flow.line" in paths
-    assert "/mock/patrol/findings" in paths
-    assert "/mock/ili/reports/SYN-ILI-2026-001" in paths
+    assert set(SERVED) <= set(mock_paths())
 
 
 @pytest.mark.parametrize("path", mock_paths())
@@ -37,21 +41,37 @@ def test_no_mock_endpoint_accepts_a_write_method(path: str, method: str) -> None
     with TestClient(app) as client:
         response = client.request(method, path, json={})
     assert response.status_code == 405
-    assert "GET" in response.headers["allow"]
+    assert response.headers["allow"] == "GET"
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.json()["code"] == "method_not_allowed"
 
 
-@pytest.mark.parametrize(
-    "path",
-    [
-        "/mock/historian/tags/DL-01.flow.line",
-        "/mock/patrol/findings",
-        "/mock/ili/reports/SYN-ILI-2026-001",
-    ],
-)
-@pytest.mark.parametrize("method", ["HEAD", "OPTIONS"])
-def test_these_sources_also_refuse_head_and_options(path: str, method: str) -> None:
-    # Stricter than the requirement: only GET reaches a handler, so there is no method to audit.
+@pytest.mark.parametrize("path", SERVED)
+@pytest.mark.parametrize("method", OTHER_METHODS)
+def test_other_methods_are_refused_with_the_methods_the_path_serves(path: str, method: str) -> None:
+    # An unregistered method such as PROPFIND must not be answered with the wrong Allow header.
     with TestClient(app) as client:
         response = client.request(method, path)
     assert response.status_code == 405
     assert response.headers["allow"] == "GET"
+    if method != "HEAD":  # a HEAD response has no body
+        assert response.headers["content-type"].startswith("application/problem+json")
+        assert response.json()["code"] == "method_not_allowed"
+
+
+@pytest.mark.parametrize("method", ["GET", "POST", "DELETE"])
+@pytest.mark.parametrize("path", ["/mock/nope", "/mock/historian/nope", "/mock/patrol/findings/1"])
+def test_unknown_mock_paths_are_problem_json_not_found(method: str, path: str) -> None:
+    with TestClient(app) as client:
+        response = client.request(method, path)
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert response.json()["code"] == "not_found"
+
+
+def test_paths_outside_the_mock_namespace_keep_the_framework_errors() -> None:
+    with TestClient(app) as client:
+        response = client.get("/v1/not-a-route")
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.json() == {"detail": "Not Found"}

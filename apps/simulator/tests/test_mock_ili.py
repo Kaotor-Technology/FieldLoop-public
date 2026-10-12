@@ -75,6 +75,7 @@ def test_writes_are_rejected_without_mutating_the_report(method: str) -> None:
         assert rejected.status_code == 405
         assert rejected.headers["allow"] == "GET"
         assert rejected.headers["content-type"].startswith("application/problem+json")
+        assert rejected.json()["code"] == "method_not_allowed"
         assert client.get(URL).json() == before
 
 

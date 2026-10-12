@@ -10,10 +10,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from fastapi import Depends, Query
+from fastapi import APIRouter, Depends, Query
 from fieldloop_common.generated_mock_patrol import MockPatrolPage
 
-from fieldloop_simulator.mock_http import ReadOnlyRouter, Rfc3339, app_state
+from fieldloop_simulator.mock_http import Rfc3339, app_state
 from fieldloop_simulator.mock_signals import Classification, Observation, utc_text
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
 
@@ -178,13 +178,13 @@ class SimulatedPatrol:
         )
 
 
-router = ReadOnlyRouter(prefix="/mock/patrol", tag="mock-patrol")
+router = APIRouter(prefix="/mock/patrol", tags=["mock-patrol"])
 
 
 get_patrol = app_state("patrol", SimulatedPatrol)
 
 
-@router.read("/findings", response_model=MockPatrolPage)
+@router.get("/findings", response_model=MockPatrolPage)
 def list_findings(
     patrol: Annotated[SimulatedPatrol, Depends(get_patrol)],
     kind: Annotated[Kind | None, Query()] = None,
