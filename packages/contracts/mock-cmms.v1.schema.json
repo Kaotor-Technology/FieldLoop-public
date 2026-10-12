@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MockCmmsPage",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "items",
+    "total",
+    "asOf",
+    "label",
+    "simulated",
+    "classification"
+  ],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/WorkOrder"
+      }
+    },
+    "total": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "asOf": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "label": {
+      "type": "string",
+      "const": "SYNTHETIC"
+    },
+    "simulated": {
+      "type": "boolean",
+      "const": true
+    },
+    "classification": {
+      "type": "string",
+      "const": "INTERNAL"
+    }
+  },
+  "$defs": {
+    "WorkOrder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "orgId",
+        "assetCode",
+        "title",
+        "kind",
+        "status",
+        "dueAt",
+        "label",
+        "simulated",
+        "classification"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^SYN-CMMS-[0-9]{3}$"
+        },
+        "orgId": {
+          "type": "string",
+          "const": "fieldloop-demo"
+        },
+        "assetCode": {
+          "type": "string",
+          "const": "DL-01"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "preventive",
+            "corrective"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "completed"
+          ]
+        },
+        "dueAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "label": {
+          "type": "string",
+          "const": "SYNTHETIC"
+        },
+        "simulated": {
+          "type": "boolean",
+          "const": true
+        },
+        "classification": {
+          "type": "string",
+          "const": "INTERNAL"
+        }
+      }
+    }
+  }
+}
