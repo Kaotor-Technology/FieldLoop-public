@@ -25,6 +25,12 @@ is documented with that change.
   unknown path) and `method_not_allowed` (405). Request values are never echoed.
   The handlers are installed on the app (`install_problem_handlers`), so any
   route added under `/mock/` gets them; paths elsewhere keep FastAPI's defaults.
+- **A contract each.** `mock-<source>.v1.openapi.json` and
+  `mock-<source>.v1.schema.json` in `packages/contracts` describe a source. The
+  response models are generated from the schema, `pnpm lint:api` lints the
+  OpenAPI file with `.spectral.mock.yaml`, and a test fails when a `/mock/` route
+  has no contract or a contract has no route. A new source is those two files,
+  its router and its tests ([contracts README](../../../packages/contracts/README.md#mock-source-contracts-fl-71)).
 - **Signals, not pushes.** A source reaches the platform only as `signal.v1`
   messages on the `signals` topic, published in process by the Scenario player
   (SIM-3). There is no HTTP trigger because the APIs are read-only.
@@ -140,8 +146,8 @@ it is not paginated.
 | `SYN-PATROL-004` | `encroachment` | medium | open | 2026-10-11 06:20 | 142 300 m |
 
 - **GPS, not Chainage.** A finding carries `gps: {latitude, longitude,
-  accuracyM}` as a device would report it. The fixes lie 2 to 9 m beside the
-  route, so snapping to Chainage (GEO-9) has something to do. The Chainage column
+  accuracyM}` as a device would report it. The fixes lie 1.6 to 9.3 m beside
+  the route, so snapping to Chainage (GEO-9) has something to do. The Chainage column
   is where each fix was authored to land; the API does not return it.
 - **Derived from the route.** The coordinates come from
   `data/synthetic/dl-01/route.geojson`. The simulator image does not contain
@@ -186,10 +192,14 @@ it is not paginated.
 | `A-006` | 133 900 m | 09:10 | internal metal loss | 15 |
 
 - **One document, two homes.** The JSON file in
-  `apps/simulator/src/fieldloop_simulator/fixtures/ili/` is the API response and
-  the object that Terraform creates in each environment's `ili-drop` bucket
-  (`reports/SYN-ILI-2026-001.json`). The simulator itself neither reads nor
-  writes the bucket, so it holds no storage permission.
+  `apps/simulator/src/fieldloop_simulator/fixtures/ili/` is the API response,
+  returned as its own bytes, and the object that Terraform creates in each
+  environment's `ili-drop` bucket (`reports/SYN-ILI-2026-001.json`). The
+  simulator itself neither reads nor writes the bucket, so it holds no storage
+  permission, and nothing is granted on the bucket yet: the ingestion consumer
+  that reads the object (FL-76) is the one to receive that grant.
+- **Where the file lives.** The fixture sits beside the module that serves it,
+  not in `data/synthetic/`, because the simulator image does not contain `data/`.
 - **No Organisation inside the file.** A vendor's report does not know FieldLoop
   Organisation IDs; the drop location identifies the Organisation.
 - **Classification** is `HIGHLY_RESTRICTED`: inspection raw data (PRD 9.1).
