@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -71,6 +71,23 @@ function recordDecisions(directory: string, decisions: Record<string, string[]>)
     return `${cells}","${decision.join('","')}"`;
   });
   writeFileSync(checklistFile, `${rows.join("\n")}\n`, "utf8");
+}
+
+function compareBatch(committed: string) {
+  const directory = temporaryDirectory();
+  // Replay the complete bound review input, not a checklist detached from its text.
+  cpSync(join(committed, "documents"), join(directory, "documents"), { recursive: true });
+  writeFileSync(
+    join(directory, "review-checklist.csv"),
+    readFileSync(join(committed, "review-checklist.csv"), "utf8"),
+    "utf8",
+  );
+  generateInto(directory);
+  const filenames = readdirSync(join(directory, "documents")).sort();
+  expect(readdirSync(join(committed, "documents")).sort()).toEqual(filenames);
+  for (const path of ["manifest.json", "review-checklist.csv", ...filenames.map((name) => `documents/${name}`)]) {
+    expect(readFileSync(join(committed, path), "utf8"), path).toBe(readFileSync(join(directory, path), "utf8"));
+  }
 }
 
 afterEach(() => {
@@ -181,21 +198,19 @@ describe("synthetic document corpus generator", () => {
   });
 
   it("matches the committed batch", () => {
-    const directory = temporaryDirectory();
-    const committed = resolve("data/synthetic/corpus");
-    // Start from the committed checklist so recorded decisions are replayed.
-    writeFileSync(
-      join(directory, "review-checklist.csv"),
-      readFileSync(join(committed, "review-checklist.csv"), "utf8"),
-      "utf8",
-    );
-    generateInto(directory);
+    compareBatch(resolve("data/synthetic/corpus"));
+  });
 
-    const filenames = readdirSync(join(directory, "documents")).sort();
-    expect(readdirSync(join(committed, "documents")).sort()).toEqual(filenames);
-    for (const path of ["manifest.json", "review-checklist.csv", ...filenames.map((name) => `documents/${name}`)]) {
-      expect(readFileSync(join(committed, path), "utf8"), path).toBe(readFileSync(join(directory, path), "utf8"));
-    }
+  it("replays a reviewed batch with passed and removed failed fixture documents", () => {
+    const fixture = temporaryDirectory();
+    generateInto(fixture);
+    recordDecisions(fixture, {
+      "SYN-UC1-PROC-EN-001-A": ["Fixture reviewer", "pass", "2026-10-12", "Test only"],
+      "SYN-UC1-MEMO-TH-002-B": ["Fixture reviewer", "fail", "2026-10-12", "Test only"],
+    });
+    generateInto(fixture);
+    expect(readManifest(fixture).review).toEqual({ pending: 238, passed: 1, failedAndRemoved: 1 });
+    compareBatch(fixture);
   });
 
   it("writes a deterministic review checklist without decisions prefilled", () => {
