@@ -2,7 +2,7 @@
 
 import re
 from collections.abc import Callable, Coroutine
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Request, Response
@@ -10,7 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from fastapi.types import DecoratedCallable
-from pydantic import AwareDatetime, BeforeValidator
+from pydantic import AfterValidator, AwareDatetime, BeforeValidator
 
 PROBLEM_JSON = "application/problem+json"
 
@@ -33,7 +33,17 @@ def require_rfc3339(value: object) -> object:
     return value
 
 
-Rfc3339 = Annotated[AwareDatetime, BeforeValidator(require_rfc3339)]
+def to_utc(value: datetime) -> datetime:
+    # A valid offset timestamp near year 1 or 9999 has no UTC datetime; reject it as input
+    # instead of letting the OverflowError surface as a 500.
+    try:
+        return value.astimezone(UTC)
+    except OverflowError as error:
+        raise ValueError("Timestamp is outside the supported range.") from error
+
+
+# Normalised to UTC at the boundary, so handlers never convert (and never overflow).
+Rfc3339 = Annotated[AwareDatetime, BeforeValidator(require_rfc3339), AfterValidator(to_utc)]
 
 
 def problem(

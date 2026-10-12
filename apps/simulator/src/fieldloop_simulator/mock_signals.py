@@ -36,7 +36,11 @@ class Observation:
 def _utc_text(at: datetime) -> str:
     if at.tzinfo is None:
         raise ValueError("Observation time needs a timezone")
-    return at.astimezone(UTC).isoformat().removesuffix("+00:00") + "Z"
+    try:
+        utc = at.astimezone(UTC)
+    except OverflowError as error:
+        raise ValueError("Observation time is outside the supported range") from error
+    return utc.isoformat().removesuffix("+00:00") + "Z"
 
 
 def _canonical_value(value: SignalValue) -> str:

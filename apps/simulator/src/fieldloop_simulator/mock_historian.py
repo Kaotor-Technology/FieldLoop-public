@@ -156,19 +156,16 @@ def read_tag(
     if end <= start or end - start > MAX_WINDOW:
         return problem(400, "Invalid historian window", "validation_failed")
     profile = historian.profile(tag)
-    start_utc = start.astimezone(UTC)
-    end_utc = end.astimezone(UTC)
     points = [
-        {"t": at, "v": value, "quality": "good"}
-        for at, value in historian.series(tag, start_utc, end_utc)
+        {"t": at, "v": value, "quality": "good"} for at, value in historian.series(tag, start, end)
     ]
     return MockHistorianSeries.model_validate(
         {
             "tag": tag,
             "unit": profile.unit,
             "description": profile.description,
-            "from": start_utc,
-            "to": end_utc,
+            "from": start,
+            "to": end,
             "intervalSeconds": int(SAMPLE_INTERVAL.total_seconds()),
             "points": points,
             "total": len(points),

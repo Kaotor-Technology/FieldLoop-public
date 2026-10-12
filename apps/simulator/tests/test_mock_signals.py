@@ -104,6 +104,18 @@ def test_naive_observation_times_are_rejected() -> None:
         emitter()[0].build(observation(observed_at=datetime(2026, 10, 12, 6, 0)))  # noqa: DTZ001
 
 
+@pytest.mark.parametrize(
+    "observed_at",
+    [
+        datetime(1, 1, 1, tzinfo=timezone(timedelta(hours=5))),
+        datetime(9999, 12, 31, 23, tzinfo=timezone(timedelta(hours=-5))),
+    ],
+)
+def test_observation_times_outside_the_utc_range_are_rejected(observed_at: datetime) -> None:
+    with pytest.raises(ValueError, match="range"):
+        emitter()[0].build(observation(observed_at=observed_at))
+
+
 def test_signal_identity_is_stable_for_replay_and_distinct_otherwise() -> None:
     first = emitter()[0].build(observation(), run_id=RUN)["id"]
     assert emitter()[0].build(observation(), run_id=RUN)["id"] == first

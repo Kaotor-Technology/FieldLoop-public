@@ -130,6 +130,8 @@ def test_kind_and_since_filter_the_list() -> None:
         {"since": "2026-10-11T03:00:00"},
         {"since": "2026-02-31T00:00:00Z"},
         {"since": "1760000000"},
+        {"since": "0001-01-01T00:00:00+05:00"},
+        {"since": "9999-12-31T23:59:59-05:00"},
     ],
 )
 def test_invalid_queries_fail_as_problem_json(params: dict[str, str]) -> None:

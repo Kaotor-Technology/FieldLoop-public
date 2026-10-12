@@ -117,6 +117,9 @@ def test_unknown_tag_is_a_not_found_problem() -> None:
         {"from": "2026-10-12T00:05:00Z", "to": "2026-10-12T00:00:00Z"},
         {"from": "2026-10-12T00:00:00Z", "to": "2026-10-12T00:00:00Z"},
         {"from": "2026-10-12T00:00:00Z", "to": "2026-10-13T00:00:01Z"},
+        # Valid RFC 3339, but the UTC instant is outside what a datetime can hold.
+        {"from": "0001-01-01T00:00:00+05:00", "to": "0001-01-01T01:00:00+05:00"},
+        {"from": "9999-12-31T22:00:00-05:00", "to": "9999-12-31T23:00:00-05:00"},
     ],
 )
 def test_invalid_windows_fail_as_problem_json(params: dict[str, str]) -> None:
