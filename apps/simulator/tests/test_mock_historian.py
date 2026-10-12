@@ -183,6 +183,15 @@ def test_override_resolution_prefers_the_latest_start_and_honours_its_end() -> N
         historian.add_override(RECTIFIER, start=datetime(2026, 10, 12), value=1)  # noqa: DTZ001
 
 
+def test_reading_a_time_without_a_timezone_is_a_clear_error() -> None:
+    historian = SimulatedHistorian()
+    naive = datetime(2026, 10, 12, 6, 0)  # noqa: DTZ001
+    with pytest.raises(ValueError, match="timezone"):
+        historian.value_at(RECTIFIER, naive)
+    with pytest.raises(ValueError, match="timezone"):
+        historian.observe(RECTIFIER, naive)
+
+
 def test_seed_selects_the_series_and_the_same_seed_reproduces_it() -> None:
     at = datetime(2026, 10, 12, 6, 30, tzinfo=UTC)
     first = SimulatedHistorian(seed=7).value_at(RECTIFIER, at)

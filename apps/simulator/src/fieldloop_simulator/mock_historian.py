@@ -99,6 +99,8 @@ class SimulatedHistorian:
         self._overrides = {}
 
     def value_at(self, tag: str, at: datetime) -> float:
+        if at.tzinfo is None:
+            raise ValueError("Reading times need a timezone")
         held = [
             item
             for item in self._overrides.get(tag, [])
