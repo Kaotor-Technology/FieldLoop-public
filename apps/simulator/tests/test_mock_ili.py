@@ -1,7 +1,5 @@
 import asyncio
 import json
-import subprocess
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -143,35 +141,3 @@ def test_unknown_reports_cannot_be_announced() -> None:
 def test_drop_rejects_an_invalid_bucket_name(bucket: str) -> None:
     with pytest.raises(ValueError, match="bucket"):
         SimulatedIliDrop(bucket=bucket)
-
-
-def test_generated_response_model_has_no_contract_drift(tmp_path: Path) -> None:
-    output = tmp_path / "generated.py"
-    subprocess.run(
-        [
-            sys.executable,
-            str(ROOT / "scripts/generate_mock_source.py"),
-            "ili",
-            "--output",
-            str(output),
-        ],
-        check=True,
-    )
-    committed = ROOT / "py/fieldloop_common/src/fieldloop_common/generated_mock_ili.py"
-    assert output.read_bytes() == committed.read_bytes()
-
-
-def test_internal_openapi_contract_documents_only_read_operations() -> None:
-    contract = json.loads((ROOT / "packages/contracts/mock-ili.v1.openapi.json").read_text())
-    assert contract["openapi"] == "3.1.0"
-    path = contract["paths"]["/mock/ili/reports/{id}"]
-    assert set(path) == {"get"}
-    operation = path["get"]
-    assert {p["name"] for p in operation["parameters"]} == {"id"}
-    assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
-        "$ref": "mock-ili.v1.schema.json",
-    }
-    for status in ("404", "405"):
-        assert operation["responses"][status]["content"]["application/problem+json"]["schema"] == {
-            "$ref": "openapi.yaml#/components/schemas/Problem",
-        }

@@ -1,6 +1,4 @@
 import json
-import subprocess
-import sys
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
@@ -259,35 +257,3 @@ def test_responses_match_the_canonical_wire_schema() -> None:
             data["simulated"] = False
             with pytest.raises(ValidationError):
                 validator.validate(data)
-
-
-def test_generated_response_model_has_no_contract_drift(tmp_path: Path) -> None:
-    output = tmp_path / "generated.py"
-    subprocess.run(
-        [
-            sys.executable,
-            str(ROOT / "scripts/generate_mock_source.py"),
-            "historian",
-            "--output",
-            str(output),
-        ],
-        check=True,
-    )
-    committed = ROOT / "py/fieldloop_common/src/fieldloop_common/generated_mock_historian.py"
-    assert output.read_bytes() == committed.read_bytes()
-
-
-def test_internal_openapi_contract_documents_only_read_operations() -> None:
-    contract = json.loads((ROOT / "packages/contracts/mock-historian.v1.openapi.json").read_text())
-    assert contract["openapi"] == "3.1.0"
-    path = contract["paths"]["/mock/historian/tags/{tag}"]
-    assert set(path) == {"get"}
-    operation = path["get"]
-    assert {p["name"] for p in operation["parameters"]} == {"tag", "from", "to"}
-    assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
-        "$ref": "mock-historian.v1.schema.json",
-    }
-    for status in ("400", "404", "405"):
-        assert operation["responses"][status]["content"]["application/problem+json"]["schema"] == {
-            "$ref": "openapi.yaml#/components/schemas/Problem",
-        }

@@ -6,7 +6,11 @@ from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("source", choices=("historian", "patrol", "ili"))
+sources = sorted(
+    path.name.removeprefix("mock-").removesuffix(".v1.schema.json")
+    for path in (root / "packages/contracts").glob("mock-*.v1.schema.json")
+)
+parser.add_argument("source", choices=sources)
 parser.add_argument("--output", type=Path)
 args = parser.parse_args()
 output = args.output or (
