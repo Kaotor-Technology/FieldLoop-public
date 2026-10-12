@@ -108,10 +108,10 @@ on is set by the publisher configuration and is not enforced by IAM.
 
 ```sh
 uv run --locked --all-packages pytest apps/simulator/tests -q
-uv run --locked --all-packages python scripts/generate-mock-source.py historian  # regenerate the model
+uv run --locked --all-packages python scripts/generate_mock_source.py historian  # regenerate the model
 ```
 
-`scripts/test-mock-signals.py` exercises the real SDK against a loopback
+`scripts/test_mock_signals.py` exercises the real SDK against a loopback
 Pub/Sub emulator (delivery, replay, quarantine); CI runs it in the "Signal
 publishers on Pub/Sub emulator" job.
 
@@ -183,7 +183,7 @@ else is `400`. The list is small and bounded, so it is not paginated.
   (`reports/SYN-ILI-2026-001.json`). The simulator itself neither reads nor
   writes the bucket, so it holds no storage permission.
 - **No Organisation inside the file.** A vendor's report does not know FieldLoop
-  Organisation IDs; the drop location identifies the customer.
+  Organisation IDs; the drop location identifies the Organisation.
 - **Classification** is `HIGHLY_RESTRICTED`: inspection raw data (PRD 9.1).
 - **Format.** A real vendor delivers PDF or spreadsheet files. This one is JSON so
   it is machine-checkable; documents for the assistant's extraction path (PRD

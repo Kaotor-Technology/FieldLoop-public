@@ -261,7 +261,7 @@ def test_generated_response_model_has_no_contract_drift(tmp_path: Path) -> None:
     subprocess.run(
         [
             sys.executable,
-            str(ROOT / "scripts/generate-mock-source.py"),
+            str(ROOT / "scripts/generate_mock_source.py"),
             "historian",
             "--output",
             str(output),

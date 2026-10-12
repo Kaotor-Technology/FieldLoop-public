@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "MockIliReport",
-  "description": "A synthetic in-line inspection report as a vendor would drop it for DL-01 (SIM-2). The same document is the dropped file and the response of GET /mock/ili/reports/{id}. It names no Organisation: the drop location identifies the customer.",
+  "description": "A synthetic in-line inspection report as a vendor would drop it for DL-01 (SIM-2). The same document is the dropped file and the response of GET /mock/ili/reports/{id}. It names no Organisation: the drop location identifies the Organisation.",
   "type": "object",
   "additionalProperties": false,
   "required": [

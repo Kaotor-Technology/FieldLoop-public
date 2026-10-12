@@ -2,12 +2,10 @@
 
 import asyncio
 import json
-import os
-import socket
-import time
 import uuid
 from datetime import UTC, datetime
 
+from emulator_support import require_loopback_emulator
 from fieldloop_common.signal import is_signal
 from fieldloop_simulator.mock_historian import SimulatedHistorian
 from fieldloop_simulator.mock_patrol import SimulatedPatrol
@@ -17,18 +15,7 @@ from fieldloop_simulator.mock_signals import (
 )
 from google.cloud.pubsub_v1 import PublisherClient, SubscriberClient
 
-host = os.environ.get("PUBSUB_EMULATOR_HOST", "")
-if not host.startswith(("127.0.0.1:", "localhost:")):
-    raise SystemExit("Set PUBSUB_EMULATOR_HOST to a loopback emulator; real GCP is forbidden here")
-address, port = host.rsplit(":", 1)
-for attempt in range(120):
-    try:
-        with socket.create_connection((address, int(port)), timeout=0.5):
-            break
-    except OSError:
-        if attempt == 119:
-            raise
-        time.sleep(0.25)
+require_loopback_emulator()
 
 # The composition uses the deployed topic names, so isolate the run by project instead.
 project = f"fieldloop-sim-{uuid.uuid4().hex[:12]}"

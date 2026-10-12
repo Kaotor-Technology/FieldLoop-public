@@ -3,30 +3,18 @@
 import asyncio
 import json
 import os
-import socket
 import subprocess
-import time
 from pathlib import Path
 from uuid import uuid4
 
+from emulator_support import require_loopback_emulator
 from fieldloop_common.google_pubsub import GooglePubSubTransport
 from fieldloop_common.signal import is_signal
 from fieldloop_common.signal_publisher import SignalPublisher
 from google.cloud.pubsub_v1 import PublisherClient, SubscriberClient
 
 root = Path(__file__).resolve().parents[1]
-host = os.environ.get("PUBSUB_EMULATOR_HOST", "")
-if not host.startswith(("127.0.0.1:", "localhost:")):
-    raise SystemExit("Set PUBSUB_EMULATOR_HOST to a loopback emulator; real GCP is forbidden here")
-address, port = host.rsplit(":", 1)
-for attempt in range(120):
-    try:
-        with socket.create_connection((address, int(port)), timeout=0.5):
-            break
-    except OSError:
-        if attempt == 119:
-            raise
-        time.sleep(0.25)
+require_loopback_emulator()
 
 project = "fieldloop-contract-test"
 suffix = uuid4().hex
