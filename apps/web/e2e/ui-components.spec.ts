@@ -452,3 +452,20 @@ test("Thai select scroll controls expose localized names", async ({ page }) => {
   await expect(page.locator('[aria-label="เลื่อนตัวเลือกขึ้น"]')).toBeVisible();
   await expect(page.locator(".fl-select-menu")).toHaveAttribute("lang", "th");
 });
+
+test("feedback titles use DESIGN weights and reduced-motion Failed markers have two separated rings", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(page.getByRole("heading", { name: "No Evidence yet", exact: true })).toHaveCSS("font-weight", "600");
+  await page.getByRole("button", { name: "Open modal", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Inspect Evidence", exact: true })).toHaveCSS("font-weight", "600");
+  await page.keyboard.press("Escape");
+  const ring = await page.getByRole("button", { name: "failed Barrier marker", exact: true }).locator("span").evaluate(element => {
+    const css = getComputedStyle(element, "::after");
+    return { animation: css.animationName, border: parseFloat(css.borderWidth), outline: parseFloat(css.outlineWidth), gap: parseFloat(css.outlineOffset), outlineStyle: css.outlineStyle };
+  });
+  expect(ring.animation).toBe("none");
+  expect(ring.border).toBeGreaterThan(0);
+  expect(ring.outline).toBeGreaterThan(0);
+  expect(ring.gap).toBeGreaterThan(0);
+  expect(ring.outlineStyle).toBe("solid");
+});
