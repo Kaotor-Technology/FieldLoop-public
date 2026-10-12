@@ -11,6 +11,7 @@ import "./ui-preview.css";
 
 const shortOptions = [{ value: "evidence", label: "Evidence" }, { value: "barrier", label: "Barrier" }, { value: "archived", label: "Archived", disabled: true }];
 const longOptions = ["Inspection", "Patrol", "Maintenance", "Pressure", "Flow", "Rain", "Water level", "Tide", "Pump", "Gate", "Sensor", "Integrity"].map(label => ({ value: label, label }));
+const thaiOptions = ["หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า", "สิบ"].map((label, index) => ({ value: String(index + 1), label: `ตัวเลือก${label}` }));
 const healths: BarrierHealth[] = ["healthy", "degraded", "failed", "unverified"];
 
 function Preview() {
@@ -19,6 +20,8 @@ function Preview() {
   const [selected, setSelected] = useState("evidence");
   const [source, setSource] = useState("");
   const [sources, setSources] = useState<string[]>([]);
+  const [selectionDisabled, setSelectionDisabled] = useState(false);
+  const [scrollingValue, setScrollingValue] = useState("1");
   const [tab, setTab] = useState("evidence");
   const [open, setOpen] = useState(false);
   const [approvalOpen, setApprovalOpen] = useState(false);
@@ -56,11 +59,13 @@ function Preview() {
             <Input label="Disabled input" disabled defaultValue="Unavailable" />
             <Input label="Field input" fieldSize="lg" helper="Field / crisis touch target" />
             <Textarea label={th ? "หมายเหตุ" : "Notes"} helper={th ? "รองรับข้อความภาษาไทยหลายบรรทัด" : "Supports multiline Thai text."} defaultValue="หลักฐานสังเคราะห์สำหรับการตรวจสอบ" lang="th" />
-            <Select lang="en" name="category" label="Evidence type" options={shortOptions} value={selected} onValueChange={setSelected} />
+            <Select lang="en" name="category" label="Evidence type" options={shortOptions} value={selected} onValueChange={setSelected} disabled={selectionDisabled} />
             <Select lang="en" name="disabled-category" label="Disabled select" options={shortOptions} value="evidence" onValueChange={() => undefined} disabled />
             <Select lang="en" label="Required category" options={shortOptions} value="" onValueChange={() => undefined} error="Choose a category." />
-            <Select lang="en" name="source" label="Source" options={longOptions} value={source} onValueChange={setSource} helper="Searchable because there are more than ten options." />
-            <MultiSelect lang="en" name="sources" label="Sources" options={longOptions} value={sources} onValueChange={setSources} />
+            <Button variant="secondary" onClick={() => setSelectionDisabled(current => !current)}>Toggle selection editing</Button>
+            <Select lang="en" name="source" label="Source" options={longOptions} value={source} onValueChange={setSource} disabled={selectionDisabled} helper="Searchable because there are more than ten options." />
+            <MultiSelect lang="en" name="sources" label="Sources" options={[...longOptions, { value: "Archived", label: "Archived", disabled: true }]} value={sources} onValueChange={setSources} disabled={selectionDisabled} />
+            <Select lang="th" label="ตัวเลือกแบบเลื่อน" options={thaiOptions} value={scrollingValue} onValueChange={setScrollingValue} scrollUpLabel="เลื่อนตัวเลือกขึ้น" scrollDownLabel="เลื่อนตัวเลือกลง" />
             <Select lang="en" name="disabled-source" label="Disabled searchable select" options={longOptions} value="Rain" onValueChange={() => undefined} disabled />
             <MultiSelect lang="en" name="disabled-sources" label="Disabled multiple select" options={longOptions} value={["Rain", "Pump"]} onValueChange={() => undefined} disabled />
           </form></Card>

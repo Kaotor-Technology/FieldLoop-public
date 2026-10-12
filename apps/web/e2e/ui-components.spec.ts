@@ -391,3 +391,64 @@ test("Failed marker boundaries exceed three-to-one contrast on system and explic
     }
   }
 });
+
+test("disabling an open selection closes it and preserves the value until editing resumes", async ({ page }) => {
+  for (const label of ["Evidence type", "Source", "Sources"]) {
+    const trigger = page.getByRole(label === "Evidence type" ? "combobox" : "button", { name: label, exact: true, includeHidden: true });
+    const original = await trigger.textContent();
+    await trigger.click();
+    await expect(page.locator(".fl-select-menu")).toBeVisible();
+    // A host state update can arrive while a portal is open (for example a save starts).
+    await page.getByRole("button", { name: "Toggle selection editing", includeHidden: true }).evaluate(button => (button as HTMLButtonElement).click());
+    await expect(trigger).toBeDisabled();
+    await expect(page.locator(".fl-select-menu")).not.toBeAttached();
+    await expect(trigger).toHaveText(original ?? "");
+    await page.getByRole("button", { name: "Toggle selection editing" }).click();
+    await trigger.click();
+    if (label === "Evidence type") {
+      await page.getByRole("option", { name: "Barrier", exact: true }).click();
+    } else if (label === "Source") {
+      await page.getByRole("option", { name: "Rain", exact: true }).click();
+    } else {
+      await page.getByRole("checkbox", { name: "Rain", exact: true }).check();
+      await page.keyboard.press("Escape");
+    }
+    await expect(trigger).toHaveText(label === "Evidence type" ? /Barrier/ : /Rain/);
+  }
+});
+
+test("multi-selection rows distinguish selected and disabled states in both themes", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await page.getByRole("button", { name: "Sources", exact: true }).click();
+    const checkbox = page.getByRole("checkbox", { name: "Rain", exact: true });
+    await checkbox.check();
+    const selected = checkbox.locator("..");
+    const disabled = page.getByRole("checkbox", { name: "Archived", exact: true }).locator("..");
+    const palette = await page.evaluate(() => {
+      const probe = document.createElement("span"); document.body.append(probe);
+      const colour = (variable: string) => { probe.style.backgroundColor = `var(${variable})`; return getComputedStyle(probe).backgroundColor; };
+      const result = { selected: colour("--fl-selected"), primary: colour("--fl-primary"), disabled: colour("--fl-disabled"), disabledInk: colour("--fl-disabled-ink") };
+      probe.remove(); return result;
+    });
+    await expect(selected).toHaveCSS("background-color", palette.selected);
+    await expect(selected).toHaveCSS("color", palette.primary);
+    await disabled.hover();
+    await expect(disabled).toHaveCSS("cursor", "not-allowed");
+    await expect(disabled).toHaveCSS("background-color", palette.disabled);
+    await expect(disabled).toHaveCSS("color", palette.disabledInk);
+    await expect(page.getByRole("checkbox", { name: "Archived", exact: true })).toBeDisabled();
+    await page.keyboard.press("Escape");
+  }
+});
+
+test("Thai select scroll controls expose localized names", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 300 });
+  await page.getByRole("combobox", { name: "ตัวเลือกแบบเลื่อน", exact: true }).click();
+  await expect(page.locator('[aria-label="เลื่อนตัวเลือกลง"]')).toBeVisible();
+  await expect(page.locator('[aria-label="Scroll options down"]')).toHaveCount(0);
+  await page.getByRole("option", { name: "ตัวเลือกหนึ่ง", exact: true }).press("End");
+  await expect(page.locator('[aria-label="เลื่อนตัวเลือกขึ้น"]')).toBeVisible();
+  await expect(page.locator(".fl-select-menu")).toHaveAttribute("lang", "th");
+});

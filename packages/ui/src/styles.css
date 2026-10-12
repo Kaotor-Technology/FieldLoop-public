@@ -85,7 +85,8 @@
 .fl-option { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-space-2); padding: var(--spacing-space-2) var(--spacing-space-3); min-height: var(--spacing-touch-target); border-radius: var(--rounded-md); cursor: pointer; outline: none; }
 .fl-option[data-highlighted], .fl-option:hover { background: var(--fl-hover); }
 .fl-option[aria-selected="true"], .fl-option[data-state="checked"] { background: var(--fl-selected); color: var(--fl-primary); }
-.fl-option[aria-disabled="true"], .fl-option[data-disabled] { color: var(--fl-disabled-ink); cursor: not-allowed; }
+.fl-option[aria-disabled="true"], .fl-option[data-disabled] { background: var(--fl-disabled); color: var(--fl-disabled-ink); cursor: not-allowed; }
+.fl-option[data-disabled] .fl-checkbox { background: var(--fl-disabled); color: var(--fl-disabled-ink); }
 .fl-checkbox { display: inline-grid; place-items: center; min-width: var(--spacing-space-6); min-height: var(--spacing-space-6); background: var(--fl-surface); color: var(--fl-primary); border: var(--spacing-border-hairline) solid var(--fl-border); border-radius: var(--rounded-sm); }
 .fl-tabs { min-width: 0; } .fl-tab-list { display: flex; flex-wrap: wrap; border-bottom: var(--spacing-border-hairline) solid var(--fl-divider); }
 .fl-tab { background: var(--fl-surface); color: var(--fl-muted); border: 0; border-radius: 0; border-bottom: var(--spacing-indicator-width) solid transparent; }

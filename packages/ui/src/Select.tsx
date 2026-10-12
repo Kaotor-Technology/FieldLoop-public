@@ -15,6 +15,8 @@ export interface SelectProps {
   name?: string;
   searchLabel?: string;
   emptyLabel?: string;
+  scrollUpLabel?: string;
+  scrollDownLabel?: string;
   lang?: string;
 }
 
@@ -23,22 +25,23 @@ export function Select(props: SelectProps) {
   return <SingleSelect {...props} />;
 }
 
-function SingleSelect({ label, options, value, onValueChange, placeholder = "Select an option", disabled = false, error, helper, name, lang }: SelectProps) {
+function SingleSelect({ label, options, value, onValueChange, placeholder = "Select an option", disabled = false, error, helper, name, lang, scrollUpLabel = "Scroll options up", scrollDownLabel = "Scroll options down" }: SelectProps) {
   const id = useId();
   const [open, setOpen] = useState(false);
-  const content = useInertOutside(open);
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
+  const content = useInertOutside(open && !disabled);
   return <div className="fl-field" lang={lang}>
     <label htmlFor={id}>{label}</label>
-    <Primitive.Root value={value} onValueChange={onValueChange} disabled={disabled} open={open} onOpenChange={setOpen} {...(name ? { name } : {})}>
+    <Primitive.Root value={value} onValueChange={next => { if (!disabled) onValueChange(next); }} disabled={disabled} open={open && !disabled} onOpenChange={next => setOpen(next && !disabled)} {...(name ? { name } : {})}>
       <Primitive.Trigger id={id} className="fl-input fl-select-trigger" aria-invalid={Boolean(error)} aria-describedby={error || helper ? `${id}-message` : undefined}>
         <Primitive.Value placeholder={placeholder} /><Primitive.Icon aria-hidden="true">⌄</Primitive.Icon>
       </Primitive.Trigger>
       <Primitive.Portal><Primitive.Content ref={content} className="fl-select-menu" position="popper" lang={lang}>
-        <Primitive.ScrollUpButton aria-label="Scroll options up">⌃</Primitive.ScrollUpButton>
+        <Primitive.ScrollUpButton aria-label={scrollUpLabel}>⌃</Primitive.ScrollUpButton>
         <Primitive.Viewport>{options.map(option => <Primitive.Item key={option.value} value={option.value} disabled={option.disabled ?? false} className="fl-option">
           <Primitive.ItemText>{option.label}</Primitive.ItemText><Primitive.ItemIndicator aria-hidden="true">✓</Primitive.ItemIndicator>
         </Primitive.Item>)}</Primitive.Viewport>
-        <Primitive.ScrollDownButton aria-label="Scroll options down">⌄</Primitive.ScrollDownButton>
+        <Primitive.ScrollDownButton aria-label={scrollDownLabel}>⌄</Primitive.ScrollDownButton>
       </Primitive.Content></Primitive.Portal>
     </Primitive.Root>
     {(error ?? helper) && <p id={`${id}-message`} className={error ? "fl-error" : "fl-helper"}>{error && <span aria-hidden="true">! </span>}{error ?? helper}</p>}
@@ -50,18 +53,19 @@ export function Combobox({ label, options, value, onValueChange, placeholder = "
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState<string>();
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   const input = useRef<HTMLInputElement>(null);
   const matches = options.filter(option => option.label.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
-  const enabled = matches.filter(option => !option.disabled);
+  const enabled = disabled ? [] : matches.filter(option => !option.disabled);
   const activeValue = enabled.some(option => option.value === active) ? active : enabled[0]?.value;
   useEffect(() => {
     if (open && activeValue) document.getElementById(`${id}-option-${options.findIndex(option => option.value === activeValue)}`)?.scrollIntoView({ block: "nearest" });
   }, [open, activeValue, id, options]);
-  function choose(next: string) { onValueChange(next); setOpen(false); }
+  function choose(next: string) { if (disabled) return; onValueChange(next); setOpen(false); }
   return <div className="fl-field" lang={lang}>
     <label htmlFor={id}>{label}</label>
     {name && <input type="hidden" name={name} value={value} disabled={disabled} />}
-    <Popover.Root open={open} onOpenChange={next => { setOpen(next); if (next) { setQuery(""); setActive(value); } }}>
+    <Popover.Root open={open && !disabled} onOpenChange={next => { setOpen(next && !disabled); if (next) { setQuery(""); setActive(value); } }}>
       <Popover.Trigger id={id} className="fl-input fl-select-trigger" disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={error || helper ? `${id}-message` : undefined}>
         {options.find(option => option.value === value)?.label ?? placeholder}<span aria-hidden="true">⌄</span>
       </Popover.Trigger>
@@ -91,19 +95,21 @@ export function Combobox({ label, options, value, onValueChange, placeholder = "
 export interface MultiSelectProps extends Omit<SelectProps, "value" | "onValueChange"> { value: readonly string[]; onValueChange: (value: string[]) => void }
 export function MultiSelect({ label, options, value, onValueChange, placeholder = "Select options", disabled = false, error, helper, name, searchLabel = "Search options", emptyLabel = "No matching options", lang }: MultiSelectProps) {
   const id = useId();
+  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   const matches = options.filter(option => option.label.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
   return <div className="fl-field" lang={lang}>
     <label htmlFor={id}>{label}</label>
     {name && value.map(item => <input key={item} type="hidden" name={name} value={item} disabled={disabled} />)}
-    <Popover.Root onOpenChange={() => setQuery("")}>
+    <Popover.Root open={open && !disabled} onOpenChange={next => { setOpen(next && !disabled); setQuery(""); }}>
       <Popover.Trigger id={id} className="fl-input fl-select-trigger" disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={error || helper ? `${id}-message` : undefined}>
         <span>{value.length ? options.filter(option => value.includes(option.value)).map(option => option.label).join(", ") : placeholder}</span><span aria-hidden="true">⌄</span>
       </Popover.Trigger>
       <Popover.Portal><Popover.Content className="fl-select-menu" aria-label={label} lang={lang}>
         {options.length > 10 && <input className="fl-input" aria-label={searchLabel} value={query} onChange={event => setQuery(event.target.value)} />}
-        <div role="group" aria-label={label} className="fl-option-list">{matches.map(option => <label key={option.value} className="fl-option">
-          <Checkbox.Root className="fl-checkbox" checked={value.includes(option.value)} disabled={option.disabled ?? false} onCheckedChange={checked => onValueChange(checked === true ? [...value, option.value] : value.filter(item => item !== option.value))}><Checkbox.Indicator aria-hidden="true">✓</Checkbox.Indicator></Checkbox.Root>{option.label}
+        <div role="group" aria-label={label} className="fl-option-list">{matches.map(option => <label key={option.value} className="fl-option" data-state={value.includes(option.value) ? "checked" : "unchecked"} data-disabled={disabled || option.disabled ? "" : undefined}>
+          <Checkbox.Root className="fl-checkbox" checked={value.includes(option.value)} disabled={disabled || (option.disabled ?? false)} onCheckedChange={checked => { if (!disabled && !option.disabled) onValueChange(checked === true ? [...value, option.value] : value.filter(item => item !== option.value)); }}><Checkbox.Indicator aria-hidden="true">✓</Checkbox.Indicator></Checkbox.Root>{option.label}
         </label>)}</div>
         {matches.length === 0 && <p role="status" className="fl-helper">{emptyLabel}</p>}
       </Popover.Content></Popover.Portal>
