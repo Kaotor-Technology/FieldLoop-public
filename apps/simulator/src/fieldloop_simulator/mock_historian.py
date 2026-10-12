@@ -7,7 +7,6 @@ is read-only; a Scenario changes the series in process through ``add_override``.
 
 import hashlib
 import math
-import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -18,7 +17,8 @@ from fastapi.responses import JSONResponse
 from fieldloop_common.generated_mock_historian import MockHistorianSeries
 
 from fieldloop_simulator.mock_http import ReadOnlyRouter, Rfc3339, problem
-from fieldloop_simulator.mock_signals import DEMO_ORG_ID, Observation
+from fieldloop_simulator.mock_signals import Observation
+from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
 
 DEMO_SEED = 20261018
 SAMPLE_INTERVAL = timedelta(seconds=60)
@@ -26,7 +26,6 @@ MAX_WINDOW = timedelta(hours=24)
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 _DAY_SECONDS = 86_400
-_ORG_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 
 
 @dataclass(frozen=True)
@@ -74,10 +73,8 @@ class _Override:
 
 class SimulatedHistorian:
     def __init__(self, *, seed: int = DEMO_SEED, org_id: str = DEMO_ORG_ID) -> None:
-        if _ORG_ID.fullmatch(org_id) is None:
-            raise ValueError("Invalid Organisation ID")
         self.seed = seed
-        self.org_id = org_id
+        self.org_id = require_org_id(org_id)
         self._overrides: dict[str, list[_Override]] = {}
 
     def profile(self, tag: str) -> TagProfile:

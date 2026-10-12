@@ -259,6 +259,6 @@ def test_environment_defaults_are_local_and_the_demo_organisation() -> None:
 )
 def test_invalid_environment_configuration_fails_closed(environ: dict[str, str]) -> None:
     client = create_autospec(PublisherClient, instance=True)
-    with pytest.raises(ValueError, match="project|configuration"):
+    with pytest.raises(ValueError, match="project|configuration|Organisation"):
         signal_publisher_from_environment(environ, client_factory=lambda: client)
     client.publish.assert_not_called()

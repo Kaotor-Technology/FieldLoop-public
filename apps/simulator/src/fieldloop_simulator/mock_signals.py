@@ -15,7 +15,7 @@ from typing import Any, Literal
 from fieldloop_common.google_pubsub import GooglePubSubTransport
 from fieldloop_common.signal_publisher import SignalPublisher, SignalPublishResult
 
-DEMO_ORG_ID = "fieldloop-demo"
+from fieldloop_simulator.organisation import org_id_from_environment
 
 # Fixed, so that replaying a Scenario run derives the same Signal IDs (consumer deduplication).
 SIGNAL_ID_NAMESPACE = uuid.UUID("5a3f0c9e-2b6d-4c41-9a57-3f1d8e7b2c64")
@@ -119,7 +119,7 @@ def signal_publisher_from_environment(
     return SignalPublisher(
         GooglePubSubTransport(client_factory(), project_id=project_id),
         environment=environ.get("FIELDLOOP_ENV", "local"),
-        org_id=environ.get("FIELDLOOP_ORG_ID", DEMO_ORG_ID),
+        org_id=org_id_from_environment(environ),
         # Mock mode: a real-labelled observation is quarantined, never sent to signals.
         simulation_only=True,
     )
