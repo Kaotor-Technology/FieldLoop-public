@@ -49,19 +49,21 @@ function Preview() {
           <Card><h3>Buttons</h3><div className="preview-row">{(["primary", "secondary", "ghost", "danger"] as const).map(variant => <Button key={variant} variant={variant} onClick={() => setPreviewAction(`${variant} button activated`)}>{variant === "primary" ? "Create Draft" : variant === "danger" ? "Stop preview" : variant === "secondary" ? "View Evidence" : "Inspect sources"}</Button>)}</div>
           <div className="preview-row"><Button size="sm">Compact button</Button><Button size="lg">Field button</Button><Button disabled>Unavailable</Button><Button loading>Create Draft</Button></div>
           <div className="preview-row">{(["secondary", "ghost", "danger"] as const).map(variant => <Button key={variant} variant={variant} disabled>Unavailable {variant}</Button>)}</div><p role="status" className="fl-helper">{previewAction}</p></Card>
-          <Card variant="divided"><div className="preview-fields">
+          <Card variant="divided"><form className="preview-fields" aria-label="Component form">
             <Input lang={language} label={th ? "ชื่อหลักฐาน" : "Evidence title"} helper={th ? "ระบุแหล่งที่มาของหลักฐาน" : "Describe the Evidence source."} defaultValue={th ? "รายงานการตรวจสังเคราะห์" : "Synthetic inspection"} />
             <Input label="Chainage" type="number" defaultValue={0} helper="SYNTHETIC · metres" />
             <Input lang={language} label={th ? "เหตุผลที่จำเป็น" : "Required reason"} error={th ? "กรุณาระบุเหตุผล" : "Enter a reason."} required />
             <Input label="Disabled input" disabled defaultValue="Unavailable" />
             <Input label="Field input" fieldSize="lg" helper="Field / crisis touch target" />
             <Textarea label={th ? "หมายเหตุ" : "Notes"} helper={th ? "รองรับข้อความภาษาไทยหลายบรรทัด" : "Supports multiline Thai text."} defaultValue="หลักฐานสังเคราะห์สำหรับการตรวจสอบ" lang="th" />
-            <Select lang="en" label="Evidence type" options={shortOptions} value={selected} onValueChange={setSelected} />
-            <Select lang="en" label="Disabled select" options={shortOptions} value="evidence" onValueChange={() => undefined} disabled />
+            <Select lang="en" name="category" label="Evidence type" options={shortOptions} value={selected} onValueChange={setSelected} />
+            <Select lang="en" name="disabled-category" label="Disabled select" options={shortOptions} value="evidence" onValueChange={() => undefined} disabled />
             <Select lang="en" label="Required category" options={shortOptions} value="" onValueChange={() => undefined} error="Choose a category." />
-            <Select lang="en" label="Source" options={longOptions} value={source} onValueChange={setSource} helper="Searchable because there are more than ten options." />
-            <MultiSelect lang="en" label="Sources" options={longOptions} value={sources} onValueChange={setSources} />
-          </div></Card>
+            <Select lang="en" name="source" label="Source" options={longOptions} value={source} onValueChange={setSource} helper="Searchable because there are more than ten options." />
+            <MultiSelect lang="en" name="sources" label="Sources" options={longOptions} value={sources} onValueChange={setSources} />
+            <Select lang="en" name="disabled-source" label="Disabled searchable select" options={longOptions} value="Rain" onValueChange={() => undefined} disabled />
+            <MultiSelect lang="en" name="disabled-sources" label="Disabled multiple select" options={longOptions} value={["Rain", "Pump"]} onValueChange={() => undefined} disabled />
+          </form></Card>
           <Card variant="subtle"><Tabs label="Evidence details" value={tab} onValueChange={setTab} items={[{ value: "evidence", label: "Evidence", content: <p>SYNTHETIC · inspection report</p> }, { value: "history", label: "History", content: <p>No history in this fixture.</p> }, { value: "export", label: "Export", disabled: true, content: null }]} /></Card>
         </section>
         <section id="feedback" className="preview-section" aria-labelledby="feedback-title"><h2 id="feedback-title" lang={language}>{th ? "ข้อความและสถานะ" : "Feedback"}</h2>

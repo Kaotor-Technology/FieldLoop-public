@@ -60,7 +60,7 @@ export function Combobox({ label, options, value, onValueChange, placeholder = "
   function choose(next: string) { onValueChange(next); setOpen(false); }
   return <div className="fl-field" lang={lang}>
     <label htmlFor={id}>{label}</label>
-    {name && <input type="hidden" name={name} value={value} />}
+    {name && <input type="hidden" name={name} value={value} disabled={disabled} />}
     <Popover.Root open={open} onOpenChange={next => { setOpen(next); if (next) { setQuery(""); setActive(value); } }}>
       <Popover.Trigger id={id} className="fl-input fl-select-trigger" disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={error || helper ? `${id}-message` : undefined}>
         {options.find(option => option.value === value)?.label ?? placeholder}<span aria-hidden="true">⌄</span>
@@ -95,7 +95,7 @@ export function MultiSelect({ label, options, value, onValueChange, placeholder 
   const matches = options.filter(option => option.label.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
   return <div className="fl-field" lang={lang}>
     <label htmlFor={id}>{label}</label>
-    {name && value.map(item => <input key={item} type="hidden" name={name} value={item} />)}
+    {name && value.map(item => <input key={item} type="hidden" name={name} value={item} disabled={disabled} />)}
     <Popover.Root onOpenChange={() => setQuery("")}>
       <Popover.Trigger id={id} className="fl-input fl-select-trigger" disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={error || helper ? `${id}-message` : undefined}>
         <span>{value.length ? options.filter(option => value.includes(option.value)).map(option => option.label).join(", ") : placeholder}</span><span aria-hidden="true">⌄</span>

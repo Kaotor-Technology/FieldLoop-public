@@ -207,3 +207,77 @@ test("disabled variants retain disabled colours in both themes and expose a visi
     expect(focus.width).toBeGreaterThan(0);
   }
 });
+
+test("disabled selections are omitted from forms while enabled selections submit their values", async ({ page }) => {
+  await page.getByRole("button", { name: "Source", exact: true }).click();
+  await page.getByRole("combobox", { name: "Search options" }).fill("rain");
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Sources", exact: true }).click();
+  await page.getByRole("textbox", { name: "Search options" }).fill("pump");
+  await page.getByRole("checkbox", { name: "Pump", exact: true }).check();
+  await page.keyboard.press("Escape");
+  const entries = await page.getByRole("form", { name: "Component form" }).evaluate(form => Array.from(new FormData(form as HTMLFormElement).entries()));
+  expect(entries).toEqual([["category", "evidence"], ["source", "Rain"], ["sources", "Pump"]]);
+});
+
+test("Thai prose retains dictionary wrapping and long identifiers reflow inside modal content", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.getByRole("button", { name: "Open modal", exact: true }).click();
+  const body = page.locator(".fl-modal-body");
+  await body.evaluate(element => {
+    element.setAttribute("lang", "th");
+    const prose = document.createElement("p");
+    prose.textContent = "หลักฐานสังเคราะห์สำหรับการตรวจสอบสถานะของสิ่งกีดขวางความเสี่ยง".repeat(4);
+    const identifier = document.createElement("code");
+    identifier.className = "fl-mono fl-break-identifier";
+    identifier.textContent = "SYNTHETIC-".repeat(30);
+    element.replaceChildren(prose, identifier);
+  });
+  expect(await body.locator("p").evaluate(element => getComputedStyle(element).overflowWrap)).toBe("normal");
+  expect(await body.locator("code").evaluate(element => element.parentElement !== null && element.scrollWidth <= element.parentElement.clientWidth)).toBe(true);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Show info", exact: true }).click();
+  for (const selector of [".fl-toast-message", ".fl-simulation-banner", ".fl-select-trigger > span:first-child", ".fl-nav-disabled"]) {
+    expect(await page.locator(selector).first().evaluate(element => { element.setAttribute("lang", "th"); return getComputedStyle(element).overflowWrap; })).toBe("normal");
+  }
+});
+
+test("modal and toast enter and exit with DESIGN motion and disappear immediately with reduced motion", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.evaluate(() => {
+    const events: { component: string; state: string | undefined; duration: string; easing: string }[] = [];
+    Object.assign(window, { uiMotionEvents: events });
+    document.addEventListener("animationstart", event => {
+      const element = event.target;
+      if (!(element instanceof HTMLElement) || !element.matches(".fl-modal, .fl-toast")) return;
+      const css = getComputedStyle(element);
+      events.push({ component: element.className, state: element.dataset["state"], duration: css.animationDuration, easing: css.animationTimingFunction });
+    });
+  });
+  for (const component of ["modal", "toast"]) {
+    await page.getByRole("button", { name: component === "modal" ? "Open modal" : "Show warning", exact: true }).click();
+    await expect(page.locator(`.fl-${component}`)).toBeVisible();
+    await page.getByRole("button", { name: component === "modal" ? "Cancel" : "Dismiss notification", exact: true }).click();
+    await expect(page.locator(`.fl-${component}`)).not.toBeAttached();
+  }
+  const motion = await page.evaluate(() => {
+    const css = getComputedStyle(document.documentElement);
+    const duration = css.getPropertyValue("--motion-base").trim();
+    const timing = document.createElement("div").style;
+    timing.animationTimingFunction = css.getPropertyValue("--ease-enter").trim();
+    const enter = timing.animationTimingFunction;
+    timing.animationTimingFunction = css.getPropertyValue("--ease-exit").trim();
+    return { events: (window as unknown as { uiMotionEvents: { component: string; state: string; duration: string; easing: string }[] }).uiMotionEvents, duration: `${duration.endsWith("ms") ? parseFloat(duration) / 1000 : parseFloat(duration)}s`, enter, exit: timing.animationTimingFunction };
+  });
+  for (const component of ["fl-modal", "fl-toast"]) {
+    for (const state of ["open", "closed"]) expect(motion.events).toContainEqual({ component, state, duration: motion.duration, easing: state === "open" ? motion.enter : motion.exit });
+  }
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  for (const component of ["modal", "toast"]) {
+    await page.getByRole("button", { name: component === "modal" ? "Open modal" : "Show warning", exact: true }).click();
+    await expect(page.locator(`.fl-${component}`)).toHaveCSS("animation-name", "none");
+    await page.getByRole("button", { name: component === "modal" ? "Cancel" : "Dismiss notification", exact: true }).click();
+    await expect(page.locator(`.fl-${component}`)).not.toBeAttached();
+  }
+});
