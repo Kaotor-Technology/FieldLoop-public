@@ -66,6 +66,7 @@ async def index_document(
             "classification": source.classification,
             "simulated": source.simulated,
             "blob_uri": source.blob_uri,
+            "licence": source.licence,
         }
         if any(document[k] != v for k, v in expected.items()):
             raise ValueError("Controlled Document metadata differs from the verified corpus")
@@ -80,7 +81,7 @@ async def index_document(
                 SELECT ST_AsText(ST_Collect(ST_LineSubstring(s.geom,
                     greatest(0, (%s - s.chainage_from) / (s.chainage_to - s.chainage_from))::float8,
                     least(1, (%s - s.chainage_from) / (s.chainage_to - s.chainage_from))::float8
-                ))) AS geom
+                ) ORDER BY s.chainage_from, s.id)) AS geom
                 FROM app.segment s JOIN app.asset a ON a.id = s.asset_id AND a.org_id = s.org_id
                 WHERE s.org_id = %s AND a.attributes->>'asset_code' = %s
                     AND s.chainage_from < %s AND s.chainage_to > %s

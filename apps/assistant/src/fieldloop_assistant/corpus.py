@@ -20,6 +20,7 @@ class DocumentSource:
     blob_uri: str
     text: str
     format: str
+    licence: str = "synthetic"
     asset_code: str | None = None
     chainage_from: int | None = None
     chainage_to: int | None = None
@@ -61,6 +62,7 @@ def load_corpus(repo: Path, org_id: str, storage: Path) -> list[DocumentSource]:
                 blob_uri=f"synthetic://corpus/{key}",
                 text=_body(synthetic, record["contentPath"]),
                 format="markdown",
+                licence=record["licence"],
                 asset_code=record["assetCode"],
                 chainage_from=record["chainageFrom"],
                 chainage_to=record["chainageTo"],
@@ -109,6 +111,7 @@ def load_corpus(repo: Path, org_id: str, storage: Path) -> list[DocumentSource]:
                 blob_uri=blob["blobUri"],
                 text=text,
                 format="xml" if record["contentPath"].endswith(".xml") else "text",
+                licence=record["licence"],
             )
         )
     return sources
