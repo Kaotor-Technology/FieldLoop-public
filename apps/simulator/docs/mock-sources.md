@@ -196,6 +196,11 @@ travels the validated path that SIM-3 requires and a rule can match it later
 without infrastructure change. A bucket notification is an additive follow-up
 once an ingestion consumer exists.
 
+**Open.** The owner's clarification that a patrol app is a report and image
+source, not a signalling source (2026-10-12), puts this choice back to review: a
+report file may not be a Signal at all. The alternatives are to drop the Signal
+and keep only the file and this API, or to replace it with a bucket notification.
+
 ### Deployment prerequisite
 
 The bucket, the object and `FIELDLOOP_ILI_DROP_BUCKET` come from the Terraform
