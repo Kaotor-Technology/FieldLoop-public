@@ -10,16 +10,19 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "lint": "turbo run lint && eslint scripts",
+    "lint": "turbo run lint && eslint scripts db/seed data/synthetic/bangkok data/synthetic/corpus/generate.mjs",
     "typecheck": "turbo run typecheck && tsc --noEmit -p tsconfig.json",
     "test": "turbo run test && vitest run --config vitest.config.ts",
     "lint:design": "design.md lint DESIGN.md",
     "lint:api": "pnpm --filter @fieldloop/contracts lint:openapi",
     "check:safety": "node scripts/check-confidential-paths.mjs",
     "db:seed:dl-01": "node db/seed/dl-01/seed.mjs",
+    "db:seed:bangkok": "node db/seed/bangkok/seed.mjs",
     "db:migrate": "dbmate --migrations-table public.schema_migrations up",
     "test:migrations": "bash scripts/test-migrations.sh",
-    "test:seed": "bash scripts/test-seed.sh"
+    "test:seed": "bash scripts/test-seed.sh",
+    "test:seed:legal": "node scripts/test-legal-seed.mjs",
+    "test:seed:bangkok": "bash scripts/test-bangkok-seed.sh"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",

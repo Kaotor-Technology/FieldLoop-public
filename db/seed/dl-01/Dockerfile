@@ -13,6 +13,7 @@ ENV NODE_ENV=production
 # The loader reads the generator and the seed file by a path relative to itself.
 WORKDIR /app/db/seed/dl-01
 COPY --from=build --chown=node:node /output ./
+COPY --chown=node:node db/seed/common.mjs /app/db/seed/common.mjs
 COPY --chown=node:node data/synthetic/dl-01/generate.mjs data/synthetic/dl-01/bowtie-a.json /app/data/synthetic/dl-01/
 USER node
 # The loader also writes the generated GeoJSON; in the image that goes to a temporary directory.

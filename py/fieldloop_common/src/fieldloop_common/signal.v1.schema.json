@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fieldloop.kaotor.com/contracts/signal.v1.schema.json",
+  "title": "Signal",
+  "description": "A read-only observation, shared by real connectors and simulated sources (SIM-3). No Health change or action is authorised by this message.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "orgId",
+    "source",
+    "tag",
+    "value",
+    "observedAt",
+    "simulated",
+    "classification"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "signal.v1"
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Producer identity; keep unchanged on retry for consumer deduplication.",
+      "not": {
+        "pattern": "[^0-9a-fA-F-]"
+      }
+    },
+    "orgId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      }
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+      "description": "Stable source ID. Source-specific detail belongs in payload.",
+      "not": {
+        "pattern": "[\\r\\n]"
+      }
+    },
+    "tag": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+      "not": {
+        "pattern": "[\\r\\n]"
+      }
+    },
+    "value": {
+      "description": "Finite measurement, status, flag, or explicit unavailable value.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SignalNumber"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "observedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^([1-9][0-9]{3}|0[1-9][0-9]{2}|00[1-9][0-9]|000[1-9])-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](\\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$",
+      "description": "RFC 3339 time with timezone; Scenario time when simulated.",
+      "not": {
+        "pattern": "[\\r\\n]"
+      }
+    },
+    "simulated": {
+      "type": "boolean",
+      "description": "Explicit provenance; never default to false."
+    },
+    "classification": {
+      "type": "string",
+      "enum": [
+        "PUBLIC",
+        "INTERNAL",
+        "CONFIDENTIAL",
+        "HIGHLY_RESTRICTED"
+      ]
+    },
+    "assetId": {
+      "type": "string",
+      "format": "uuid",
+      "not": {
+        "pattern": "[^0-9a-fA-F-]"
+      }
+    },
+    "barrierId": {
+      "type": "string",
+      "format": "uuid",
+      "not": {
+        "pattern": "[^0-9a-fA-F-]"
+      }
+    },
+    "simulationRunId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Optional Scenario run identity for replay and reset.",
+      "not": {
+        "pattern": "[^0-9a-fA-F-]"
+      }
+    },
+    "unit": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Untrusted source detail; consumers validate pack-specific content."
+    }
+  },
+  "$defs": {
+    "SignalNumber": {
+      "type": "number",
+      "minimum": -1.7976931348623157e+308,
+      "maximum": 1.7976931348623157e+308,
+      "description": "Finite IEEE 754 binary64 range shared by TypeScript and Python."
+    }
+  }
+}

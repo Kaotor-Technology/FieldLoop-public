@@ -1,0 +1,818 @@
+{
+  "id": "bangkok-bowtie-d",
+  "assetCode": "Z3",
+  "assetCodes": [
+    "Z3",
+    "Z4"
+  ],
+  "hazard": "Stormwater and river water around a low-lying city",
+  "topEvent": "Water exceeds the drainage and flood-defence capacity of the zone",
+  "domain": "mah",
+  "status": "approved",
+  "version": "1.0.0",
+  "metadata": {
+    "label": "SYNTHETIC",
+    "simulated": true,
+    "classification": "CONFIDENTIAL",
+    "parameterBasis": "Illustrative simulation frequencies, conditional probabilities, PFD defaults and assumed independence only; not measured rates, forecasts, hydraulic modelling or a QRA. Severity bands follow PRD 6.1-D.",
+    "simulationStartsAt": "2026-10-12T00:00:00.000Z",
+    "scenarioReference": "convective-storm-pump-power-loss",
+    "healthBasis": "Initial simulated generator backup Health is Degraded with an overdue monthly load test; pumping-stations remains Healthy until a person accepts a later Health Proposal.",
+    "crossDomainNote": "A pump-SCADA Cyber/OT Bowtie may later link to pump-station-outage; no Cross-Domain Link is seeded without that source Bowtie."
+  },
+  "threats": [
+    {
+      "id": "heavy-convective-rainfall",
+      "name": "Heavy convective rainfall (> 60 mm/h)",
+      "frequencyPerYear": 2
+    },
+    {
+      "id": "high-upstream-flow",
+      "name": "High Chao Phraya flow from upstream runoff",
+      "frequencyPerYear": 0.2
+    },
+    {
+      "id": "high-tide-storm-surge",
+      "name": "High tide / storm surge",
+      "frequencyPerYear": 0.5
+    },
+    {
+      "id": "pump-station-outage",
+      "name": "Pump station outage (power loss)",
+      "frequencyPerYear": 0.1
+    }
+  ],
+  "consequences": [
+    {
+      "id": "electrocution-drowning",
+      "name": "Electrocution or drowning",
+      "severity": {
+        "people": 5
+      },
+      "conditionalProbability": 0.1
+    },
+    {
+      "id": "hospital-emergency-access",
+      "name": "Hospital and emergency access cut",
+      "severity": {
+        "service_continuity": 5
+      },
+      "conditionalProbability": 0.1
+    },
+    {
+      "id": "metro-road-disruption",
+      "name": "Metro/road disruption",
+      "severity": {
+        "service_continuity": 4
+      },
+      "conditionalProbability": 0.1
+    },
+    {
+      "id": "property-economic-loss",
+      "name": "Property and economic loss",
+      "severity": {
+        "financial": 4
+      },
+      "conditionalProbability": 0.1
+    }
+  ],
+  "independenceGroups": [
+    {
+      "id": "shared-district-response-team",
+      "cause": "Shared simulated district response team for early warning and traffic diversion"
+    }
+  ],
+  "barriers": [
+    {
+      "id": "drainage-network-tunnels",
+      "name": "Drainage network & tunnels",
+      "type": "technical",
+      "side": "preventive",
+      "assetCode": "Z3",
+      "ownerRole": "Flood Barrier Owner",
+      "pfdBand": 0.01,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "SIMULATION: Drainage inspection and tunnel function records. Record a passed check within the Evidence interval; failures require human review.",
+      "triad": {
+        "effective": {
+          "pass": true,
+          "justification": "Clear flow paths remove stormwater before capacity is exceeded. Illustrative model only."
+        },
+        "independent": {
+          "pass": true,
+          "justification": "The model treats this function as separate from other credited functions; real independence requires site validation."
+        },
+        "auditable": {
+          "pass": true,
+          "justification": "Drainage inspection and tunnel function records. All records are simulated."
+        }
+      },
+      "evidence": [
+        {
+          "id": "drainage-network-tunnels-check-1",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-08-15T00:00:00.000Z"
+        },
+        {
+          "id": "drainage-network-tunnels-check-2",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-09-15T00:00:00.000Z"
+        }
+      ],
+      "degradationFactors": [
+        {
+          "id": "drainage-network-tunnels-degradation",
+          "description": "Garbage-blocked drains",
+          "controls": [
+            {
+              "id": "drainage-network-tunnels-control",
+              "description": "Drain-cleaning programme"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pumping-stations",
+      "name": "Pumping stations",
+      "type": "technical",
+      "side": "preventive",
+      "assetCode": "P-3",
+      "ownerRole": "Flood Barrier Owner",
+      "pfdBand": 0.01,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "SIMULATION: Dated simulated pump function tests. Record a passed check within the Evidence interval; failures require human review.",
+      "triad": {
+        "effective": {
+          "pass": true,
+          "justification": "Pumps remove stored stormwater from the illustrative zone. Illustrative model only."
+        },
+        "independent": {
+          "pass": true,
+          "justification": "The model treats this function as separate from other credited functions; real independence requires site validation."
+        },
+        "auditable": {
+          "pass": true,
+          "justification": "Dated simulated pump function tests. All records are simulated."
+        }
+      },
+      "evidence": [
+        {
+          "id": "pumping-stations-check-1",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-08-15T00:00:00.000Z"
+        },
+        {
+          "id": "pumping-stations-check-2",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-09-15T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "canal-pre-drawdown",
+      "name": "Canal pre-drawdown before forecast storms",
+      "type": "organisational",
+      "side": "preventive",
+      "assetCode": "Z3",
+      "ownerRole": "Flood Barrier Owner",
+      "pfdBand": 0.1,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "SIMULATION: Simulated forecast review and pre-drawdown checklist. Record a passed check within the Evidence interval; failures require human review.",
+      "triad": {
+        "effective": {
+          "pass": true,
+          "justification": "Planned pre-drawdown creates storage before a forecast storm. Illustrative model only."
+        },
+        "independent": {
+          "pass": true,
+          "justification": "The model treats this function as separate from other credited functions; real independence requires site validation."
+        },
+        "auditable": {
+          "pass": true,
+          "justification": "Simulated forecast review and pre-drawdown checklist. All records are simulated."
+        }
+      },
+      "evidence": [
+        {
+          "id": "canal-pre-drawdown-check-1",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-08-15T00:00:00.000Z"
+        },
+        {
+          "id": "canal-pre-drawdown-check-2",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-09-15T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "river-flood-walls",
+      "name": "River flood walls & embankments",
+      "type": "technical",
+      "side": "preventive",
+      "assetCode": "Z4",
+      "ownerRole": "Flood Barrier Owner",
+      "pfdBand": 0.01,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "SIMULATION: Simulated embankment survey records. Record a passed check within the Evidence interval; failures require human review.",
+      "triad": {
+        "effective": {
+          "pass": true,
+          "justification": "Flood defences limit river water entering the illustrative zone. Illustrative model only."
+        },
+        "independent": {
+          "pass": true,
+          "justification": "The model treats this function as separate from other credited functions; real independence requires site validation."
+        },
+        "auditable": {
+          "pass": true,
+          "justification": "Simulated embankment survey records. All records are simulated."
+        }
+      },
+      "evidence": [
+        {
+          "id": "river-flood-walls-check-1",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-08-15T00:00:00.000Z"
+        },
+        {
+          "id": "river-flood-walls-check-2",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-09-15T00:00:00.000Z"
+        }
+      ],
+      "degradationFactors": [
+        {
+          "id": "river-flood-walls-degradation",
+          "description": "Wall settlement / land subsidence",
+          "controls": [
+            {
+              "id": "river-flood-walls-control",
+              "description": "Embankment survey"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "water-gates",
+      "name": "Water gates",
+      "type": "technical",
+      "side": "preventive",
+      "assetCode": "G-1",
+      "ownerRole": "Flood Barrier Owner",
+      "pfdBand": 0.01,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "SIMULATION: Simulated gate isolation tests. Record a passed check within the Evidence interval; failures require human review.",
+      "triad": {
+        "effective": {
+          "pass": true,
+          "justification": "Water gates isolate high upstream levels from the drainage system. Illustrative model only."
+        },
+        "independent": {
+          "pass": true,
+          "justification": "The model treats this function as separate from other credited functions; real independence requires site validation."
+        },
+        "auditable": {
+          "pass": true,
+          "justification": "Simulated gate isolation tests. All records are simulated."
+        }
+      },
+      "evidence": [
+        {
+          "id": "water-gates-check-1",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-08-15T00:00:00.000Z"
+        },
+        {
+          "id": "water-gates-check-2",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-09-15T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "upstream-release-coordination",
+      "name": "Upstream release coordination",
+      "type": "organisational",
+      "side": "preventive",
+      "assetCode": "Z4",
+      "ownerRole": "Flood Barrier Owner",
+      "pfdBand": 0.1,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "SIMULATION: Simulated coordination exercise records. Record a passed check within the Evidence interval; failures require human review.",
+      "triad": {
+        "effective": {
+          "pass": true,
+          "justification": "Coordination prepares drainage capacity for upstream runoff. Illustrative model only."
+        },
+        "independent": {
+          "pass": true,
+          "justification": "The model treats this function as separate from other credited functions; real independence requires site validation."
+        },
+        "auditable": {
+          "pass": true,
+          "justification": "Simulated coordination exercise records. All records are simulated."
+        }
+      },
+      "evidence": [
+        {
+          "id": "upstream-release-coordination-check-1",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-08-15T00:00:00.000Z"
+        },
+        {
+          "id": "upstream-release-coordination-check-2",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-09-15T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "tidal-gates",
+      "name": "Tidal gates",
+      "type": "technical",
+      "side": "preventive",
+      "assetCode": "G-2",
+      "ownerRole": "Flood Barrier Owner",
+      "pfdBand": 0.01,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "SIMULATION: Simulated gate closure tests. Record a passed check within the Evidence interval; failures require human review.",
+      "triad": {
+        "effective": {
+          "pass": true,
+          "justification": "Tidal gates reduce reverse flow at elevated tide. Illustrative model only."
+        },
+        "independent": {
+          "pass": true,
+          "justification": "The model treats this function as separate from other credited functions; real independence requires site validation."
+        },
+        "auditable": {
+          "pass": true,
+          "justification": "Simulated gate closure tests. All records are simulated."
+        }
+      },
+      "evidence": [
+        {
+          "id": "tidal-gates-check-1",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-08-15T00:00:00.000Z"
+        },
+        {
+          "id": "tidal-gates-check-2",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-09-15T00:00:00.000Z"
+        }
+      ],
+      "degradationFactors": [
+        {
+          "id": "tidal-gates-degradation",
+          "description": "Gate maintenance backlog",
+          "controls": [
+            {
+              "id": "tidal-gates-control",
+              "description": "Gate test regime"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tide-aware-pump-scheduling",
+      "name": "Tide-aware pump scheduling",
+      "type": "organisational",
+      "side": "preventive",
+      "assetCode": "P-2",
+      "ownerRole": "Flood Barrier Owner",
+      "pfdBand": 0.1,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "SIMULATION: Simulated tide schedule review. Record a passed check within the Evidence interval; failures require human review.",
+      "triad": {
+        "effective": {
+          "pass": true,
+          "justification": "Scheduling preserves pumping effectiveness across the tide cycle. Illustrative model only."
+        },
+        "independent": {
+          "pass": true,
+          "justification": "The model treats this function as separate from other credited functions; real independence requires site validation."
+        },
+        "auditable": {
+          "pass": true,
+          "justification": "Simulated tide schedule review. All records are simulated."
+        }
+      },
+      "evidence": [
+        {
+          "id": "tide-aware-pump-scheduling-check-1",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-08-15T00:00:00.000Z"
+        },
+        {
+          "id": "tide-aware-pump-scheduling-check-2",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-09-15T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "dual-power-generators",
+      "name": "Dual power feed & generators",
+      "type": "technical",
+      "side": "preventive",
+      "assetCode": "P-3",
+      "ownerRole": "Flood Barrier Owner",
+      "pfdBand": 0.01,
+      "health": "degraded",
+      "evidenceInterval": "1 month",
+      "performanceStandard": "SIMULATION: Simulated monthly generator load-test records. Record a passed check within the Evidence interval; failures require human review.",
+      "triad": {
+        "effective": {
+          "pass": true,
+          "justification": "Separate power feeds and generator backup support pumps after power loss. Illustrative model only."
+        },
+        "independent": {
+          "pass": true,
+          "justification": "The model treats this function as separate from other credited functions; real independence requires site validation."
+        },
+        "auditable": {
+          "pass": true,
+          "justification": "Simulated monthly generator load-test records. All records are simulated."
+        }
+      },
+      "evidence": [
+        {
+          "id": "dual-power-generators-check-1",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-08-01T00:00:00.000Z"
+        },
+        {
+          "id": "dual-power-generators-check-2",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-09-01T00:00:00.000Z"
+        }
+      ],
+      "degradationFactors": [
+        {
+          "id": "dual-power-generators-degradation",
+          "description": "Generator not tested",
+          "controls": [
+            {
+              "id": "dual-power-generators-control",
+              "description": "Monthly load test"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "mobile-pumps-standby",
+      "name": "Mobile pumps on standby",
+      "type": "organisational",
+      "side": "preventive",
+      "assetCode": "Z3",
+      "ownerRole": "Flood Barrier Owner",
+      "pfdBand": 0.1,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "SIMULATION: Simulated standby readiness checklists. Record a passed check within the Evidence interval; failures require human review.",
+      "triad": {
+        "effective": {
+          "pass": true,
+          "justification": "Prepared mobile pumps provide alternative drainage during station outages. Illustrative model only."
+        },
+        "independent": {
+          "pass": true,
+          "justification": "The model treats this function as separate from other credited functions; real independence requires site validation."
+        },
+        "auditable": {
+          "pass": true,
+          "justification": "Simulated standby readiness checklists. All records are simulated."
+        }
+      },
+      "evidence": [
+        {
+          "id": "mobile-pumps-standby-check-1",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-08-15T00:00:00.000Z"
+        },
+        {
+          "id": "mobile-pumps-standby-check-2",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-09-15T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "early-warning",
+      "name": "Early warning to districts and communities",
+      "type": "human",
+      "side": "mitigative",
+      "assetCode": "Z3",
+      "ownerRole": "Flood Barrier Owner",
+      "pfdBand": 0.1,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "SIMULATION: Simulated warning and receipt exercises. Record a passed check within the Evidence interval; failures require human review.",
+      "triad": {
+        "effective": {
+          "pass": true,
+          "justification": "Approved warnings let people avoid flood exposure. Illustrative model only."
+        },
+        "independent": {
+          "pass": true,
+          "justification": "Shared district response-team availability is represented by the Independence Group; do not credit both independently on one path."
+        },
+        "auditable": {
+          "pass": true,
+          "justification": "Simulated warning and receipt exercises. All records are simulated."
+        }
+      },
+      "evidence": [
+        {
+          "id": "early-warning-check-1",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-08-15T00:00:00.000Z"
+        },
+        {
+          "id": "early-warning-check-2",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-09-15T00:00:00.000Z"
+        }
+      ],
+      "independenceGroupId": "shared-district-response-team"
+    },
+    {
+      "id": "traffic-diversion",
+      "name": "Traffic diversion & road closures",
+      "type": "organisational",
+      "side": "mitigative",
+      "assetCode": "Z3",
+      "ownerRole": "Flood Barrier Owner",
+      "pfdBand": 0.1,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "SIMULATION: Simulated diversion exercises. Record a passed check within the Evidence interval; failures require human review.",
+      "triad": {
+        "effective": {
+          "pass": true,
+          "justification": "Diversions preserve safe access after drainage capacity is exceeded. Illustrative model only."
+        },
+        "independent": {
+          "pass": true,
+          "justification": "Shared district response-team availability is represented by the Independence Group; do not credit both independently on one path."
+        },
+        "auditable": {
+          "pass": true,
+          "justification": "Simulated diversion exercises. All records are simulated."
+        }
+      },
+      "evidence": [
+        {
+          "id": "traffic-diversion-check-1",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-08-15T00:00:00.000Z"
+        },
+        {
+          "id": "traffic-diversion-check-2",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-09-15T00:00:00.000Z"
+        }
+      ],
+      "independenceGroupId": "shared-district-response-team"
+    },
+    {
+      "id": "sandbag-mobile-pump-deployment",
+      "name": "Sandbag and mobile-pump deployment",
+      "type": "human",
+      "side": "mitigative",
+      "assetCode": "Z3",
+      "ownerRole": "Flood Barrier Owner",
+      "pfdBand": 0.1,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "SIMULATION: Simulated deployment drills. Record a passed check within the Evidence interval; failures require human review.",
+      "triad": {
+        "effective": {
+          "pass": true,
+          "justification": "Prepared deployment limits local inundation and exposure. Illustrative model only."
+        },
+        "independent": {
+          "pass": true,
+          "justification": "The model treats this function as separate from other credited functions; real independence requires site validation."
+        },
+        "auditable": {
+          "pass": true,
+          "justification": "Simulated deployment drills. All records are simulated."
+        }
+      },
+      "evidence": [
+        {
+          "id": "sandbag-mobile-pump-deployment-check-1",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-08-15T00:00:00.000Z"
+        },
+        {
+          "id": "sandbag-mobile-pump-deployment-check-2",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-09-15T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "de-energising-substations",
+      "name": "De-energising flooded substations",
+      "type": "technical",
+      "side": "mitigative",
+      "assetCode": "Z4",
+      "ownerRole": "Flood Barrier Owner",
+      "pfdBand": 0.01,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "SIMULATION: Simulated isolation procedure exercises. Record a passed check within the Evidence interval; failures require human review.",
+      "triad": {
+        "effective": {
+          "pass": true,
+          "justification": "Operator-controlled isolation reduces electrical exposure in inundated areas. Illustrative model only."
+        },
+        "independent": {
+          "pass": true,
+          "justification": "The model treats this function as separate from other credited functions; real independence requires site validation."
+        },
+        "auditable": {
+          "pass": true,
+          "justification": "Simulated isolation procedure exercises. All records are simulated."
+        }
+      },
+      "evidence": [
+        {
+          "id": "de-energising-substations-check-1",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-08-15T00:00:00.000Z"
+        },
+        {
+          "id": "de-energising-substations-check-2",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-09-15T00:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "id": "evacuation-shelters",
+      "name": "Evacuation shelters",
+      "type": "organisational",
+      "side": "mitigative",
+      "assetCode": "Z4",
+      "ownerRole": "Flood Barrier Owner",
+      "pfdBand": 0.1,
+      "health": "healthy",
+      "evidenceInterval": "12 months",
+      "performanceStandard": "SIMULATION: Simulated shelter readiness checks. Record a passed check within the Evidence interval; failures require human review.",
+      "triad": {
+        "effective": {
+          "pass": true,
+          "justification": "Prepared shelters reduce exposure after inundation. Illustrative model only."
+        },
+        "independent": {
+          "pass": true,
+          "justification": "The model treats this function as separate from other credited functions; real independence requires site validation."
+        },
+        "auditable": {
+          "pass": true,
+          "justification": "Simulated shelter readiness checks. All records are simulated."
+        }
+      },
+      "evidence": [
+        {
+          "id": "evacuation-shelters-check-1",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-08-15T00:00:00.000Z"
+        },
+        {
+          "id": "evacuation-shelters-check-2",
+          "kind": "performance_check",
+          "source": "manual",
+          "observedAt": "2026-09-15T00:00:00.000Z"
+        }
+      ]
+    }
+  ],
+  "paths": [
+    {
+      "id": "heavy-convective-rainfall-path",
+      "side": "preventive",
+      "targetId": "heavy-convective-rainfall",
+      "barrierIds": [
+        "drainage-network-tunnels",
+        "pumping-stations",
+        "canal-pre-drawdown"
+      ]
+    },
+    {
+      "id": "high-upstream-flow-path",
+      "side": "preventive",
+      "targetId": "high-upstream-flow",
+      "barrierIds": [
+        "river-flood-walls",
+        "water-gates",
+        "upstream-release-coordination"
+      ]
+    },
+    {
+      "id": "high-tide-storm-surge-path",
+      "side": "preventive",
+      "targetId": "high-tide-storm-surge",
+      "barrierIds": [
+        "tidal-gates",
+        "tide-aware-pump-scheduling"
+      ]
+    },
+    {
+      "id": "pump-station-outage-path",
+      "side": "preventive",
+      "targetId": "pump-station-outage",
+      "barrierIds": [
+        "dual-power-generators",
+        "mobile-pumps-standby"
+      ]
+    },
+    {
+      "id": "electrocution-drowning-path",
+      "side": "mitigative",
+      "targetId": "electrocution-drowning",
+      "barrierIds": [
+        "early-warning",
+        "sandbag-mobile-pump-deployment",
+        "de-energising-substations",
+        "evacuation-shelters"
+      ]
+    },
+    {
+      "id": "hospital-emergency-access-path",
+      "side": "mitigative",
+      "targetId": "hospital-emergency-access",
+      "barrierIds": [
+        "early-warning",
+        "traffic-diversion",
+        "sandbag-mobile-pump-deployment"
+      ]
+    },
+    {
+      "id": "metro-road-disruption-path",
+      "side": "mitigative",
+      "targetId": "metro-road-disruption",
+      "barrierIds": [
+        "early-warning",
+        "traffic-diversion",
+        "sandbag-mobile-pump-deployment"
+      ]
+    },
+    {
+      "id": "property-economic-loss-path",
+      "side": "mitigative",
+      "targetId": "property-economic-loss",
+      "barrierIds": [
+        "early-warning",
+        "sandbag-mobile-pump-deployment",
+        "de-energising-substations"
+      ]
+    }
+  ]
+}

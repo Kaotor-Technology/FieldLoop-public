@@ -5,6 +5,8 @@ packages:
   - apps/signal-worker
   - packages/*
   - db/seed/dl-01
+  - db/seed/legal-corpus
+  - db/seed/bangkok
 injectWorkspacePackages: true
 syncInjectedDepsAfterScripts:
   - build

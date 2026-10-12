@@ -1,0 +1,173 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "P-1",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.575,
+          13.776
+        ]
+      },
+      "properties": {
+        "asset_code": "P-1",
+        "facility_type": "pump",
+        "zone_code": "Z3",
+        "name": "Demo pump P-1 (SYNTHETIC)",
+        "label": "SYNTHETIC",
+        "simulated": true,
+        "classification": "HIGHLY_RESTRICTED",
+        "location_basis": "Authored synthetic coordinates; not a real Facility location."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "P-3",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.58,
+          13.775
+        ]
+      },
+      "properties": {
+        "asset_code": "P-3",
+        "facility_type": "pump",
+        "zone_code": "Z3",
+        "name": "Demo pump P-3 (SYNTHETIC)",
+        "label": "SYNTHETIC",
+        "simulated": true,
+        "classification": "HIGHLY_RESTRICTED",
+        "location_basis": "Authored synthetic coordinates; not a real Facility location."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "P-2",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.635,
+          13.765
+        ]
+      },
+      "properties": {
+        "asset_code": "P-2",
+        "facility_type": "pump",
+        "zone_code": "Z4",
+        "name": "Demo pump P-2 (SYNTHETIC)",
+        "label": "SYNTHETIC",
+        "simulated": true,
+        "classification": "HIGHLY_RESTRICTED",
+        "location_basis": "Authored synthetic coordinates; not a real Facility location."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "G-1",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.582,
+          13.777
+        ]
+      },
+      "properties": {
+        "asset_code": "G-1",
+        "facility_type": "gate",
+        "zone_code": "Z3",
+        "name": "Demo gate G-1 (SYNTHETIC)",
+        "label": "SYNTHETIC",
+        "simulated": true,
+        "classification": "HIGHLY_RESTRICTED",
+        "location_basis": "Authored synthetic coordinates; not a real Facility location."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "G-2",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.64,
+          13.775
+        ]
+      },
+      "properties": {
+        "asset_code": "G-2",
+        "facility_type": "gate",
+        "zone_code": "Z4",
+        "name": "Demo gate G-2 (SYNTHETIC)",
+        "label": "SYNTHETIC",
+        "simulated": true,
+        "classification": "HIGHLY_RESTRICTED",
+        "location_basis": "Authored synthetic coordinates; not a real Facility location."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "S-R1",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.578,
+          13.778
+        ]
+      },
+      "properties": {
+        "asset_code": "S-R1",
+        "facility_type": "rain_sensor",
+        "zone_code": "Z3",
+        "name": "Demo rain sensor S-R1 (SYNTHETIC)",
+        "label": "SYNTHETIC",
+        "simulated": true,
+        "classification": "HIGHLY_RESTRICTED",
+        "location_basis": "Authored synthetic coordinates; not a real Facility location."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "S-L1",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.583,
+          13.776
+        ]
+      },
+      "properties": {
+        "asset_code": "S-L1",
+        "facility_type": "level_sensor",
+        "zone_code": "Z3",
+        "name": "Demo level sensor S-L1 (SYNTHETIC)",
+        "label": "SYNTHETIC",
+        "simulated": true,
+        "classification": "HIGHLY_RESTRICTED",
+        "location_basis": "Authored synthetic coordinates; not a real Facility location."
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "S-T1",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          100.63,
+          13.79
+        ]
+      },
+      "properties": {
+        "asset_code": "S-T1",
+        "facility_type": "tide_sensor",
+        "zone_code": "Z4",
+        "name": "Demo tide sensor S-T1 (SYNTHETIC)",
+        "label": "SYNTHETIC",
+        "simulated": true,
+        "classification": "HIGHLY_RESTRICTED",
+        "location_basis": "Authored synthetic coordinates; not a real Facility location."
+      }
+    }
+  ]
+}
