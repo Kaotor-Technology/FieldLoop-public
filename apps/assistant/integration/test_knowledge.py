@@ -334,3 +334,64 @@ def test_database_and_embedding_deadlines_fail_closed() -> None:
                 assert time.perf_counter() - start < 2.5
 
     asyncio.run(exercise())
+
+
+def test_a_human_licence_change_prevents_reindexing() -> None:
+    async def exercise() -> None:
+        item = source()
+        embeddings = FakeEmbeddings()
+        async with await AsyncConnection.connect(
+            DSN, row_factory=dict_row, autocommit=True
+        ) as connection:
+            await index_document(connection, "licence-fixture", item, embeddings)
+            await connection.execute(
+                "UPDATE app.controlled_document SET licence=%s WHERE id=%s",
+                ("reference-only", item.id),
+            )
+            with pytest.raises(ValueError, match="metadata differs"):
+                await index_document(connection, "licence-fixture", item, embeddings)
+            assert embeddings.calls == ["RETRIEVAL_DOCUMENT"]
+
+    asyncio.run(exercise())
+
+
+def test_spatial_index_clips_a_document_to_its_chainage() -> None:
+    async def exercise() -> None:
+        item = replace(source(), asset_code="DL-01", chainage_from=250, chainage_to=750)
+        asset_id = uuid4()
+        embeddings = FakeEmbeddings()
+        async with await AsyncConnection.connect(
+            DSN, row_factory=dict_row, autocommit=True
+        ) as connection:
+            await connection.execute(
+                """
+                INSERT INTO app.asset (id,org_id,type,attributes,simulated,classification)
+                VALUES (%s, 'clip-fixture', 'linear', '{"asset_code":"DL-01"}', true,
+                        'HIGHLY_RESTRICTED')
+            """,
+                (asset_id,),
+            )
+            await connection.execute(
+                """
+                INSERT INTO app.segment
+                    (org_id,asset_id,chainage_from,chainage_to,geom,simulated,classification)
+                VALUES ('clip-fixture', %s, 0, 1000,
+                        ST_GeomFromText('LINESTRING(100 13,101 13)',4326), true,'HIGHLY_RESTRICTED')
+            """,
+                (asset_id,),
+            )
+            assert await index_document(connection, "clip-fixture", item, embeddings) == 1
+            assert await index_document(connection, "clip-fixture", item, embeddings) == 0
+            row = await (
+                await connection.execute(
+                    """
+                SELECT ST_XMin(geom) AS west, ST_XMax(geom) AS east, geom_classification
+                FROM app.document_chunk WHERE document_id=%s
+            """,
+                    (item.id,),
+                )
+            ).fetchone()
+            assert row and row["west"] == 100.25 and row["east"] == 100.75
+            assert row["geom_classification"] == "HIGHLY_RESTRICTED"
+
+    asyncio.run(exercise())
