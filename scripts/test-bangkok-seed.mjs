@@ -60,6 +60,15 @@ try {
         OR (b.side = 'mitigative' AND p.consequence_id IS NOT NULL AND p.threat_id IS NULL))
   `.execute(database);
   assert.equal(paths.count, 23);
+  const initialBowtie = readBowtieSeed();
+  const healthRows = await database.selectFrom("app.barrier").select(["id", "health"])
+    .where("org_id", "=", orgId).where("created_by", "=", "seed:bangkok").execute();
+  assert.deepEqual(Object.fromEntries(healthRows.map(row => [row.id, row.health])),
+    Object.fromEntries(initialBowtie.barriers.map(barrier => [databaseId(orgId, `barrier:${barrier.id}`), barrier.health])),
+    "every initial Barrier Health must match the authored seed");
+  const scope = await database.selectFrom("app.bowtie_asset").select("asset_id").where("org_id", "=", orgId).execute();
+  assert.deepEqual(scope.map(row => row.asset_id).sort(), initialBowtie.assetCodes.map(code => databaseId(orgId, `asset:${code}`)).sort(),
+    "Bowtie D must cover both demo Areas");
   for (const [table, count] of Object.entries(expected)) {
     const rows = await database.selectFrom(`app.${table}`).selectAll().where("org_id", "=", orgId).execute();
     assert.equal(rows.length, count);
