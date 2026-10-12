@@ -1,0 +1,60 @@
+id: pipeline-integrity
+version: 1.0.0
+label: SIMULATION
+simulated: true
+classification: CONFIDENTIAL
+parameterBasis: >-
+  Authored DL-01 demo rules. Thresholds are illustrative simulation inputs,
+  not measured operating limits, engineering advice or regulatory findings.
+knowledgeFolders:
+  - Codes & Standards
+  - Company Standards
+  - Integrity
+  - Maintenance
+  - Regulatory
+  - Templates
+  - Lessons Learned
+  - Golden Examples
+threatCategories:
+  - {code: third-party-excavation, name: Third-party excavation}
+  - {code: external-corrosion, name: External corrosion}
+  - {code: slope-movement-river-scour, name: Slope movement / river scour}
+  - {code: overpressure, name: Overpressure}
+signalRules:
+  - id: cp-rectifier-output-lost
+    condition: {kind: signal, source: mock-historian, tag: DL-01.rectifier.output, operator: eq, threshold: 0, unit: A}
+    targetBarrierSelector:
+      pack: pipeline-integrity
+      bowtieCode: dl-01-bowtie-a
+      barrierCodes: [cathodic-protection]
+    effect:
+      kind: health_proposal
+      proposedHealth: failed
+      reason: SIMULATION rectifier output is zero; a person must decide the proposed CP Health change.
+  - id: encroachment-detected
+    condition: {kind: signal, source: mock-patrol, tag: DL-01.encroachment.detected, operator: eq, threshold: 1, unit: boolean}
+    targetBarrierSelector:
+      pack: pipeline-integrity
+      bowtieCode: dl-01-bowtie-a
+      barrierCodes: [right-of-way-patrol, excavation-permit-one-call]
+    effect:
+      kind: health_proposal
+      proposedHealth: degraded
+      reason: SIMULATION encroachment finding requires review of patrol and permit Evidence.
+  - id: evidence-ageing
+    condition: {kind: evidence_ageing, intervalSource: barrier.evidence_interval}
+    targetBarrierSelector:
+      pack: pipeline-integrity
+      bowtieCode: dl-01-bowtie-a
+      barrierCodes: [cathodic-protection, coating, right-of-way-patrol, excavation-permit-one-call]
+    effect:
+      kind: health_proposal
+      proposedHealth: unverified
+      reason: SIMULATION Evidence is older than the Barrier interval; request fresh Evidence and human review.
+agentFiles:
+  - agents/integrity-orchestrator.yaml
+  - agents/code-standard.yaml
+  - agents/regulatory.yaml
+  - agents/inspection-data-prep.yaml
+  - agents/report-generator.yaml
+warningTemplates: []

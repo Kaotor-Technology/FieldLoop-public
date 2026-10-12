@@ -1,0 +1,8 @@
+{
+  "label": "SIMULATION",
+  "agents": ["flood-situation"],
+  "rules": [
+    { "id": "rainfall-needs-fresh-evidence", "source": "mock-hydro", "tag": "rain.accumulation.24h", "operator": "gt", "threshold": 100, "windowSeconds": 86400, "health": "unverified", "barriers": ["pumping-stations", "water-gates", "tidal-gates"] },
+    { "id": "pump-power-lost", "source": "mock-pumps", "tag": "pump.power", "operator": "eq", "threshold": 0, "health": "degraded", "barriers": ["pumping-stations"] }
+  ]
+}

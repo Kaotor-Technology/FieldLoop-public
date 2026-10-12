@@ -1,4 +1,5 @@
 export { createGoogleCloudSqlPool } from "./cloud-sql.js";
+export { loadDomainPacks, type LoadedDomainPack } from "./domain-pack-loader.js";
 export { GoogleCloudKmsEnvelopeKeyService, type EnvelopeKeyService } from "./kms-envelope-key.js";
 export { GoogleCloudSecretReader } from "./secret-manager.js";
 export { GooglePubSubTransport } from "./google-pubsub.js";
