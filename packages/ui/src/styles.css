@@ -1,0 +1,94 @@
+@import "./generated/tokens.css";
+@import "tailwindcss/theme";
+@import "./generated/theme.css";
+@import "tailwindcss/utilities";
+@source "./**/*.tsx";
+
+/* Semantic aliases keep portal surfaces and application surfaces on the same theme. */
+:root {
+  --fl-canvas: var(--color-neutral-50); --fl-surface: var(--color-neutral-0);
+  --fl-raised: var(--color-neutral-0); --fl-ink: var(--color-neutral-900);
+  --fl-muted: var(--color-neutral-600); --fl-border: var(--color-neutral-400);
+  --fl-divider: var(--color-neutral-200); --fl-hover: var(--color-neutral-100);
+  --fl-primary: var(--color-primary); --fl-primary-hover: var(--color-primary-hover);
+  --fl-primary-active: var(--color-primary-active); --fl-on-primary: var(--color-on-primary);
+  --fl-selected: var(--color-primary-subtle); --fl-focus: var(--color-focus);
+  --fl-disabled: var(--color-neutral-100); --fl-disabled-ink: var(--color-neutral-600);
+  --fl-error: var(--color-error); --fl-error-bg: var(--color-error-subtle);
+  --fl-success: var(--color-success); --fl-success-bg: var(--color-success-subtle);
+  --fl-warning: var(--color-warning); --fl-warning-bg: var(--color-warning-subtle);
+  --fl-info: var(--color-info); --fl-info-bg: var(--color-info-subtle);
+  --fl-simulation: var(--color-simulation); --fl-simulation-bg: var(--color-simulation-subtle);
+  --fl-shadow: var(--elevation-level-3); --fl-modal-shadow: var(--elevation-level-4);
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --fl-canvas: var(--color-dark-canvas); --fl-surface: var(--color-dark-surface);
+  --fl-raised: var(--color-dark-surface-raised); --fl-ink: var(--color-dark-on-surface);
+  --fl-muted: var(--color-dark-on-surface-muted); --fl-border: var(--color-dark-outline);
+  --fl-divider: var(--color-dark-border); --fl-hover: var(--color-dark-surface-raised);
+  --fl-primary: var(--color-dark-primary); --fl-primary-hover: var(--color-dark-primary-hover);
+  --fl-primary-active: var(--color-dark-primary-hover); --fl-on-primary: var(--color-dark-on-primary);
+  --fl-selected: var(--color-dark-surface-raised); --fl-focus: var(--color-dark-focus);
+  --fl-disabled: var(--color-dark-surface-disabled); --fl-disabled-ink: var(--color-dark-on-surface-muted);
+  --fl-error: var(--color-dark-error); --fl-error-bg: var(--color-dark-surface-raised);
+  --fl-success: var(--color-dark-success); --fl-success-bg: var(--color-dark-surface-raised);
+  --fl-warning: var(--color-dark-warning); --fl-warning-bg: var(--color-dark-surface-raised);
+  --fl-info: var(--color-dark-info); --fl-info-bg: var(--color-dark-surface-raised);
+  --fl-simulation: var(--color-dark-simulation); --fl-simulation-bg: var(--color-dark-simulation-subtle);
+  --fl-shadow: var(--elevation-dark-level-3); --fl-modal-shadow: var(--elevation-dark-level-4);
+}
+/* The generated media rules below apply these same aliases for system dark mode. */
+.fl-button, .fl-input, .fl-tab, .fl-select-menu, .fl-option, .fl-field, .fl-tab-panel {
+  box-sizing: border-box; font-family: var(--type-body-md-font-family), sans-serif;
+  font-size: var(--type-body-md-font-size); line-height: var(--type-body-md-line-height); color: var(--fl-ink);
+}
+.fl-button, .fl-input, .fl-tab {
+  border: var(--spacing-border-hairline) solid var(--fl-border);
+  border-radius: var(--radius-md); min-height: var(--spacing-control-md);
+  padding: var(--spacing-space-2) var(--spacing-space-3);
+  transition: background-color var(--motion-instant) var(--ease-standard), color var(--motion-instant) var(--ease-standard);
+}
+.fl-button, .fl-tab { cursor: pointer; font-weight: var(--type-label-lg-font-weight); }
+.fl-button { position: relative; display: inline-flex; justify-content: center; align-items: center; gap: var(--spacing-space-2); background: var(--fl-primary); color: var(--fl-on-primary); border-color: transparent; }
+.fl-button:hover { background: var(--fl-primary-hover); }
+.fl-button:active { background: var(--fl-primary-active); transform: translateY(var(--spacing-border-hairline)); }
+.fl-button[data-variant="secondary"] { background: var(--fl-surface); color: var(--fl-ink); border-color: var(--fl-border); }
+.fl-button[data-variant="ghost"] { background: var(--fl-canvas); color: var(--fl-primary); }
+.fl-button[data-variant="secondary"]:hover, .fl-button[data-variant="ghost"]:hover { background: var(--fl-hover); }
+.fl-button[data-variant="danger"] { background: var(--color-error); color: var(--color-on-primary); }
+.fl-button[data-variant="danger"]:hover { background: var(--color-error-hover); }
+:root[data-theme="dark"] .fl-button[data-variant="danger"] { background: var(--color-dark-error); color: var(--color-dark-on-primary); }
+:root[data-theme="dark"] .fl-button[data-variant="danger"]:hover { background: var(--color-dark-warning); }
+.fl-button[data-size="sm"] { min-height: var(--spacing-control-sm); font-size: var(--type-label-md-font-size); padding: var(--spacing-space-1) var(--spacing-space-3); }
+.fl-button[data-size="lg"], .fl-input[data-size="lg"] { min-height: var(--spacing-touch-target-field); }
+.fl-button:disabled, .fl-input:disabled, .fl-tab:disabled { background: var(--fl-disabled); color: var(--fl-disabled-ink); cursor: not-allowed; transform: none; }
+.fl-button:disabled:hover { background: var(--fl-disabled); }
+.fl-progress { position: absolute; bottom: 0; inset-inline: var(--spacing-space-3); height: var(--spacing-indicator-width); background: currentColor; animation: fl-progress var(--motion-pulse) var(--ease-standard) infinite alternate; }
+.fl-field { display: grid; gap: var(--spacing-space-1); min-width: 0; }
+.fl-field > label { font-weight: var(--type-label-md-font-weight); }
+.fl-input { background: var(--fl-surface); width: 100%; min-width: 0; }
+.fl-input:hover:not(:disabled) { border-color: var(--fl-muted); }
+.fl-input[aria-invalid="true"] { background: var(--fl-error-bg); border-color: var(--fl-error); }
+.fl-textarea { min-height: var(--spacing-space-16); resize: vertical; }
+.fl-helper, .fl-error { margin: 0; font-size: var(--type-body-sm-font-size); line-height: var(--type-body-sm-line-height); }
+.fl-helper { color: var(--fl-muted); } .fl-error { color: var(--fl-error); }
+.fl-mono { font-family: var(--type-mono-md-font-family), monospace; font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1, "zero" 1; }
+.fl-select-trigger { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-space-2); text-align: start; cursor: pointer; }
+.fl-select-trigger > span:first-child { overflow-wrap: anywhere; }
+.fl-select-menu { background: var(--fl-raised); border: var(--spacing-border-hairline) solid var(--fl-border); border-radius: var(--radius-lg); padding: var(--spacing-space-1); box-shadow: var(--fl-shadow); min-width: var(--radix-select-trigger-width, var(--radix-popover-trigger-width)); max-width: calc(100vw - var(--spacing-space-8)); max-height: var(--radix-select-content-available-height, var(--radix-popover-content-available-height)); overflow: auto; z-index: 30; }
+.fl-option-list { max-height: var(--spacing-chat-session-list-width); overflow: auto; }
+.fl-option { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-space-2); padding: var(--spacing-space-2) var(--spacing-space-3); min-height: var(--spacing-touch-target); border-radius: var(--radius-md); cursor: pointer; outline: none; }
+.fl-option[data-highlighted], .fl-option:hover { background: var(--fl-hover); }
+.fl-option[aria-selected="true"], .fl-option[data-state="checked"] { background: var(--fl-selected); color: var(--fl-primary); }
+.fl-option[aria-disabled="true"], .fl-option[data-disabled] { color: var(--fl-disabled-ink); cursor: not-allowed; }
+.fl-checkbox { display: inline-grid; place-items: center; min-width: var(--spacing-space-6); min-height: var(--spacing-space-6); background: var(--fl-surface); color: var(--fl-primary); border: var(--spacing-border-hairline) solid var(--fl-border); border-radius: var(--radius-sm); }
+.fl-tabs { min-width: 0; } .fl-tab-list { display: flex; flex-wrap: wrap; border-bottom: var(--spacing-border-hairline) solid var(--fl-divider); }
+.fl-tab { background: var(--fl-surface); color: var(--fl-muted); border: 0; border-radius: 0; border-bottom: var(--spacing-indicator-width) solid transparent; }
+.fl-tab:hover { background: var(--fl-hover); } .fl-tab[data-state="active"] { color: var(--fl-primary); border-bottom-color: var(--fl-primary); }
+.fl-tab-panel { padding: var(--spacing-space-4) 0; }
+:where(.fl-button, .fl-input, .fl-tab, .fl-checkbox, .fl-option, .fl-tab-panel):focus-visible { outline: var(--spacing-focus-ring-width) solid var(--fl-focus); outline-offset: var(--spacing-focus-ring-offset); }
+:where(.fl-field, .fl-button, .fl-tab-panel):lang(th) { line-height: var(--type-body-md-line-height); letter-spacing: 0; }
+@keyframes fl-progress { from { transform: scaleX(.25); } to { transform: scaleX(1); } }
+@media (pointer: coarse) { .fl-button, .fl-button[data-size="sm"], .fl-input, .fl-tab { min-height: var(--spacing-touch-target); } .fl-button[data-size="lg"], .fl-input[data-size="lg"] { min-height: var(--spacing-touch-target-field); } }
+@media (prefers-reduced-motion: reduce) { .fl-button, .fl-input, .fl-tab { transition: none; } .fl-progress { animation: none; } .fl-button:active { transform: none; } }
