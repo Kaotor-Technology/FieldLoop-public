@@ -9,7 +9,6 @@ from fieldloop_simulator.main import app
 
 ROOT = Path(__file__).resolve().parents[3]
 CONTRACTS = ROOT / "packages/contracts"
-PROBLEM = {"$ref": "openapi.yaml#/components/schemas/Problem"}
 # A source is a mock-<source>.v1.schema.json file; nothing here is edited to add one.
 SOURCES = sorted(
     path.name.removeprefix("mock-").removesuffix(".v1.schema.json")
@@ -60,18 +59,13 @@ def test_generated_response_model_has_no_contract_drift(source: str, tmp_path: P
 
 
 @pytest.mark.parametrize("source", SOURCES)
-def test_internal_openapi_contract_documents_only_read_operations(source: str) -> None:
+def test_the_contract_serves_its_own_schema_and_documents_the_refused_methods(source: str) -> None:
+    # The /mock/ root, GET only, and Problem error bodies are `.spectral.mock.yaml` rules.
     contract = json.loads((CONTRACTS / f"mock-{source}.v1.openapi.json").read_text())
-    assert contract["openapi"] == "3.1.0"
     assert contract["paths"]
-    for path, item in contract["paths"].items():
-        assert path.startswith("/mock/")
-        assert set(item) == {"get"}
+    for item in contract["paths"].values():
         responses = item["get"]["responses"]
         assert responses["200"]["content"]["application/json"]["schema"] == {
             "$ref": f"mock-{source}.v1.schema.json"
         }
         assert "405" in responses
-        for status, response in responses.items():
-            if status != "200":
-                assert response["content"]["application/problem+json"]["schema"] == PROBLEM
