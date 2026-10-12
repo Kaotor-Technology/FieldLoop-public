@@ -1,13 +1,18 @@
+import asyncio
 import json
 import math
 import subprocess
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from fieldloop_common.signal import parse_signal
+from fieldloop_common.signal_publisher import SignalPublisher
 from fieldloop_simulator.main import app
 from fieldloop_simulator.mock_patrol import SimulatedPatrol
+from fieldloop_simulator.mock_signals import SimulatedSignalEmitter
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -165,6 +170,96 @@ def test_reads_report_the_configured_organisation() -> None:
     finally:
         app.state.patrol = previous
     assert orgs == {"other-org"}
+
+
+class RecordingTransport:
+    def __init__(self) -> None:
+        self.messages: list[tuple[str, bytes, dict[str, str]]] = []
+
+    async def publish(self, topic: str, data: bytes, attributes: dict[str, str]) -> str:
+        self.messages.append((topic, data, attributes))
+        return "message-143"
+
+
+def emit(finding: str, at: datetime, run_id: object = None) -> dict[str, object]:
+    transport = RecordingTransport()
+    publisher = SignalPublisher(
+        transport, environment="dev", org_id="fieldloop-demo", simulation_only=True
+    )
+    emitter = SimulatedSignalEmitter(
+        publisher,
+        org_id="fieldloop-demo",
+        source="mock-patrol",
+        classification="HIGHLY_RESTRICTED",
+    )
+    result = asyncio.run(emitter.emit(SimulatedPatrol().observe(finding, at), run_id=run_id))  # type: ignore[arg-type]
+    assert result.outcome == "published"
+    topic, data, attributes = transport.messages[0]
+    assert topic == "signals"
+    assert attributes["classification"] == "HIGHLY_RESTRICTED"
+    assert attributes["simulated"] == "true"
+    signal: dict[str, object] = json.loads(data)
+    parse_signal(signal)
+    return signal
+
+
+AT = datetime(2026, 10, 12, 9, 0, tzinfo=UTC)
+
+
+def test_an_open_encroachment_arrives_as_the_signal_the_pack_rule_matches() -> None:
+    signal = emit("SYN-PATROL-001", AT)
+    # The shape of FL-78's encroachment-detected rule: source, tag, eq 1, unit boolean.
+    assert signal["source"] == "mock-patrol"
+    assert signal["tag"] == "DL-01.encroachment.detected"
+    assert signal["value"] == 1
+    assert signal["unit"] == "boolean"
+    assert signal["observedAt"] == "2026-10-12T09:00:00Z"
+    assert signal["simulated"] is True
+    assert signal["classification"] == "HIGHLY_RESTRICTED"
+    payload = signal["payload"]
+    assert isinstance(payload, dict)
+    assert payload["findingId"] == "SYN-PATROL-001"
+    assert payload["kind"] == "encroachment"
+    assert payload["severity"] == "high"
+    assert payload["status"] == "open"
+    assert payload["foundAt"] == "2026-10-11T02:15:00Z"
+    assert payload["label"] == "SYNTHETIC"
+    assert set(payload["gps"]) == {"latitude", "longitude", "accuracyM"}  # type: ignore[call-overload]
+
+
+def test_each_kind_has_its_own_detected_tag() -> None:
+    tags = {
+        finding: emit(finding, AT)["tag"]
+        for finding in ("SYN-PATROL-001", "SYN-PATROL-002", "SYN-PATROL-003")
+    }
+    assert tags == {
+        "SYN-PATROL-001": "DL-01.encroachment.detected",
+        "SYN-PATROL-002": "DL-01.marker_damage.detected",
+        "SYN-PATROL-003": "DL-01.erosion.detected",
+    }
+
+
+def test_a_closed_finding_clears_the_flag_instead_of_raising_it() -> None:
+    signal = emit("SYN-PATROL-005", AT)
+    assert signal["tag"] == "DL-01.marker_damage.detected"
+    assert signal["value"] == 0
+    payload = signal["payload"]
+    assert isinstance(payload, dict) and payload["status"] == "closed"
+
+
+def test_two_findings_of_one_kind_at_the_same_instant_keep_distinct_identities() -> None:
+    first = emit("SYN-PATROL-001", AT)["id"]
+    second = emit("SYN-PATROL-004", AT)["id"]
+    assert first != second
+    # A replay of the same finding keeps its identity (consumer deduplication).
+    assert emit("SYN-PATROL-001", AT)["id"] == first
+
+
+def test_an_unknown_finding_cannot_be_observed() -> None:
+    with pytest.raises(KeyError):
+        SimulatedPatrol().observe("SYN-PATROL-999", AT)
+    with pytest.raises(ValueError, match="timezone"):
+        SimulatedPatrol().observe("SYN-PATROL-001", datetime(2026, 10, 12, 9, 0))  # noqa: DTZ001
 
 
 def test_patrol_rejects_an_invalid_organisation_id() -> None:

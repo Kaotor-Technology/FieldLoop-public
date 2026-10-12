@@ -14,6 +14,7 @@ from fastapi import Depends, Query, Request
 from fieldloop_common.generated_mock_patrol import MockPatrolPage
 
 from fieldloop_simulator.mock_http import ReadOnlyRouter, Rfc3339
+from fieldloop_simulator.mock_signals import Observation, utc_text
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
 
 Kind = Literal["encroachment", "marker_damage", "erosion"]
@@ -95,9 +96,45 @@ _FINDINGS = sorted(
 )
 
 
+_FINDINGS_BY_ID = {finding.id: finding for finding in _FINDINGS}
+
+
 class SimulatedPatrol:
     def __init__(self, *, org_id: str = DEMO_ORG_ID) -> None:
         self.org_id = require_org_id(org_id)
+
+    def observe(self, finding_id: str, at: datetime) -> Observation:
+        """Announce a finding as a Signal; the report itself travels in the payload.
+
+        The flag is 1 while the finding is open and 0 once it is closed, so closing a finding
+        clears the condition instead of raising it again. ``at`` is the Scenario time; when
+        the patroller found it is in the payload as ``foundAt``.
+        """
+        if at.tzinfo is None:
+            raise ValueError("Observation times need a timezone")
+        finding = _FINDINGS_BY_ID[finding_id]
+        return Observation(
+            tag=f"DL-01.{finding.kind}.detected",
+            value=1 if finding.status == "open" else 0,
+            observed_at=at,
+            unit="boolean",
+            subject=finding.id,
+            payload={
+                "assetCode": "DL-01",
+                "findingId": finding.id,
+                "kind": finding.kind,
+                "severity": finding.severity,
+                "status": finding.status,
+                "summary": finding.summary,
+                "foundAt": utc_text(finding.observed_at),
+                "gps": {
+                    "latitude": finding.latitude,
+                    "longitude": finding.longitude,
+                    "accuracyM": GPS_ACCURACY_M,
+                },
+                "label": "SYNTHETIC",
+            },
+        )
 
     def page(self, kind: Kind | None = None, since: datetime | None = None) -> MockPatrolPage:
         selected = [

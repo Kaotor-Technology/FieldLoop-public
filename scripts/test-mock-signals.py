@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 
 from fieldloop_common.signal import is_signal
 from fieldloop_simulator.mock_historian import SimulatedHistorian
+from fieldloop_simulator.mock_patrol import SimulatedPatrol
 from fieldloop_simulator.mock_signals import (
     SimulatedSignalEmitter,
     signal_publisher_from_environment,
@@ -88,10 +89,24 @@ try:
     refused = asyncio.run(publisher.publish({**emitter.build(reading), "simulated": False}))
     assert refused.outcome == "dead_lettered"
 
-    delivered = pull(subscriptions[signal_topic], 2)
+    # A patrol finding is a report that arrives as a Signal too: a Signal is Evidence that
+    # arrives automatically from a connected source system, whatever its content.
+    patrol_emitter = SimulatedSignalEmitter(
+        publisher, org_id="fieldloop-demo", source="mock-patrol", classification="HIGHLY_RESTRICTED"
+    )
+    finding = SimulatedPatrol().observe("SYN-PATROL-001", failed_at)
+    assert asyncio.run(patrol_emitter.emit(finding, run_id=run_id)).outcome == "published"
+
+    delivered = pull(subscriptions[signal_topic], 3)
     bodies = [json.loads(data) for data, _ in delivered]
-    assert bodies[0] == bodies[1] and is_signal(bodies[0])
-    body = bodies[0]
+    historian = [item for item in bodies if item["source"] == "mock-historian"]
+    patrol = [item for item in bodies if item["source"] == "mock-patrol"]
+    assert len(historian) == 2 and len(patrol) == 1
+    assert historian[0] == historian[1] and is_signal(historian[0]) and is_signal(patrol[0])
+    assert patrol[0]["tag"] == "DL-01.encroachment.detected" and patrol[0]["value"] == 1
+    assert patrol[0]["classification"] == "HIGHLY_RESTRICTED"
+    assert patrol[0]["payload"]["findingId"] == "SYN-PATROL-001"
+    body = historian[0]
     assert body["source"] == "mock-historian"
     assert body["tag"] == "DL-01.rectifier.output"
     assert body["value"] == 0
@@ -99,16 +114,16 @@ try:
     assert body["observedAt"] == "2026-10-12T06:00:00Z"
     assert body["simulated"] is True
     assert body["simulationRunId"] == str(run_id)
-    for _, attributes in delivered:
+    for data, attributes in delivered:
         assert attributes["environment"] == "dev"
         assert attributes["orgId"] == "fieldloop-demo"
-        assert attributes["signalId"] == body["id"]
+        assert attributes["signalId"] == json.loads(data)["id"]
         assert attributes["simulated"] == "true"
 
     quarantined = pull(subscriptions[dead_letter_topic], 1)
     assert quarantined[0][1]["failureReason"] == "simulation_required"
     assert quarantined[0][1]["classification"] == "HIGHLY_RESTRICTED"
-    print("Pub/Sub emulator: simulator emission delivered, replayed and quarantined as expected")
+    print("Pub/Sub emulator: historian and patrol Signals delivered, replayed and quarantined")
 finally:
     for subscription in subscriptions.values():
         subscriber.delete_subscription(request={"subscription": subscription}, timeout=10)
