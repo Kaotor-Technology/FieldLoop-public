@@ -107,3 +107,36 @@ uv run --locked --all-packages python scripts/generate-mock-source.py historian 
 `scripts/test-mock-signals.py` exercises the real SDK against a loopback
 Pub/Sub emulator (delivery, replay, quarantine); CI runs it in the "Signal
 publishers on Pub/Sub emulator" job.
+
+## Mock patrol app (FL-143)
+
+`GET /mock/patrol/findings[?kind=<kind>][&since=<RFC 3339>]`
+
+Five authored right-of-way findings for DL-01, oldest first, each with a GPS fix.
+`kind` is `encroachment`, `marker_damage` or `erosion`; `since` is a
+timezone-aware RFC 3339 time and is inclusive. The filters combine; anything
+else is `400`. The list is small and bounded, so it is not paginated.
+
+| Finding | Kind | Severity | Status | Observed (UTC) | Intended Chainage |
+| --- | --- | --- | --- | --- | --- |
+| `SYN-PATROL-005` | `marker_damage` | low | closed | 2026-10-09 08:00 | 23 100 m |
+| `SYN-PATROL-001` | `encroachment` | high | open | 2026-10-11 02:15 | 38 400 m |
+| `SYN-PATROL-002` | `marker_damage` | low | open | 2026-10-11 03:05 | 61 700 m |
+| `SYN-PATROL-003` | `erosion` | medium | open | 2026-10-11 04:40 | 104 900 m |
+| `SYN-PATROL-004` | `encroachment` | medium | open | 2026-10-11 06:20 | 142 300 m |
+
+- **GPS, not Chainage.** A finding carries `gps: {latitude, longitude,
+  accuracyM}` as a device would report it. The fixes lie 2 to 9 m beside the
+  route, so snapping to Chainage (GEO-9) has something to do. The Chainage column
+  is where each fix was authored to land; the API does not return it.
+- **Derived from the route.** The coordinates come from
+  `data/synthetic/dl-01/route.geojson`. The simulator image does not contain
+  `data/`, so they are literals in the module and a test recomputes the route to
+  keep every fix within 20 m of it and within 50 m of its intended Chainage.
+- **Classification.** Findings are `HIGHLY_RESTRICTED` because a run of GPS
+  fixes along the pipeline reveals Asset geometry (PRD 9.1). This is more
+  conservative than the `CONFIDENTIAL` Evidence rows of the DL-01 seed.
+- **No Signal yet.** This source publishes nothing. The pipeline pack rule
+  `encroachment-detected` (FL-78) expects a `mock-patrol` Signal with tag
+  `DL-01.encroachment.detected`; the emitter and `Observation` from FL-141 can
+  carry one, but producing it is not a FL-143 deliverable. See the handoff note.
