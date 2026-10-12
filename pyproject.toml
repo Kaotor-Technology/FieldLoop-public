@@ -22,7 +22,7 @@ dev = [
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-include = ["apps/assistant/**/*.py", "apps/simulator/**/*.py", "py/**/*.py", "packages/adapters/python/**/*.py"]
+include = ["apps/assistant/**/*.py", "apps/simulator/**/*.py", "py/**/*.py", "packages/adapters/python/**/*.py", "db/seed/knowledge/**/*.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
@@ -30,7 +30,7 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["apps/assistant/src", "apps/simulator/src", "py/fieldloop_common/src", "packages/adapters/python/src"]
+files = ["apps/assistant/src", "apps/simulator/src", "py/fieldloop_common/src", "packages/adapters/python/src", "db/seed/knowledge/index.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["apps/assistant/tests", "apps/simulator/tests", "py/fieldloop_common/tests", "packages/adapters/python/tests"]
