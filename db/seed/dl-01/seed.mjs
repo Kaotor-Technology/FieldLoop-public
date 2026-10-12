@@ -4,15 +4,46 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Kysely, PostgresDialect, sql } from "kysely";
 import pg from "pg";
-import { buildDataset, writeDataset } from "./generate.mjs";
+import { buildDataset, writeDataset } from "../../../data/synthetic/dl-01/generate.mjs";
 
 const UUID_NAMESPACE_URL = Buffer.from(
   "6ba7b8119dad11d180b400c04fd430c8",
   "hex",
 );
-const DEFAULT_OUTPUT_DIR = new URL(".", import.meta.url);
+// The generator, the Bowtie A seed file and the generated GeoJSON live with the synthetic data.
+const SEED_DATA_URL = new URL("../../../data/synthetic/dl-01/", import.meta.url);
+const DEFAULT_OUTPUT_DIR = SEED_DATA_URL;
 const CREATED_BY = "seed:dl-01";
-const BOWTIE_SEED_URL = new URL("./bowtie-a.json", import.meta.url);
+const ORGANISATION_NAME = "FieldLoop Demo Organisation (SYNTHETIC)";
+// The PRD 9.1 classes, as the schema stores them. Asset geometry is Highly Restricted and
+// Bowtie and Barrier records are Confidential; the seed data states its class itself.
+const CLASSIFICATIONS = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"];
+const ORGANISATION_CLASSIFICATION = "INTERNAL";
+
+function requireClassification(value, fieldName) {
+  if (value === undefined || value === null || value === "") {
+    throw new Error(`${fieldName} requires classification.`);
+  }
+  if (!CLASSIFICATIONS.includes(value)) {
+    throw new Error(`${fieldName} classification must be one of ${CLASSIFICATIONS.join(", ")}.`);
+  }
+}
+// Tables whose rows this seed owns, parents before children. bowtie_asset has no id and is
+// handled apart; organisation is shared with other seeds and never cleaned.
+const OWNED_TABLES = [
+  "app.asset",
+  "app.segment",
+  "app.bowtie",
+  "app.threat",
+  "app.consequence",
+  "app.independence_group",
+  "app.barrier",
+  "app.barrier_path",
+  "app.degradation_factor",
+  "app.degradation_control",
+  "app.evidence",
+];
+const BOWTIE_SEED_URL = new URL("bowtie-a.json", SEED_DATA_URL);
 
 function readBowtieSeed() {
   return JSON.parse(readFileSync(BOWTIE_SEED_URL, "utf8"));
@@ -42,6 +73,7 @@ function validateBowtieSeed(seed) {
     throw new Error("Bowtie A seed metadata must label the data SYNTHETIC and simulated.");
   }
   requireString(seed.metadata.classification, "metadata.classification");
+  requireClassification(seed.metadata.classification, "Bowtie A seed metadata");
   requireString(seed.metadata.parameterBasis, "metadata.parameterBasis");
   if (!Number.isFinite(Date.parse(seed.metadata.simulationStartsAt))) {
     throw new Error("Bowtie A seed requires a valid metadata.simulationStartsAt.");
@@ -124,8 +156,8 @@ function validateBowtieSeed(seed) {
       }
       requireString(check.justification, `Barrier ${barrier.id} ${checkName} justification`);
     }
-    if (!Array.isArray(barrier.evidence) || barrier.evidence.length === 0) {
-      throw new Error(`Barrier ${barrier.id} requires at least one Evidence record.`);
+    if (!Array.isArray(barrier.evidence) || barrier.evidence.length < 2) {
+      throw new Error(`Barrier ${barrier.id} requires an Evidence history of at least two records.`);
     }
     for (const evidence of barrier.evidence) {
       requireString(evidence.id, `Barrier ${barrier.id} Evidence.id`);
@@ -297,6 +329,16 @@ function insertSegment(database, { id, orgId, assetId, geometry, properties, sim
     })));
 }
 
+// A generated feature states its own labelling; the loader does not assume it.
+function featureLabelling(feature) {
+  const { label, simulated, classification } = feature.properties;
+  if (label !== "SYNTHETIC" || simulated !== true) {
+    throw new Error(`Feature ${feature.id} must be labelled SYNTHETIC and simulated.`);
+  }
+  requireClassification(classification, `Feature ${feature.id}`);
+  return { simulated, classification };
+}
+
 export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowtieSeed()) {
   if (typeof orgId !== "string" || orgId.trim().length === 0) {
     throw new Error("An Organisation ID is required.");
@@ -308,7 +350,24 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
   if (bowtieSeed.assetCode !== routeFeature.properties.asset_code) {
     throw new Error("Bowtie A seed assetCode must match the generated DL-01 Asset.");
   }
-  const pipelineId = databaseId(orgId, "asset:dl-01");
+  const features = [routeFeature, ...dataset.facilities.features, ...dataset.segments.features];
+  const labelling = new Map(features.map((feature) => [feature.id, featureLabelling(feature)]));
+
+  // IDs this run loads, per owned table.
+  const loadedIds = new Map(OWNED_TABLES.map((table) => [table, []]));
+  const track = (table, id) => {
+    if (!loadedIds.has(table)) {
+      throw new Error(`${table} is not a table this seed owns.`);
+    }
+    loadedIds.get(table).push(id);
+    return id;
+  };
+  const upsert = (table, values) => {
+    track(table, values.id);
+    return insertById(database, table, values);
+  };
+
+  const pipelineId = track("app.asset", databaseId(orgId, "asset:dl-01"));
   const statements = [
     insertAsset(database, {
       id: pipelineId,
@@ -317,8 +376,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
       parentId: null,
       domainPack: "pipeline-integrity",
       geometry: routeFeature.geometry,
-      simulated,
-      classification,
+      ...labelling.get(routeFeature.id),
       attributes: {
         asset_code: routeFeature.properties.asset_code,
         name: routeFeature.properties.name,
@@ -333,7 +391,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
   ];
 
   for (const facility of dataset.facilities.features) {
-    const facilityId = databaseId(orgId, "asset:" + facility.id);
+    const facilityId = track("app.asset", databaseId(orgId, "asset:" + facility.id));
     statements.push(
       insertAsset(database, {
         id: facilityId,
@@ -342,8 +400,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
         parentId: pipelineId,
         domainPack: "pipeline-integrity",
         geometry: facility.geometry,
-        simulated,
-        classification,
+        ...labelling.get(facility.id),
         attributes: {
           name: facility.properties.name,
           facility_type: facility.properties.facility_type,
@@ -357,20 +414,29 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
   for (const segment of dataset.segments.features) {
     statements.push(
       insertSegment(database, {
-        id: databaseId(orgId, "segment:" + segment.id),
+        id: track("app.segment", databaseId(orgId, "segment:" + segment.id)),
         orgId,
         assetId: pipelineId,
         geometry: segment.geometry,
         properties: segment.properties,
-        simulated,
-        classification,
+        ...labelling.get(segment.id),
       }),
     );
   }
 
+  // One row per Organisation: every seed for it upserts this same ID, and none removes it.
+  statements.push(insertById(database, "app.organisation", {
+    id: deterministicUuid("fieldloop:organisation:" + orgId),
+    org_id: orgId,
+    name: ORGANISATION_NAME,
+    simulated,
+    classification: ORGANISATION_CLASSIFICATION,
+    created_by: CREATED_BY,
+  }));
+
   const bowtieId = databaseId(orgId, `bowtie:${bowtieSeed.id}`);
   const databaseIdFor = (entityType, entityId) => databaseId(orgId, `${entityType}:${entityId}`);
-  statements.push(insertById(database, "app.bowtie", {
+  statements.push(upsert("app.bowtie", {
     id: bowtieId,
     org_id: orgId,
     hazard: bowtieSeed.hazard,
@@ -403,7 +469,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
     ));
 
   for (const threat of bowtieSeed.threats) {
-    statements.push(insertById(database, "app.threat", {
+    statements.push(upsert("app.threat", {
       id: databaseIdFor("threat", threat.id),
       org_id: orgId,
       bowtie_id: bowtieId,
@@ -416,7 +482,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
   }
 
   for (const consequence of bowtieSeed.consequences) {
-    statements.push(insertById(database, "app.consequence", {
+    statements.push(upsert("app.consequence", {
       id: databaseIdFor("consequence", consequence.id),
       org_id: orgId,
       bowtie_id: bowtieId,
@@ -430,7 +496,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
   }
 
   for (const group of bowtieSeed.independenceGroups) {
-    statements.push(insertById(database, "app.independence_group", {
+    statements.push(upsert("app.independence_group", {
       id: databaseIdFor("independence_group", group.id),
       org_id: orgId,
       bowtie_id: bowtieId,
@@ -443,7 +509,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
 
   for (const barrier of bowtieSeed.barriers) {
     const barrierId = databaseIdFor("barrier", barrier.id);
-    statements.push(insertById(database, "app.barrier", {
+    statements.push(upsert("app.barrier", {
       id: barrierId,
       org_id: orgId,
       name: barrier.name,
@@ -468,7 +534,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
       const pathTargetId = path.side === "preventive"
         ? databaseIdFor("threat", path.targetId)
         : databaseIdFor("consequence", path.targetId);
-      statements.push(insertById(database, "app.barrier_path", {
+      statements.push(upsert("app.barrier_path", {
         id: databaseIdFor("barrier_path", `${path.id}:${barrierKey}`),
         org_id: orgId,
         barrier_id: databaseIdFor("barrier", barrierKey),
@@ -485,7 +551,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
   for (const barrier of bowtieSeed.barriers) {
     for (const factor of barrier.degradationFactors ?? []) {
       const factorId = databaseIdFor("degradation_factor", factor.id);
-      statements.push(insertById(database, "app.degradation_factor", {
+      statements.push(upsert("app.degradation_factor", {
         id: factorId,
         org_id: orgId,
         barrier_id: databaseIdFor("barrier", barrier.id),
@@ -495,7 +561,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
         created_by: CREATED_BY,
       }));
       for (const control of factor.controls) {
-        statements.push(insertById(database, "app.degradation_control", {
+        statements.push(upsert("app.degradation_control", {
           id: databaseIdFor("degradation_control", control.id),
           org_id: orgId,
           degradation_factor_id: factorId,
@@ -507,7 +573,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
       }
     }
     for (const evidence of barrier.evidence) {
-      statements.push(insertById(database, "app.evidence", {
+      statements.push(upsert("app.evidence", {
         id: databaseIdFor("evidence", evidence.id),
         org_id: orgId,
         barrier_id: databaseIdFor("barrier", barrier.id),
@@ -522,6 +588,22 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
     }
   }
 
+  // Rows an earlier run of this seed loaded that are no longer in the seed files are removed,
+  // children before parents. Rows the seed did not create are left alone.
+  const stale = (table) => database
+    .deleteFrom(table)
+    .where("org_id", "=", orgId)
+    .where("created_by", "=", CREATED_BY);
+  statements.push(stale("app.bowtie_asset").where((expression) => expression.not(expression.and([
+    expression("bowtie_id", "=", bowtieId),
+    expression("asset_id", "=", pipelineId),
+  ]))));
+  for (const table of [...OWNED_TABLES].reverse()) {
+    const ids = loadedIds.get(table);
+    // A table the seed files no longer fill is emptied of this seed's rows.
+    statements.push(ids.length === 0 ? stale(table) : stale(table).where("id", "not in", ids));
+  }
+
   return statements;
 }
 
@@ -533,21 +615,106 @@ export async function loadSeed(database, dataset, orgId, bowtieSeed = readBowtie
   });
 }
 
-function validateConnectionString(connectionString) {
+// dbmate and Cloud SQL name a Unix socket directory with an empty host and ?socket= or ?host=.
+// The WHATWG URL parser rejects an empty host, and the driver rejects one followed by a port, so
+// the URL is read and passed on with a placeholder host. The driver connects to ?host= instead.
+const EMPTY_HOST = "localhost";
+
+// Returns FIELDLOOP_DATABASE_URL in the form the PostgreSQL driver reads.
+export function driverConnectionString(connectionString) {
+  if (!/^postgres(ql)?:\/\//.test(connectionString)) {
+    throw new Error("FIELDLOOP_DATABASE_URL must use postgres:// or postgresql://.");
+  }
+  const withHost = connectionString.replace(/^([a-z]+:\/\/(?:[^/?#@]*@)?)(?=\/|:\d+\/)/, "$1" + EMPTY_HOST);
+  const hostWasEmpty = withHost !== connectionString;
   let url;
   try {
-    url = new URL(connectionString);
+    url = new URL(withHost);
   } catch {
     throw new Error("FIELDLOOP_DATABASE_URL must be a valid PostgreSQL URL.");
   }
-  if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") {
-    throw new Error("FIELDLOOP_DATABASE_URL must use postgres:// or postgresql://.");
+  const socket = url.searchParams.get("socket");
+  if (socket !== null) {
+    url.searchParams.delete("socket");
+    if (!url.searchParams.has("host")) {
+      url.searchParams.set("host", socket);
+    }
   }
-  if (!url.pathname.replace(/^\/+/, "") || !(url.searchParams.get("host") ?? url.hostname) || !url.username) {
+  // dbmate reads the same URL and gives sslmode=require its libpq meaning: encrypt, without checking
+  // the server certificate. The driver does that only when asked. Other modes are left as they are.
+  if (url.searchParams.get("sslmode") === "require" && !url.searchParams.has("uselibpqcompat")) {
+    url.searchParams.set("uselibpqcompat", "true");
+  }
+  const hasHost = Boolean(url.searchParams.get("host")) || !hostWasEmpty;
+  if (!url.pathname.replace(/^\/+/, "") || !hasHost || !url.username) {
     throw new Error(
       "FIELDLOOP_DATABASE_URL must include a host, database name and user.",
     );
   }
+  return url.toString();
+}
+
+// Reads back what the Organisation now holds, so a job log is evidence of the load.
+async function readLoadedState(database, orgId, queries) {
+  const tables = [...new Set(
+    queries.map((query) => /^insert into "app"\."([a-z_]+)"/.exec(query.compile().sql)?.[1]),
+  )].filter((table) => table !== undefined);
+  if (tables.length === 0) {
+    throw new Error("No seeded table was recognised in the seed statements.");
+  }
+  const rowCounts = [];
+  for (const table of tables) {
+    const { count } = await database
+      .selectFrom(`app.${table}`)
+      .select((expression) => expression.fn.countAll().as("count"))
+      .where("org_id", "=", orgId)
+      .executeTakeFirstOrThrow();
+    rowCounts.push(`${table} ${count}`);
+  }
+  // A Segment is broken when it has no Chainage, is empty, or does not start where the previous one
+  // ends; the first one must start at 0. db/test/seed/dl_01_loaded.sql applies the same rule.
+  const { rows: [pipeline] } = await sql`
+    WITH pipeline AS (
+      SELECT id FROM app.asset WHERE org_id = ${orgId} AND attributes->>'asset_code' = 'DL-01'
+    ), ordered AS (
+      SELECT chainage_from, chainage_to, lag(chainage_to) OVER (ORDER BY chainage_from) AS previous_to
+      FROM app.segment
+      WHERE org_id = ${orgId} AND asset_id IN (SELECT id FROM pipeline)
+    )
+    SELECT (SELECT count(*) FROM pipeline)::int AS assets,
+           count(*)::int AS segments,
+           (count(*) FILTER (
+             WHERE chainage_from IS NULL OR chainage_to IS NULL OR chainage_from >= chainage_to
+                OR chainage_from IS DISTINCT FROM coalesce(previous_to, 0)
+           ))::int AS broken,
+           min(chainage_from)::float8 AS chainage_from,
+           max(chainage_to)::float8 AS chainage_to
+    FROM ordered
+  `.execute(database);
+  return { rowCounts, pipeline };
+}
+
+// Lists where the read-back differs from what the seed loads. An empty list means the
+// Organisation holds one DL-01 pipeline whose Segments cover its whole length.
+export function loadedStateProblems(pipeline, routeLengthM) {
+  const problems = [];
+  if (pipeline.assets !== 1) {
+    problems.push(`${pipeline.assets} DL-01 pipeline Assets instead of 1`);
+  }
+  if (pipeline.segments === 0) {
+    problems.push("no Segments on the DL-01 pipeline");
+    return problems;
+  }
+  if (pipeline.chainage_from !== 0) {
+    problems.push(`Segments start at Chainage ${pipeline.chainage_from} m instead of 0`);
+  }
+  if (pipeline.chainage_to !== routeLengthM) {
+    problems.push(`Segments end at Chainage ${pipeline.chainage_to} m instead of ${routeLengthM}`);
+  }
+  if (pipeline.broken !== 0) {
+    problems.push(`${pipeline.broken} gaps or overlaps between Segments`);
+  }
+  return problems;
 }
 
 function parseArguments(argumentsList) {
@@ -580,8 +747,8 @@ function printUsage() {
   process.stdout.write(
     [
       "Usage:",
-      "  FIELDLOOP_ORG_ID=<org-id> FIELDLOOP_DATABASE_URL=<postgres-url> node data/synthetic/dl-01/seed.mjs",
-      "  node data/synthetic/dl-01/seed.mjs --print-sql --org-id <org-id>",
+      "  FIELDLOOP_ORG_ID=<org-id> FIELDLOOP_DATABASE_URL=<postgres-url> node db/seed/dl-01/seed.mjs",
+      "  node db/seed/dl-01/seed.mjs --print-sql --org-id <org-id>",
       "",
     ].join("\n"),
   );
@@ -606,13 +773,11 @@ async function main() {
       "Set FIELDLOOP_DATABASE_URL to the target database before loading the seed.",
     );
   }
-  if (!options.printSql) {
-    validateConnectionString(databaseUrl);
-  }
+  let loadedState;
   const database = new Kysely({
     dialect: new PostgresDialect({
       pool: new pg.Pool({
-        connectionString: options.printSql ? undefined : databaseUrl,
+        connectionString: options.printSql ? undefined : driverConnectionString(databaseUrl),
         max: 1,
         connectionTimeoutMillis: 10_000,
       }),
@@ -629,6 +794,19 @@ async function main() {
     }
     await writeDataset(options.outputDir);
     await loadSeed(database, dataset, orgId, bowtieSeed);
+    try {
+      loadedState = await readLoadedState(
+        database,
+        orgId,
+        buildSeedQueries(database, dataset, orgId, bowtieSeed),
+      );
+    } catch (error) {
+      throw new Error(
+        "The seed was loaded and committed, but reading it back failed: " +
+          (error instanceof Error ? error.message : String(error)),
+        { cause: error },
+      );
+    }
   } finally {
     await database.destroy();
   }
@@ -639,8 +817,34 @@ async function main() {
       dataset.facilities.features.length +
       " Facilities, Bowtie A and its Threats, Consequences, Barriers, Evidence for Organisation " +
       orgId +
-      ".\n",
+      ".\n" +
+      "Rows for this Organisation: " +
+      loadedState.rowCounts.join(", ") +
+      ".\n" +
+      "DL-01 pipeline Assets: " +
+      loadedState.pipeline.assets +
+      ". Segments: " +
+      loadedState.pipeline.segments +
+      ", from Chainage " +
+      loadedState.pipeline.chainage_from +
+      " to " +
+      loadedState.pipeline.chainage_to +
+      " m, with " +
+      loadedState.pipeline.broken +
+      " gaps or overlaps.\n",
   );
+  // The summary above is printed first, so a failing job still logs what the database holds.
+  const problems = loadedStateProblems(
+    loadedState.pipeline,
+    dataset.route.features[0].properties.length_m,
+  );
+  if (problems.length > 0) {
+    throw new Error(
+      "The seed was loaded and committed, but the database does not hold what it loads: " +
+        problems.join("; ") +
+        ".",
+    );
+  }
 }
 
 const invokedAsScript =

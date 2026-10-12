@@ -4,10 +4,10 @@ info:
   version: 0.1.0
   summary: Base contract for the FieldLoop platform API served by web-api.
   description: |
-    Shared conventions and components for every `/v1` endpoint. Feature
-    endpoints are added to `paths` by the Jira issue that implements them and
-    must pass the Spectral ruleset in `.spectral.yaml`. See `README.md` in this
-    package for the conventions.
+    Shared conventions and components for the BFF authentication endpoints and
+    every `/v1` endpoint. Feature endpoints are added to `paths` by the Jira
+    issue that implements them and must pass the Spectral ruleset in
+    `.spectral.yaml`. See `README.md` in this package for the conventions.
   contact:
     name: FieldLoop engineering
     url: https://github.com/Kaotor-Technology/FieldLoop-v2
@@ -15,12 +15,167 @@ info:
     name: Proprietary
     identifier: LicenseRef-Proprietary
 servers:
-  - url: /
-    description: Same origin as the SPA. web-api serves both (architecture §2).
+  - url: /api
+    description: Same origin as the SPA; web-api mounts backend routes under /api.
 security:
   - sessionCookie: []
-tags: []
-paths: {}
+tags:
+  - name: Auth
+    description: OIDC sign-in, sign-out and session reauthentication.
+  - name: Session
+    description: Current signed-in user's BFF session.
+  - name: Internal Auth
+    description: Internal token verification keys; contains no user data.
+paths:
+  /auth/login:
+    get:
+      operationId: startLogin
+      summary: Start sign-in with Kaotor SSO
+      description: Creates a one-time OIDC transaction and redirects to Keycloak. The return path is restricted to this origin.
+      tags: [Auth]
+      security: []
+      parameters:
+        - name: return
+          in: query
+          required: false
+          description: Same-origin path to open after sign-in; unsafe paths fall back to `/`.
+          schema: { type: string, maxLength: 2048 }
+      responses:
+        "302":
+          description: Redirect to Keycloak's authorization endpoint.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /auth/callback:
+    get:
+      operationId: completeLogin
+      summary: Complete OIDC sign-in
+      description: Exchanges the authorization code server-side, consumes one-time state and sets only the opaque `fl_session` cookie.
+      tags: [Auth]
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema: { type: string, minLength: 1 }
+        - name: state
+          in: query
+          required: true
+          schema: { type: string, minLength: 1 }
+        - name: error
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "303":
+          description: Redirect to the safe return path and set the HttpOnly session cookie.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+            Set-Cookie:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /auth/logout:
+    post:
+      operationId: logout
+      summary: End the BFF session
+      description: Deletes the server-side session and clears `fl_session`. With Accept application/json, returns a token-free Keycloak logout URL for top-level navigation; otherwise redirects. Keycloak confirms logout because no ID-token hint is sent. Repeated session deletion is safe.
+      tags: [Auth]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "200":
+          description: Token-free logout destination for a browser requesting application/json.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [redirectUrl]
+                properties:
+                  redirectUrl: { type: string, format: uri }
+        "303":
+          description: Redirect to Keycloak's logout endpoint and clear the session cookie.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+            Set-Cookie:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /auth/backchannel-logout:
+    post:
+      operationId: processBackchannelLogout
+      summary: Process Keycloak back-channel logout
+      description: Verifies the signed Keycloak logout token and deletes BFF sessions matching its `sid`. This service-to-service callback is intentionally exempt from browser session CSRF.
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [logout_token]
+              patternProperties:
+                "^logout_token$": { type: string, minLength: 1 }
+              additionalProperties: false
+      responses:
+        "204": { description: Logout sessions deleted. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /auth/reauth:
+    get:
+      operationId: startReauthentication
+      summary: Require a fresh SSO login
+      description: Redirects the signed-in user to Keycloak with `prompt=login` and `max_age=0`; the callback updates the same session's `auth_time`.
+      tags: [Auth]
+      parameters:
+        - name: return
+          in: query
+          required: false
+          description: Same-origin path to open after reauthentication; unsafe paths fall back to `/`.
+          schema: { type: string, maxLength: 2048 }
+      responses:
+        "302":
+          description: Redirect to Keycloak's authorization endpoint.
+          headers:
+            Location:
+              schema: { type: string, format: uri }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/me:
+    get:
+      operationId: getCurrentUser
+      summary: Get the current user and CSRF token
+      description: Returns the authenticated user's server-derived roles and fixed environment Organisation ID.
+      tags: [Session]
+      responses:
+        "200":
+          description: Current BFF user.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CurrentUser" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /internal/auth/jwks:
+    get:
+      operationId: getInternalAuthJwks
+      summary: Get internal user token signing keys
+      description: Returns public RSA keys used by internal services to verify five-minute user tokens; no session tokens are exposed.
+      tags: [Internal Auth]
+      security: []
+      responses:
+        "200":
+          description: Public JSON Web Key Set.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Jwks" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
 components:
   securitySchemes:
     sessionCookie:
@@ -79,6 +234,37 @@ components:
         minimum: 0
 
   schemas:
+    CurrentUser:
+      type: object
+      required: [sub, roles, persona, orgId, clearance, csrfToken, authTime]
+      properties:
+        sub: { type: string }
+        roles:
+          type: array
+          items: { type: string, enum: [fieldloop.viewer, fieldloop.operator, fieldloop.manager] }
+        persona: { type: string }
+        orgId: { type: string }
+        clearance: { type: string }
+        csrfToken: { type: string }
+        authTime: { type: string, format: date-time }
+
+    Jwks:
+      type: object
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            type: object
+            required: [kty, n, e, kid, use, alg]
+            properties:
+              kty: { type: string, const: RSA }
+              n: { type: string }
+              e: { type: string }
+              kid: { type: string }
+              use: { type: string, const: sig }
+              alg: { type: string, const: RS256 }
+
     ErrorCode:
       type: string
       description: Stable machine-readable error code. Clients branch on this, never on `title` or `detail`.

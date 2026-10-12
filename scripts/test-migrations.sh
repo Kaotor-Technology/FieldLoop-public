@@ -26,6 +26,18 @@ run_psql() {
   docker exec -i "${DB_CONTAINER}" psql -X -q -v ON_ERROR_STOP=1 -U postgres -d fieldloop_test "$@"
 }
 
+run_psql_database() {
+  docker exec -i "${DB_CONTAINER}" psql -X -q -v ON_ERROR_STOP=1 -U postgres -d "$1" "${@:2}"
+}
+
+dbmate_database() {
+  local database="$1"
+  shift
+  docker run --rm --network "${NETWORK}" \
+    -e DATABASE_URL="postgres://postgres:postgres@${DB_CONTAINER}:5432/${database}?sslmode=disable" \
+    "${MIGRATE_IMAGE}" "$@"
+}
+
 echo "==> Building images"
 docker build -q -t "${DB_IMAGE}" - < db/test/Dockerfile
 docker build -q -t "${MIGRATE_IMAGE}" -f db/Dockerfile .
@@ -63,6 +75,19 @@ for test_file in db/test/*.sql; do
   echo "==> ${test_file}"
   run_psql -o /dev/null < "${test_file}"
 done
+
+# Verify that each BFF IAM identity receives app privileges only in its own database.
+echo "==> BFF dev/demo database role isolation"
+docker exec -i "${DB_CONTAINER}" psql -X -q -v ON_ERROR_STOP=1 -U postgres -d postgres <<'SQL'
+CREATE ROLE "fl-v2-web-api-dev@example-project.iam" LOGIN;
+CREATE ROLE "fl-v2-web-api-demo@example-project.iam" LOGIN;
+CREATE DATABASE fieldloop_dev;
+CREATE DATABASE fieldloop_demo;
+SQL
+dbmate_database fieldloop_dev up
+dbmate_database fieldloop_demo up
+run_psql_database fieldloop_dev < db/test/bff_auth_roles.sql
+run_psql_database fieldloop_demo < db/test/bff_auth_roles.sql
 
 # Cloud SQL shape: the extensions already exist and the migrating role is not a superuser.
 echo "==> dbmate up as a non-superuser with pre-installed extensions"

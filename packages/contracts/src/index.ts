@@ -1,2 +1,2 @@
-// Reserved for the responsibility described in docs/architecture.md section 1.
-export {};
+export type { paths, components, operations } from "./generated/api.js";
+export { isSignal, signalSchema, type Signal } from "./signal.js";

@@ -1,17 +1,23 @@
 import { buildApp } from "./app.js";
-import fastifyStatic from "@fastify/static";
+import { createProductionAuthRuntime } from "./auth/runtime.js";
+import { registerSpa } from "./spa.js";
+import { registerReference } from "./reference.js";
 import { fileURLToPath } from "node:url";
 
-const app = buildApp();
+const authRuntime = await createProductionAuthRuntime();
+const app = buildApp({
+  auth: authRuntime.auth,
+  ...(process.env["FIELDLOOP_BASE_URL"] ? { baseUrl: process.env["FIELDLOOP_BASE_URL"] } : {}),
+});
+app.addHook("onClose", authRuntime.close);
 const port = Number(process.env["PORT"] ?? "8080");
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error("PORT must be an integer between 1 and 65535");
 }
 
 // The web-api image serves the built SPA from the same origin.
-await app.register(fastifyStatic, {
-  root: fileURLToPath(new URL("../../web/dist/", import.meta.url)),
-});
+await registerReference(app, fileURLToPath(new URL("reference/", import.meta.resolve("@fieldloop/contracts"))));
+await registerSpa(app, fileURLToPath(new URL("../../web/dist/", import.meta.url)));
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {

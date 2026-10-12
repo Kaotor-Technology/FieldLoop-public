@@ -36,6 +36,17 @@
 !db/
 !db/migrations/
 !db/migrations/**
+!db/seed/
+!db/seed/dl-01/
+!data/synthetic/dl-01/
+# Contract and token generators are build inputs.
+!DESIGN.md
+!packages/contracts/openapi.yaml
+!packages/contracts/signal.v1.schema.json
+!packages/contracts/scripts/
+!packages/contracts/scripts/**
+!packages/ui/scripts/
+!packages/ui/scripts/**
 # These exclusions take precedence even inside an admitted source directory.
 **/node_modules
 **/dist

@@ -186,7 +186,7 @@ export function buildDataset() {
     via_regions: ["Phayao"],
     end_region: "Chiang Rai",
     simulated: true,
-    classification: "internal",
+    classification: "HIGHLY_RESTRICTED",
   };
   const route = feature(
     "dl-01-route",
@@ -224,7 +224,7 @@ export function buildDataset() {
           chainage_to_m: chainageTo,
           label: "SYNTHETIC",
           simulated: true,
-          classification: "internal",
+          classification: "HIGHLY_RESTRICTED",
         },
       ),
     );
@@ -248,7 +248,7 @@ export function buildDataset() {
         chainage_m: chainage,
         label: "SYNTHETIC",
         simulated: true,
-        classification: "internal",
+        classification: "HIGHLY_RESTRICTED",
       },
     );
   });

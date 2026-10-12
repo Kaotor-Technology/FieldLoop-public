@@ -4,6 +4,7 @@ packages:
   - apps/guardrail
   - apps/signal-worker
   - packages/*
+  - db/seed/dl-01
 injectWorkspacePackages: true
 syncInjectedDepsAfterScripts:
   - build

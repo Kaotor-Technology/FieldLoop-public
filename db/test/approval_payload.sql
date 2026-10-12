@@ -24,8 +24,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-INSERT INTO app.action_request (id, org_id, action_type, action_level, payload, status, simulated)
-VALUES ('00000000-0000-0000-0000-000000000001', 'org-test', 'public_warning', 'l1', '{"message": "a"}', 'open', true);
+INSERT INTO app.action_request (id, org_id, action_type, action_level, payload, status, simulated, classification)
+VALUES ('00000000-0000-0000-0000-000000000001', 'org-test', 'public_warning', 'l1', '{"message": "a"}', 'open', true, 'INTERNAL');
 
 SELECT pg_temp.expect(
     payload_hash = encode(sha256(convert_to(payload::text, 'UTF8')), 'hex'),
@@ -33,35 +33,35 @@ SELECT pg_temp.expect(
 FROM app.action_request;
 
 SELECT pg_temp.expect_error(
-    $$INSERT INTO app.action_request (org_id, action_type, action_level, payload, payload_hash, status)
-      VALUES ('org-test', 'public_warning', 'l1', '{}', 'forged', 'open')$$,
+    $$INSERT INTO app.action_request (org_id, action_type, action_level, payload, payload_hash, status, simulated, classification)
+      VALUES ('org-test', 'public_warning', 'l1', '{}', 'forged', 'open', true, 'INTERNAL')$$,
     '428C9', 'payload_hash cannot be supplied on insert');
 SELECT pg_temp.expect_error(
     $$UPDATE app.action_request SET payload_hash = 'forged'$$,
     '428C9', 'payload_hash cannot be changed on its own');
 
 SELECT pg_temp.expect_error(
-    $$INSERT INTO app.approval (org_id, action_request_id, approver_sub, decision, payload_hash, auth_time)
-      VALUES ('org-test', '00000000-0000-0000-0000-000000000001', 'approver-1', 'approved', 'wrong', now())$$,
+    $$INSERT INTO app.approval (org_id, action_request_id, approver_sub, decision, payload_hash, auth_time, simulated, classification)
+      VALUES ('org-test', '00000000-0000-0000-0000-000000000001', 'approver-1', 'approved', 'wrong', now(), true, 'INTERNAL')$$,
     '23514', 'approval with a wrong hash is rejected');
 
 SELECT pg_temp.expect_error(
-    $$INSERT INTO app.action_request (org_id, action_type, action_level, payload, status)
-      VALUES ('org-test', 'public_warning', 'l1', '{}', 'approved')$$,
+    $$INSERT INTO app.action_request (org_id, action_type, action_level, payload, status, simulated, classification)
+      VALUES ('org-test', 'public_warning', 'l1', '{}', 'approved', true, 'INTERNAL')$$,
     '23514', 'a request cannot be created already approved');
 SELECT pg_temp.expect_error(
     $$UPDATE app.action_request SET status = 'approved'$$,
     '23514', 'a request cannot be approved without an approval');
 
-INSERT INTO app.approval (org_id, action_request_id, approver_sub, decision, reason, payload_hash, auth_time, simulated)
-SELECT 'org-test', id, 'approver-0', 'rejected', 'not yet', payload_hash, now(), true
+INSERT INTO app.approval (org_id, action_request_id, approver_sub, decision, reason, payload_hash, auth_time, simulated, classification)
+SELECT 'org-test', id, 'approver-0', 'rejected', 'not yet', payload_hash, now(), true, 'INTERNAL'
 FROM app.action_request;
 SELECT pg_temp.expect_error(
     $$UPDATE app.action_request SET status = 'approved'$$,
     '23514', 'a rejection does not allow approved');
 
-INSERT INTO app.approval (id, org_id, action_request_id, approver_sub, decision, payload_hash, auth_time, simulated)
-SELECT '00000000-0000-0000-0000-00000000000a', 'org-test', id, 'approver-1', 'approved', payload_hash, now(), true
+INSERT INTO app.approval (id, org_id, action_request_id, approver_sub, decision, payload_hash, auth_time, simulated, classification)
+SELECT '00000000-0000-0000-0000-00000000000a', 'org-test', id, 'approver-1', 'approved', payload_hash, now(), true, 'INTERNAL'
 FROM app.action_request;
 UPDATE app.action_request SET status = 'approved';
 
@@ -75,12 +75,12 @@ SELECT pg_temp.expect_error(
     $$TRUNCATE app.approval$$,
     '23514', 'approval cannot be truncated');
 SELECT pg_temp.expect_error(
-    $$INSERT INTO app.approval (org_id, action_request_id, approver_sub, decision, payload_hash, auth_time)
-      SELECT 'org-test', id, 'approver-1', 'approved', payload_hash, now() FROM app.action_request$$,
+    $$INSERT INTO app.approval (org_id, action_request_id, approver_sub, decision, payload_hash, auth_time, simulated, classification)
+      SELECT 'org-test', id, 'approver-1', 'approved', payload_hash, now(), true, 'INTERNAL' FROM app.action_request$$,
     '23505', 'one approver cannot approve the same payload twice');
 SELECT pg_temp.expect_error(
-    $$INSERT INTO app.action_request (org_id, action_type, action_level, payload, status)
-      VALUES ('org-test', 'public_warning', 'L3', '{}', 'open')$$,
+    $$INSERT INTO app.action_request (org_id, action_type, action_level, payload, status, simulated, classification)
+      VALUES ('org-test', 'public_warning', 'L3', '{}', 'open', true, 'INTERNAL')$$,
     '23514', 'action_level must be a glossary value');
 
 -- A status-only update keeps the Approval.
@@ -97,8 +97,8 @@ FROM app.action_request a, old_hash o;
 SELECT pg_temp.expect(bool_and(voided_at IS NOT NULL), 'payload change voids every approval') FROM app.approval;
 
 SELECT pg_temp.expect_error(
-    $$INSERT INTO app.approval (org_id, action_request_id, approver_sub, decision, payload_hash, auth_time)
-      SELECT 'org-test', '00000000-0000-0000-0000-000000000001', 'approver-2', 'approved', payload_hash, now()
+    $$INSERT INTO app.approval (org_id, action_request_id, approver_sub, decision, payload_hash, auth_time, simulated, classification)
+      SELECT 'org-test', '00000000-0000-0000-0000-000000000001', 'approver-2', 'approved', payload_hash, now(), true, 'INTERNAL'
       FROM old_hash$$,
     '23514', 'the old hash can no longer approve the changed payload');
 
@@ -117,8 +117,8 @@ SELECT pg_temp.expect_error(
     '23514', 'a voided approval does not allow approved');
 
 -- The app role needs no UPDATE on approval: a payload change by it still voids the Approvals.
-INSERT INTO app.approval (org_id, action_request_id, approver_sub, decision, payload_hash, auth_time, simulated)
-SELECT 'org-test', id, 'approver-3', 'approved', payload_hash, now(), true
+INSERT INTO app.approval (org_id, action_request_id, approver_sub, decision, payload_hash, auth_time, simulated, classification)
+SELECT 'org-test', id, 'approver-3', 'approved', payload_hash, now(), true, 'INTERNAL'
 FROM app.action_request;
 SET LOCAL ROLE fieldloop_app;
 SELECT pg_temp.expect_error(

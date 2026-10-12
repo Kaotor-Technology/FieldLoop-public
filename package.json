@@ -16,8 +16,10 @@
     "lint:design": "design.md lint DESIGN.md",
     "lint:api": "pnpm --filter @fieldloop/contracts lint:openapi",
     "check:safety": "node scripts/check-confidential-paths.mjs",
+    "db:seed:dl-01": "node db/seed/dl-01/seed.mjs",
     "db:migrate": "dbmate --migrations-table public.schema_migrations up",
-    "test:migrations": "bash scripts/test-migrations.sh"
+    "test:migrations": "bash scripts/test-migrations.sh",
+    "test:seed": "bash scripts/test-seed.sh"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",
