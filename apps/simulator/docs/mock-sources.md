@@ -137,10 +137,12 @@ else is `400`. The list is small and bounded, so it is not paginated.
 - **Classification.** Findings are `HIGHLY_RESTRICTED` because a run of GPS
   fixes along the pipeline reveals Asset geometry (PRD 9.1). This is more
   conservative than the `CONFIDENTIAL` Evidence rows of the DL-01 seed.
-- **No Signal yet.** This source publishes nothing. The pipeline pack rule
-  `encroachment-detected` (FL-78) expects a `mock-patrol` Signal with tag
-  `DL-01.encroachment.detected`; the emitter and `Observation` from FL-141 can
-  carry one, but producing it is not a FL-143 deliverable. See the handoff note.
+- **No Signal, by design.** A patrol app yields reports and photographs, not a
+  telemetry feed, so this source publishes nothing to `signals`; its findings
+  reach the platform as Evidence (GEO-8), linked to the Right-of-Way patrol
+  Barrier. The pipeline pack rule `encroachment-detected` (FL-78) names a
+  `mock-patrol` Signal and should be revisited with its owner. Findings carry no
+  photographs yet.
 
 ## Mock ILI report drop (FL-144)
 
