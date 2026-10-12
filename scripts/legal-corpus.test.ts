@@ -41,7 +41,7 @@ function previewSeed(orgId: string): SeedQuery[] {
   )) as SeedQuery[];
 }
 
-function runSeedTransaction(failAt: number): TransactionResult {
+function runSeedTransaction(failAt: number, zeroRowsAt = 0): TransactionResult {
   // Exercise Kysely's PostgreSQL driver without connecting to a database.
   const script = `
     import { Kysely, PostgresDialect } from 'kysely';
@@ -54,7 +54,7 @@ function runSeedTransaction(failAt: number): TransactionResult {
         if (queries.length === Number(process.argv[1])) {
           throw new Error('injected seed failure');
         }
-        return { rows: [], rowCount: 1, command: 'INSERT' };
+        return { rows: [], rowCount: queries.length === Number(process.argv[2]) ? 0 : 1, command: 'INSERT' };
       },
       release() { releases += 1; },
     };
@@ -74,7 +74,7 @@ function runSeedTransaction(failAt: number): TransactionResult {
   `;
   return JSON.parse(execFileSync(
     process.execPath,
-    ["--input-type=module", "--eval", script, String(failAt)],
+    ["--input-type=module", "--eval", script, String(failAt), String(zeroRowsAt)],
     { cwd: repositoryRoot, encoding: "utf8" },
   )) as TransactionResult;
 }
@@ -199,6 +199,13 @@ describe("legal corpus manifest and Controlled Document loader", () => {
 
     expect(validationError(unknownState)).toContain("has an unknown contentState");
     expect(validationError(missingFile)).toContain("points to a missing file");
+  });
+
+  it("rolls back when an existing document has a different immutable revision", () => {
+    const result = runSeedTransaction(0, 2);
+    expect(result.error).toMatch(/revision cannot change in place/);
+    expect(result.queries.at(-1)?.sql).toBe("rollback");
+    expect(result.queries.some(({ sql }) => sql === "commit")).toBe(false);
   });
 
   it("loads every record in one transaction and rolls back on failure", () => {

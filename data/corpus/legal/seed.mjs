@@ -139,13 +139,16 @@ export function buildSeedQueries(database, manifest, orgId) {
       licence: expression.ref("excluded.licence"),
       simulated: expression.ref("excluded.simulated"),
       created_by: expression.ref("excluded.created_by"),
-    }))));
+    })).whereRef("controlled_document.revision", "=", "excluded.revision")));
 }
 
 export async function loadSeed(database, manifest, orgId) {
   await database.transaction().execute(async (transaction) => {
     for (const query of buildSeedQueries(transaction, manifest, orgId)) {
-      await query.execute();
+      const result = await query.executeTakeFirst();
+      if (result.numInsertedOrUpdatedRows === 0n) {
+        throw new Error("Controlled Document revision cannot change in place; create a new document key and supersede the old record through the document workflow.");
+      }
     }
   });
 }

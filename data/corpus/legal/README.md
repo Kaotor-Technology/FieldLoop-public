@@ -32,7 +32,9 @@ Re-running the seed refreshes source metadata while preserving the
 `superseded_by` link and `blob_uri` once a person or storage step has set them.
 A record that is still `status unverified` takes its status from the manifest,
 so a verified status recorded there reaches the database on the next run. Any
-other stored status is kept.
+other stored status is kept. A changed revision is rejected transactionally;
+create a new document key and supersede the old record through the document
+workflow. This prevents a new revision label from pointing to an old blob.
 
 Source links point to public agencies only. Do not link to an Organisation's
 website.
