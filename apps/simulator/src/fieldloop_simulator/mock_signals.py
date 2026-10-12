@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Literal
 
+from fieldloop_common.generated_signal import Signal
 from fieldloop_common.google_pubsub import GooglePubSubTransport
 from fieldloop_common.signal_publisher import SignalPublisher, SignalPublishResult
 
@@ -27,6 +28,14 @@ SignalValue = float | int | str | bool | None
 
 @dataclass(frozen=True)
 class Observation:
+    """One reading, finding or arrival, with the source that vouches for it.
+
+    The source states its own ID and classification, so the Signal cannot be labelled below
+    what the source's API reports.
+    """
+
+    source: str
+    classification: Classification
     tag: str
     value: SignalValue
     observed_at: datetime
@@ -51,27 +60,18 @@ def _canonical_value(value: SignalValue) -> str:
 
 
 class SimulatedSignalEmitter:
-    """Turn one source's observations into signal.v1 messages marked ``simulated: true``."""
+    """Turn observations into signal.v1 messages marked ``simulated: true``."""
 
-    def __init__(
-        self,
-        publisher: SignalPublisher,
-        *,
-        org_id: str,
-        source: str,
-        classification: Classification,
-    ) -> None:
+    def __init__(self, publisher: SignalPublisher, *, org_id: str) -> None:
         self._publisher = publisher
         self._org_id = org_id
-        self._source = source
-        self._classification = classification
 
     def build(self, observation: Observation, run_id: uuid.UUID | None = None) -> dict[str, object]:
         observed_at = utc_text(observation.observed_at)
         parts = [
             self._org_id,
             str(run_id) if run_id is not None else "-",
-            self._source,
+            observation.source,
             observation.tag,
             observed_at,
             _canonical_value(observation.value),
@@ -80,24 +80,26 @@ class SimulatedSignalEmitter:
             # Appended only when present, so a subject-less observation keeps its identity.
             parts.append(observation.subject)
         identity = "|".join(parts)
-        signal: dict[str, object] = {
+        fields: dict[str, object] = {
             "schemaVersion": "signal.v1",
             "id": str(uuid.uuid5(SIGNAL_ID_NAMESPACE, identity)),
             "orgId": self._org_id,
-            "source": self._source,
+            "source": observation.source,
             "tag": observation.tag,
             "value": observation.value,
             "observedAt": observed_at,
             "simulated": True,
-            "classification": self._classification,
+            "classification": observation.classification,
         }
         if observation.unit is not None:
-            signal["unit"] = observation.unit
+            fields["unit"] = observation.unit
         if run_id is not None:
-            signal["simulationRunId"] = str(run_id)
+            fields["simulationRunId"] = str(run_id)
         if observation.payload is not None:
-            signal["payload"] = dict(observation.payload)
-        return signal
+            fields["payload"] = dict(observation.payload)
+        # The generated model is the contract's type; `exclude_unset` keeps an explicit null value.
+        envelope = Signal.model_validate(fields)
+        return envelope.model_dump(mode="json", by_alias=True, exclude_unset=True)
 
     async def emit(
         self, observation: Observation, run_id: uuid.UUID | None = None

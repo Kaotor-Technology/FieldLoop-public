@@ -63,9 +63,7 @@ try:
             "FIELDLOOP_ORG_ID": "fieldloop-demo",
         }
     )
-    emitter = SimulatedSignalEmitter(
-        publisher, org_id="fieldloop-demo", source="mock-historian", classification="CONFIDENTIAL"
-    )
+    emitter = SimulatedSignalEmitter(publisher, org_id="fieldloop-demo")
     historian = SimulatedHistorian()
     historian.add_override("DL-01.rectifier.output", start=failed_at, value=0.0)
     reading = historian.observe("DL-01.rectifier.output", failed_at)
@@ -78,11 +76,8 @@ try:
 
     # A patrol finding is a report that arrives as a Signal too: a Signal is Evidence that
     # arrives automatically from a connected source system, whatever its content.
-    patrol_emitter = SimulatedSignalEmitter(
-        publisher, org_id="fieldloop-demo", source="mock-patrol", classification="HIGHLY_RESTRICTED"
-    )
     finding = SimulatedPatrol().observe("SYN-PATROL-001", failed_at)
-    assert asyncio.run(patrol_emitter.emit(finding, run_id=run_id)).outcome == "published"
+    assert asyncio.run(emitter.emit(finding, run_id=run_id)).outcome == "published"
 
     delivered = pull(subscriptions[signal_topic], 3)
     bodies = [json.loads(data) for data, _ in delivered]

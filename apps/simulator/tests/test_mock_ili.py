@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from fieldloop_common.memory_transport import InMemoryTransport
 from fieldloop_common.signal import parse_signal
-from fieldloop_common.signal_publisher import SignalPublisher
 from fieldloop_simulator.main import app
 from fieldloop_simulator.mock_ili import SimulatedIliDrop
 from fieldloop_simulator.mock_signals import SimulatedSignalEmitter
@@ -20,15 +20,6 @@ REPORT = "SYN-ILI-2026-001"
 URL = f"/mock/ili/reports/{REPORT}"
 ROUTE_LENGTH_M = 180_000
 AT = datetime(2026, 10, 12, 8, 0, tzinfo=UTC)
-
-
-class RecordingTransport:
-    def __init__(self) -> None:
-        self.messages: list[tuple[str, bytes, dict[str, str]]] = []
-
-    async def publish(self, topic: str, data: bytes, attributes: dict[str, str]) -> str:
-        self.messages.append((topic, data, attributes))
-        return "message-144"
 
 
 def test_report_is_the_dropped_document_and_a_deterministic_synthetic_read() -> None:
@@ -104,15 +95,10 @@ def test_the_report_matches_the_canonical_wire_schema() -> None:
             validator.validate({**data, **change})
 
 
-def test_arrival_is_announced_as_a_signal_that_points_at_the_dropped_file() -> None:
+def test_arrival_is_announced_as_a_signal_that_points_at_the_dropped_file(
+    emitter: SimulatedSignalEmitter, transport: InMemoryTransport
+) -> None:
     drop = SimulatedIliDrop(bucket="example-fieldloop-dev-ili-drop")
-    transport = RecordingTransport()
-    publisher = SignalPublisher(
-        transport, environment="dev", org_id="fieldloop-demo", simulation_only=True
-    )
-    emitter = SimulatedSignalEmitter(
-        publisher, org_id="fieldloop-demo", source="mock-ili", classification="HIGHLY_RESTRICTED"
-    )
     result = asyncio.run(emitter.emit(drop.observe(REPORT, AT)))
     assert result.outcome == "published"
     topic, data, attributes = transport.messages[0]

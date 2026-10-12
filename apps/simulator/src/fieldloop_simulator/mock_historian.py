@@ -17,9 +17,11 @@ from fastapi.responses import JSONResponse
 from fieldloop_common.generated_mock_historian import MockHistorianSeries
 
 from fieldloop_simulator.mock_http import ReadOnlyRouter, Rfc3339, app_state, problem
-from fieldloop_simulator.mock_signals import Observation
+from fieldloop_simulator.mock_signals import Classification, Observation
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
 
+SOURCE_ID = "mock-historian"
+CLASSIFICATION: Classification = "CONFIDENTIAL"
 DEMO_SEED = 20261018
 SAMPLE_INTERVAL = timedelta(seconds=60)
 MAX_WINDOW = timedelta(hours=24)
@@ -121,6 +123,8 @@ class SimulatedHistorian:
     def observe(self, tag: str, at: datetime) -> Observation:
         """The reading a Scenario publishes as a Signal; source detail goes in the payload."""
         return Observation(
+            source=SOURCE_ID,
+            classification=CLASSIFICATION,
             tag=tag,
             value=self.value_at(tag, at),
             observed_at=at,
@@ -167,11 +171,11 @@ def read_tag(
             "intervalSeconds": int(SAMPLE_INTERVAL.total_seconds()),
             "points": points,
             "total": len(points),
-            "source": "mock-historian",
+            "source": SOURCE_ID,
             "orgId": historian.org_id,
             "assetCode": "DL-01",
             "label": "SYNTHETIC",
             "simulated": True,
-            "classification": "CONFIDENTIAL",
+            "classification": CLASSIFICATION,
         }
     )

@@ -63,9 +63,7 @@ historian = app.state.historian
 historian.add_override("DL-01.rectifier.output", start=scenario_time, value=0.0)
 
 publisher = signal_publisher_from_environment(os.environ)  # when a run starts
-emitter = SimulatedSignalEmitter(
-    publisher, org_id=historian.org_id, source="mock-historian", classification="CONFIDENTIAL"
-)
+emitter = SimulatedSignalEmitter(publisher, org_id=historian.org_id)
 await emitter.emit(historian.observe("DL-01.rectifier.output", scenario_time), run_id=run_id)
 ```
 
@@ -144,8 +142,9 @@ else is `400`. The list is small and bounded, so it is not paginated.
   fixes along the pipeline reveals Asset geometry (PRD 9.1). This is more
   conservative than the `CONFIDENTIAL` Evidence rows of the DL-01 seed.
 - **Findings arrive as Signals.** `SimulatedPatrol.observe(finding_id, at)`
-  returns the Observation for `SimulatedSignalEmitter` (source `mock-patrol`,
-  classification `HIGHLY_RESTRICTED`):
+  returns the Observation for `SimulatedSignalEmitter`. It names its own
+  `source` (`mock-patrol`) and `classification` (`HIGHLY_RESTRICTED`, as the API
+  reports), so one emitter serves every source and cannot mislabel a Signal:
 
   | Member | Value |
   | --- | --- |
@@ -195,9 +194,6 @@ A Scenario turns the drop into a Signal with the same emitter as the historian:
 
 ```python
 drop = app.state.ili  # SimulatedIliDrop, bucket from FIELDLOOP_ILI_DROP_BUCKET
-emitter = SimulatedSignalEmitter(
-    publisher, org_id=ORG_ID, source="mock-ili", classification="HIGHLY_RESTRICTED"
-)
 await emitter.emit(drop.observe("SYN-ILI-2026-001", scenario_time), run_id=run_id)
 ```
 

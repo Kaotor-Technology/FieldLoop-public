@@ -18,6 +18,7 @@ from fieldloop_common.generated_mock_ili import MockIliReport
 from fieldloop_simulator.mock_http import ReadOnlyRouter, app_state, problem
 from fieldloop_simulator.mock_signals import Observation
 
+SOURCE_ID = "mock-ili"
 REPORT_PREFIX = "reports/"
 # Cloud Storage names: 3 to 63 characters of lowercase letters, digits, dots, dashes, underscores.
 _BUCKET = re.compile(r"[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]")
@@ -59,6 +60,8 @@ class SimulatedIliDrop:
         if self.bucket is not None:
             payload["bucket"] = self.bucket
         return Observation(
+            source=SOURCE_ID,
+            classification=report.classification,
             tag="DL-01.ili.report.received",
             value=1,
             observed_at=at,

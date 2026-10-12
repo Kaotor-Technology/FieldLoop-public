@@ -14,10 +14,12 @@ from fastapi import Depends, Query
 from fieldloop_common.generated_mock_patrol import MockPatrolPage
 
 from fieldloop_simulator.mock_http import ReadOnlyRouter, Rfc3339, app_state
-from fieldloop_simulator.mock_signals import Observation, utc_text
+from fieldloop_simulator.mock_signals import Classification, Observation, utc_text
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
 
 Kind = Literal["encroachment", "marker_damage", "erosion"]
+SOURCE_ID = "mock-patrol"
+CLASSIFICATION: Classification = "HIGHLY_RESTRICTED"
 GPS_ACCURACY_M = 5.0
 
 
@@ -114,6 +116,8 @@ class SimulatedPatrol:
             raise ValueError("Observation times need a timezone")
         finding = _FINDINGS_BY_ID[finding_id]
         return Observation(
+            source=SOURCE_ID,
+            classification=CLASSIFICATION,
             tag=f"DL-01.{finding.kind}.detected",
             value=1 if finding.status == "open" else 0,
             observed_at=at,
@@ -162,14 +166,14 @@ class SimulatedPatrol:
                         },
                         "label": "SYNTHETIC",
                         "simulated": True,
-                        "classification": "HIGHLY_RESTRICTED",
+                        "classification": CLASSIFICATION,
                     }
                     for finding in selected
                 ],
                 "total": len(selected),
                 "label": "SYNTHETIC",
                 "simulated": True,
-                "classification": "HIGHLY_RESTRICTED",
+                "classification": CLASSIFICATION,
             }
         )
 
