@@ -140,3 +140,60 @@ else is `400`. The list is small and bounded, so it is not paginated.
   `encroachment-detected` (FL-78) expects a `mock-patrol` Signal with tag
   `DL-01.encroachment.detected`; the emitter and `Observation` from FL-141 can
   carry one, but producing it is not a FL-143 deliverable. See the handoff note.
+
+## Mock ILI report drop (FL-144)
+
+`GET /mock/ili/reports/{id}` serves one synthetic in-line inspection report,
+`SYN-ILI-2026-001`, run on 2026-08-24 and issued 2026-09-10 by the fictional
+"Synthetic Inspection Services". An unknown id is `404`.
+
+| Anomaly | Chainage | Clock | Feature | Depth (% wall) |
+| --- | --- | --- | --- | --- |
+| `A-001` | 12 800 m | 04:30 | external metal loss | 12 |
+| `A-002` | 38 250 m | 06:00 | external metal loss | 27 |
+| `A-003` | 61 400 m | 11:15 | internal metal loss | 9 |
+| `A-004` | 87 600 m | 03:45 | external metal loss | 18 |
+| `A-005` | 104 700 m | 07:20 | external metal loss | 31 |
+| `A-006` | 133 900 m | 09:10 | internal metal loss | 15 |
+
+- **One document, two homes.** The JSON file in
+  `apps/simulator/src/fieldloop_simulator/fixtures/ili/` is the API response and
+  the object that Terraform creates in each environment's `ili-drop` bucket
+  (`reports/SYN-ILI-2026-001.json`). The simulator itself neither reads nor
+  writes the bucket, so it holds no storage permission.
+- **No Organisation inside the file.** A vendor's report does not know FieldLoop
+  Organisation IDs; the drop location identifies the customer.
+- **Classification** is `HIGHLY_RESTRICTED`: inspection raw data (PRD 9.1).
+- **Format.** A real vendor delivers PDF or spreadsheet files. This one is JSON so
+  it is machine-checkable; documents for the assistant's extraction path (PRD
+  Demo A step 2) belong to the synthetic corpus, not to this source.
+
+### Announcing the arrival
+
+A Scenario turns the drop into a Signal with the same emitter as the historian:
+
+```python
+drop = app.state.ili  # SimulatedIliDrop, bucket from FIELDLOOP_ILI_DROP_BUCKET
+emitter = SimulatedSignalEmitter(
+    publisher, org_id=ORG_ID, source="mock-ili", classification="HIGHLY_RESTRICTED"
+)
+await emitter.emit(drop.observe("SYN-ILI-2026-001", scenario_time), run_id=run_id)
+```
+
+The Signal is `source: mock-ili`, `tag: DL-01.ili.report.received`, `value: 1`,
+`unit: boolean`, with a payload of `assetCode`, `reportId`, `bucket`,
+`objectName`, `contentType`, `anomalyCount` and `label`. The payload locates the
+file and does not copy the findings. The `bucket` member is absent when
+`FIELDLOOP_ILI_DROP_BUCKET` is unset, as it is locally.
+
+**Why a Signal and not a bucket notification.** A Cloud Storage notification
+publishes the raw object event, which is not `signal.v1`; sent to `signals` it
+would be quarantined, and no other topic has a consumer for it yet. The Signal
+travels the validated path that SIM-3 requires and a rule can match it later
+without infrastructure change. A bucket notification is an additive follow-up
+once an ingestion consumer exists.
+
+### Deployment prerequisite
+
+The bucket, the object and `FIELDLOOP_ILI_DROP_BUCKET` come from the Terraform
+change, which is **not applied**; nothing here has run against real storage.
