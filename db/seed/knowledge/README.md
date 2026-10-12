@@ -3,8 +3,11 @@
 Run this operator job once after the reviewed corpus, legal seed and DL-01
 segments are loaded in the target Organisation. It does not run on service
 startup or deployment. Apply the repository migrations first.
+Use Node from `.nvmrc` and pnpm from the root `packageManager`; the existing
+FL-65 corpus gate and legal handoff require their locked Node dependencies.
 
 ```bash
+pnpm install --frozen-lockfile
 uv sync --locked --all-packages
 # Use the approved private database connection and an authorised Vertex identity.
 # Provide FIELDLOOP_DATABASE_URL through the existing secret workflow, never as a CLI argument.
