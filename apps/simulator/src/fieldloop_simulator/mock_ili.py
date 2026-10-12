@@ -63,6 +63,7 @@ class SimulatedIliDrop:
             value=1,
             observed_at=at,
             unit="boolean",
+            subject=report.report_id,
             payload=payload,
         )
 

@@ -31,9 +31,12 @@ class Observation:
     observed_at: datetime
     unit: str | None = None
     payload: Mapping[str, object] | None = None
+    # What the observation is about, such as a finding or a report. It takes part in the
+    # identity, so two findings of one kind at the same instant are not one Signal.
+    subject: str | None = None
 
 
-def _utc_text(at: datetime) -> str:
+def utc_text(at: datetime) -> str:
     if at.tzinfo is None:
         raise ValueError("Observation time needs a timezone")
     try:
@@ -67,17 +70,19 @@ class SimulatedSignalEmitter:
         self._classification = classification
 
     def build(self, observation: Observation, run_id: uuid.UUID | None = None) -> dict[str, object]:
-        observed_at = _utc_text(observation.observed_at)
-        identity = "|".join(
-            (
-                self._org_id,
-                str(run_id) if run_id is not None else "-",
-                self._source,
-                observation.tag,
-                observed_at,
-                _canonical_value(observation.value),
-            )
-        )
+        observed_at = utc_text(observation.observed_at)
+        parts = [
+            self._org_id,
+            str(run_id) if run_id is not None else "-",
+            self._source,
+            observation.tag,
+            observed_at,
+            _canonical_value(observation.value),
+        ]
+        if observation.subject is not None:
+            # Appended only when present, so a subject-less observation keeps its identity.
+            parts.append(observation.subject)
+        identity = "|".join(parts)
         signal: dict[str, object] = {
             "schemaVersion": "signal.v1",
             "id": str(uuid.uuid5(SIGNAL_ID_NAMESPACE, identity)),

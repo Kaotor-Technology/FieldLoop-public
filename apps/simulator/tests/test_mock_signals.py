@@ -150,6 +150,15 @@ def test_equal_json_numbers_share_one_identity() -> None:
     )
 
 
+def test_the_subject_takes_part_in_the_identity() -> None:
+    instance = emitter()[0]
+    plain = instance.build(observation(), run_id=RUN)["id"]
+    first = instance.build(observation(subject="SYN-PATROL-001"), run_id=RUN)["id"]
+    second = instance.build(observation(subject="SYN-PATROL-004"), run_id=RUN)["id"]
+    assert len({plain, first, second}) == 3
+    assert instance.build(observation(subject="SYN-PATROL-001"), run_id=RUN)["id"] == first
+
+
 def test_emit_publishes_to_the_signal_topic_with_routing_attributes() -> None:
     instance, transport = emitter()
     result = asyncio.run(instance.emit(observation(), run_id=RUN))
