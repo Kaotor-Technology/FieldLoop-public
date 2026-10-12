@@ -18,8 +18,8 @@ from fastapi.responses import JSONResponse
 from fieldloop_common.generated_mock_historian import MockHistorianSeries
 
 from fieldloop_simulator.mock_http import ReadOnlyRouter, Rfc3339, problem
+from fieldloop_simulator.mock_signals import DEMO_ORG_ID, Observation
 
-DEMO_ORG_ID = "fieldloop-demo"
 DEMO_SEED = 20261018
 SAMPLE_INTERVAL = timedelta(seconds=60)
 MAX_WINDOW = timedelta(hours=24)
@@ -118,6 +118,16 @@ class SimulatedHistorian:
         digest = hashlib.sha256(f"{self.seed}|{tag}|{second}".encode()).digest()
         jitter = int.from_bytes(digest[:8], "big") / 2**64
         return round(profile.base + profile.swing * wave + profile.noise * (2 * jitter - 1), 3)
+
+    def observe(self, tag: str, at: datetime) -> Observation:
+        """The reading a Scenario publishes as a Signal; source detail goes in the payload."""
+        return Observation(
+            tag=tag,
+            value=self.value_at(tag, at),
+            observed_at=at,
+            unit=TAG_PROFILES[tag].unit,
+            payload={"assetCode": "DL-01", "label": "SYNTHETIC", "quality": "good"},
+        )
 
     def series(self, tag: str, start: datetime, end: datetime) -> list[tuple[datetime, float]]:
         """Samples on the UTC clock grid inside ``start``..``end`` inclusive."""
