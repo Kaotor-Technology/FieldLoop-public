@@ -1,0 +1,7 @@
+{
+  "name": "@fieldloop/seed-bangkok",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": { "kysely": "0.29.6", "pg": "8.23.1" }
+}
