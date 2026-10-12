@@ -221,6 +221,7 @@ test("disabled selections are omitted from forms while enabled selections submit
 });
 
 test("Thai prose retains dictionary wrapping and long identifiers reflow inside modal content", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 320, height: 900 });
   await page.getByRole("button", { name: "Open modal", exact: true }).click();
   const body = page.locator(".fl-modal-body");
@@ -236,6 +237,7 @@ test("Thai prose retains dictionary wrapping and long identifiers reflow inside 
   expect(await body.locator("p").evaluate(element => getComputedStyle(element).overflowWrap)).toBe("normal");
   expect(await body.locator("code").evaluate(element => element.parentElement !== null && element.scrollWidth <= element.parentElement.clientWidth)).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.locator(".fl-modal").screenshot({ path: "e2e/evidence/ui-kit-thai-320.png" });
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Show info", exact: true }).click();
   for (const selector of [".fl-toast-message", ".fl-simulation-banner", ".fl-select-trigger > span:first-child", ".fl-nav-disabled"]) {
@@ -280,4 +282,60 @@ test("modal and toast enter and exit with DESIGN motion and disappear immediatel
     await page.getByRole("button", { name: component === "modal" ? "Cancel" : "Dismiss notification", exact: true }).click();
     await expect(page.locator(`.fl-${component}`)).not.toBeAttached();
   }
+});
+
+test("shared controls match DESIGN geometry and the canonical Stitch header and hover states", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  const tokens = await page.evaluate(() => {
+    const css = getComputedStyle(document.documentElement);
+    const number = (name: string) => parseFloat(css.getPropertyValue(name));
+    const probe = document.createElement("span");
+    probe.style.backgroundColor = "var(--color-primary-subtle)";
+    document.body.append(probe);
+    const ghostHover = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return { sm: number("--spacing-control-sm"), md: number("--spacing-control-md"), lg: number("--spacing-control-lg"), topBar: number("--spacing-top-bar-height"), padding: number("--spacing-space-4"), ghostPadding: number("--spacing-space-3"), largePadding: number("--spacing-space-5"), ghostHover };
+  });
+  for (const [name, height, padding] of [["Compact button", tokens.sm, tokens.ghostPadding], ["View Evidence", tokens.md, tokens.padding], ["Field button", tokens.lg, tokens.largePadding]] as const) {
+    const button = page.getByRole("button", { name, exact: true });
+    expect((await button.boundingBox())?.height).toBe(height);
+    expect(await button.evaluate(element => parseFloat(getComputedStyle(element).paddingInlineStart))).toBe(padding);
+  }
+  const ghost = page.getByRole("button", { name: "Inspect sources", exact: true });
+  await ghost.hover();
+  await expect(ghost).toHaveCSS("background-color", tokens.ghostHover);
+  expect(await ghost.evaluate(element => parseFloat(getComputedStyle(element).paddingInlineStart))).toBe(tokens.ghostPadding);
+  expect((await page.locator(".fl-top-bar").boundingBox())?.height).toBe(tokens.topBar);
+  await expect(page.getByRole("link", { name: "FieldLoop-v2", exact: true })).toBeVisible();
+  await expect(page.getByText("Powered by Kaotor Technology", { exact: true })).toBeVisible();
+  const thaiButton = await page.getByRole("button", { name: "Compact button", exact: true }).evaluate(element => {
+    element.setAttribute("lang", "th");
+    const css = getComputedStyle(element);
+    return { size: parseFloat(css.fontSize), leading: parseFloat(css.lineHeight) / parseFloat(css.fontSize) };
+  });
+  expect(thaiButton.size).toBeGreaterThanOrEqual(13);
+  expect(thaiButton.leading).toBeGreaterThanOrEqual(1.5);
+});
+
+test("Health markers use distinct triangle cross and hatched-square anchors in both themes", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light", reducedMotion: "reduce" });
+  const degraded = page.getByRole("button", { name: "degraded Barrier marker", exact: true });
+  const failed = page.getByRole("button", { name: "failed Barrier marker", exact: true });
+  const unverified = page.getByRole("button", { name: "unverified Barrier marker", exact: true });
+  await expect(degraded.locator("svg polygon")).toHaveCount(1);
+  await expect(failed.locator("svg > path")).toHaveCount(1);
+  await expect(unverified.locator("svg pattern")).toHaveCount(1);
+  await expect(page.locator(".fl-map-marker svg circle")).toHaveCount(0);
+  for (const marker of [degraded, failed, unverified]) {
+    expect((await marker.boundingBox())?.width).toBeGreaterThanOrEqual(44);
+    expect((await marker.locator("svg").boundingBox())?.width).toBe(24);
+  }
+  const lightFills = await page.locator(".fl-map-marker:not(:disabled) svg").evaluateAll(elements => elements.map(element => getComputedStyle(element).fill));
+  const markers = page.locator(".preview-row").filter({ has: failed });
+  await markers.screenshot({ path: "e2e/evidence/ui-kit-markers-light.png" });
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  expect(await page.locator(".fl-map-marker:not(:disabled) svg").evaluateAll(elements => elements.map(element => getComputedStyle(element).fill))).toEqual(lightFills);
+  expect(await failed.locator("span").evaluate(element => getComputedStyle(element, "::after").animationName)).toBe("none");
+  await markers.screenshot({ path: "e2e/evidence/ui-kit-markers-dark.png" });
 });

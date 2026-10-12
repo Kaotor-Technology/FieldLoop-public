@@ -15,7 +15,7 @@ export function Navigation({ label, items, variant = "rail" }: NavigationProps) 
 
 export interface TopBarProps { children?: ReactNode; homeHref?: string }
 export function TopBar({ children, homeHref = "/map" }: TopBarProps) {
-  return <header className="fl-top-bar"><a href={homeHref} className="fl-wordmark" aria-label="FieldLoop">Field<span>Loop</span></a><div className="fl-top-actions">{children}</div></header>;
+  return <header className="fl-top-bar"><a href={homeHref} className="fl-wordmark" aria-label="FieldLoop-v2">Field<span>Loop</span><span className="fl-mono">-v2</span></a><div className="fl-top-actions">{children}</div></header>;
 }
 
 export interface SimulationBannerProps { scenario: string; speed: string; label?: string; scenarioLabel?: string }
