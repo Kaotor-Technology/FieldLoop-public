@@ -97,6 +97,47 @@ afterEach(() => {
 });
 
 describe("synthetic document corpus generator", () => {
+  it("fails a read-only delivery check while any human decision is pending", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    const before = readFileSync(join(directory, "review-checklist.csv"), "utf8");
+    expect(() => execFileSync(process.execPath, [generator, "--check-delivery", "--output-dir", directory], {
+      cwd: repositoryRoot, stdio: "pipe",
+    })).toThrow(/240 documents still require human review/);
+    expect(readFileSync(join(directory, "review-checklist.csv"), "utf8")).toBe(before);
+  });
+
+  it("accepts a complete reviewed fixture and rejects an edited delivery without rewriting it", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    const decisions = Object.fromEntries(readManifest(directory).documents.map(({ documentId }, index) => [
+      documentId, ["Fixture reviewer", index === 0 ? "fail" : "pass", "2026-10-12", "Test only"],
+    ]));
+    recordDecisions(directory, decisions);
+    generateInto(directory);
+    const check = () => execFileSync(process.execPath, [generator, "--check-delivery", "--output-dir", directory], {
+      cwd: repositoryRoot, encoding: "utf8", stdio: "pipe",
+    });
+    expect(check()).toContain("Delivery check passed: 239 human-reviewed documents");
+    const path = join(directory, readManifest(directory).documents[0]?.contentPath ?? "missing");
+    const edited = readFileSync(path, "utf8") + "\nUnreviewed fixture edit.\n";
+    writeFileSync(path, edited);
+    expect(check).toThrow(/does not match the reviewed delivery/);
+    expect(readFileSync(path, "utf8")).toBe(edited);
+  });
+
+  it("rejects a reviewed delivery below the retained document target", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    recordDecisions(directory, Object.fromEntries(readManifest(directory).documents.map(({ documentId }, index) => [
+      documentId, ["Fixture reviewer", index < 41 ? "fail" : "pass", "2026-10-12", "Test only"],
+    ])));
+    generateInto(directory);
+    expect(() => execFileSync(process.execPath, [generator, "--check-delivery", "--output-dir", directory], {
+      cwd: repositoryRoot, stdio: "pipe",
+    })).toThrow(/199 retained documents; requires 200–300/);
+  });
+
   it("rejects a changed template before replacing reviewed content or decisions", () => {
     const directory = temporaryDirectory();
     generateInto(directory);

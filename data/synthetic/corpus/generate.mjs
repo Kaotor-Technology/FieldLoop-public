@@ -781,6 +781,34 @@ export async function writeCorpus(outputDir = DEFAULT_OUTPUT_DIR) {
   return manifest;
 }
 
+/** Verify the recorded human delivery without changing decisions or files. */
+export async function checkCorpusDelivery(outputDir = DEFAULT_OUTPUT_DIR) {
+  const outputPath = resolve(outputDir);
+  const reviews = await readRecordedReviews(resolve(outputPath, "review-checklist.csv"));
+  const { documents, manifest, checklist } = buildCorpus(reviews);
+  if (manifest.review.pending > 0) {
+    throw new Error(`Delivery incomplete: ${manifest.review.pending} documents still require human review.`);
+  }
+  if (manifest.documentCount < 200 || manifest.documentCount > 300) {
+    throw new Error(`Delivery incomplete: ${manifest.documentCount} retained documents; requires 200–300.`);
+  }
+  for (const document of documents) {
+    const content = await readFile(resolve(outputPath, "documents", document.filename), "utf8");
+    if (content !== document.content) {
+      throw new Error(`${document.metadata.documentId} does not match the reviewed delivery. Regenerate and review changed content.`);
+    }
+  }
+  const filenames = (await readdir(resolve(outputPath, "documents"))).filter((name) => name.endsWith(".md")).sort();
+  if (JSON.stringify(filenames) !== JSON.stringify(documents.map((document) => document.filename).sort())) {
+    throw new Error("Delivery contains missing or unremoved document files. Regenerate after recording decisions.");
+  }
+  if (await readFile(resolve(outputPath, "manifest.json"), "utf8") !== `${JSON.stringify(manifest, null, 2)}\n`
+    || await readFile(resolve(outputPath, "review-checklist.csv"), "utf8") !== checklist) {
+    throw new Error("Delivery metadata does not match recorded review decisions. Regenerate before delivery.");
+  }
+  return manifest;
+}
+
 function outputDirectoryFromArgs(args) {
   const outputIndex = args.indexOf("--output-dir");
   if (outputIndex === -1) {
@@ -796,7 +824,16 @@ function outputDirectoryFromArgs(args) {
 }
 
 async function main() {
-  const outputDir = outputDirectoryFromArgs(process.argv.slice(2));
+  const args = process.argv.slice(2);
+  const checkDelivery = args.includes("--check-delivery");
+  const checkIndex = args.indexOf("--check-delivery");
+  if (checkDelivery) args.splice(checkIndex, 1);
+  const outputDir = outputDirectoryFromArgs(args);
+  if (checkDelivery) {
+    const manifest = await checkCorpusDelivery(outputDir);
+    process.stdout.write(`Delivery check passed: ${manifest.documentCount} human-reviewed documents (${manifest.review.failedAndRemoved} failed and removed).\n`);
+    return;
+  }
   const manifest = await writeCorpus(outputDir);
   if (manifest.documentCount < 200 || manifest.documentCount > 300) {
     process.stdout.write(`Delivery target unmet: ${manifest.documentCount} retained documents; requires 200–300 after removals. Human review remains required.\n`);

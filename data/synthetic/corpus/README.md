@@ -48,6 +48,19 @@ records and applies it:
 Do not load a `draft` candidate as accepted Evidence. OCR and document parsing
 are outside this task.
 
+Before handing the reviewed batch to FL-70, run:
+
+```sh
+node data/synthetic/corpus/generate.mjs --check-delivery
+```
+
+This read-only check exits nonzero while any human decision is pending, if fewer
+than 200 or more than 300 documents remain after removals, or when files,
+manifest or checklist differ from the recorded reviewed batch. It writes no
+decisions and performs no review. Use `--output-dir <path>` for a review copy.
+The committed batch currently fails this check because all 240 decisions remain
+pending. A person must complete the checklist; AI cannot supply those decisions.
+
 Thai laws and 49 CFR source records are tracked separately under
 [`../../corpus/legal/`](../../corpus/legal/). Legal status labels must be read
 with their source and verification date; an item marked `status unverified` is
