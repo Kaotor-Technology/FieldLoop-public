@@ -99,6 +99,8 @@ def hydro(
     start: Annotated[datetime | None, Query(alias="from")] = None,
     end: Annotated[datetime | None, Query(alias="to")] = None,
 ) -> list[HydroObservation]:
+    if any(value is not None and value.utcoffset() is None for value in (start, end)):
+        raise HTTPException(status_code=422, detail="from and to must include a timezone")
     if start and end and start > end:
         raise HTTPException(status_code=422, detail="from must be before to")
     _, unit, value = HYDRO_DATA[kind]
@@ -120,14 +122,18 @@ def _signal_id(source: str, tag: str, observed_at: datetime) -> str:
 
 
 async def publish_hydro_signal(
-    kind: Literal["rain", "level", "tide"], publisher: SignalPublisher | None = None
+    kind: Literal["rain", "level", "tide"],
+    publisher: SignalPublisher | None = None,
+    observed_at: datetime | None = None,
 ) -> dict[str, str]:
     """Publish the observation when called by the in-process scenario player."""
     publisher = publisher or _publisher()
     if publisher is None:
         raise RuntimeError("Signal publisher is not configured")
     tag, unit, value = HYDRO_DATA[kind]
-    observed_at = datetime(2026, 10, 12, tzinfo=UTC)
+    observed_at = observed_at or datetime(2026, 10, 12, tzinfo=UTC)
+    if observed_at.utcoffset() is None:
+        raise ValueError("Scenario time must include a timezone")
     result = await publisher.publish(
         {
             "schemaVersion": "signal.v1",
@@ -154,7 +160,9 @@ def pump_status(pump_id: str) -> PumpStatus:
 
 
 async def publish_pump_signal(
-    pump_id: str, publisher: SignalPublisher | None = None
+    pump_id: str,
+    publisher: SignalPublisher | None = None,
+    observed_at: datetime | None = None,
 ) -> dict[str, str]:
     """Publish pump state when called by the in-process scenario player."""
     if pump_id != PUMP_DATA.pump_id:
@@ -162,7 +170,9 @@ async def publish_pump_signal(
     publisher = publisher or _publisher()
     if publisher is None:
         raise RuntimeError("Signal publisher is not configured")
-    observed_at = PUMP_DATA.observed_at
+    observed_at = observed_at or PUMP_DATA.observed_at
+    if observed_at.utcoffset() is None:
+        raise ValueError("Scenario time must include a timezone")
     result = await publisher.publish(
         {
             "schemaVersion": "signal.v1",

@@ -1,5 +1,6 @@
 import asyncio
 import json
+from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 from fieldloop_common.signal import is_signal
@@ -113,3 +114,18 @@ def test_hydro_range_rejects_reversed_bounds() -> None:
             "/mock/hydro/rain?from=2026-10-13T00:00:00Z&to=2026-10-12T00:00:00Z"
         )
         assert response.status_code == 422
+
+
+def test_hydro_range_requires_timezone() -> None:
+    with TestClient(app) as client:
+        response = client.get("/mock/hydro/rain?from=2026-10-12T00:00:00")
+        assert response.status_code == 422
+
+
+def test_publishers_use_scenario_clock_when_provided() -> None:
+    transport = RecordingTransport()
+    observed_at = datetime(2026, 10, 13, 12, 30, tzinfo=UTC)
+    asyncio.run(publish_hydro_signal("rain", make_publisher(transport), observed_at))
+
+    signal = json.loads(transport.messages[0][1])
+    assert signal["observedAt"] == "2026-10-13T12:30:00Z"
