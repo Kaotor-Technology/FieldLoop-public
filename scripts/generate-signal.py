@@ -28,6 +28,7 @@ subprocess.run(
         "--use-standard-collections",
         "--use-object-type",
         "--use-annotated",
+        "--use-type-alias",
         "--formatters",
         "ruff-check",
         "ruff-format",

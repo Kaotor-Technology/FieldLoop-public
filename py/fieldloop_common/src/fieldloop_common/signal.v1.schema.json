@@ -55,13 +55,21 @@
       }
     },
     "value": {
-      "type": [
-        "number",
-        "string",
-        "boolean",
-        "null"
-      ],
-      "description": "Finite measurement, status, flag, or explicit unavailable value."
+      "description": "Finite measurement, status, flag, or explicit unavailable value.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SignalNumber"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "observedAt": {
       "type": "string",
@@ -104,6 +112,14 @@
       "type": "object",
       "additionalProperties": true,
       "description": "Untrusted source detail; consumers validate pack-specific content."
+    }
+  },
+  "$defs": {
+    "SignalNumber": {
+      "type": "number",
+      "minimum": -1.7976931348623157e+308,
+      "maximum": 1.7976931348623157e+308,
+      "description": "Finite IEEE 754 binary64 range shared by TypeScript and Python."
     }
   }
 }

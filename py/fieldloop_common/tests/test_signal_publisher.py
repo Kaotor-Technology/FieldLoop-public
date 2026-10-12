@@ -48,6 +48,20 @@ def test_shared_routing(case: dict[str, object]) -> None:
         assert attributes["classification"] == "HIGHLY_RESTRICTED"
 
 
+@pytest.mark.parametrize("value", [10**309, -(10**309)])
+def test_out_of_range_integers_go_only_to_quarantine(value: int) -> None:
+    signal = {**CASES[0]["signal"], "value": value}
+    transport = RecordingTransport()
+    result = asyncio.run(publisher(transport).publish(signal))
+    assert result.outcome == "dead_lettered"
+    assert len(transport.messages) == 1
+    topic, data, attributes = transport.messages[0]
+    assert topic == "fieldloop-v2-dead-letter"
+    assert json.loads(data) == signal
+    assert attributes["failureReason"] == "validation_failed"
+    assert attributes["classification"] == "HIGHLY_RESTRICTED"
+
+
 def test_simulation_and_organisation_guards() -> None:
     transport = RecordingTransport()
     instance = publisher(transport, simulation_only=True)

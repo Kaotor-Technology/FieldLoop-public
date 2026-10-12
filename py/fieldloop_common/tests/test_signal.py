@@ -18,6 +18,7 @@ def test_shared_wire_cases(case: dict[str, object]) -> None:
         assert model.schema_version == "signal.v1"
         assert isinstance(case["signal"], dict)
         assert model.simulated == case["signal"]["simulated"]
+        assert model.model_dump(mode="json", by_alias=True, exclude_unset=True) == case["signal"]
     else:
         with pytest.raises(ValidationError):
             parse_signal(case["signal"])
@@ -32,6 +33,14 @@ def test_model_is_generated_and_schema_packaged() -> None:
 
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), -float("inf"), json.loads("1e309")])
 def test_exported_validators_reject_nonfinite_observations(value: float) -> None:
+    signal = {**CASES[0]["signal"], "value": value}
+    assert not is_signal(signal)
+    with pytest.raises(ValidationError):
+        parse_signal(signal)
+
+
+@pytest.mark.parametrize("value", [10**309, -(10**309)])
+def test_exported_validators_reject_out_of_range_integers(value: int) -> None:
     signal = {**CASES[0]["signal"], "value": value}
     assert not is_signal(signal)
     with pytest.raises(ValidationError):

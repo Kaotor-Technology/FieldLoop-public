@@ -8,6 +8,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+type SignalNumber = Annotated[
+    float,
+    Field(
+        description="Finite IEEE 754 binary64 range shared by TypeScript and Python.",
+        ge=-1.7976931348623157e308,
+        le=1.7976931348623157e308,
+    ),
+]
+
 
 class Signal(BaseModel):
     model_config = ConfigDict(
@@ -35,7 +44,7 @@ class Signal(BaseModel):
         str, Field(max_length=256, min_length=1, pattern="^[A-Za-z0-9][A-Za-z0-9._:/-]*$")
     ]
     value: Annotated[
-        float | str | bool | None,
+        SignalNumber | str | bool | None,
         Field(description="Finite measurement, status, flag, or explicit unavailable value."),
     ]
     observed_at: Annotated[
