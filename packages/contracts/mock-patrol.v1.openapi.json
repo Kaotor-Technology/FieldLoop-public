@@ -1,0 +1,80 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FieldLoop internal mock patrol app",
+    "version": "1.0.0",
+    "description": "Synthetic read-only simulator endpoint from architecture section 4.2. Not a web-api/BFF endpoint. Run behind Cloud Run invoker IAM in dev/demo; local reads need no credentials. No real patrol-app connector, no write operation and no Signal publication.",
+    "contact": {
+      "name": "FieldLoop engineering",
+      "url": "https://github.com/Kaotor-Technology/FieldLoop-v2"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8082",
+      "description": "Local simulator as the repository README starts it. Deployed environments call the private simulator-{env} Cloud Run service with a Google OIDC ID token."
+    }
+  ],
+  "tags": [
+    {
+      "name": "mock-patrol",
+      "description": "Internal SYNTHETIC findings"
+    }
+  ],
+  "security": [
+    {
+      "serviceIdentity": []
+    }
+  ],
+  "paths": {
+    "/mock/patrol/findings": {
+      "get": {
+        "operationId": "listMockPatrolFindings",
+        "description": "Return the deterministic synthetic right-of-way findings for DL-01, oldest first, each with a GPS fix. This bounded internal fixture list is not the paginated public platform list API.",
+        "tags": [
+          "mock-patrol"
+        ],
+        "responses": {
+          "200": {
+            "description": "Deterministic synthetic findings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "mock-patrol.v1.schema.json"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Only GET is served, so every other method is refused; code method_not_allowed, and Allow names the methods the path serves. No state mutation.",
+            "headers": {
+              "Allow": {
+                "schema": {
+                  "type": "string",
+                  "const": "GET"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "serviceIdentity": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Google OIDC",
+        "description": "Verified by Cloud Run invoker IAM, not proxy headers. The handler does not implement browser auth or independently validate IAM."
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "reportId": "SYN-ILI-2026-001",
+  "assetCode": "DL-01",
+  "vendor": "Synthetic Inspection Services",
+  "tool": "magnetic_flux_leakage",
+  "runDate": "2026-08-24",
+  "issuedAt": "2026-09-10T00:00:00Z",
+  "inspectedFromChainageM": 0,
+  "inspectedToChainageM": 180000,
+  "anomalyCount": 6,
+  "anomalies": [
+    { "id": "A-001", "chainageM": 12800, "clockPosition": "04:30", "feature": "external_metal_loss", "depthPercent": 12, "lengthMm": 38, "widthMm": 24 },
+    { "id": "A-002", "chainageM": 38250, "clockPosition": "06:00", "feature": "external_metal_loss", "depthPercent": 27, "lengthMm": 64, "widthMm": 41 },
+    { "id": "A-003", "chainageM": 61400, "clockPosition": "11:15", "feature": "internal_metal_loss", "depthPercent": 9, "lengthMm": 30, "widthMm": 22 },
+    { "id": "A-004", "chainageM": 87600, "clockPosition": "03:45", "feature": "external_metal_loss", "depthPercent": 18, "lengthMm": 52, "widthMm": 35 },
+    { "id": "A-005", "chainageM": 104700, "clockPosition": "07:20", "feature": "external_metal_loss", "depthPercent": 31, "lengthMm": 88, "widthMm": 47 },
+    { "id": "A-006", "chainageM": 133900, "clockPosition": "09:10", "feature": "internal_metal_loss", "depthPercent": 15, "lengthMm": 41, "widthMm": 29 }
+  ],
+  "label": "SYNTHETIC",
+  "simulated": true,
+  "classification": "HIGHLY_RESTRICTED"
+}
