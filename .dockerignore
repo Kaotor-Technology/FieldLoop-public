@@ -37,6 +37,7 @@
 !db/migrations/
 !db/migrations/**
 !db/seed/
+!db/seed/common.mjs
 !db/seed/dl-01/
 !data/synthetic/dl-01/
 # Contract and token generators are build inputs.
