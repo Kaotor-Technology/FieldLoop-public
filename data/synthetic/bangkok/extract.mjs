@@ -61,7 +61,15 @@ export function boundaryGeometry(source, relationId) {
         chain.push(...nodes.slice(1));
       }
       if (new Set(chain).size < 3) throw new Error("District boundary ring is degenerate.");
-      result.push(chain.map((id) => coordinate(elements.get(`node/${id}`))));
+      const ring = chain.map((id) => coordinate(elements.get(`node/${id}`)));
+      const area = ring.reduce((sum, point, index) => {
+        const next = ring[(index + 1) % ring.length];
+        return sum + point[0] * next[1] - next[0] * point[1];
+      }, 0);
+      if (area === 0) throw new Error("District boundary ring is degenerate.");
+      // RFC 7946: outer rings counterclockwise, holes clockwise.
+      if ((area > 0) !== (role === "outer")) ring.reverse();
+      result.push(ring);
     }
     return result;
   };

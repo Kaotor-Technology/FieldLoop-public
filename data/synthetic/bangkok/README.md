@@ -61,3 +61,28 @@ checks that each Point falls within its assigned zone.
 ```sh
 node data/synthetic/bangkok/generate.mjs
 ```
+
+## Bowtie D (FL-138)
+
+`bowtie-d.json` authors PRD §6.1-D: four Threats, four Consequences (severity
+5/5/4/4), ten Preventive and five Mitigative Barriers, eight complete paths,
+Validation Triad justifications, one shared-response-team Independence Group,
+four Degradation Factors with Controls and two simulated Evidence records per
+Barrier. The initial generator-backup Barrier is Degraded with its monthly test
+overdue at the fixed simulation start, `2026-10-12T00:00:00Z`.
+
+Frequency/PFD/conditional-probability parameters are illustrative simulation
+inputs with `parameterBasis`; no measured operating rates or forecasts are
+claimed. Physical response functions are modelled only: de-energising substations
+and deploying pumps require human-operated L1 Command Packages. Early warning
+requires the separate approval-gated sandbox notification feature.
+
+The database loader in [db/seed/bangkok](../../../db/seed/bangkok/README.md)
+loads Area/Linear/Facility Assets, this graph and Evidence Geo References in one
+transaction. All database records exercise the demo classification/Simulation
+rules; raw public OSM files retain their independent public metadata.
+
+```sh
+FIELDLOOP_ORG_ID=fieldloop-demo node db/seed/bangkok/seed.mjs --print-sql
+pnpm test:seed:bangkok
+```
