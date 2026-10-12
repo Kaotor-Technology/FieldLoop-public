@@ -24,7 +24,10 @@
     "id": {
       "type": "string",
       "format": "uuid",
-      "description": "Producer identity; keep unchanged on retry for consumer deduplication."
+      "description": "Producer identity; keep unchanged on retry for consumer deduplication.",
+      "not": {
+        "pattern": "[^0-9a-fA-F-]"
+      }
     },
     "orgId": {
       "type": "string",
@@ -95,16 +98,25 @@
     },
     "assetId": {
       "type": "string",
-      "format": "uuid"
+      "format": "uuid",
+      "not": {
+        "pattern": "[^0-9a-fA-F-]"
+      }
     },
     "barrierId": {
       "type": "string",
-      "format": "uuid"
+      "format": "uuid",
+      "not": {
+        "pattern": "[^0-9a-fA-F-]"
+      }
     },
     "simulationRunId": {
       "type": "string",
       "format": "uuid",
-      "description": "Optional Scenario run identity for replay and reset."
+      "description": "Optional Scenario run identity for replay and reset.",
+      "not": {
+        "pattern": "[^0-9a-fA-F-]"
+      }
     },
     "unit": {
       "type": "string",

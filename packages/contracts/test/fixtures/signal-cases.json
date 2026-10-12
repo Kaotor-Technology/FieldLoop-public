@@ -877,5 +877,446 @@
       "simulated": true,
       "classification": "CONFIDENTIAL"
     }
+  },
+  {
+    "name": "id rejects UUID URN",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "urn:uuid:00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "id rejects UUID braces",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "{00000000-0000-4000-8000-000000000073}",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "id rejects UUID compact",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000000040008000000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "id rejects UUID trailing LF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073\n",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "id rejects UUID trailing CR",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073\r",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "id rejects UUID trailing CRLF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073\r\n",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "assetId rejects UUID URN",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "assetId": "urn:uuid:00000000-0000-4000-8000-000000000073"
+    }
+  },
+  {
+    "name": "assetId rejects UUID braces",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "assetId": "{00000000-0000-4000-8000-000000000073}"
+    }
+  },
+  {
+    "name": "assetId rejects UUID compact",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "assetId": "00000000000040008000000000000073"
+    }
+  },
+  {
+    "name": "assetId rejects UUID trailing LF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "assetId": "00000000-0000-4000-8000-000000000073\n"
+    }
+  },
+  {
+    "name": "assetId rejects UUID trailing CR",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "assetId": "00000000-0000-4000-8000-000000000073\r"
+    }
+  },
+  {
+    "name": "assetId rejects UUID trailing CRLF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "assetId": "00000000-0000-4000-8000-000000000073\r\n"
+    }
+  },
+  {
+    "name": "barrierId rejects UUID URN",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "barrierId": "urn:uuid:00000000-0000-4000-8000-000000000073"
+    }
+  },
+  {
+    "name": "barrierId rejects UUID braces",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "barrierId": "{00000000-0000-4000-8000-000000000073}"
+    }
+  },
+  {
+    "name": "barrierId rejects UUID compact",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "barrierId": "00000000000040008000000000000073"
+    }
+  },
+  {
+    "name": "barrierId rejects UUID trailing LF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "barrierId": "00000000-0000-4000-8000-000000000073\n"
+    }
+  },
+  {
+    "name": "barrierId rejects UUID trailing CR",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "barrierId": "00000000-0000-4000-8000-000000000073\r"
+    }
+  },
+  {
+    "name": "barrierId rejects UUID trailing CRLF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "barrierId": "00000000-0000-4000-8000-000000000073\r\n"
+    }
+  },
+  {
+    "name": "simulationRunId rejects UUID URN",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "simulationRunId": "urn:uuid:00000000-0000-4000-8000-000000000073"
+    }
+  },
+  {
+    "name": "simulationRunId rejects UUID braces",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "simulationRunId": "{00000000-0000-4000-8000-000000000073}"
+    }
+  },
+  {
+    "name": "simulationRunId rejects UUID compact",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "simulationRunId": "00000000000040008000000000000073"
+    }
+  },
+  {
+    "name": "simulationRunId rejects UUID trailing LF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "simulationRunId": "00000000-0000-4000-8000-000000000073\n"
+    }
+  },
+  {
+    "name": "simulationRunId rejects UUID trailing CR",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "simulationRunId": "00000000-0000-4000-8000-000000000073\r"
+    }
+  },
+  {
+    "name": "simulationRunId rejects UUID trailing CRLF",
+    "valid": false,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "simulationRunId": "00000000-0000-4000-8000-000000000073\r\n"
+    }
+  },
+  {
+    "name": "id accepts UUID hex letters",
+    "valid": true,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "12345678-90ab-4cde-8f01-23456789abcd",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL"
+    }
+  },
+  {
+    "name": "assetId accepts UUID hex letters",
+    "valid": true,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "assetId": "12345678-90ab-4cde-8f01-23456789abcd"
+    }
+  },
+  {
+    "name": "barrierId accepts UUID hex letters",
+    "valid": true,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "barrierId": "12345678-90ab-4cde-8f01-23456789abcd"
+    }
+  },
+  {
+    "name": "simulationRunId accepts UUID hex letters",
+    "valid": true,
+    "signal": {
+      "schemaVersion": "signal.v1",
+      "id": "00000000-0000-4000-8000-000000000073",
+      "orgId": "fieldloop-demo",
+      "source": "mock-historian",
+      "tag": "DL-01.rectifier.output",
+      "value": 0,
+      "observedAt": "2026-10-12T00:00:00Z",
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "simulationRunId": "12345678-90ab-4cde-8f01-23456789abcd"
+    }
   }
 ]

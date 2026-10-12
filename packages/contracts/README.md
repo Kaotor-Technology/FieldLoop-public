@@ -48,7 +48,8 @@ Scenario contracts arrive with their own issue.
 connectors and simulated sources use the same camelCase envelope. Every message
 states `schemaVersion`, producer-assigned UUID `id`, `orgId`, `source`, `tag`,
 `value`, RFC 3339 `observedAt`, `simulated` and uppercase `classification`.
-There are no provenance defaults. Optional Asset/Barrier/run IDs are UUIDs.
+There are no provenance defaults. Signal and optional Asset/Barrier/run IDs use
+plain hyphenated UUID text; URN prefixes, braces and compact forms are rejected.
 Observation timestamps use years 0001–9999 and seconds 00–59; leap seconds and
 year zero are rejected consistently by both validators.
 Organisation, source and tag identifiers and observation timestamps reject all
