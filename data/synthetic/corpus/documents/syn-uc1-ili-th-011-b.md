@@ -4,8 +4,8 @@ title: "รายงาน ILI จำลอง: การตรวจสอบ�
 document_type: "ili-report"
 language: "th"
 revision: "B"
-status: "draft"
-review_status: "pending"
+status: "current"
+review_status: "passed"
 folder: "Integrity/ILI Reports"
 classification: "INTERNAL"
 licence: "synthetic"
@@ -21,7 +21,7 @@ superseded_by: null
 
 # รายงาน ILI จำลอง: การตรวจสอบย้อนกลับของหลักฐาน
 
-> SYNTHETIC — เอกสาร candidate สำหรับการสาธิตเท่านั้น รอการทบทวนโดยบุคคล
+> SYNTHETIC — เอกสารสำหรับการสาธิต ผ่านการทบทวนโดยบุคคลแล้ว
 
 ## ขอบเขต
 
@@ -50,7 +50,7 @@ superseded_by: null
 ## การควบคุมเอกสาร
 
 - Revision: B
-- สถานะ: draft
+- สถานะ: current
 - วันที่บันทึก: 2026-10-10 (วันที่บันทึกแบบ SYNTHETIC)
-- การทบทวน: รอการทบทวนโดยบุคคล
+- การทบทวน: ผ่านการทบทวนโดยบุคคลแล้ว
 - ตัวระบุ ข้อสังเกต และค่าทั้งหมดในเอกสารนี้เป็นข้อมูลสมมติ ไม่มีกิจกรรมภาคสนามเกิดขึ้นจริง

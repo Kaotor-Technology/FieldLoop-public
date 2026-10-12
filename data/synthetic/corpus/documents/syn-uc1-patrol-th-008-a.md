@@ -4,8 +4,8 @@ title: "บันทึกการตรวจแนวท่อจำลอง
 document_type: "patrol-log"
 language: "th"
 revision: "A"
-status: "draft"
-review_status: "pending"
+status: "superseded"
+review_status: "passed"
 folder: "Maintenance/Patrol Logs"
 classification: "INTERNAL"
 licence: "synthetic"
@@ -21,7 +21,7 @@ superseded_by: "SYN-UC1-PATROL-TH-008-B"
 
 # บันทึกการตรวจแนวท่อจำลอง: การเตรียมงานซ่อมบำรุง
 
-> SYNTHETIC — เอกสาร candidate สำหรับการสาธิตเท่านั้น รอการทบทวนโดยบุคคล
+> SYNTHETIC — เอกสารสำหรับการสาธิต ผ่านการทบทวนโดยบุคคลแล้ว
 
 ## ขอบเขตการตรวจ
 
@@ -46,7 +46,7 @@ superseded_by: "SYN-UC1-PATROL-TH-008-B"
 ## การควบคุมเอกสาร
 
 - Revision: A
-- สถานะ: draft
+- สถานะ: superseded
 - วันที่บันทึก: 2026-10-10 (วันที่บันทึกแบบ SYNTHETIC)
-- การทบทวน: รอการทบทวนโดยบุคคล
+- การทบทวน: ผ่านการทบทวนโดยบุคคลแล้ว
 - ตัวระบุ ข้อสังเกต และค่าทั้งหมดในเอกสารนี้เป็นข้อมูลสมมติ ไม่มีกิจกรรมภาคสนามเกิดขึ้นจริง

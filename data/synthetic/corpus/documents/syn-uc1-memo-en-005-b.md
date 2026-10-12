@@ -4,8 +4,8 @@ title: "Synthetic engineering memo: right-of-way observation"
 document_type: "memo"
 language: "en"
 revision: "B"
-status: "draft"
-review_status: "pending"
+status: "current"
+review_status: "passed"
 folder: "Integrity/Engineering Memos"
 classification: "INTERNAL"
 licence: "synthetic"
@@ -21,7 +21,7 @@ superseded_by: null
 
 # Synthetic engineering memo: right-of-way observation
 
-> SYNTHETIC — Candidate document for demonstration only. Human review is pending.
+> SYNTHETIC — Demonstration document. Human review passed.
 
 ## Purpose
 
@@ -50,7 +50,7 @@ Supersedes revision A. Adds the section "Next review".
 ## Document control
 
 - Revision: B
-- Status: draft
+- Status: current
 - Recorded on: 2026-10-10 (synthetic record date)
-- Review: pending human review
+- Review: passed human review
 - All identifiers, observations and values in this document are fictional. No field activity occurred.

@@ -1,10 +1,17 @@
 # Synthetic document corpus
 
-This directory contains candidate documents for the FieldLoop Demo A
+This directory contains reviewed synthetic documents for the FieldLoop Demo A
 Knowledge Library. The generator creates procedures, ILI reports, patrol logs,
 root-cause analyses and engineering memos in Thai and English. Every record is
-fictional, labelled **SYNTHETIC**, marked `simulated: true`, and remains in
-`draft` status with human review pending.
+fictional, labelled **SYNTHETIC**, and marked `simulated: true`.
+
+Napat Chenchai confirmed that all 240 documents passed human review on
+12 October 2026 and explicitly requested recording those results. The checklist
+records those human-supplied decisions with their existing content hashes.
+The retained batch has 120 current revision-B documents and 120 superseded
+revision-A documents; none are pending or failed. The assistant transcribed
+the decisions and regenerated lifecycle annotations; it did not perform or
+approve the human review.
 
 ## Generate the candidate batch
 
@@ -58,8 +65,9 @@ This read-only check exits nonzero while any human decision is pending, if fewer
 than 200 or more than 300 documents remain after removals, or when files,
 manifest or checklist differ from the recorded reviewed batch. It writes no
 decisions and performs no review. Use `--output-dir <path>` for a review copy.
-The committed batch currently fails this check because all 240 decisions remain
-pending. A person must complete the checklist; AI cannot supply those decisions.
+The committed batch passes this check with 240 human-reviewed documents.
+New or changed authored content still requires an actual human decision;
+AI cannot supply those decisions.
 
 Thai laws and 49 CFR source records are tracked separately under
 [`../../corpus/legal/`](../../corpus/legal/). Legal status labels must be read

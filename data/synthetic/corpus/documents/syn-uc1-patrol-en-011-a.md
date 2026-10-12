@@ -4,8 +4,8 @@ title: "Synthetic patrol log: evidence traceability"
 document_type: "patrol-log"
 language: "en"
 revision: "A"
-status: "draft"
-review_status: "pending"
+status: "superseded"
+review_status: "passed"
 folder: "Maintenance/Patrol Logs"
 classification: "INTERNAL"
 licence: "synthetic"
@@ -21,7 +21,7 @@ superseded_by: "SYN-UC1-PATROL-EN-011-B"
 
 # Synthetic patrol log: evidence traceability
 
-> SYNTHETIC — Candidate document for demonstration only. Human review is pending.
+> SYNTHETIC — Demonstration document. Human review passed.
 
 ## Patrol scope
 
@@ -46,7 +46,7 @@ Initial issue.
 ## Document control
 
 - Revision: A
-- Status: draft
+- Status: superseded
 - Recorded on: 2026-10-10 (synthetic record date)
-- Review: pending human review
+- Review: passed human review
 - All identifiers, observations and values in this document are fictional. No field activity occurred.

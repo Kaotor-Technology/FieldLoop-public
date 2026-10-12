@@ -4,8 +4,8 @@ title: "บันทึกวิศวกรรมจำลอง: การท�
 document_type: "memo"
 language: "th"
 revision: "A"
-status: "draft"
-review_status: "pending"
+status: "superseded"
+review_status: "passed"
 folder: "Integrity/Engineering Memos"
 classification: "INTERNAL"
 licence: "synthetic"
@@ -21,7 +21,7 @@ superseded_by: "SYN-UC1-MEMO-TH-003-B"
 
 # บันทึกวิศวกรรมจำลอง: การทบทวนระบบป้องกันการกัดกร่อนแบบแคโทดิก
 
-> SYNTHETIC — เอกสาร candidate สำหรับการสาธิตเท่านั้น รอการทบทวนโดยบุคคล
+> SYNTHETIC — เอกสารสำหรับการสาธิต ผ่านการทบทวนโดยบุคคลแล้ว
 
 ## วัตถุประสงค์
 
@@ -46,7 +46,7 @@ superseded_by: "SYN-UC1-MEMO-TH-003-B"
 ## การควบคุมเอกสาร
 
 - Revision: A
-- สถานะ: draft
+- สถานะ: superseded
 - วันที่บันทึก: 2026-10-10 (วันที่บันทึกแบบ SYNTHETIC)
-- การทบทวน: รอการทบทวนโดยบุคคล
+- การทบทวน: ผ่านการทบทวนโดยบุคคลแล้ว
 - ตัวระบุ ข้อสังเกต และค่าทั้งหมดในเอกสารนี้เป็นข้อมูลสมมติ ไม่มีกิจกรรมภาคสนามเกิดขึ้นจริง
