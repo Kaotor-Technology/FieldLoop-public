@@ -56,6 +56,21 @@ describe("Domain Pack loading (FL-78 / D10 / D11)", () => {
     await expect(loadDomainPacks(directory, tools)).rejects.toThrow(/pack.yaml.*version/);
   });
 
+  it("loads valid spatial rules without losing their coordinates", async () => {
+    const geometry = { type: "Polygon", coordinates: [[[100, 13], [101, 13], [101, 14], [100, 14], [100, 13]]] };
+    const directory = await fixture((pack) => {
+      const rules = pack["signalRules"] as { spatialGeometry?: unknown }[];
+      if (rules[0]) rules[0].spatialGeometry = geometry;
+    });
+    const packs = await loadDomainPacks(directory, tools);
+    expect(packs[0]?.content.signalRules[0].spatialGeometry).toEqual(geometry);
+  });
+
+  it("rejects an agent that exceeds the demo step ceiling", async () => {
+    const directory = await fixture((_pack, agent) => { agent["maxSteps"] = 9; });
+    await expect(loadDomainPacks(directory, tools)).rejects.toThrow(/code-standard.yaml.*maxSteps/);
+  });
+
   it("rejects unknown tools with the agent filename", async () => {
     const directory = await fixture((_pack, agent) => { agent["allowedTools"] = ["cmms.create_work_order"]; });
     await expect(loadDomainPacks(directory, tools)).rejects.toThrow(/code-standard.yaml.*cmms.create_work_order/);
