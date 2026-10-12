@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Checkbox, Popover, Select as Primitive } from "radix-ui";
 import { useInertOutside } from "./useInertOutside.js";
+import { Field } from "./Field.js";
 
 export interface SelectOption { value: string; label: string; disabled?: boolean }
 export interface SelectProps {
@@ -30,8 +31,7 @@ function SingleSelect({ label, options, value, onValueChange, placeholder = "Sel
   const [open, setOpen] = useState(false);
   useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   const content = useInertOutside(open && !disabled);
-  return <div className="fl-field" lang={lang}>
-    <label htmlFor={id}>{label}</label>
+  return <Field id={id} label={label} helper={helper} error={error} lang={lang}>
     <Primitive.Root value={value} onValueChange={next => { if (!disabled) onValueChange(next); }} disabled={disabled} open={open && !disabled} onOpenChange={next => setOpen(next && !disabled)} {...(name ? { name } : {})}>
       <Primitive.Trigger id={id} className="fl-input fl-select-trigger" aria-invalid={Boolean(error)} aria-describedby={error || helper ? `${id}-message` : undefined}>
         <Primitive.Value placeholder={placeholder} /><Primitive.Icon aria-hidden="true">⌄</Primitive.Icon>
@@ -44,8 +44,7 @@ function SingleSelect({ label, options, value, onValueChange, placeholder = "Sel
         <Primitive.ScrollDownButton aria-label={scrollDownLabel}>⌄</Primitive.ScrollDownButton>
       </Primitive.Content></Primitive.Portal>
     </Primitive.Root>
-    {(error ?? helper) && <p id={`${id}-message`} className={error ? "fl-error" : "fl-helper"}>{error && <span aria-hidden="true">! </span>}{error ?? helper}</p>}
-  </div>;
+  </Field>;
 }
 
 export function Combobox({ label, options, value, onValueChange, placeholder = "Select an option", disabled = false, error, helper, name, searchLabel = "Search options", emptyLabel = "No matching options", lang }: SelectProps) {
@@ -62,8 +61,7 @@ export function Combobox({ label, options, value, onValueChange, placeholder = "
     if (open && activeValue) document.getElementById(`${id}-option-${options.findIndex(option => option.value === activeValue)}`)?.scrollIntoView({ block: "nearest" });
   }, [open, activeValue, id, options]);
   function choose(next: string) { if (disabled) return; onValueChange(next); setOpen(false); }
-  return <div className="fl-field" lang={lang}>
-    <label htmlFor={id}>{label}</label>
+  return <Field id={id} label={label} helper={helper} error={error} lang={lang}>
     {name && <input type="hidden" name={name} value={value} disabled={disabled} />}
     <Popover.Root open={open && !disabled} onOpenChange={next => { setOpen(next && !disabled); if (next) { setQuery(""); setActive(value); } }}>
       <Popover.Trigger id={id} className="fl-input fl-select-trigger" disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={error || helper ? `${id}-message` : undefined}>
@@ -88,8 +86,7 @@ export function Combobox({ label, options, value, onValueChange, placeholder = "
         {matches.length === 0 && <p role="status" className="fl-helper">{emptyLabel}</p>}
       </Popover.Content></Popover.Portal>
     </Popover.Root>
-    {(error ?? helper) && <p id={`${id}-message`} className={error ? "fl-error" : "fl-helper"}>{error && <span aria-hidden="true">! </span>}{error ?? helper}</p>}
-  </div>;
+  </Field>;
 }
 
 export interface MultiSelectProps extends Omit<SelectProps, "value" | "onValueChange"> { value: readonly string[]; onValueChange: (value: string[]) => void }
@@ -99,8 +96,7 @@ export function MultiSelect({ label, options, value, onValueChange, placeholder 
   const [query, setQuery] = useState("");
   useEffect(() => { if (disabled) setOpen(false); }, [disabled]);
   const matches = options.filter(option => option.label.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
-  return <div className="fl-field" lang={lang}>
-    <label htmlFor={id}>{label}</label>
+  return <Field id={id} label={label} helper={helper} error={error} lang={lang}>
     {name && value.map(item => <input key={item} type="hidden" name={name} value={item} disabled={disabled} />)}
     <Popover.Root open={open && !disabled} onOpenChange={next => { setOpen(next && !disabled); setQuery(""); }}>
       <Popover.Trigger id={id} className="fl-input fl-select-trigger" disabled={disabled} aria-invalid={Boolean(error)} aria-describedby={error || helper ? `${id}-message` : undefined}>
@@ -114,6 +110,5 @@ export function MultiSelect({ label, options, value, onValueChange, placeholder 
         {matches.length === 0 && <p role="status" className="fl-helper">{emptyLabel}</p>}
       </Popover.Content></Popover.Portal>
     </Popover.Root>
-    {(error ?? helper) && <p id={`${id}-message`} className={error ? "fl-error" : "fl-helper"}>{error && <span aria-hidden="true">! </span>}{error ?? helper}</p>}
-  </div>;
+  </Field>;
 }
