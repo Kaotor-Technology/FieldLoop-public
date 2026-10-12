@@ -33,7 +33,11 @@ carry that value into their portals. Button defaults to `type="button"`;
 forms explicitly opt into submit. Numbers, IDs, timestamps and Chainage use
 `fl-mono`, including numeric Input and Action Level badges.
 Named disabled Select/Combobox/MultiSelect controls are omitted from native form
-submission. Thai prose uses dictionary line breaking; apply `fl-break-identifier`
+submission. Setting `disabled` while a selection popup is open closes it and
+preserves its value; re-enabling does not reopen the popup. Supply `scrollUpLabel`
+and `scrollDownLabel` for translated single-select scroll controls. MultiSelect
+rows expose selected and disabled palettes in both themes.
+Thai prose uses dictionary line breaking; apply `fl-break-identifier`
 only to IDs and URLs that need arbitrary wrapping.
 
 Set `document.documentElement.dataset.theme` to `light` or `dark`. With no explicit
@@ -44,7 +48,9 @@ or `fieldSize="lg"` for 48-unit field/crisis controls.
 Modal and Toast use `base` entry/exit opacity motion with `enter`/`exit` easing;
 menus and tooltips open with `fast`/`standard` motion. Reduced motion removes these
 animations. Failed-marker outlines remain visible on both dark surface levels,
-while all marker fills retain their canonical Health colours.
+while all marker fills retain their canonical Health colours. Reduced-motion
+Failed markers use two separated static rings. Modal and EmptyState titles use
+their prescribed typography weights.
 
 `Modal` is a layout primitive, not an approval service. Its `approval` option moves
 initial focus to its title, traps focus, preserves Escape/Cancel and prevents Enter
@@ -87,9 +93,9 @@ from [the verified manifest](../../docs/design/redesign/manifest.json):
 | --- | --- |
 | Map Light / Dark | `5948747683069634041` / `7631654295750903555` |
 | Approval Light / Dark | `12353232703741438240` / `6802810922368815876` |
-| Field capture Light | `13517614703790346409` |
+| Field capture Light / Dark | `13517614703790346409` / `16000957026580574503` |
 
-Fresh MCP metadata, downloaded HTML and screenshots were inspected. All five HTML
+Fresh MCP metadata, downloaded HTML and screenshots were inspected. All six HTML
 SHA-256 values matched the manifest. Canonical palette, IBM Plex typography,
 button geometry/hover states, the 56-unit desktop Header and FieldLoop-v2 wordmark,
 and distinct triangle/cross/hatched-square marker anchors guide this shared kit.
@@ -97,9 +103,14 @@ Stitch's automatically derived theme metadata differs from its canonical guidanc
 root `DESIGN.md` remains the token source. Static artboards cannot verify runtime
 focus, form semantics or animation, which are covered by the component browser suite.
 
-The suite has 19 cases, including native form submission, Thai prose/identifier
+The suite has 23 cases, including native form submission, Thai prose/identifier
 reflow, feedback/menu/tooltip motion, button geometry and direct SVG boundary
-contrast in system/explicit dark mode. Updated [Light markers](../../apps/web/e2e/evidence/ui-kit-markers-light.png),
+contrast in system/explicit dark mode. Four additional cases cover disabling open
+selection controls, MultiSelect row palettes, Thai scroll labels, title weights
+and distinct reduced-motion rings. The latest real VoiceOver attempt could not
+run because Computer Use rejected native-app access, including after user
+authorization; a real screen-reader result is still pending.
+Updated [Light markers](../../apps/web/e2e/evidence/ui-kit-markers-light.png),
 [Dark markers](../../apps/web/e2e/evidence/ui-kit-markers-dark.png) and
 [Thai modal at 320](../../apps/web/e2e/evidence/ui-kit-thai-320.png) supplement the
 catalogue screenshots. Screen-specific layouts remain with the consuming issues.
