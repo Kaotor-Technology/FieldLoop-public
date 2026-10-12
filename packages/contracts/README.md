@@ -87,8 +87,11 @@ Mock sources and the Scenario player must set it to true; real connectors set
 it to false. Environment and Organisation attributes come from configuration,
 and cannot be overwritten by message input. Match the environment to the
 existing Terraform subscription filter. Signals default to topic `signals`;
-quarantine defaults to `fieldloop-v2-dead-letter`. Python topic options are short
-topic names. Give the runtime identity `roles/pubsub.publisher` on both topics;
+quarantine defaults to `fieldloop-v2-dead-letter`. Both publishers accept only
+short topic IDs (3–255 characters, starting with a letter, followed by letters,
+digits or `._~+%-`). Full resource paths and whitespace are rejected before
+transport, so a short ID and its full-name alias cannot refer to the same signal
+and quarantine destination. Give the runtime identity `roles/pubsub.publisher` on both topics;
 the existing Pub/Sub service-agent DLQ grant only covers subscription forwarding.
 The adapter creates no topics, subscriptions, credentials or IAM grants.
 

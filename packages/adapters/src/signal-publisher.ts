@@ -18,6 +18,11 @@ export interface SignalPublishResult {
 }
 
 export const MAX_SIGNAL_BYTES = 256 * 1024;
+const SHORT_TOPIC_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9._~+%-]{2,254}$/;
+
+function isShortTopicName(value: unknown): value is string {
+  return typeof value === "string" && value.trim() === value && SHORT_TOPIC_NAME_PATTERN.test(value);
+}
 
 /** Refuse lossy JSON conversions (NaN, undefined, Date, getters and cycles). */
 function assertJson(value: unknown, depth = 0): void {
@@ -47,7 +52,9 @@ export class SignalPublisher {
     if (!["dev", "demo", "local"].includes(config.environment)
       || typeof config.orgId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(config.orgId) || config.orgId.includes("\n")
       || typeof config.simulationOnly !== "boolean"
-      || !this.config.signalTopic.trim() || !this.config.deadLetterTopic.trim()
+      // Short IDs have one spelling within the transport's configured project.
+      // Reject full resource paths so aliases cannot bypass destination separation.
+      || !isShortTopicName(this.config.signalTopic) || !isShortTopicName(this.config.deadLetterTopic)
       || this.config.signalTopic === this.config.deadLetterTopic) {
       throw new TypeError("Invalid Signal publisher configuration");
     }

@@ -56,8 +56,8 @@ class SignalPublisher:
             environment not in ("dev", "demo", "local")
             or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", org_id) is None
             or not isinstance(simulation_only, bool)
-            or not signal_topic.strip()
-            or not dead_letter_topic.strip()
+            or re.fullmatch(r"[A-Za-z][A-Za-z0-9._~+%-]{2,254}", signal_topic) is None
+            or re.fullmatch(r"[A-Za-z][A-Za-z0-9._~+%-]{2,254}", dead_letter_topic) is None
             or signal_topic == dead_letter_topic
         ):
             raise ValueError("Invalid Signal publisher configuration")

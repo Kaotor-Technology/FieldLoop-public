@@ -113,3 +113,29 @@ def test_bad_config() -> None:
             simulation_only=True,
             dead_letter_topic="signals",
         )
+
+
+@pytest.mark.parametrize(
+    ("signal_topic", "dead_letter_topic"),
+    [
+        ("signals", "projects/test-project/topics/signals"),
+        ("projects/test-project/topics/signals", "signals"),
+        ("projects/test-project/topics/signals", "projects/test-project/topics/dead-letter"),
+        ("signals ", "dead-letter"),
+        ("signals", " dead-letter"),
+    ],
+)
+def test_topic_aliases_and_non_canonical_names_are_rejected(
+    signal_topic: str, dead_letter_topic: str
+) -> None:
+    transport = RecordingTransport()
+    with pytest.raises(ValueError):
+        SignalPublisher(
+            transport,
+            environment="dev",
+            org_id="fieldloop-demo",
+            simulation_only=True,
+            signal_topic=signal_topic,
+            dead_letter_topic=dead_letter_topic,
+        )
+    assert transport.messages == []

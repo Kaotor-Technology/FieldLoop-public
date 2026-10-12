@@ -76,4 +76,16 @@ describe("validating publisher (FL-149)", () => {
     expect(() => new SignalPublisher(transport, { ...config, orgId: "" })).toThrow();
     expect(() => new SignalPublisher(transport, { ...config, signalTopic: "signals", deadLetterTopic: "signals" })).toThrow();
   });
+
+  it.each([
+    { signalTopic: "signals", deadLetterTopic: "projects/test-project/topics/signals" },
+    { signalTopic: "projects/test-project/topics/signals", deadLetterTopic: "signals" },
+    { signalTopic: "projects/test-project/topics/signals", deadLetterTopic: "projects/test-project/topics/dead-letter" },
+    { signalTopic: "signals ", deadLetterTopic: "dead-letter" },
+    { signalTopic: "signals", deadLetterTopic: " dead-letter" },
+  ])("rejects topic aliases and non-canonical names before transport: %j", (topics) => {
+    const publish = vi.fn();
+    expect(() => new SignalPublisher({ publish }, { ...config, ...topics })).toThrow();
+    expect(publish).not.toHaveBeenCalled();
+  });
 });
