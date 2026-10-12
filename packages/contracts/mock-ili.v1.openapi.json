@@ -1,0 +1,91 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FieldLoop internal mock ILI report drop",
+    "version": "1.0.0",
+    "description": "Synthetic read-only simulator endpoint from architecture section 4.2. Not a web-api/BFF endpoint. Run behind Cloud Run invoker IAM in dev/demo; local reads need no credentials. The same document is the file placed in the environment's ILI drop bucket by Terraform; this service neither reads nor writes that bucket. Arrival is announced to the platform only as a signal.v1 message published in process."
+  },
+  "tags": [
+    {
+      "name": "mock-ili",
+      "description": "Internal SYNTHETIC reports"
+    }
+  ],
+  "security": [
+    {
+      "serviceIdentity": []
+    }
+  ],
+  "paths": {
+    "/mock/ili/reports/{id}": {
+      "get": {
+        "operationId": "readMockIliReport",
+        "description": "Return one deterministic synthetic in-line inspection report for DL-01, byte-for-byte the document that is dropped in the bucket. No source write, database, publisher or remote IO.",
+        "tags": [
+          "mock-ili"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "description": "Report identifier, for example SYN-ILI-2026-001.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deterministic synthetic report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "mock-ili.v1.schema.json"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown report; code not_found.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Only GET is allowed; code validation_failed. No state mutation.",
+            "headers": {
+              "Allow": {
+                "schema": {
+                  "type": "string",
+                  "const": "GET"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "serviceIdentity": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Google OIDC",
+        "description": "Verified by Cloud Run invoker IAM, not proxy headers. The handler does not implement browser auth or independently validate IAM."
+      }
+    }
+  }
+}
