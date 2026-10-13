@@ -9,6 +9,7 @@ import "@fontsource/ibm-plex-sans-thai/400.css";
 import "@fontsource/ibm-plex-sans-thai/600.css";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fieldloop/ui/tokens.css";
+import "@fieldloop/ui/styles.css";
 import "./styles.css";
 
 const queryClient = new QueryClient();

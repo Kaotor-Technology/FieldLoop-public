@@ -1,12 +1,2 @@
-export { calculateRiskScore } from "./risk-score.js";
-export type {
-  BarrierHealth,
-  ConsequenceRiskCell,
-  RiskBarrier,
-  RiskConsequence,
-  RiskPath,
-  RiskScore,
-  RiskScoreInput,
-  RiskThreat,
-  RiskZone,
-} from "./risk-score.js";
+export { calculateRisk, RiskInputError } from "./risk/index.js";
+export { DEMO_RISK_MATRIX } from "./risk-score.js";

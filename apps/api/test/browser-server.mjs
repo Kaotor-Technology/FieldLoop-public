@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
+import { simulator, resetSimulationFixture } from "./simulation-fixture.mjs";
 import { buildApp } from "../dist/app.js";
 import { registerSpa } from "../dist/spa.js";
 import { registerReference } from "../dist/reference.js";
@@ -55,7 +56,7 @@ const auth = new BffAuthService({
       return {
         accessToken: "server-only-access-token", refreshToken: "server-only-refresh-token", idToken: "server-only-id-token", expiresIn: 300,
         claims: { sub: `synthetic-${role}`, sid: `synthetic-sid-${role}`, auth_time: Math.floor(now / 1000) },
-        accessClaims: { exp: Math.floor(Date.now() / 1000) + 300, resource_access: { "kaotor-fieldloop": { roles: [`fieldloop.${role}`] } } },
+        accessClaims: { clearance: "HIGHLY_RESTRICTED", exp: Math.floor(Date.now() / 1000) + 300, resource_access: { "kaotor-fieldloop": { roles: [`fieldloop.${role}`] } } },
       };
     },
     introspect: async () => { if (unavailable) throw new Error("Scripted IdP unavailable"); return active; },
@@ -67,7 +68,7 @@ const auth = new BffAuthService({
     },
   },
 });
-const app = buildApp({ auth, baseUrl });
+const app = buildApp({ auth, baseUrl, simulator });
 await registerReference(app, fileURLToPath(new URL("reference/", import.meta.resolve("@fieldloop/contracts"))));
 await registerSpa(app, fileURLToPath(new URL("../../web/dist/", import.meta.url)));
 await app.ready();
@@ -78,6 +79,7 @@ const server = createServer({ key: await readFile(join(directory, "key.pem")), c
   try {
     const url = new URL(request.url, baseUrl);
     if (url.pathname === "/test/reset") {
+      resetSimulationFixture();
       sessions.clear(); transactions.clear(); authorizations.clear(); codes.clear(); now = Date.now(); active = true; unavailable = false;
       response.end("reset"); return;
     }
@@ -99,10 +101,8 @@ const server = createServer({ key: await readFile(join(directory, "key.pem")), c
       response.setHeader("content-type", "text/html");
       response.end('<html lang="en"><title>Confirm logout</title><body><h1>Confirm SSO logout</h1><a href="/">Confirm logout</a></body></html>'); return;
     }
-    const chunks = [];
-    for await (const chunk of request) chunks.push(chunk);
-    const result = await app.inject({ method: request.method, url: request.url, headers: request.headers, payload: Buffer.concat(chunks) });
-    response.writeHead(result.statusCode, result.headers); response.end(result.rawPayload);
+    // Route the HTTPS request directly so SSE reaches the browser incrementally.
+    app.server.emit("request", request, response);
   } catch { response.writeHead(500); response.end("Browser fixture failed"); }
 });
 server.listen(4173, "localhost");

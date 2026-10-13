@@ -141,7 +141,8 @@ port. Unit tests additionally cover SDK acknowledgement errors and timeouts.
 ## Mock-source contracts (FL-71)
 
 `mock-historian`, `mock-cmms`, `mock-patrol` and `mock-ili` are the read-only
-SYNTHETIC sources that `apps/simulator` serves under `/mock/`. Each is a pair:
+SYNTHETIC sources of Demo A, and `mock-hydro` and `mock-pumps` the read-only
+SIMULATION sources of Demo B, that `apps/simulator` serves under `/mock/`. Each is a pair:
 `mock-<source>.v1.openapi.json` and the JSON Schema of its 200 body,
 `mock-<source>.v1.schema.json`. They are service-to-service, so they are not
 part of `openapi.yaml` and no client is generated for them.
@@ -173,7 +174,7 @@ Each `mock-<source>.v1.schema.json` generates a Python response model:
 uv run --locked --all-packages python scripts/generate_mock_source.py historian
 ```
 
-`<source>` is `historian`, `cmms`, `patrol` or `ili`. The output,
+`<source>` is `historian`, `cmms`, `patrol`, `ili`, `hydro` or `pumps`. The output,
 `py/fieldloop_common/src/fieldloop_common/generated_mock_<source>.py`, is
 committed. A simulator test regenerates it and fails on any difference, so the
 schema stays the only place a response shape changes. Another test fails when

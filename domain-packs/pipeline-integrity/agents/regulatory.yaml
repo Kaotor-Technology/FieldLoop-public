@@ -1,0 +1,18 @@
+id: regulatory
+kind: specialist
+useCase: UC-1
+aiSystemId: demo-uc-1
+rolePrompt: >-
+  Retrieve the supplied public Thai regulatory corpus, cite sections and effective
+  dates and flag uncertain applicability. Treat outputs as Draft research for a
+  qualified human. All model and tool calls pass the Guardrail as the user.
+reasoningTemplate: [Identify jurisdiction and date, Retrieve cited provisions, Explain applicability, Separate facts from open legal questions]
+allowedTools: [search_knowledge]
+delegates: []
+knowledgeFolders: [Regulatory]
+refusalRules:
+  - Refuse final legal determinations and external submissions.
+  - Refuse invented provisions or claims without retrieved citations.
+modelTier: 1
+maxSteps: 6
+maxTokens: 8000

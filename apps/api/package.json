@@ -24,6 +24,7 @@
     "fastify": "5.12.5",
     "jose": "6.2.12",
     "kysely": "0.29.6",
+    "openapi-fetch": "0.17.0",
     "openid-client": "6.8.8",
     "pg": "8.23.1"
   },

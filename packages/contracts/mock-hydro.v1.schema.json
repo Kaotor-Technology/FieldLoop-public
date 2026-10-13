@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MockHydroReading",
+  "description": "Read-only simulated rain, canal level or tide reading for the Bangkok storm Scenario (SIM-2). Authored simulation values, not observations or forecasts of a real place.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "assetCode",
+    "zoneCode",
+    "value",
+    "unit",
+    "observedAt",
+    "orgId",
+    "label",
+    "simulated",
+    "classification"
+  ],
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "rain",
+        "level",
+        "tide"
+      ]
+    },
+    "assetCode": {
+      "description": "The synthetic sensor Facility that reports the reading.",
+      "type": "string",
+      "pattern": "^S-[A-Z][0-9]+$"
+    },
+    "zoneCode": {
+      "description": "The simulated drainage zone the sensor stands in.",
+      "type": "string",
+      "pattern": "^Z[0-9]+$"
+    },
+    "value": {
+      "type": "number"
+    },
+    "unit": {
+      "type": "string",
+      "enum": [
+        "mm/h",
+        "m"
+      ]
+    },
+    "observedAt": {
+      "description": "The Scenario time the reading is for.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "orgId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "label": {
+      "type": "string",
+      "const": "SIMULATION"
+    },
+    "simulated": {
+      "type": "boolean",
+      "const": true
+    },
+    "classification": {
+      "type": "string",
+      "const": "CONFIDENTIAL"
+    }
+  },
+  "if": {
+    "properties": {
+      "kind": {
+        "const": "rain"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "unit": {
+        "const": "mm/h"
+      },
+      "value": {
+        "minimum": 0
+      }
+    }
+  },
+  "else": {
+    "properties": {
+      "unit": {
+        "const": "m"
+      }
+    }
+  }
+}
