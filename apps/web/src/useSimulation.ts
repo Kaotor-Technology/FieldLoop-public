@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { api, SessionError } from "./api-client";
 import { applySimulationEvent, simulationKey, type SimulationRun } from "./simulation-events";
+import { applyRiskRecalculatedEvent } from "./risk-events";
 
 export function useSimulation(): UseQueryResult<SimulationRun | null, SessionError> {
   return useQuery({ queryKey: simulationKey, queryFn: async ({ signal }) => {
@@ -35,10 +36,7 @@ export function useSimulationEvents() {
     stream.addEventListener("risk.recalculated", (event: MessageEvent<string>) => {
       try {
         const payload: unknown = JSON.parse(event.data);
-        if (payload && typeof payload === "object" && "bowtieId" in payload && typeof payload.bowtieId === "string") {
-          void client.invalidateQueries({ queryKey: ["bowtie", payload.bowtieId, "risk"] });
-          void client.invalidateQueries({ queryKey: ["bowtie", payload.bowtieId, "risk", "explain"] });
-        }
+        if (!applyRiskRecalculatedEvent(client, payload)) void client.invalidateQueries({ queryKey: ["bowtie"] });
       } catch {
         void client.invalidateQueries({ queryKey: ["bowtie"] });
       }
