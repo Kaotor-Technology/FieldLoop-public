@@ -1,7 +1,5 @@
 import { isRunCreate, isPlayerCommand } from "@fieldloop/contracts";
 import { createHash } from "node:crypto";
-import { setTimeout as delay } from "node:timers/promises";
-import { once } from "node:events";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { CurrentUser } from "../auth/service.js";
 import { SimulationError, type PlayerCommand, type RunCreate, type SimulationPort, type SimulationRun } from "./client.js";
@@ -67,47 +65,6 @@ export function registerSimulationRoutes(app: FastifyInstance, simulator?: Simul
         return checked(request, await port().command(id, command, body, key));
       });
     }
-    routes.get("/api/v1/events", async (request, reply) => {
-      const abort = new AbortController();
-      reply.raw.on("close", () => abort.abort());
-      let previous = checked(request, await port().current(abort.signal));
-      reply.hijack();
-      reply.raw.writeHead(200, {
-        "Content-Type": "text/event-stream", "Cache-Control": "private, no-store",
-        "X-Accel-Buffering": "no", Connection: "keep-alive",
-      });
-      reply.raw.write("retry: 1000\n\n");
-      const started = Date.now();
-      let lastValidated = started;
-      let firstEvent = true;
-      try {
-        while (!abort.signal.aborted && Date.now() - started < 45_000) {
-          const current = checked(request, await port().current(abort.signal));
-          if (current) {
-            const reset = (previous && current.id !== previous.id) || (
-              firstEvent && typeof request.headers["last-event-id"] === "string" && request.headers["last-event-id"].split(":")[0] !== current.id
-            );
-            const payload = `id: ${current.id}:${current.revision}\nevent: ${reset ? "simulation.reset" : "simulation.state"}\ndata: ${JSON.stringify(current)}\n\n`;
-            if (!reply.raw.write(payload)) await once(reply.raw, "drain", { signal: abort.signal });
-          } else reply.raw.write(": idle\n\n");
-          previous = current;
-          firstEvent = false;
-          await delay(500, undefined, { signal: abort.signal });
-          // Revalidate server-side session while streaming. Tokens never go to the browser.
-          if (Date.now() - lastValidated >= 5000) {
-            const user = await app.fieldLoopAuth.getCurrentUser(request.cookies["fl_session"], false);
-            if (user.orgId !== currentUser(request).orgId) throw new SimulationError(403, "organisation_denied");
-            request.fieldLoopCurrentUser = user;
-            lastValidated = Date.now();
-          }
-        }
-      } catch (error) {
-        if (!abort.signal.aborted) request.log.warn({ errorType: error instanceof Error ? error.name : "unknown" }, "Simulation stream ended");
-      } finally {
-        abort.abort();
-        reply.raw.end();
-      }
-    });
   });
 }
 

@@ -6,8 +6,10 @@ import { setTimeout } from "node:timers/promises";
 import { performance } from "node:perf_hooks";
 import { Kysely, PostgresDialect, sql } from "kysely";
 import pg from "pg";
+import { appendWorkerEvent } from "../packages/adapters/dist/postgres-domain-events.js";
 import { domainPackRecordId, loadDemoDomainPacks } from "../apps/api/dist/domain-packs.js";
 import { PostgresWorkerStore } from "../apps/signal-worker/dist/postgres-store.js";
+import { PostgresHealthStore } from "../apps/api/dist/health/postgres-store.js";
 import { buildApp } from "../apps/signal-worker/dist/app.js";
 import { loadSeed as loadDlSeed } from "../db/seed/dl-01/seed.mjs";
 import { loadSeed as loadFloodSeed } from "../db/seed/bangkok/seed.mjs";
@@ -18,7 +20,7 @@ import { buildDataset as floodDataset } from "../data/synthetic/bangkok/generate
 const container = `fieldloop-worker-fixture-${process.pid}`;
 const docker = (...args) => execFileSync("docker", args, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
 const orgId = "worker-fixture", otherOrg = "other-worker-fixture";
-let database, application, app;
+let database, application, apiDatabase, app;
 const loadedPacks = await loadDemoDomainPacks();
 const pr47Signals = JSON.parse(readFileSync("apps/signal-worker/test/fixtures/pr47-signals.json", "utf8"));
 const rules = loadedPacks.flatMap(({ content }) => content.signalRules
@@ -57,6 +59,7 @@ try {
   const connectionString = `postgres://postgres:fixture@127.0.0.1:${port}/fieldloop_dev`;
   database = new Kysely({ dialect: new PostgresDialect({ pool: new pg.Pool({ connectionString }) }) });
   application = new Kysely({ dialect: new PostgresDialect({ pool: new pg.Pool({ connectionString, options: "-c role=fl-v2-signal-worker-dev@example-project.iam", max: 5 }) }) });
+  apiDatabase = new Kysely({ dialect: new PostgresDialect({ pool: new pg.Pool({ connectionString, options: "-c role=fieldloop_app_dev", max: 5 }) }) });
   for (const org of [orgId, otherOrg]) {
     await loadDlSeed(database, dlDataset(), org); await loadFloodSeed(database, floodDataset(), org);
     for (const rule of rules) {
@@ -213,7 +216,8 @@ try {
   assert.equal((await sql`SELECT health FROM app.barrier WHERE org_id = ${orgId} AND code = 'cathodic-protection'`.execute(database)).rows[0].health, "failed");
 
   // Calendar months follow Bangkok local dates rather than assuming 90 days or UTC day-of-month.
-  await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code IN ('right-of-way-patrol', 'excavation-permit-one-call')`.execute(database);
+  const patrolBarrierCodes = ["right-of-way-patrol", "excavation-permit-one-call"];
+  await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code IN (${sql.join(patrolBarrierCodes)})`.execute(database);
   await sql`UPDATE app.signal_dependency SET last_received_at = NULL, created_at = '2026-02-28T20:30:00Z'::timestamptz
     WHERE org_id = ${orgId} AND rule_id = ${patrolRule.id}::uuid`.execute(database);
   assert.equal(await store.detectSilence(new Date("2026-05-28T20:30:00Z")), 0);
@@ -222,18 +226,252 @@ try {
 
   // Repeat authenticated production boundary against the real transactional store, including queue retry.
   let failPublish = true;
+  const publishedEvents = [];
   const runtime = { store, identity: { verify: async () => {} }, audience: "https://worker.example.test", pushEmail: "push@example.test", schedulerEmail: "scheduler@example.test",
     subscription: "projects/fixture/subscriptions/signals-local", orgId, environment: "local", simulatedOnly: true, close: async () => {},
-    publish: async () => { if (failPublish) throw new Error("queue retry fixture"); } };
+    publish: async (event) => { if (failPublish) throw new Error("queue retry fixture"); publishedEvents.push(event); } };
   app = buildApp(runtime);
+  const pushBody = (signal, messageId) => ({ subscription: runtime.subscription, message: { messageId, data: Buffer.from(JSON.stringify(signal)).toString("base64"), attributes: {
+    environment: "local", orgId, schemaVersion: signal.schemaVersion, signalId: signal.id, simulated: "true", classification: signal.classification,
+  } } });
+  const serviceHeaders = { authorization: "Bearer fixture" };
+  const postSignal = (payload, headers = serviceHeaders) => app.inject({ method: "POST", url: "/internal/pubsub/signals", headers, payload });
   const wire = reading({ observedAt: "2026-10-13T05:00:00Z" });
-  const body = { subscription: runtime.subscription, message: { messageId: "first-push", data: Buffer.from(JSON.stringify(wire)).toString("base64"), attributes: {
-    environment: "local", orgId, schemaVersion: wire.schemaVersion, signalId: wire.id, simulated: "true", classification: wire.classification,
-  } } };
-  const inject = () => app.inject({ method: "POST", url: "/internal/pubsub/signals", headers: { authorization: "Bearer fixture" }, payload: body });
+  const body = pushBody(wire, "first-push");
+  const inject = () => postSignal(body);
   assert.equal((await inject()).statusCode, 503);
   const proposalsBeforeRetry = await count("health_proposal"); failPublish = false; body.message.messageId = "new-pubsub-message-same-producer-id";
   assert.equal((await inject()).statusCode, 204); assert.equal(await count("health_proposal"), proposalsBeforeRetry);
+
+  // FL-27 / D08 (LS-1..LS-4) acceptance through the HTTP boundary with the real transactional store.
+  // The CP Barrier starts Healthy so an auto-applied proposal (the pack effect is Failed) would be visible.
+  await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code = 'cathodic-protection'`.execute(database);
+  const periodicCpReading = reading({ observedAt: "2026-10-13T05:30:00Z" });
+  const healthBeforePush = await snapshot();
+  const signalsBeforePush = await count("signal"), receiptsBeforePush = await count("signal_receipt");
+  const unauthenticatedResponse = await postSignal(pushBody(periodicCpReading, "no-token"), {});
+  assert.equal(unauthenticatedResponse.statusCode, 401, "push without an OIDC token is rejected");
+  assert.match(String(unauthenticatedResponse.headers["content-type"]), /application\/problem\+json/);
+  assert.equal(await count("signal"), signalsBeforePush, "an unauthenticated push stores no Signal");
+  assert.equal(await count("signal_receipt"), receiptsBeforePush);
+  assert.equal((await postSignal(pushBody(periodicCpReading, "first-delivery"))).statusCode, 204);
+  assert.equal(await count("signal"), signalsBeforePush + 1, "the authenticated push stores the Signal");
+  assert.equal(await count("signal_receipt"), receiptsBeforePush + 1);
+  const proposalRows = (await sql`SELECT id, status, proposed_health AS "proposedHealth", barrier_id AS "barrierId"
+    FROM app.health_proposal WHERE org_id = ${orgId} AND signal_receipt_id = ${periodicCpReading.id}::uuid`.execute(database)).rows;
+  assert.equal(proposalRows.length, 1, "a qualifying push creates one Health Proposal");
+  const [pushProposal] = proposalRows;
+  assert.equal(pushProposal.status, "open");
+  assert.equal(pushProposal.proposedHealth, cpRule.condition.effect.proposedHealth, "the proposal uses the registered pack effect");
+  assert.equal(pushProposal.proposedHealth, "failed");
+  assert.equal(pushProposal.barrierId, cpBarrierBefore.id, "the proposal targets the CP Barrier");
+  assert.equal(await count("evidence", sql`AND signal_receipt_id = ${periodicCpReading.id}::uuid`), 1, "the push stores Evidence");
+  const createdEvents = () => publishedEvents.filter(({ type, entityId }) => type === "health_proposal.created" && entityId === pushProposal.id);
+  assert.equal(createdEvents().length, 1, "health_proposal.created is published once");
+  assert.equal(createdEvents()[0].barrierId, pushProposal.barrierId);
+  assert.equal(createdEvents()[0].simulated, true);
+  for (const messageId of ["first-delivery", "redelivery-with-new-message-id"]) {
+    assert.equal((await postSignal(pushBody(periodicCpReading, messageId))).statusCode, 204);
+  }
+  assert.equal(await count("health_proposal", sql`AND signal_receipt_id = ${periodicCpReading.id}::uuid`), 1, "redelivery stays idempotent");
+  assert.equal(await count("evidence", sql`AND signal_receipt_id = ${periodicCpReading.id}::uuid`), 1);
+  assert.equal(await count("signal"), signalsBeforePush + 1);
+  assert.equal(createdEvents().length, 1, "redelivery publishes no second event");
+  assert.deepEqual(await snapshot(), healthBeforePush, "an unaccepted Health Proposal leaves Barrier Health unchanged");
+  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${cpBarrierBefore.id}::uuid`.execute(database)).rows[0].health, "healthy");
+
+  // A silent source marks its dependent Barriers Unverified through the Scheduler route; Failed stays Failed
+  // even when its own source is also silent.
+  const runSourceCheck = (headers) => app.inject({ method: "POST", url: "/internal/jobs/silent-sources", headers });
+  assert.equal((await runSourceCheck({})).statusCode, 401, "the source check requires a service token");
+  const barrierIdsFor = async (codes) => (await sql`SELECT id FROM app.barrier WHERE org_id = ${orgId}
+    AND code IN (${sql.join(codes)})`.execute(database)).rows.map(({ id }) => id).sort();
+  const floodBarrierCode = "tidal-gates";
+  const silentBarrierCodes = [...patrolBarrierCodes, floodBarrierCode];
+  const silentBarrierIds = await barrierIdsFor(silentBarrierCodes);
+  const [floodBarrierId] = await barrierIdsFor([floodBarrierCode]);
+  assert.equal(silentBarrierIds.length, silentBarrierCodes.length);
+  const silentCodeList = sql.join(silentBarrierCodes);
+  await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code IN (${silentCodeList})`.execute(database);
+  await sql`UPDATE app.barrier SET health = 'failed' WHERE org_id = ${orgId} AND code = 'cathodic-protection'`.execute(database);
+  // Back-date the patrol, CP and flood-rain sources by 270 days; silence is induced in SQL, not by waiting.
+  // pumping-stations and water-gates were already made Unverified by the earlier deadline checks, so they emit no event.
+  const aged = await sql`UPDATE app.signal_dependency SET last_received_at = ${new Date(Date.now() - 270 * 86_400_000)}
+    WHERE org_id = ${orgId} AND (rule_id IN (${patrolRule.id}::uuid, ${cpRule.id}::uuid) OR barrier_id = ${floodBarrierId}::uuid)
+    RETURNING id`.execute(database);
+  const cpAndFloodDependencies = 2; // the CP rule's and tidal-gates' rain-rule dependency
+  assert.equal(aged.rows.length, patrolBarrierCodes.length + cpAndFloodDependencies, "patrol, CP and flood-rain dependencies are aged");
+  const healthChangedSince = (index) => publishedEvents.slice(index).filter(({ type }) => type === "barrier.health_changed");
+  const eventsBeforeCheck = publishedEvents.length;
+  const sourceCheck = await runSourceCheck(serviceHeaders);
+  assert.equal(sourceCheck.statusCode, 200);
+  const healthChangedEvents = healthChangedSince(eventsBeforeCheck);
+  assert.deepEqual(healthChangedEvents.map(({ barrierId }) => barrierId).sort(), silentBarrierIds, "Healthy Barriers with an aged source become Unverified; Failed and already-Unverified Barriers do not change");
+  assert.equal(sourceCheck.json().changed, healthChangedEvents.length);
+  assert.deepEqual((await sql`SELECT code, health FROM app.barrier WHERE org_id = ${orgId}
+    AND code IN (${silentCodeList}, 'cathodic-protection') ORDER BY code`.execute(database)).rows, [
+    { code: "cathodic-protection", health: "failed" },
+    { code: "excavation-permit-one-call", health: "unverified" },
+    { code: "right-of-way-patrol", health: "unverified" },
+    { code: "tidal-gates", health: "unverified" },
+  ]);
+
+  // Control: the same Barrier, Healthy again with a source that reported just now, must not change.
+  await sql`UPDATE app.barrier SET health = 'healthy' WHERE id = ${floodBarrierId}::uuid`.execute(database);
+  const refreshed = await sql`UPDATE app.signal_dependency SET last_received_at = ${new Date()}
+    WHERE org_id = ${orgId} AND barrier_id = ${floodBarrierId}::uuid RETURNING id`.execute(database);
+  assert.equal(refreshed.rows.length, 1, "the control Barrier has exactly one source dependency");
+  const eventsBeforeControl = publishedEvents.length;
+  const controlCheck = await runSourceCheck(serviceHeaders);
+  assert.equal(controlCheck.statusCode, 200);
+  assert.equal(controlCheck.json().changed, 0, "a fresh source changes nothing");
+  assert.deepEqual(healthChangedSince(eventsBeforeControl), []);
+  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${floodBarrierId}::uuid`.execute(database)).rows[0].health, "healthy");
+
+  // Evidence ageing uses a strict expiry boundary, leaves Failed untouched and notifies
+  // Barrier Owners in-app before expiry and when Health changes.
+  const ownerId = randomUUID(), ageNow = new Date("2026-11-01T00:00:00.000Z");
+  await sql`INSERT INTO app.app_user (id, org_id, keycloak_sub, display_name, roles_snapshot, created_by)
+    VALUES (${ownerId}::uuid, ${orgId}, 'synthetic-ageing-owner', 'Synthetic Barrier Owner', '["fieldloop.operator"]'::jsonb, 'worker-fixture')`.execute(database);
+  const patrolOwnerBarrier = (await sql`SELECT id FROM app.barrier WHERE org_id = ${orgId} AND code = 'right-of-way-patrol'`.execute(database)).rows[0];
+  const failedOwnerBarrier = (await sql`SELECT id FROM app.barrier WHERE org_id = ${orgId} AND code = 'cathodic-protection'`.execute(database)).rows[0];
+  const expiringOwnerBarrier = (await sql`SELECT id FROM app.barrier WHERE org_id = ${orgId} AND code = 'tidal-gates'`.execute(database)).rows[0];
+  assert.ok(patrolOwnerBarrier && failedOwnerBarrier && expiringOwnerBarrier);
+  await sql`UPDATE app.barrier SET evidence_interval = NULL WHERE org_id = ${orgId}
+    AND id NOT IN (${patrolOwnerBarrier.id}::uuid, ${failedOwnerBarrier.id}::uuid, ${expiringOwnerBarrier.id}::uuid)`.execute(database);
+  await sql`UPDATE app.barrier SET owner_id = ${ownerId}::uuid, evidence_interval = INTERVAL '1 day', health = 'healthy'
+    WHERE id = ${patrolOwnerBarrier.id}::uuid`.execute(database);
+  await sql`UPDATE app.barrier SET owner_id = ${ownerId}::uuid, evidence_interval = INTERVAL '1 day', health = 'failed'
+    WHERE id = ${failedOwnerBarrier.id}::uuid`.execute(database);
+  await sql`UPDATE app.barrier SET owner_id = ${ownerId}::uuid, evidence_interval = INTERVAL '1 day', health = 'degraded'
+    WHERE id = ${expiringOwnerBarrier.id}::uuid`.execute(database);
+  await sql`INSERT INTO app.evidence (org_id, barrier_id, kind, source, observed_at, simulated, classification, created_by)
+    VALUES (${orgId}, ${patrolOwnerBarrier.id}::uuid, 'inspection', 'synthetic-ageing', ${new Date(ageNow.getTime() - 86_400_000)}, true, 'CONFIDENTIAL', 'worker-fixture'),
+      (${orgId}, ${failedOwnerBarrier.id}::uuid, 'inspection', 'synthetic-ageing', ${new Date(ageNow.getTime() - 172_800_000)}, true, 'CONFIDENTIAL', 'worker-fixture'),
+      (${orgId}, ${expiringOwnerBarrier.id}::uuid, 'inspection', 'synthetic-ageing', ${new Date(ageNow.getTime() - 23 * 3_600_000)}, true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
+  const beforeAgeEvents = publishedEvents.length;
+  const beforeAgeAudit = await count("audit_event", sql`AND action = 'barrier.health_changed' AND entity = ${patrolOwnerBarrier.id}`);
+  assert.deepEqual(await store.ageEvidence(ageNow), { changed: 0, notified: 1 }, "exact expiry stays current and one-hour notice is delivered once");
+  await store.publishPending(runtime.publish);
+  assert.deepEqual(await store.ageEvidence(ageNow), { changed: 0, notified: 0 }, "reruns do not duplicate Evidence notifications");
+  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${patrolOwnerBarrier.id}::uuid`.execute(database)).rows[0].health, "healthy");
+  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${failedOwnerBarrier.id}::uuid`.execute(database)).rows[0].health, "failed");
+  assert.equal((await sql`SELECT count(*)::int AS count FROM app.notification WHERE org_id = ${orgId}
+    AND evidence_id IS NOT NULL AND recipient_ref = ${`sandbox:${ownerId}`}`.execute(database)).rows[0].count, 1);
+  assert.deepEqual(await store.ageEvidence(new Date(ageNow.getTime() + 1)), { changed: 1, notified: 1 }, "strictly expired Evidence ages Healthy to Unverified and sends one owner notice");
+  await store.publishPending(runtime.publish);
+  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${patrolOwnerBarrier.id}::uuid`.execute(database)).rows[0].health, "unverified");
+  assert.equal((await sql`SELECT actor FROM app.health_change WHERE org_id = ${orgId} AND barrier_id = ${patrolOwnerBarrier.id}::uuid
+    ORDER BY created_at DESC LIMIT 1`.execute(database)).rows[0].actor, "ageing");
+  assert.equal(await count("audit_event", sql`AND action = 'barrier.health_changed' AND entity = ${patrolOwnerBarrier.id}`), beforeAgeAudit + 1);
+  assert.equal((await sql`SELECT count(*)::int AS count FROM app.notification WHERE org_id = ${orgId}
+    AND health_change_id IS NOT NULL AND recipient_ref = ${`sandbox:${ownerId}`}`.execute(database)).rows[0].count, 1);
+  assert.deepEqual(publishedEvents.slice(beforeAgeEvents).filter(({ type }) => type === "barrier.health_changed").map(({ barrierId }) => barrierId), [patrolOwnerBarrier.id]);
+  assert.equal(publishedEvents.slice(beforeAgeEvents).filter(({ type }) => type === "notification.delivered").length, 2);
+
+  // FL-177 service decisions are owner-only, reasoned, audited, idempotent and event-backed.
+  const healthStore = new PostgresHealthStore(apiDatabase);
+  const owner = { sub: "synthetic-ageing-owner", roles: ["fieldloop.operator"], persona: "Integrity Engineer", orgId,
+    clearance: "HIGHLY_RESTRICTED", csrfToken: "fixture-csrf", authTime: new Date("2026-10-13T00:00:00Z") };
+  let releaseEventWriter;
+  let markEventWriterReady;
+  const holdEventWriter = new Promise((resolve) => { releaseEventWriter = resolve; });
+  const eventWriterReady = new Promise((resolve) => { markEventWriterReady = resolve; });
+  const cursorRaceEvent = { id: randomUUID(), type: "barrier.health_changed", orgId, entityId: randomUUID(),
+    barrierId: patrolOwnerBarrier.id, simulated: true, classification: "CONFIDENTIAL" };
+  const eventWriter = database.transaction().execute(async (trx) => {
+    await appendWorkerEvent(trx, cursorRaceEvent, "worker-fixture");
+    markEventWriterReady();
+    await holdEventWriter;
+  });
+  await eventWriterReady;
+  let cursorReadFinished = false;
+  const cursorRead = healthStore.latestEventPosition(owner).then((position) => {
+    cursorReadFinished = true;
+    return position;
+  });
+  await setTimeout(50);
+  assert.equal(cursorReadFinished, false, "initial event cursor waits for an in-flight outbox transaction");
+  releaseEventWriter();
+  await eventWriter;
+  const raceSafeCursor = await cursorRead;
+  const cursorIncludesCommittedEvent = (await sql`SELECT (created_at, id) <= (${raceSafeCursor.createdAt}::timestamptz, ${raceSafeCursor.id}::uuid) AS included
+    FROM app.signal_event_outbox WHERE id = ${cursorRaceEvent.id}::uuid`.execute(database)).rows[0].included;
+  assert.equal(cursorIncludesCommittedEvent, true, "the initial cursor advances only after the pending event commits");
+  assert.ok(!(await healthStore.listEvents(owner, raceSafeCursor, 100)).some(({ event }) => event.id === cursorRaceEvent.id));
+  const acceptedProposalId = randomUUID();
+  await sql`INSERT INTO app.health_proposal (id, org_id, barrier_id, proposed_health, status, simulated, classification, created_by)
+    VALUES (${acceptedProposalId}::uuid, ${orgId}, ${patrolOwnerBarrier.id}::uuid, 'degraded', 'open', true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
+  const decision = { user: owner, proposalId: acceptedProposalId, decision: "accept", reason: "Inspection confirms degradation.", idempotencyKey: "aaaaaaaaaaaaaaaa" };
+  const acceptedAuditBefore = await count("audit_event", sql`AND action = 'health_proposal.accepted' AND entity = ${acceptedProposalId}`);
+  const changesBeforeDecision = await count("health_change", sql`AND barrier_id = ${patrolOwnerBarrier.id}::uuid`);
+  const firstDecision = await healthStore.decide(decision);
+  assert.deepEqual(firstDecision, { healthProposalId: acceptedProposalId, status: "accepted", barrierId: patrolOwnerBarrier.id, health: "degraded" });
+  assert.deepEqual(await healthStore.decide(decision), firstDecision, "a retry with the same key and body returns the first decision");
+  await assert.rejects(healthStore.decide({ ...decision, reason: "Different command body." }), (error) => error.status === 409 && error.code === "idempotency_key_reused");
+  await assert.rejects(healthStore.decide({ ...decision, idempotencyKey: "bbbbbbbbbbbbbbbb" }),
+    (error) => error.status === 409 && error.code === "conflict");
+  await assert.rejects(healthStore.decide({ ...decision, user: { ...owner, sub: "another-synthetic-user" }, idempotencyKey: "cccccccccccccccc" }),
+    (error) => error.status === 403 && error.code === "forbidden");
+  assert.equal(await count("health_change", sql`AND barrier_id = ${patrolOwnerBarrier.id}::uuid`), changesBeforeDecision + 1);
+  assert.equal((await sql`SELECT status, decided_by, reason FROM app.health_proposal WHERE org_id = ${orgId} AND id = ${acceptedProposalId}::uuid`.execute(database)).rows[0].status, "accepted");
+  assert.equal(await count("audit_event", sql`AND action = 'health_proposal.accepted' AND entity = ${acceptedProposalId}`), acceptedAuditBefore + 1);
+  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${patrolOwnerBarrier.id}::uuid`.execute(database)).rows[0].health, "degraded");
+
+  const rejectedProposalId = randomUUID();
+  await sql`INSERT INTO app.health_proposal (id, org_id, barrier_id, proposed_health, status, simulated, classification, created_by)
+    VALUES (${rejectedProposalId}::uuid, ${orgId}, ${failedOwnerBarrier.id}::uuid, 'healthy', 'open', true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
+  const rejectedDecision = await healthStore.decide({ ...decision, proposalId: rejectedProposalId, decision: "reject",
+    reason: "Evidence does not support this change.", idempotencyKey: "dddddddddddddddd" });
+  assert.equal(await count("audit_event", sql`AND action = 'health_proposal.rejected' AND entity = ${rejectedProposalId}`), 1);
+  assert.equal(rejectedDecision.status, "rejected"); assert.equal(rejectedDecision.health, "failed");
+  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${failedOwnerBarrier.id}::uuid`.execute(database)).rows[0].health, "failed");
+  const notificationPage = await healthStore.listNotifications(owner, undefined, 1);
+  assert.equal(notificationPage.items.length, 1); assert.ok(notificationPage.nextCursor, "notification pages expose a continuation cursor");
+  const nextNotifications = await healthStore.listNotifications(owner, notificationPage.nextCursor, 10);
+  assert.ok(!notificationPage.items.some(({ id }) => nextNotifications.items.some((next) => next.id === id)));
+  const expiringEvidenceId = (await sql`SELECT id FROM app.evidence WHERE org_id = ${orgId}
+    AND barrier_id = ${expiringOwnerBarrier.id}::uuid ORDER BY observed_at DESC, id DESC LIMIT 1`.execute(database)).rows[0].id;
+  const expiringNotice = (await healthStore.listNotifications(owner, undefined, 100)).items.find(
+    ({ subjectType, subjectId }) => subjectType === "evidence" && subjectId === expiringEvidenceId,
+  );
+  assert.ok(expiringNotice, "the current Evidence expiry notice is visible to its owner");
+  const ageingHealthChangeId = (await sql`SELECT id FROM app.health_change WHERE org_id = ${orgId}
+    AND barrier_id = ${patrolOwnerBarrier.id}::uuid AND actor = 'ageing' ORDER BY created_at DESC LIMIT 1`.execute(database)).rows[0].id;
+  const externalNotificationId = randomUUID();
+  await sql`INSERT INTO app.notification (id, org_id, health_change_id, channel, recipient_ref, status, receipt,
+    sandbox, simulated, classification, created_by)
+    VALUES (${externalNotificationId}::uuid, ${orgId}, ${ageingHealthChangeId}::uuid, 'email', ${`sandbox:${ownerId}`},
+      'delivered', '{}', true, true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
+  assert.ok(!(await healthStore.listNotifications(owner, undefined, 100)).items.some(({ id }) => id === externalNotificationId),
+    "the in-app feed excludes email delivery receipts");
+  await sql`INSERT INTO app.evidence (org_id, barrier_id, kind, source, observed_at, simulated, classification, created_by)
+    VALUES (${orgId}, ${expiringOwnerBarrier.id}::uuid, 'inspection', 'synthetic-ageing-refresh',
+      ${new Date(ageNow.getTime() + 2)}, true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
+  assert.ok(!(await healthStore.listNotifications(owner, undefined, 100)).items.some(({ id }) => id === expiringNotice.id),
+    "a newer current Evidence hides the old expiry notice");
+  const restrictedEvidenceId = randomUUID(), restrictedNotificationId = randomUUID();
+  await sql`INSERT INTO app.evidence (id, org_id, barrier_id, kind, source, observed_at, simulated, classification, created_by)
+    VALUES (${restrictedEvidenceId}::uuid, ${orgId}, ${patrolOwnerBarrier.id}::uuid, 'inspection', 'synthetic-restricted',
+      ${new Date(ageNow.getTime() + 3)}, true, 'HIGHLY_RESTRICTED', 'worker-fixture')`.execute(database);
+  await sql`INSERT INTO app.notification (id, org_id, evidence_id, channel, recipient_ref, status, receipt,
+    sandbox, simulated, classification, created_by)
+    VALUES (${restrictedNotificationId}::uuid, ${orgId}, ${restrictedEvidenceId}::uuid, 'in_app', ${`sandbox:${ownerId}`},
+      'delivered', '{}', true, true, 'HIGHLY_RESTRICTED', 'worker-fixture')`.execute(database);
+  const restrictedEvent = { id: randomUUID(), type: "notification.delivered", orgId, entityId: restrictedNotificationId,
+    barrierId: patrolOwnerBarrier.id, simulated: true, classification: "HIGHLY_RESTRICTED" };
+  await database.transaction().execute((trx) => appendWorkerEvent(trx, restrictedEvent, "worker-fixture"));
+  assert.ok((await healthStore.listNotifications(owner, undefined, 100)).items.some(({ id }) => id === restrictedNotificationId),
+    "a user can see notifications at their clearance level");
+  assert.ok((await healthStore.listEvents(owner, null, 200)).some(({ event }) => event.id === restrictedEvent.id),
+    "a user can see events at their clearance level");
+  const outsider = { ...owner, sub: "synthetic-notification-outsider", roles: ["fieldloop.viewer"] };
+  assert.equal((await healthStore.listNotifications(outsider, undefined, 100)).items.length, 0);
+  assert.ok(!(await healthStore.listEvents(outsider, null, 100)).some(({ event }) => event.type === "notification.delivered"),
+    "notification events are scoped to their recipient");
+  const healthEvents = await healthStore.listEvents(owner, null, 100);
+  assert.ok(healthEvents.some(({ event }) => event.type === "barrier.health_changed" && event.barrierId === patrolOwnerBarrier.id));
+  assert.ok(healthEvents.some(({ event }) => event.type === "notification.delivered"));
 
   // Source checking and Evidence insertion use the same dependency lock order.
   const race = await Promise.allSettled([
@@ -252,9 +490,10 @@ try {
     WHERE org_id = ${orgId} AND stream_key = (SELECT stream_key FROM app.signal_receipt WHERE org_id = ${orgId} LIMIT 1)
       AND observed_at >= '2026-10-13T00:00:00Z'::timestamptz ORDER BY observed_at`.execute(database);
   console.log(plan.rows.map((row) => row["QUERY PLAN"]).join("\n"));
-  console.log("Worker PostGIS integration passed: concurrent producer deduplication, rollback, periodic CP/patrol, FL-78 loaded pack rules, PR-47 source samples, durations, spatial boundary, receipt-clock silence, Failed-stays, audit, Organisation isolation and outbox retry.");
+  console.log("Worker/PostGIS integration passed: concurrent producer deduplication, rollback, periodic CP/patrol, FL-78 loaded pack rules, PR-47 source samples, durations, spatial boundary, receipt-clock silence, Evidence ageing boundary and Failed-stays, scoped owner notifications, Health Proposal decisions and idempotency, audit, Organisation isolation, outbox retry and FL-27 HTTP acceptance.");
 } finally {
   if (app) await app.close();
+  if (apiDatabase) await apiDatabase.destroy();
   if (application) await application.destroy();
   if (database) await database.destroy();
   try { docker("rm", "-f", container); } catch { /* Container may not have started. */ }

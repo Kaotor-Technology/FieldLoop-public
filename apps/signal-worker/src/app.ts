@@ -57,6 +57,14 @@ export function buildApp(runtime?: WorkerRuntime) {
     await runtime.store.publishPending(runtime.publish);
     return { changed };
   });
+  app.post("/internal/jobs/ageing", {
+    onRequest: async (request) => { await authenticate(request.headers.authorization, "scheduler"); },
+  }, async () => {
+    if (!runtime) throw new WorkerError("Signal worker is not configured", 503);
+    const result = await runtime.store.ageEvidence(new Date());
+    await runtime.store.publishPending(runtime.publish);
+    return result;
+  });
   if (runtime) app.addHook("onClose", runtime.close);
   return app;
 }

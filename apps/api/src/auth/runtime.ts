@@ -5,6 +5,9 @@ import { KmsEnvelopeCrypto } from "./envelope-crypto.js";
 import { SecretManagerInternalTokenService } from "./internal-tokens.js";
 import { KeycloakOidcProvider } from "./keycloak-oidc.js";
 import { createAuthDatabase, createCloudSqlAuthDatabase, PostgresAuthStore } from "./postgres-store.js";
+import { PostgresHealthStore } from "../health/postgres-store.js";
+import type { HealthServicePort } from "../health/model.js";
+import type { Kysely } from "kysely";
 import { PostgresMapLayerStore, UnavailableMapLayerStore, type MapLayerStore } from "../map/layers.js";
 
 export class UnavailableAuthService implements AuthServicePort {
@@ -25,6 +28,7 @@ export class UnavailableAuthService implements AuthServicePort {
 export async function createProductionAuthRuntime(): Promise<{
   auth: AuthServicePort;
   mapLayers: MapLayerStore;
+  health?: HealthServicePort;
   close: () => Promise<void>;
   registerPacks?: (packs: LoadedDomainPack[]) => Promise<void>;
 }> {
@@ -53,6 +57,7 @@ export async function createProductionAuthRuntime(): Promise<{
   if (!database) return { auth: new UnavailableAuthService(), mapLayers: new UnavailableMapLayerStore(), close: async () => {} };
   const runtime = {
     mapLayers: new PostgresMapLayerStore(database.db),
+    health: new PostgresHealthStore(database.db as unknown as Kysely<Record<string, never>>),
     close: async () => {
       if ("close" in database && typeof database.close === "function") await database.close();
       else await database.db.destroy();

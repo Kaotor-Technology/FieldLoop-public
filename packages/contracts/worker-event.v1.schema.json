@@ -5,7 +5,7 @@
   "required": ["id", "type", "orgId", "barrierId", "entityId", "simulated", "classification"],
   "properties": {
     "id": {"type": "string", "format": "uuid"},
-    "type": {"enum": ["health_proposal.created", "barrier.health_changed", "evidence.created"]},
+    "type": {"enum": ["health_proposal.created", "barrier.health_changed", "evidence.created", "notification.delivered"]},
     "orgId": {"type": "string", "minLength": 1},
     "barrierId": {"type": "string", "format": "uuid"},
     "entityId": {"type": "string", "format": "uuid"},
