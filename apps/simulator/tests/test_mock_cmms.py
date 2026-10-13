@@ -1,11 +1,15 @@
+import asyncio
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from fieldloop_common.memory_transport import InMemoryTransport
+from fieldloop_common.signal import parse_signal
 from fieldloop_simulator.main import app
 from fieldloop_simulator.mock_cmms import SimulatedCmms
+from fieldloop_simulator.mock_signals import SimulatedSignalEmitter
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -210,3 +214,87 @@ def test_rfc3339_lowercase_separators_match_the_uppercase_snapshot(timestamp: st
         actual = client.get(URL, params={"pmDue": "true", "asOf": timestamp})
         assert actual.status_code == 200
         assert actual.json() == expected.json()
+
+
+def emit(
+    emitter: SimulatedSignalEmitter,
+    transport: InMemoryTransport,
+    work_order: str,
+    at: datetime,
+) -> dict[str, object]:
+    result = asyncio.run(emitter.emit(SimulatedCmms().observe(work_order, at)))
+    assert result.outcome == "published"
+    topic, data, attributes = transport.messages[-1]
+    assert topic == "signals"
+    assert attributes["classification"] == "INTERNAL"
+    assert attributes["simulated"] == "true"
+    signal: dict[str, object] = json.loads(data)
+    parse_signal(signal)
+    return signal
+
+
+SURVEY_DUE = datetime(2026, 10, 13, tzinfo=UTC)
+
+
+def test_a_work_order_past_its_due_date_arrives_as_an_overdue_signal(
+    emitter: SimulatedSignalEmitter, transport: InMemoryTransport
+) -> None:
+    signal = emit(emitter, transport, "SYN-CMMS-001", SURVEY_DUE)
+    assert signal["source"] == "mock-cmms"
+    assert signal["tag"] == "DL-01.work_order.overdue"
+    assert signal["value"] == 1
+    assert signal["unit"] == "boolean"
+    assert signal["observedAt"] == "2026-10-13T00:00:00Z"
+    assert signal["simulated"] is True
+    assert signal["classification"] == "INTERNAL"
+    assert signal["payload"] == {
+        "assetCode": "DL-01",
+        "workOrderId": "SYN-CMMS-001",
+        "barrierId": "cathodic-protection",
+        "kind": "preventive",
+        "status": "open",
+        "title": "Synthetic cathodic protection survey",
+        "dueAt": "2026-10-13T00:00:00Z",
+        "label": "SYNTHETIC",
+    }
+
+
+def test_the_overdue_flag_follows_the_due_date_and_the_status(
+    emitter: SimulatedSignalEmitter, transport: InMemoryTransport
+) -> None:
+    before = emit(emitter, transport, "SYN-CMMS-001", datetime(2026, 10, 12, 23, 59, tzinfo=UTC))
+    assert before["value"] == 0
+    # A corrective work order is announced the same way; its kind is in the payload.
+    corrective = emit(emitter, transport, "SYN-CMMS-003", datetime(2026, 10, 20, tzinfo=UTC))
+    assert corrective["value"] == 1
+    assert isinstance(corrective["payload"], dict)
+    assert corrective["payload"]["kind"] == "corrective"
+    # Completed work is never overdue, however late it is observed.
+    completed = emit(emitter, transport, "SYN-CMMS-004", datetime(2026, 12, 1, tzinfo=UTC))
+    assert completed["value"] == 0
+    assert isinstance(completed["payload"], dict)
+    assert completed["payload"]["completedAt"] == "2026-09-15T00:00:00Z"
+
+
+def test_two_work_orders_at_one_instant_are_two_signals_and_a_replay_is_one(
+    emitter: SimulatedSignalEmitter, transport: InMemoryTransport
+) -> None:
+    at = datetime(2026, 10, 14, tzinfo=UTC)
+    first = emit(emitter, transport, "SYN-CMMS-001", at)
+    second = emit(emitter, transport, "SYN-CMMS-002", at)
+    assert (first["tag"], first["value"]) == (second["tag"], second["value"])
+    assert first["id"] != second["id"]
+    assert emit(emitter, transport, "SYN-CMMS-001", at)["id"] == first["id"]
+
+
+def test_a_read_publishes_nothing(transport: InMemoryTransport) -> None:
+    with TestClient(app) as client:
+        client.get(URL, params={"pmDue": "true", "asOf": "2026-10-13T00:00:00Z"})
+    assert transport.messages == []
+
+
+def test_an_unknown_work_order_cannot_be_observed() -> None:
+    with pytest.raises(KeyError):
+        SimulatedCmms().observe("SYN-CMMS-999", SURVEY_DUE)
+    with pytest.raises(ValueError, match="timezone"):
+        SimulatedCmms().observe("SYN-CMMS-001", datetime(2026, 10, 13))  # noqa: DTZ001

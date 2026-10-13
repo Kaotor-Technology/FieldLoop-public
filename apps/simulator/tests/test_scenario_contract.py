@@ -111,11 +111,13 @@ def test_a_signal_is_never_labelled_below_what_its_source_api_reports(player: Pl
             "mock-historian": client.get(f"/mock/historian/tags/{RECTIFIER}", params=WINDOW).json()[
                 "classification"
             ],
+            "mock-cmms": client.get("/mock/cmms/work-orders").json()["classification"],
             "mock-patrol": client.get("/mock/patrol/findings").json()["classification"],
             "mock-ili": client.get("/mock/ili/reports/SYN-ILI-2026-001").json()["classification"],
         }
     observations = [
         app.state.historian.observe(RECTIFIER, at),
+        app.state.cmms.observe("SYN-CMMS-001", at),
         app.state.patrol.observe("SYN-PATROL-001", at),
         app.state.ili.observe("SYN-ILI-2026-001", at),
     ]
