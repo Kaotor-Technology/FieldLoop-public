@@ -228,7 +228,7 @@ would be quarantined, and no other topic has a consumer for it yet. The Signal
 travels the validated path that SIM-3 requires and a rule can match it later
 without infrastructure change. A bucket notification is an additive follow-up
 once an ingestion consumer exists. A report file that arrives from a connected
-source is a Signal by the glossary's definition, as a patrol finding is.
+source is a Signal by the glossary's definition, as a patrol finding is. The owner chose this on 2026-10-13 (FL-144).
 
 ### Deployment prerequisite
 
