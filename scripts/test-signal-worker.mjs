@@ -445,6 +445,21 @@ try {
       ${new Date(ageNow.getTime() + 2)}, true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
   assert.ok(!(await healthStore.listNotifications(owner, undefined, 100)).items.some(({ id }) => id === expiringNotice.id),
     "a newer current Evidence hides the old expiry notice");
+  const restrictedEvidenceId = randomUUID(), restrictedNotificationId = randomUUID();
+  await sql`INSERT INTO app.evidence (id, org_id, barrier_id, kind, source, observed_at, simulated, classification, created_by)
+    VALUES (${restrictedEvidenceId}::uuid, ${orgId}, ${patrolOwnerBarrier.id}::uuid, 'inspection', 'synthetic-restricted',
+      ${new Date(ageNow.getTime() + 3)}, true, 'HIGHLY_RESTRICTED', 'worker-fixture')`.execute(database);
+  await sql`INSERT INTO app.notification (id, org_id, evidence_id, channel, recipient_ref, status, receipt,
+    sandbox, simulated, classification, created_by)
+    VALUES (${restrictedNotificationId}::uuid, ${orgId}, ${restrictedEvidenceId}::uuid, 'in_app', ${`sandbox:${ownerId}`},
+      'delivered', '{}', true, true, 'HIGHLY_RESTRICTED', 'worker-fixture')`.execute(database);
+  const restrictedEvent = { id: randomUUID(), type: "notification.delivered", orgId, entityId: restrictedNotificationId,
+    barrierId: patrolOwnerBarrier.id, simulated: true, classification: "HIGHLY_RESTRICTED" };
+  await database.transaction().execute((trx) => appendWorkerEvent(trx, restrictedEvent, "worker-fixture"));
+  assert.ok((await healthStore.listNotifications(owner, undefined, 100)).items.some(({ id }) => id === restrictedNotificationId),
+    "a user can see notifications at their clearance level");
+  assert.ok((await healthStore.listEvents(owner, null, 200)).some(({ event }) => event.id === restrictedEvent.id),
+    "a user can see events at their clearance level");
   const outsider = { ...owner, sub: "synthetic-notification-outsider", roles: ["fieldloop.viewer"] };
   assert.equal((await healthStore.listNotifications(outsider, undefined, 100)).items.length, 0);
   assert.ok(!(await healthStore.listEvents(outsider, null, 100)).some(({ event }) => event.type === "notification.delivered"),

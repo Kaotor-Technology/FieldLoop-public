@@ -119,7 +119,7 @@ export class PostgresHealthStore implements HealthServicePort {
       LEFT JOIN app.evidence e ON e.org_id = n.org_id AND e.id = n.evidence_id
       WHERE n.org_id = ${user.orgId} AND n.channel = 'in_app' AND n.simulation_retired_at IS NULL
         AND n.recipient_ref IN (${userId}, ${`sandbox:${userId}`})
-        AND array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], n.classification) <= ${classificationRank(user.clearance)}
+        AND array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], n.classification) <= ${classificationRank(user.clearance) + 1}
         AND (n.evidence_id IS NULL OR EXISTS (
           SELECT 1 FROM app.evidence current_evidence
           WHERE current_evidence.org_id = n.org_id AND current_evidence.id = n.evidence_id
@@ -159,7 +159,7 @@ export class PostgresHealthStore implements HealthServicePort {
       : sql``;
     const rows = (await sql<StoredEventRow>`SELECT o.id::text, o.created_at::text AS created_at, o.event
       FROM app.signal_event_outbox o WHERE o.org_id = ${user.orgId}
-        AND array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], o.classification) <= ${classificationRank(user.clearance)}
+        AND array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], o.classification) <= ${classificationRank(user.clearance) + 1}
         AND (o.event->>'type' <> 'notification.delivered' OR EXISTS (
           SELECT 1 FROM app.current_notification n WHERE n.org_id = o.org_id
             AND n.id::text = o.event->>'entityId'
