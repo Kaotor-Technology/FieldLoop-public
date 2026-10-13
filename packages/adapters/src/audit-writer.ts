@@ -1,4 +1,4 @@
-import type { Pool } from "pg";
+import type { Pool, PoolClient } from "pg";
 
 export interface AuditEventInput {
   orgId: string;
@@ -17,8 +17,18 @@ export interface AuditEventReceipt {
   hash: string;
 }
 
-/** Append metadata only; callers supply digests, never raw prompts or classified payloads. */
-export async function appendAuditEvent(pool: Pool, input: AuditEventInput): Promise<AuditEventReceipt> {
+/**
+ * Append metadata only; callers supply digests, never raw prompts or classified payloads.
+ * An optional SQL-only mutation runs on the same client before the audit INSERT.
+ * The writer owns transaction/session settings and connection lifecycle: the mutation
+ * must not BEGIN/COMMIT/ROLLBACK, change those settings, or perform external effects.
+ * Any mutation/append failure rolls back both; the receipt is returned only after COMMIT.
+ */
+export async function appendAuditEvent(
+  pool: Pool,
+  input: AuditEventInput,
+  mutate?: (transaction: Pick<PoolClient, "query">) => Promise<void>,
+): Promise<AuditEventReceipt> {
   // Own the scalar metadata before validation and any asynchronous work.
   const snapshot: AuditEventInput = {
     orgId: input.orgId,
@@ -45,6 +55,7 @@ export async function appendAuditEvent(pool: Pool, input: AuditEventInput): Prom
     // Every service uses the same transaction lock. The next statement gets a fresh snapshot
     // after a concurrent writer commits, including when the pool default is REPEATABLE READ.
     await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`fieldloop:audit:${snapshot.orgId}`]);
+    if (mutate) await mutate({ query: client.query.bind(client) });
     const result = await client.query<{ id: string; prev_hash: string | null; hash: string }>(`
       INSERT INTO app.audit_event (org_id, actor, action, entity, before_hash, after_hash,
         prev_hash, simulated, classification, created_at, created_by)

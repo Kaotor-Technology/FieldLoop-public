@@ -5,8 +5,8 @@ import * as adapters from "../src/index.js";
 const input = { orgId: "org-test", actor: "synthetic-user", action: "barrier.health_changed", entity: "barrier:synthetic-1", beforeHash: null, afterHash: "a".repeat(64), simulated: true, classification: "INTERNAL" };
 
 function fixture() {
-  const calls: { sql: string; values?: unknown[] }[] = [];
-  const query = vi.fn(async (sql: string, values?: unknown[]) => {
+  const calls: { sql: string; values: unknown[] | undefined }[] = [];
+  const query = vi.fn(async (sql: string, values?: unknown[]): Promise<{ rows: { id: string; prev_hash: string | null; hash: string }[] }> => {
     calls.push({ sql, values });
     return { rows: sql.includes("INSERT INTO") ? [{ id: "event-1", prev_hash: "b".repeat(64), hash: "c".repeat(64) }] : [] };
   });
@@ -22,6 +22,78 @@ function writer() {
 }
 
 describe("shared audit writer", () => {
+  it("rolls back when the domain mutation fails without appending audit", async () => {
+    const f = fixture();
+    const failure = new Error("synthetic domain mutation failed");
+    await expect(adapters.appendAuditEvent(f.pool, input as adapters.AuditEventInput, async (transaction) => {
+      await transaction.query("UPDATE synthetic_domain SET value = $1", [2]);
+      throw failure;
+    })).rejects.toBe(failure);
+    expect(f.calls.at(-1)?.sql).toBe("ROLLBACK");
+    expect(f.calls.some((call) => call.sql.includes("app.audit_event"))).toBe(false);
+    expect(f.calls.some((call) => call.sql === "COMMIT")).toBe(false);
+    expect(f.release).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("rolls back the domain mutation when audit insertion fails", async () => {
+    const f = fixture();
+    const failure = new Error("synthetic audit insertion failed");
+    f.query.mockImplementation(async (sql, values) => {
+      f.calls.push({ sql, values });
+      if (sql.includes("INSERT INTO app.audit_event")) throw failure;
+      return { rows: [] };
+    });
+    await expect(adapters.appendAuditEvent(f.pool, input as adapters.AuditEventInput, async (transaction) => {
+      await transaction.query("UPDATE synthetic_domain SET value = $1", [2]);
+    })).rejects.toBe(failure);
+    expect(f.calls[3]?.sql).toBe("UPDATE synthetic_domain SET value = $1");
+    expect(f.calls.at(-1)?.sql).toBe("ROLLBACK");
+    expect(f.calls.some((call) => call.sql === "COMMIT")).toBe(false);
+    expect(f.release).toHaveBeenCalledExactlyOnceWith();
+  });
+
+  it("does not run a domain mutation when metadata is rejected", async () => {
+    const f = fixture();
+    let mutated = false;
+    await expect(adapters.appendAuditEvent(f.pool, { ...input, actor: "" } as adapters.AuditEventInput, async () => {
+      mutated = true;
+    })).rejects.toThrow("Invalid audit metadata");
+    expect(mutated).toBe(false);
+    expect(f.connect).not.toHaveBeenCalled();
+  });
+
+  it("propagates an ambiguous commit error without retrying the mutation", async () => {
+    const f = fixture();
+    const failure = new Error("synthetic commit connection failure");
+    let mutations = 0;
+    f.query.mockImplementation(async (sql, values) => {
+      f.calls.push({ sql, values });
+      if (sql === "COMMIT") throw failure;
+      return { rows: sql.includes("INSERT INTO") ? [{ id: "event-1", prev_hash: null, hash: "c".repeat(64) }] : [] };
+    });
+    await expect(adapters.appendAuditEvent(f.pool, input as adapters.AuditEventInput, async () => {
+      mutations++;
+    })).rejects.toBe(failure);
+    expect(mutations).toBe(1);
+    expect(f.connect).toHaveBeenCalledOnce();
+    expect(f.calls.filter((call) => call.sql === "COMMIT")).toHaveLength(1);
+  });
+
+  it("pairs a domain mutation with audit on the same transaction client", async () => {
+    const f = fixture();
+    await expect(adapters.appendAuditEvent(f.pool, input as adapters.AuditEventInput, async (transaction) => {
+      await transaction.query("INSERT INTO synthetic_domain (id) VALUES ($1)", ["synthetic-1"]);
+    })).resolves.toEqual({ id: "event-1", prevHash: "b".repeat(64), hash: "c".repeat(64) });
+    expect(f.connect).toHaveBeenCalledOnce();
+    expect(f.calls.map((call) => call.sql.trim().split("\n")[0])).toEqual([
+      "BEGIN ISOLATION LEVEL READ COMMITTED", "SET LOCAL TIME ZONE 'UTC'",
+      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+      "INSERT INTO synthetic_domain (id) VALUES ($1)",
+      "INSERT INTO app.audit_event (org_id, actor, action, entity, before_hash, after_hash,", "COMMIT",
+    ]);
+    expect(f.release).toHaveBeenCalledExactlyOnceWith();
+  });
+
   it("appends a server-hashed event under the Organisation transaction lock", async () => {
     const f = fixture();
     await expect(writer()(f.pool, input)).resolves.toEqual({ id: "event-1", prevHash: "b".repeat(64), hash: "c".repeat(64) });
