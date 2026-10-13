@@ -68,7 +68,16 @@ const auth = new BffAuthService({
     },
   },
 });
-const app = buildApp({ auth, baseUrl, simulator });
+const risk = {
+  listBowties: async () => [],
+  getBowtie: async () => { throw new Error("Unused browser fixture route"); },
+  getRisk: async () => { throw new Error("Unused browser fixture route"); },
+  explain: async () => { throw new Error("Unused browser fixture route"); },
+  getEvidence: async () => { throw new Error("Unused browser fixture route"); },
+  riskEventsAfter: async () => [],
+  processHealthChanges: async () => 0,
+};
+const app = buildApp({ auth, baseUrl, simulator, risk });
 await registerReference(app, fileURLToPath(new URL("reference/", import.meta.resolve("@fieldloop/contracts"))));
 await registerSpa(app, fileURLToPath(new URL("../../web/dist/", import.meta.url)));
 await app.ready();
