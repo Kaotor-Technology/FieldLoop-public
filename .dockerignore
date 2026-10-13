@@ -55,6 +55,9 @@
 !DESIGN.md
 !packages/contracts/openapi.yaml
 !packages/contracts/signal.v1.schema.json
+!packages/contracts/registered-signal-rule.v1.schema.json
+!packages/contracts/worker-event.v1.schema.json
+!packages/contracts/signal-worker.v1.openapi.json
 !packages/contracts/scripts/
 !packages/contracts/scripts/**
 !packages/ui/scripts/
