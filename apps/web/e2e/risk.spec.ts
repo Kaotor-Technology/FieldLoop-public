@@ -16,8 +16,14 @@ const snapshot = {
   worstConsequenceId: consequenceId,
   cell: { frequencyBand: 2, severityBand: 3, zone: "amber", rank: 12 },
 };
-const current = { id: "50000000-0000-4000-8000-000000000005", createdAt: "2026-10-13T01:00:00.000Z", trigger: "health_change", snapshot };
-const previous = { id: "50000000-0000-4000-8000-000000000006", createdAt: "2026-10-13T00:00:00.000Z", trigger: "initial", snapshot: { ...snapshot, topEventFrequencyPerYear: 0.001 } };
+const current = {
+  id: "50000000-0000-4000-8000-000000000005", createdAt: "2026-10-13T01:00:00.000Z", trigger: "health_change",
+  calibration: { standardRef: "SYNTHETIC-ORG-RISK-STD", standardVersion: "2026.1", approvedBy: "synthetic-authority", approvedAt: "2026-10-13T00:00:00.000Z" }, snapshot,
+};
+const previous = {
+  id: "50000000-0000-4000-8000-000000000006", createdAt: "2026-10-13T00:00:00.000Z", trigger: "initial",
+  calibration: { ...current.calibration, standardVersion: "2026.0" }, snapshot: { ...snapshot, topEventFrequencyPerYear: 0.001 },
+};
 
 async function mockRiskApi(page: Page, configured: boolean) {
   await page.route(`**/api/v1/bowties/${bowtieId}/risk/explain`, (route) => configured
@@ -72,6 +78,8 @@ test("Bowtie canvas shows Organisation severity dimensions and explains changed 
   await expect(page.getByRole("heading", { name: "Explain score" })).toBeVisible();
   await expect(page.getByText("Health accepted by a reviewer.")).toBeVisible();
   await expect(page.getByText(/Healthy → Degraded/)).toBeVisible();
+  await expect(page.getByText("SYNTHETIC-ORG-RISK-STD").first()).toBeVisible();
+  await expect(page.getByText("2026.1", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
 });
@@ -89,5 +97,5 @@ test("Bowtie canvas displays a pending notice when Organisation calibration is u
   await expect(page.getByRole("heading", { name: "Risk calibration needs Technical Authority approval" })).toBeVisible();
   await expect(page.getByText("Organisation Risk Score")).toHaveCount(0);
   await page.getByRole("button", { name: "Explain score" }).click();
-  await expect(page.getByText(/no approved Risk Matrix and severity criteria/)).toBeVisible();
+  await expect(page.getByText(/controlled standard reference and version/)).toBeVisible();
 });

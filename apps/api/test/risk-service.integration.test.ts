@@ -42,6 +42,7 @@ integration("PostgresRiskService against migrated PostgreSQL", () => {
     const fixture = await createFixture();
     const user = reviewer(fixture.orgId, fixture.classification);
     const initial = await service.getRisk(user, fixture.bowtieId);
+    expect(initial.calibration).toMatchObject({ standardRef: "SYNTHETIC-ORG-RISK-STD", standardVersion: "2026.1", approvedBy: "synthetic-technical-authority" });
     expect((await service.getRisk(user, fixture.bowtieId)).id).toBe(initial.id);
 
     const firstChange = randomUUID();
@@ -79,6 +80,7 @@ integration("PostgresRiskService against migrated PostgreSQL", () => {
     const events = await service.riskEventsAfter(user, { createdAt: new Date(0).toISOString(), id: "00000000-0000-0000-0000-000000000000" });
     expect(events.length).toBeGreaterThanOrEqual(2);
     expect(events.every((event) => event.bowtieId === fixture.bowtieId)).toBe(true);
+    expect(events.every((event) => event.calibration.standardVersion === "2026.1")).toBe(true);
   }, 20_000);
 
   it("enforces Organisation scope and classification against stored rows", async () => {
@@ -102,6 +104,16 @@ integration("PostgresRiskService against migrated PostgreSQL", () => {
     const fixture = await createFixture({ approved: false });
     await expect(service.getRisk(reviewer(fixture.orgId, fixture.classification), fixture.bowtieId))
       .rejects.toMatchObject({ status: 409, code: "risk_matrix_unconfigured" });
+  });
+
+  it("rejects an approved calibration without its controlled standard reference and version", async () => {
+    const fixture = await createFixture({ approved: false });
+    await expect(pool.query(
+      `UPDATE app.organisation SET risk_matrix = $2::jsonb, risk_severity_criteria = $3::jsonb,
+         risk_matrix_approved_at = now(), risk_matrix_approved_by = 'synthetic-technical-authority'
+       WHERE org_id = $1`,
+      [fixture.orgId, JSON.stringify(matrix()), JSON.stringify(severityCriteria())],
+    )).rejects.toMatchObject({ constraint: "organisation_risk_matrix_provenance" });
   });
 
   it("does not resurrect simulated risk snapshots or Health changes after reset", async () => {
@@ -171,13 +183,16 @@ async function createFixture(options: FixtureOptions = {}): Promise<RiskFixture>
   const approved = options.approved ?? true;
   await pool.query(
     `INSERT INTO app.organisation
-       (org_id, name, simulated, classification, risk_matrix, risk_severity_criteria, risk_matrix_approved_at, risk_matrix_approved_by)
-     VALUES ($1, 'Synthetic Risk Integration Organisation', $2, $3, $4::jsonb, $5::jsonb, $6, $7)`,
+       (org_id, name, simulated, classification, risk_matrix, risk_severity_criteria, risk_matrix_approved_at, risk_matrix_approved_by,
+        risk_matrix_standard_ref, risk_matrix_standard_version)
+     VALUES ($1, 'Synthetic Risk Integration Organisation', $2, $3, $4::jsonb, $5::jsonb, $6, $7, $8, $9)`,
     [fixture.orgId, fixture.simulated, fixture.classification,
       approved ? JSON.stringify(matrix()) : null,
       approved ? JSON.stringify(severityCriteria()) : null,
       approved ? new Date() : null,
-      approved ? "synthetic-technical-authority" : null],
+      approved ? "synthetic-technical-authority" : null,
+      approved ? "SYNTHETIC-ORG-RISK-STD" : null,
+      approved ? "2026.1" : null],
   );
   await pool.query(
     `INSERT INTO app.bowtie (id, org_id, hazard, top_event, domain, status, simulated, classification, created_by)

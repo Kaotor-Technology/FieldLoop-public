@@ -15,7 +15,15 @@ export interface RiskSnapshotEnvelope {
   id: string;
   createdAt: string;
   trigger: string;
+  calibration: RiskCalibration;
   snapshot: RiskSnapshot;
+}
+
+export interface RiskCalibration {
+  standardRef: string;
+  standardVersion: string;
+  approvedBy: string;
+  approvedAt: string;
 }
 
 export interface BowtieSummary {
@@ -82,6 +90,7 @@ export interface RiskEvent {
   bowtieId: string;
   snapshotId: string;
   trigger: string;
+  calibration: RiskCalibration;
   snapshot: RiskSnapshot;
 }
 
@@ -106,6 +115,7 @@ export interface RiskApiPort {
 interface StoredInput {
   input: RiskInput;
   evidenceByBarrier: Record<string, string | null>;
+  calibration: RiskCalibration;
 }
 
 interface BowtieRow {
@@ -148,12 +158,14 @@ export class PostgresRiskService implements RiskApiPort {
     if (!bowtie) throw new RiskServiceError(404, "not_found");
     assertClearance(user, bowtie.classification);
     const { rows: organisationRows } = await this.pool.query(
-      `SELECT risk_matrix, risk_severity_criteria, risk_matrix_approved_at, risk_matrix_approved_by, classification
+      `SELECT risk_matrix, risk_severity_criteria, risk_matrix_approved_at, risk_matrix_approved_by,
+              risk_matrix_standard_ref, risk_matrix_standard_version, classification
        FROM app.organisation WHERE org_id = $1 ORDER BY id LIMIT 1`, [user.orgId],
     );
     const organisation = organisationRows[0];
     if (organisation) assertClearance(user, organisation.classification);
-    const severityCriteria = organisation?.risk_matrix && organisation.risk_matrix_approved_at && organisation.risk_matrix_approved_by
+    const calibration = organisation ? readCalibration(organisation) : null;
+    const severityCriteria = organisation?.risk_matrix && calibration
       && isSeverityCriteria(organisation.risk_severity_criteria)
       ? organisation.risk_severity_criteria as SeverityCriteria : null;
     const { rows: threats } = await this.pool.query(
@@ -221,8 +233,10 @@ export class PostgresRiskService implements RiskApiPort {
     const snapshot = calculateConfiguredRisk(loaded.stored.input);
     const current = await this.latestSnapshot(user.orgId, bowtieId);
     if (current) assertClearance(user, current.classification);
+    const currentStored = current?.input_json as StoredInput | undefined;
     const sameSnapshot = current && canonicalJson(current.snapshot_json) === canonicalJson(snapshot)
-      && canonicalJson((current.input_json as StoredInput).input) === canonicalJson(loaded.stored.input);
+      && canonicalJson(currentStored?.input) === canonicalJson(loaded.stored.input)
+      && canonicalJson(currentStored?.calibration) === canonicalJson(loaded.stored.calibration);
     if (sameSnapshot) return snapshotEnvelope(current);
     const saved = await this.saveSnapshot({
       user, loaded, snapshot, trigger: current ? "recalculated" : "initial", healthChangeId: null,
@@ -236,6 +250,7 @@ export class PostgresRiskService implements RiskApiPort {
       `SELECT id, created_at, trigger, snapshot_json, input_json, health_change_id, classification
        FROM app.risk_snapshot WHERE org_id = $1 AND bowtie_id = $2
          AND simulation_retired_at IS NULL AND snapshot_json IS NOT NULL AND input_json IS NOT NULL
+         AND input_json->'calibration' IS NOT NULL
        ORDER BY created_at DESC, id DESC LIMIT 2`, [user.orgId, bowtieId],
     );
     const latest = rows[0];
@@ -310,19 +325,23 @@ export class PostgresRiskService implements RiskApiPort {
     if (cursor && !UUID_PATTERN.test(cursor.id)) throw new RiskServiceError(400, "validation_failed");
     const result = cursor
       ? await this.pool.query(
-        `SELECT id, bowtie_id, created_at, trigger, snapshot_json, classification
+        `SELECT id, bowtie_id, created_at, trigger, snapshot_json, input_json, classification
          FROM app.risk_snapshot WHERE org_id = $1 AND simulation_retired_at IS NULL AND snapshot_json IS NOT NULL
+           AND input_json->'calibration' IS NOT NULL
            AND (created_at, id) > ($2::timestamptz, $3::uuid) ORDER BY created_at, id LIMIT 100`,
         [user.orgId, cursor.createdAt, cursor.id],
       )
       : await this.pool.query(
-        `SELECT id, bowtie_id, created_at, trigger, snapshot_json, classification
+        `SELECT id, bowtie_id, created_at, trigger, snapshot_json, input_json, classification
          FROM app.risk_snapshot WHERE org_id = $1 AND simulation_retired_at IS NULL AND snapshot_json IS NOT NULL
+           AND input_json->'calibration' IS NOT NULL
            AND created_at > now() - interval '2 seconds' ORDER BY created_at, id LIMIT 100`, [user.orgId],
       );
     return result.rows.map((row) => {
       assertClearance(user, row.classification);
-      return { id: String(row.id), createdAt: asIso(row.created_at), bowtieId: String(row.bowtie_id), snapshotId: String(row.id), trigger: String(row.trigger ?? "recalculated"), snapshot: row.snapshot_json as RiskSnapshot };
+      const envelope = snapshotEnvelope(row);
+      return { id: envelope.id, createdAt: envelope.createdAt, bowtieId: String(row.bowtie_id), snapshotId: envelope.id,
+        trigger: envelope.trigger, calibration: envelope.calibration, snapshot: envelope.snapshot };
     });
   }
 
@@ -333,7 +352,9 @@ export class PostgresRiskService implements RiskApiPort {
        FROM app.health_change hc
        WHERE EXISTS (SELECT 1 FROM app.organisation org WHERE org.org_id = hc.org_id
            AND org.risk_matrix IS NOT NULL AND org.risk_severity_criteria IS NOT NULL
-           AND org.risk_matrix_approved_at IS NOT NULL AND org.risk_matrix_approved_by IS NOT NULL)
+           AND org.risk_matrix_approved_at IS NOT NULL AND NULLIF(btrim(org.risk_matrix_approved_by), '') IS NOT NULL
+           AND NULLIF(btrim(org.risk_matrix_standard_ref), '') IS NOT NULL
+           AND NULLIF(btrim(org.risk_matrix_standard_version), '') IS NOT NULL)
          AND EXISTS (
            SELECT 1 FROM app.barrier_path bp
            LEFT JOIN app.threat t ON t.id = bp.threat_id AND t.org_id = bp.org_id
@@ -395,7 +416,8 @@ export class PostgresRiskService implements RiskApiPort {
     if (!bowtie) throw new RiskServiceError(404, "not_found");
     assertClearance(user, bowtie.classification);
     const [orgResult, threatsResult, consequencesResult, groupsResult, pathsResult] = await Promise.all([
-      this.pool.query(`SELECT risk_matrix, risk_severity_criteria, risk_matrix_approved_at, risk_matrix_approved_by, classification
+      this.pool.query(`SELECT risk_matrix, risk_severity_criteria, risk_matrix_approved_at, risk_matrix_approved_by,
+          risk_matrix_standard_ref, risk_matrix_standard_version, classification
         FROM app.organisation WHERE org_id = $1 ORDER BY id LIMIT 1`, [user.orgId]),
       this.pool.query(`SELECT id, frequency_per_year, classification FROM app.threat WHERE org_id = $1 AND bowtie_id = $2 ORDER BY id`, [user.orgId, bowtieId]),
       this.pool.query(`SELECT id, severity, p_conditional, classification FROM app.consequence WHERE org_id = $1 AND bowtie_id = $2 ORDER BY id`, [user.orgId, bowtieId]),
@@ -411,7 +433,8 @@ export class PostgresRiskService implements RiskApiPort {
     const organisation = orgResult.rows[0];
     if (!organisation) throw new RiskServiceError(409, "risk_matrix_unconfigured");
     assertClearance(user, organisation.classification);
-    if (!organisation.risk_matrix || !organisation.risk_severity_criteria || !organisation.risk_matrix_approved_at || !organisation.risk_matrix_approved_by) {
+    const calibration = readCalibration(organisation);
+    if (!organisation.risk_matrix || !organisation.risk_severity_criteria || !calibration) {
       throw new RiskServiceError(409, "risk_matrix_unconfigured");
     }
     if (!isSeverityCriteria(organisation.risk_severity_criteria)) throw new RiskServiceError(409, "risk_matrix_invalid");
@@ -500,14 +523,14 @@ export class PostgresRiskService implements RiskApiPort {
       ...pathsResult.rows.flatMap((row) => [row.path_classification, row.barrier_classification]),
       ...[...barrierEvidence.values()].map((evidence) => evidence.classification),
     ]);
-    return { bowtie, stored: { input, evidenceByBarrier }, classification };
+    return { bowtie, stored: { input, evidenceByBarrier, calibration }, classification };
   }
 
   private async latestSnapshot(orgId: string, bowtieId: string): Promise<Record<string, unknown> | null> {
     const { rows } = await this.pool.query(
       `SELECT id, created_at, trigger, snapshot_json, input_json, classification
        FROM app.risk_snapshot WHERE org_id = $1 AND bowtie_id = $2 AND simulation_retired_at IS NULL
-         AND snapshot_json IS NOT NULL AND input_json IS NOT NULL
+         AND snapshot_json IS NOT NULL AND input_json IS NOT NULL AND input_json->'calibration' IS NOT NULL
        ORDER BY created_at DESC, id DESC LIMIT 1`, [orgId, bowtieId],
     );
     return rows[0] ?? null;
@@ -519,8 +542,10 @@ export class PostgresRiskService implements RiskApiPort {
   }): Promise<Record<string, unknown>> {
     if (!input.force && input.healthChangeId === null) {
       const current = await this.latestSnapshot(input.user.orgId, input.loaded.bowtie.id);
+      const currentStored = current?.input_json as StoredInput | undefined;
       if (current && canonicalJson(current.snapshot_json) === canonicalJson(input.snapshot)
-        && canonicalJson((current.input_json as StoredInput).input) === canonicalJson(input.loaded.stored.input)) return current;
+        && canonicalJson(currentStored?.input) === canonicalJson(input.loaded.stored.input)
+        && canonicalJson(currentStored?.calibration) === canonicalJson(input.loaded.stored.calibration)) return current;
     }
     let simulationRunId: string | null = null;
     if (input.loaded.bowtie.simulated) {
@@ -528,7 +553,9 @@ export class PostgresRiskService implements RiskApiPort {
       simulationRunId = rows[0]?.active_run_id ? String(rows[0].active_run_id) : null;
     }
     const cellMap = Object.fromEntries(input.snapshot.consequences.map((item) => [item.consequenceId, item.cell]));
-    const fingerprint = createHash("sha256").update(canonicalJson({ snapshot: input.snapshot, input: input.loaded.stored.input })).digest("hex");
+    const fingerprint = createHash("sha256").update(canonicalJson({
+      snapshot: input.snapshot, input: input.loaded.stored.input, calibration: input.loaded.stored.calibration,
+    })).digest("hex");
     const conflictClause = input.healthChangeId
       ? "ON CONFLICT (org_id, bowtie_id, health_change_id) WHERE health_change_id IS NOT NULL DO NOTHING"
       : "ON CONFLICT (org_id, bowtie_id, input_fingerprint) WHERE health_change_id IS NULL AND input_fingerprint IS NOT NULL AND simulation_retired_at IS NULL DO NOTHING";
@@ -667,5 +694,20 @@ function canonicalJson(value: unknown): string {
 }
 
 function snapshotEnvelope(row: Record<string, unknown>): RiskSnapshotEnvelope {
-  return { id: String(row.id), createdAt: asIso(row.created_at), trigger: String(row.trigger ?? "initial"), snapshot: row.snapshot_json as RiskSnapshot };
+  const stored = row.input_json as StoredInput | null;
+  if (!stored?.calibration) throw new RiskServiceError(503, "risk_snapshot_unavailable");
+  return {
+    id: String(row.id), createdAt: asIso(row.created_at), trigger: String(row.trigger ?? "initial"),
+    calibration: stored.calibration, snapshot: row.snapshot_json as RiskSnapshot,
+  };
+}
+
+function readCalibration(organisation: Record<string, unknown>): RiskCalibration | null {
+  const standardRef = typeof organisation.risk_matrix_standard_ref === "string" ? organisation.risk_matrix_standard_ref.trim() : "";
+  const standardVersion = typeof organisation.risk_matrix_standard_version === "string" ? organisation.risk_matrix_standard_version.trim() : "";
+  const approvedBy = typeof organisation.risk_matrix_approved_by === "string" ? organisation.risk_matrix_approved_by.trim() : "";
+  const approvedAtValue = organisation.risk_matrix_approved_at;
+  const approvedAt = approvedAtValue instanceof Date ? approvedAtValue : new Date(String(approvedAtValue ?? ""));
+  if (!standardRef || !standardVersion || !approvedBy || !Number.isFinite(approvedAt.getTime())) return null;
+  return { standardRef, standardVersion, approvedBy, approvedAt: approvedAt.toISOString() };
 }

@@ -122,6 +122,7 @@ it("emits risk recalculation snapshots over SSE with a resumable cursor", async 
   const cell = { frequencyBand: 1 as const, severityBand: 1 as const, zone: "green" as const, rank: 1 };
   const event: RiskEvent = {
     id: snapshotId, createdAt, bowtieId, snapshotId, trigger: "health_change",
+    calibration: { standardRef: "SYNTHETIC-ORG-RISK-STD", standardVersion: "2026.1", approvedBy: "synthetic-authority", approvedAt: createdAt },
     snapshot: {
       bowtieId, topEventFrequencyPerYear: 0.001, threats: [],
       consequences: [{

@@ -139,8 +139,18 @@ function ExplanationPanel({ explanation, t }: { explanation: RiskExplain; t: Ret
   return <>
     <p>{explanation.summary}</p>
     {explanation.hasPrevious && explanation.previous ? <div className="snapshot-comparison">
-      <div><span>{t("previousSnapshot")}</span><strong className="mono">{explanation.previous.snapshot.topEventFrequencyPerYear.toExponential(3)}</strong><span>{t(`riskZone.${explanation.previous.snapshot.cell.zone}`)}</span><time className="mono" dateTime={explanation.previous.createdAt}>{new Date(explanation.previous.createdAt).toISOString()}</time></div>
-      <div><span>{t("currentSnapshot")}</span><strong className="mono">{explanation.current.snapshot.topEventFrequencyPerYear.toExponential(3)}</strong><span>{t(`riskZone.${explanation.current.snapshot.cell.zone}`)}</span><time className="mono" dateTime={explanation.current.createdAt}>{new Date(explanation.current.createdAt).toISOString()}</time></div>
+      <div>
+        <span>{t("previousSnapshot")}</span><strong className="mono">{explanation.previous.snapshot.topEventFrequencyPerYear.toExponential(3)}</strong>
+        <span>{t(`riskZone.${explanation.previous.snapshot.cell.zone}`)}</span>
+        <time className="mono" dateTime={explanation.previous.createdAt}>{new Date(explanation.previous.createdAt).toISOString()}</time>
+        <CalibrationProvenance calibration={explanation.previous.calibration} t={t} />
+      </div>
+      <div>
+        <span>{t("currentSnapshot")}</span><strong className="mono">{explanation.current.snapshot.topEventFrequencyPerYear.toExponential(3)}</strong>
+        <span>{t(`riskZone.${explanation.current.snapshot.cell.zone}`)}</span>
+        <time className="mono" dateTime={explanation.current.createdAt}>{new Date(explanation.current.createdAt).toISOString()}</time>
+        <CalibrationProvenance calibration={explanation.current.calibration} t={t} />
+      </div>
     </div> : <p className="no-prior-snapshot">{t("noPriorSnapshot")}</p>}
     {explanation.changes.length ? <ol className="risk-change-list">{explanation.changes.map((change) => <li key={change.barrierId}>
       <h3>{t("barrierChange")}</h3>
@@ -155,6 +165,18 @@ function ExplanationPanel({ explanation, t }: { explanation: RiskExplain; t: Ret
       {change.sourceEvidenceHref ? <a href={change.sourceEvidenceHref}>{t("openSourceEvidence")} <span className="mono">{change.sourceEvidenceId}</span></a> : <p>{t("noSourceEvidence")}</p>}
     </li>)}</ol> : explanation.hasPrevious ? <p>{t("noInputChanges")}</p> : null}
   </>;
+}
+
+function CalibrationProvenance({ calibration, t }: {
+  calibration: components["schemas"]["RiskCalibration"];
+  t: ReturnType<typeof useTranslation>["t"];
+}) {
+  return <dl className="risk-calibration-provenance">
+    <dt>{t("riskStandardRef")}</dt><dd className="mono">{calibration.standardRef}</dd>
+    <dt>{t("riskStandardVersion")}</dt><dd className="mono">{calibration.standardVersion}</dd>
+    <dt>{t("riskCalibrationApprovedBy")}</dt><dd className="mono">{calibration.approvedBy}</dd>
+    <dt>{t("riskCalibrationApprovedAt")}</dt><dd><time className="mono" dateTime={calibration.approvedAt}>{calibration.approvedAt}</time></dd>
+  </dl>;
 }
 
 async function readResult<T>(result: { response: Response; data?: T; error?: unknown }): Promise<T> {

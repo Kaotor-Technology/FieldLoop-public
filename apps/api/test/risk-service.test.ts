@@ -50,10 +50,11 @@ interface FakeHealthChange {
   reason: string;
 }
 
-function fixture(approved = true, healthChanges: FakeHealthChange[] = []) {
+function fixture(approved = true, healthChanges: FakeHealthChange[] = [], standardRef = "ORG-RISK-STD", standardVersion = "2026.1") {
   const snapshots: Record<string, unknown>[] = [];
   let nextId = 1;
   let health = "healthy";
+  let currentStandardVersion = standardVersion;
   const paths = [
     { id: "20000000-0000-4000-8000-000000000001", position: 1, threat_id: ids.threat, consequence_id: null, path_classification: "PUBLIC", barrier_id: ids.preventiveBarrier, type: "technical", side: "preventive", pfd_band: 0.01, independence_group_id: null, evidence_interval: null, barrier_classification: "PUBLIC" },
     { id: "20000000-0000-4000-8000-000000000002", position: 2, threat_id: null, consequence_id: ids.consequence, path_classification: "PUBLIC", barrier_id: ids.mitigativeBarrier, type: "technical", side: "mitigative", pfd_band: 0.01, independence_group_id: null, evidence_interval: null, barrier_classification: "PUBLIC" },
@@ -71,8 +72,10 @@ function fixture(approved = true, healthChanges: FakeHealthChange[] = []) {
         })) };
       if (sql.includes("FROM app.organisation")) return { rows: approved ? [{
         risk_matrix: matrix(), risk_severity_criteria: criteria, risk_matrix_approved_at: new Date("2026-10-13T00:00:00Z"),
-        risk_matrix_approved_by: "synthetic-authority", classification: "PUBLIC",
-      }] : [{ risk_matrix: null, risk_severity_criteria: null, risk_matrix_approved_at: null, risk_matrix_approved_by: null, classification: "PUBLIC" }] };
+        risk_matrix_approved_by: "synthetic-authority", risk_matrix_standard_ref: standardRef,
+        risk_matrix_standard_version: currentStandardVersion, classification: "PUBLIC",
+      }] : [{ risk_matrix: null, risk_severity_criteria: null, risk_matrix_approved_at: null, risk_matrix_approved_by: null,
+        risk_matrix_standard_ref: null, risk_matrix_standard_version: null, classification: "PUBLIC" }] };
       if (sql.startsWith("SELECT id, frequency_per_year, classification FROM app.threat")) return { rows: [{ id: ids.threat, name: "Synthetic threat", frequency_per_year: 0.1, classification: "PUBLIC" }] };
       if (sql.startsWith("SELECT id, severity, p_conditional, classification FROM app.consequence")) return { rows: [{ id: ids.consequence, name: "Synthetic consequence", severity: { people: 3, environment: 2, financial: 2 }, p_conditional: 1, classification: "PUBLIC" }] };
       if (sql.startsWith("SELECT id, classification FROM app.independence_group")) return { rows: [] };
@@ -126,6 +129,7 @@ function fixture(approved = true, healthChanges: FakeHealthChange[] = []) {
   return {
     service: new PostgresRiskService(pool), snapshots,
     set health(value: string) { health = value; },
+    setStandardVersion(value: string) { currentStandardVersion = value; },
     setBarrierClassification(value: string) { for (const path of paths) path.barrier_classification = value; },
   };
 }
@@ -140,9 +144,15 @@ describe("PostgresRiskService", () => {
     await expect(service.getRisk(user, ids.bowtie)).rejects.toMatchObject({ status: 409, code: "risk_matrix_unconfigured" });
   });
 
+  it("fails closed when an approved matrix has no controlled standard reference", async () => {
+    const { service } = fixture(true, [], "", "2026.1");
+    await expect(service.getRisk(user, ids.bowtie)).rejects.toMatchObject({ status: 409, code: "risk_matrix_unconfigured" });
+  });
+
   it("persists only changed snapshots and explains the Barrier Health impact", async () => {
     const testFixture = fixture();
     const first = await testFixture.service.getRisk(user, ids.bowtie);
+    expect(first.calibration).toEqual({ standardRef: "ORG-RISK-STD", standardVersion: "2026.1", approvedBy: "synthetic-authority", approvedAt: "2026-10-13T00:00:00.000Z" });
     const same = await testFixture.service.getRisk(user, ids.bowtie);
     expect(same.id).toBe(first.id);
     expect(testFixture.snapshots).toHaveLength(1);
@@ -152,6 +162,16 @@ describe("PostgresRiskService", () => {
     expect(testFixture.snapshots).toHaveLength(2);
     expect(explanation).toMatchObject({ hasPrevious: true, changes: [{ beforeHealth: "healthy", afterHealth: "degraded" }] });
     expect(explanation.changes[0]?.impact).toBeGreaterThan(0);
+  });
+
+  it("creates a new auditable snapshot when the approved standard version changes", async () => {
+    const testFixture = fixture();
+    const first = await testFixture.service.getRisk(user, ids.bowtie);
+    testFixture.setStandardVersion("2026.2");
+    const recalibrated = await testFixture.service.getRisk(user, ids.bowtie);
+    expect(recalibrated.id).not.toBe(first.id);
+    expect(recalibrated.calibration.standardVersion).toBe("2026.2");
+    expect(testFixture.snapshots).toHaveLength(2);
   });
 
   it("deduplicates simultaneous current snapshot requests", async () => {

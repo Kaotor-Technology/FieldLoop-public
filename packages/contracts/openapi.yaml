@@ -567,7 +567,7 @@ paths:
     get:
       operationId: streamEvents
       summary: Stream live platform events
-      description: SSE emits simulation.state, simulation.reset and risk.recalculated events. Risk events carry a persisted RiskSnapshot and invalidate the matching Bowtie risk query. The stream is limited to a session validation window; reconnect reauthenticates.
+      description: SSE emits simulation.state, simulation.reset and risk.recalculated events. Risk events carry a persisted RiskSnapshot and the controlled-standard calibration provenance used to calculate it, then invalidate the matching Bowtie risk query. The stream is limited to a session validation window; reconnect reauthenticates.
       tags:
       - Simulation
       responses:
@@ -632,7 +632,7 @@ paths:
     get:
       operationId: getBowtieRisk
       summary: Read the current Bowtie Risk Score
-      description: Calculates with the approved Organisation Risk Matrix, persists a full RiskSnapshot when inputs change and returns risk_matrix_unconfigured until both matrix and severity criteria have Technical Authority approval.
+      description: Calculates with the approved Organisation Risk Matrix, persists a full RiskSnapshot and its controlled-standard reference/version when inputs change, and returns risk_matrix_unconfigured until the matrix, severity criteria and standard provenance have Technical Authority approval.
       tags: [Risk]
       parameters:
         - name: bowtieId
@@ -1025,12 +1025,22 @@ components:
     RiskSnapshotEnvelope:
       type: object
       additionalProperties: false
-      required: [id, createdAt, trigger, snapshot]
+      required: [id, createdAt, trigger, calibration, snapshot]
       properties:
         id: { type: string, format: uuid }
         createdAt: { type: string, format: date-time }
         trigger: { type: string }
+        calibration: { $ref: '#/components/schemas/RiskCalibration' }
         snapshot: { $ref: '#/components/schemas/RiskSnapshot' }
+    RiskCalibration:
+      type: object
+      additionalProperties: false
+      required: [standardRef, standardVersion, approvedBy, approvedAt]
+      properties:
+        standardRef: { type: string, minLength: 1 }
+        standardVersion: { type: string, minLength: 1 }
+        approvedBy: { type: string, minLength: 1 }
+        approvedAt: { type: string, format: date-time }
     RiskSnapshot:
       type: object
       additionalProperties: false
