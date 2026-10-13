@@ -160,6 +160,10 @@ export function GeoCommandMap() {
 
   useEffect(() => {
     if (!overlay.current) return;
+    const lineWidth = designTokenPixels("--spacing-indicator-width");
+    const assetPointRadius = designTokenPixels("--spacing-space-3") / 2;
+    const barrierHitRadius = designTokenPixels("--spacing-touch-target") / 2;
+    const barrierMarkerSize = designTokenPixels("--spacing-space-6");
     const layers = [];
     const assets = collections.get("assets");
     const barriers = collections.get("barriers");
@@ -172,11 +176,11 @@ export function GeoCommandMap() {
         pickable: true,
         stroked: true,
         filled: true,
-        lineWidthMinPixels: 2,
-        pointRadiusMinPixels: 5,
+        lineWidthMinPixels: lineWidth,
+        pointRadiusMinPixels: assetPointRadius,
         getLineColor: (feature) => riskColor(feature.properties.riskBand, "--color-neutral-600", 220),
         getFillColor: (feature) => riskColor(feature.properties.riskBand, "--color-neutral-300", 100),
-        getPointRadius: 6,
+        getPointRadius: assetPointRadius,
         onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
       }));
     }
@@ -187,7 +191,7 @@ export function GeoCommandMap() {
         pickable: true,
         stroked: true,
         filled: true,
-        lineWidthMinPixels: 2,
+        lineWidthMinPixels: lineWidth,
         getLineColor: tokenColor("--color-warning", 210),
         getFillColor: tokenColor("--color-warning", 42),
         onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
@@ -202,8 +206,8 @@ export function GeoCommandMap() {
         data: barrierCollection as never,
         pickable: true,
         pointType: "circle",
-        pointRadiusMinPixels: 22,
-        getPointRadius: 22,
+        pointRadiusMinPixels: barrierHitRadius,
+        getPointRadius: barrierHitRadius,
         getFillColor: [0, 0, 0, 0],
         stroked: false,
         onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
@@ -216,7 +220,7 @@ export function GeoCommandMap() {
         pickable: true,
         getPosition: (feature) => pointPosition(feature),
         getIcon: (feature) => feature.properties.health === "failed" ? "failed" : feature.properties.health === "degraded" ? "degraded" : "unverified",
-        getSize: 24,
+        getSize: barrierMarkerSize,
         sizeUnits: "pixels",
         getColor: (feature) => healthColor(feature.properties.health),
         onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
@@ -232,6 +236,8 @@ export function GeoCommandMap() {
       ? filterCollection(mapBarriers, domain).features.filter((feature) => feature.properties.health === "failed")
       : [];
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const lineWidth = designTokenPixels("--spacing-indicator-width");
+    const failedPulseRadius = designTokenPixels("--spacing-space-5");
     const renderPulse = () => {
       if (!overlay.current) return;
       const pulseLayer = failed.length === 0 ? [] : [new ScatterplotLayer<MapFeature>({
@@ -240,10 +246,10 @@ export function GeoCommandMap() {
         pickable: false,
         stroked: true,
         filled: false,
-        lineWidthMinPixels: 2,
+        lineWidthMinPixels: lineWidth,
         radiusUnits: "pixels",
         getPosition: (feature) => pointPosition(feature),
-        getRadius: 19,
+        getRadius: failedPulseRadius,
         getLineColor: (feature) => {
           const [red, green, blue] = healthColor(feature.properties.health);
           return [red, green, blue, reducedMotion ? 150 : Math.round(pulseOpacity.current * 255)];
@@ -469,6 +475,12 @@ function tokenColor(token: string, alpha: number): [number, number, number, numb
   if (!match?.[1]) return [0, 0, 0, alpha];
   const color = Number.parseInt(match[1], 16);
   return [(color >> 16) & 255, (color >> 8) & 255, color & 255, alpha];
+}
+
+function designTokenPixels(token: string): number {
+  const value = Number.parseFloat(window.getComputedStyle(document.documentElement).getPropertyValue(token));
+  if (!Number.isFinite(value)) throw new Error(`Missing design token ${token}`);
+  return value;
 }
 
 function readViewportFromSearch(params: Record<string, unknown>): MapViewport {
