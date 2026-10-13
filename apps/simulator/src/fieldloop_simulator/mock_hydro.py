@@ -60,17 +60,21 @@ SENSOR_PROFILES: Mapping[str, SensorProfile] = {
 }
 
 
-def signal_payload(kind: str, *, accumulation: bool = False) -> dict[str, object]:
+def signal_payload(kind: str) -> dict[str, object]:
     """What a Signal of this source says about its sensor, whoever publishes the Signal."""
     profile = SENSOR_PROFILES[kind]
-    payload: dict[str, object] = {
+    return {
         "assetCode": profile.asset_code,
         "zone": profile.zone_code,
         "kind": kind,
+        "label": LABEL,
     }
-    if accumulation:
-        payload["windowSeconds"] = int(ACCUMULATION_WINDOW.total_seconds())
-    payload["label"] = LABEL
+
+
+def rainfall_payload() -> dict[str, object]:
+    """The payload of the 24 hour rainfall Signal: the rain sensor's, with the window it sums."""
+    payload = signal_payload("rain")
+    payload["windowSeconds"] = int(ACCUMULATION_WINDOW.total_seconds())
     return payload
 
 
@@ -154,7 +158,7 @@ class SimulatedHydro:
             observed_at=at,
             unit=ACCUMULATION_UNIT,
             subject=profile.asset_code,
-            payload=signal_payload("rain", accumulation=True),
+            payload=rainfall_payload(),
         )
 
     def read(self, kind: str, as_of: datetime) -> MockHydroReading:

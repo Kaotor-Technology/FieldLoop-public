@@ -8,7 +8,7 @@ through ``set_power``; operating a real pump or gate is an L1 Command Package (A
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Annotated, Literal, cast, get_args
+from typing import Annotated, Literal, get_args
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
@@ -66,18 +66,22 @@ def power_tag(asset_code: str) -> str:
     return f"{_known(asset_code).facility_type}.power"
 
 
-def signal_payload(asset_code: str, status: PowerStatus) -> dict[str, object]:
-    """What a Signal of this source says about its pump or gate, whoever publishes the Signal.
-
-    A pump without power is stopped; a gate stays where it was.
-    """
+def operating_state(asset_code: str, status: PowerStatus) -> OperatingState:
+    """A pump without power is stopped; a gate stays where it was."""
     facility = _known(asset_code)
-    stopped = facility.facility_type == "pump" and status == "lost"
+    if facility.facility_type == "pump" and status == "lost":
+        return "stopped"
+    return facility.operating_state
+
+
+def signal_payload(asset_code: str, status: PowerStatus) -> dict[str, object]:
+    """What a Signal of this source says about its pump or gate, whoever publishes the Signal."""
+    facility = _known(asset_code)
     return {
         "assetCode": asset_code,
         "facilityType": facility.facility_type,
         "zone": facility.zone_code,
-        "operatingState": "stopped" if stopped else facility.operating_state,
+        "operatingState": operating_state(asset_code, status),
         "label": LABEL,
     }
 
@@ -113,8 +117,7 @@ class SimulatedPumps:
         return self._power.at(asset_code, at) or "available"
 
     def operating_state_at(self, asset_code: str, at: datetime) -> OperatingState:
-        state = signal_payload(asset_code, self.power_at(asset_code, at))["operatingState"]
-        return cast(OperatingState, state)
+        return operating_state(asset_code, self.power_at(asset_code, at))
 
     def observe(self, asset_code: str, at: datetime) -> Observation:
         """The power status a Scenario publishes as a Signal; the payload names the Facility.

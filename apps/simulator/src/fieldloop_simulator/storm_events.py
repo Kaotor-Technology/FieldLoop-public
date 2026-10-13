@@ -115,7 +115,7 @@ def payload(event: Event, value: object) -> dict[str, object]:
     if check(event) is not None:
         return {}
     if _is_rainfall(event):
-        return mock_hydro.signal_payload("rain", accumulation=True)
+        return mock_hydro.rainfall_payload()
     if event.source == mock_hydro.SOURCE_ID:
         return mock_hydro.signal_payload(_KIND_OF_TAG[event.tag])
     if event.source == mock_pumps.SOURCE_ID:
