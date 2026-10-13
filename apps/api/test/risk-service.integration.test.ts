@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import type { RiskMatrix } from "@fieldloop/contracts";
 import type { CurrentUser } from "../src/auth/service.js";
 import { PostgresRiskService } from "../src/risk/service.js";
+import { createRiskDatabase } from "../src/risk/database.js";
 
 const databaseUrl = process.env["FIELDLOOP_RISK_TEST_DATABASE_URL"];
 const integration = describe.skipIf(!databaseUrl);
@@ -33,7 +34,7 @@ integration("PostgresRiskService against migrated PostgreSQL", () => {
   beforeAll(() => {
     if (!databaseUrl) throw new Error("FIELDLOOP_RISK_TEST_DATABASE_URL is required for PostgreSQL RiskService integration tests");
     pool = new Pool({ connectionString: databaseUrl, max: 5 });
-    service = new PostgresRiskService(pool);
+    service = new PostgresRiskService(createRiskDatabase(pool));
   });
 
   afterAll(async () => { await pool?.end(); });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RiskMatrix } from "@fieldloop/contracts";
 import type { Pool } from "pg";
+import { createRiskDatabase } from "../src/risk/database.js";
 import { PostgresRiskService, RiskServiceError } from "../src/risk/service.js";
 import type { CurrentUser } from "../src/auth/service.js";
 
@@ -54,37 +55,43 @@ function fixture(approved = true, healthChanges: FakeHealthChange[] = [], standa
   const snapshots: Record<string, unknown>[] = [];
   let nextId = 1;
   let health = "healthy";
+  let threatFrequency = 0.1;
+  let evidenceId: string | null = null;
+  let evidenceInterval: string | null = null;
   let currentStandardVersion = standardVersion;
   const paths = [
-    { id: "20000000-0000-4000-8000-000000000001", position: 1, threat_id: ids.threat, consequence_id: null, path_classification: "PUBLIC", barrier_id: ids.preventiveBarrier, type: "technical", side: "preventive", pfd_band: 0.01, independence_group_id: null, evidence_interval: null, barrier_classification: "PUBLIC" },
+    { id: "20000000-0000-4000-8000-000000000001", position: 1, threat_id: ids.threat, consequence_id: null, path_classification: "PUBLIC", barrier_id: ids.preventiveBarrier, type: "technical", side: "preventive", pfd_band: 0.01, independence_group_id: null, get evidence_interval() { return evidenceInterval; }, barrier_classification: "PUBLIC" },
     { id: "20000000-0000-4000-8000-000000000002", position: 2, threat_id: null, consequence_id: ids.consequence, path_classification: "PUBLIC", barrier_id: ids.mitigativeBarrier, type: "technical", side: "mitigative", pfd_band: 0.01, independence_group_id: null, evidence_interval: null, barrier_classification: "PUBLIC" },
   ];
-  const pool = {
-    query: async (statement: string, values: unknown[] = []) => {
-      const sql = statement.replace(/\s+/g, " ").trim();
-      if (sql.includes("FROM app.bowtie WHERE")) return { rows: [{ id: ids.bowtie, hazard: "Synthetic hazard", top_event: "Synthetic top event", domain: "pipeline", status: "active", simulated: false, classification: "PUBLIC" }] };
-      if (sql.startsWith("SELECT hc.id, hc.org_id, hc.barrier_id")) return { rows: healthChanges
+  const runQuery = async (statement: string, values: unknown[] = []) => {
+      const sql = statement.replaceAll('"', "").replace(/\s+/g, " ").trim().toLowerCase();
+      const starts = (pattern: string) => sql.startsWith(pattern.toLowerCase());
+      const has = (pattern: string) => sql.includes(pattern.toLowerCase());
+      if (has("FROM app.bowtie") && !has("FROM app.bowtie AS b")) return { rows: [{ id: ids.bowtie, hazard: "Synthetic hazard", top_event: "Synthetic top event", domain: "pipeline", status: "active", simulated: false, classification: "PUBLIC" }] };
+      if (starts("SELECT hc.id, hc.org_id, hc.barrier_id")) return { rows: healthChanges
         .filter((change) => !snapshots.some((snapshot) => snapshot.health_change_id === change.id))
         .map((change) => ({
           id: change.id, org_id: user.orgId, barrier_id: change.barrierId, actor: "synthetic-reviewer",
           from_health: change.fromHealth, to_health: change.toHealth, created_at: new Date(change.createdAt),
           simulated: false, classification: "PUBLIC",
         })) };
-      if (sql.includes("FROM app.organisation")) return { rows: approved ? [{
+      if (has("FROM app.organisation")) return { rows: approved ? [{
         risk_matrix: matrix(), risk_severity_criteria: criteria, risk_matrix_approved_at: new Date("2026-10-13T00:00:00Z"),
         risk_matrix_approved_by: "synthetic-authority", risk_matrix_standard_ref: standardRef,
         risk_matrix_standard_version: currentStandardVersion, classification: "PUBLIC",
       }] : [{ risk_matrix: null, risk_severity_criteria: null, risk_matrix_approved_at: null, risk_matrix_approved_by: null,
         risk_matrix_standard_ref: null, risk_matrix_standard_version: null, classification: "PUBLIC" }] };
-      if (sql.startsWith("SELECT id, frequency_per_year, classification FROM app.threat")) return { rows: [{ id: ids.threat, name: "Synthetic threat", frequency_per_year: 0.1, classification: "PUBLIC" }] };
-      if (sql.startsWith("SELECT id, severity, p_conditional, classification FROM app.consequence")) return { rows: [{ id: ids.consequence, name: "Synthetic consequence", severity: { people: 3, environment: 2, financial: 2 }, p_conditional: 1, classification: "PUBLIC" }] };
-      if (sql.startsWith("SELECT id, classification FROM app.independence_group")) return { rows: [] };
-      if (sql.startsWith("SELECT bp.id AS path_row_id")) return { rows: paths.map((path) => ({ ...path, health: path.barrier_id === ids.preventiveBarrier ? health : "healthy" })) };
-      if (sql.includes("SELECT DISTINCT ON (barrier_id)")) return { rows: [] };
-      if (sql.startsWith("SELECT id, created_at, trigger, snapshot_json, input_json, health_change_id, classification")) {
+      if (starts("SELECT id, frequency_per_year, classification FROM app.threat")) return { rows: [{ id: ids.threat, name: "Synthetic threat", frequency_per_year: threatFrequency, classification: "PUBLIC" }] };
+      if (starts("SELECT id, severity, p_conditional, classification FROM app.consequence")) return { rows: [{ id: ids.consequence, name: "Synthetic consequence", severity: { people: 3, environment: 2, financial: 2 }, p_conditional: 1, classification: "PUBLIC" }] };
+      if (starts("SELECT id, classification FROM app.independence_group")) return { rows: [] };
+      if (starts("SELECT bp.id AS path_row_id")) return { rows: paths.map((path) => ({ ...path, health: path.barrier_id === ids.preventiveBarrier ? health : "healthy" })) };
+      if (has("SELECT DISTINCT ON (barrier_id)")) return { rows: evidenceId ? [{
+        id: evidenceId, barrier_id: ids.preventiveBarrier, observed_at: new Date("2026-10-13T00:00:00Z"), classification: "PUBLIC",
+      }] : [] };
+      if (starts("SELECT id, created_at, trigger, snapshot_json, input_json, health_change_id, classification")) {
         return { rows: snapshots.slice().sort(byNewest).slice(0, 2) };
       }
-      if (sql.startsWith("SELECT id, barrier_id, from_health FROM app.health_change")) {
+      if (starts("SELECT id, barrier_id, from_health FROM app.health_change")) {
         const [orgId, barrierIds, createdAt, changeId] = values;
         if (orgId !== user.orgId || !Array.isArray(barrierIds)) return { rows: [] };
         const cursorTime = new Date(String(createdAt)).getTime();
@@ -94,17 +101,17 @@ function fixture(approved = true, healthChanges: FakeHealthChange[] = [], standa
           .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id))
           .map((change) => ({ id: change.id, barrier_id: change.barrierId, from_health: change.fromHealth })) };
       }
-      if (sql.startsWith("SELECT id, created_at, trigger, snapshot_json, input_json, classification")) {
+      if (starts("SELECT id, created_at, trigger, snapshot_json, input_json, classification")) {
         return { rows: snapshots.slice().sort(byNewest).slice(0, 1) };
       }
-      if (sql.startsWith("SELECT id, created_at, trigger, snapshot_json, input_json FROM app.risk_snapshot")) {
-        const rows = sql.includes("input_fingerprint = $3")
+      if (starts("SELECT id, created_at, trigger, snapshot_json, input_json FROM app.risk_snapshot")) {
+        const rows = has("input_fingerprint = $3")
           ? snapshots.filter((snapshot) => snapshot.input_fingerprint === values[2] && snapshot.health_change_id === null)
           : snapshots.filter((snapshot) => snapshot.health_change_id === values[2]);
         return { rows: rows.slice(0, 1) };
       }
-      if (sql.startsWith("SELECT DISTINCT b.id AS bowtie_id")) return { rows: [{ bowtie_id: ids.bowtie }] };
-      if (sql.startsWith("INSERT INTO app.risk_snapshot")) {
+      if (has("FROM app.bowtie AS b")) return { rows: [{ bowtie_id: ids.bowtie }] };
+      if (starts("INSERT INTO app.risk_snapshot")) {
         const fingerprint = String(values[12]);
         if (values[10] === null && snapshots.some((snapshot) => snapshot.input_fingerprint === fingerprint && snapshot.health_change_id === null)) {
           return { rows: [] };
@@ -112,23 +119,35 @@ function fixture(approved = true, healthChanges: FakeHealthChange[] = [], standa
         const row = {
           id: `30000000-0000-4000-8000-${String(nextId++).padStart(12, "0")}`,
           created_at: new Date(Date.UTC(2026, 9, 13, 0, 0, nextId)), trigger: values[4],
-          snapshot_json: sortJson(JSON.parse(String(values[8]))), input_json: sortJson(JSON.parse(String(values[9]))),
+          snapshot_json: sortJson(typeof values[8] === "string" ? JSON.parse(values[8]) : values[8]),
+          input_json: sortJson(typeof values[9] === "string" ? JSON.parse(values[9]) : values[9]),
           classification: values[6], health_change_id: values[10], bowtie_id: values[1], input_fingerprint: fingerprint,
         };
         snapshots.push(row);
         return { rows: [row] };
       }
-      if (sql.startsWith("SELECT reason, actor FROM app.health_change")) {
+      if (starts("SELECT reason, actor FROM app.health_change")) {
         const change = healthChanges.find((item) => item.id === values[1]);
         return { rows: change ? [{ reason: change.reason, actor: "synthetic-reviewer" }] : [] };
       }
-      if (sql.includes("FROM app.health_change")) return { rows: [] };
+      if (has("FROM app.health_change")) return { rows: [] };
       throw new Error(`Unexpected SQL in RiskService test: ${sql}`);
-    },
+  };
+  const pool = {
+    connect: async () => ({
+      query: async (statement: string, values: unknown[] = []) => {
+        const result = await runQuery(statement, values);
+        return { ...result, command: statement.trimStart().slice(0, 6).toUpperCase() === "INSERT" ? "INSERT" : "SELECT", rowCount: result.rows.length };
+      },
+      release: () => {},
+    }),
+    end: async () => {},
   } as unknown as Pool;
   return {
-    service: new PostgresRiskService(pool), snapshots,
+    service: new PostgresRiskService(createRiskDatabase(pool)), snapshots,
     set health(value: string) { health = value; },
+    setThreatFrequency(value: number) { threatFrequency = value; },
+    setEvidence(id: string | null, interval: string | null) { evidenceId = id; evidenceInterval = interval; },
     setStandardVersion(value: string) { currentStandardVersion = value; },
     setBarrierClassification(value: string) { for (const path of paths) path.barrier_classification = value; },
   };
@@ -162,6 +181,35 @@ describe("PostgresRiskService", () => {
     expect(testFixture.snapshots).toHaveLength(2);
     expect(explanation).toMatchObject({ hasPrevious: true, changes: [{ beforeHealth: "healthy", afterHealth: "degraded" }] });
     expect(explanation.changes[0]?.impact).toBeGreaterThan(0);
+  });
+
+  it("attributes a score change to changed non-Barrier risk inputs", async () => {
+    const testFixture = fixture();
+    await testFixture.service.getRisk(user, ids.bowtie);
+    testFixture.setThreatFrequency(0.2);
+
+    const explanation = await testFixture.service.explain(user, ids.bowtie);
+
+    expect(explanation.riskInputChanges).toContainEqual({
+      path: `riskInput/threats/${ids.threat}/frequencyPerYear`, beforeValue: "0.1", afterValue: "0.2",
+    });
+    expect(explanation.summary).toContain("listed risk input changes");
+  });
+
+  it("attributes evidence expiry changes to the source Evidence", async () => {
+    const testFixture = fixture();
+    await testFixture.service.getRisk(user, ids.bowtie);
+    const evidenceId = "40000000-0000-4000-8000-000000000001";
+    testFixture.setEvidence(evidenceId, "00:00:01");
+
+    const explanation = await testFixture.service.explain(user, ids.bowtie);
+
+    expect(explanation.riskInputChanges).toContainEqual({
+      path: `evidenceByBarrier/${ids.preventiveBarrier}`, beforeValue: null, afterValue: evidenceId,
+    });
+    expect(explanation.changes.find((change) => change.barrierId === ids.preventiveBarrier)).toMatchObject({
+      reason: "Evidence is older than the configured interval.", sourceEvidenceId: evidenceId,
+    });
   });
 
   it("creates a new auditable snapshot when the approved standard version changes", async () => {

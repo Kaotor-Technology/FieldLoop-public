@@ -6,6 +6,7 @@ import { SecretManagerInternalTokenService } from "./internal-tokens.js";
 import { KeycloakOidcProvider } from "./keycloak-oidc.js";
 import { createAuthDatabase, createCloudSqlAuthDatabase, PostgresAuthStore } from "./postgres-store.js";
 import { PostgresRiskService } from "../risk/service.js";
+import { createRiskDatabase } from "../risk/database.js";
 
 export class UnavailableAuthService implements AuthServicePort {
   async startLogin(): Promise<URL> { return this.unavailable(); }
@@ -52,7 +53,7 @@ export async function createProductionAuthRuntime(): Promise<{
       : undefined;
   if (!database) return { auth: new UnavailableAuthService(), close: async () => {} };
   const packRuntime = {
-    risk: new PostgresRiskService(database.pool),
+    risk: new PostgresRiskService(createRiskDatabase(database.pool)),
     registerPacks: (packs: LoadedDomainPack[]) => registerDomainPackRecords(database.db, defaultOrgId, packs),
     close: async () => {
       if ("close" in database && typeof database.close === "function") await database.close();
