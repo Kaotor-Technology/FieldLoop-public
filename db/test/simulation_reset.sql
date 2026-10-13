@@ -73,6 +73,19 @@ BEGIN
     EXCEPTION WHEN check_violation THEN NULL;
     END;
 END $$;
+DO $$
+BEGIN
+    BEGIN
+        INSERT INTO notification(org_id, action_request_id, channel, recipient_ref, status, sandbox, simulated, classification) VALUES ('simulation-test', '11111111-1111-4111-8111-111111111119', 'email', 'sandbox:test', 'queued', true, true, 'INTERNAL');
+        RAISE EXCEPTION 'a queued old ActionRequest produced a new-run notification';
+    EXCEPTION WHEN check_violation THEN NULL;
+    END;
+    BEGIN
+        INSERT INTO notification(org_id, action_request_id, channel, recipient_ref, status, sandbox, simulated, classification) VALUES ('simulation-test', '11111111-1111-4111-8111-111111111119', 'email', 'sandbox:test', 'queued', false, false, 'INTERNAL');
+        RAISE EXCEPTION 'a simulated ActionRequest was relabelled as a real notification';
+    EXCEPTION WHEN check_violation THEN NULL;
+    END;
+END $$;
 -- A rollback restores the old epoch as well as all domain state.
 SAVEPOINT before_reset;
 SELECT restore_simulation_baseline('simulation-test');

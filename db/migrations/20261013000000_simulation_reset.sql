@@ -174,17 +174,69 @@ GRANT EXECUTE ON FUNCTION capture_simulation_baseline(text), restore_simulation_
 DO $$
 DECLARE
     identity text;
+    runtime_role text;
+    app_role text;
+    table_name text;
 BEGIN
     IF current_database() IN ('fieldloop_dev', 'fieldloop_demo') THEN
         identity := 'fl-v2-simulator-' || replace(current_database(), 'fieldloop_', '') || '@example-project.iam';
+        runtime_role := 'fieldloop_simulator_' || replace(current_database(), 'fieldloop_', '');
+        app_role := 'fieldloop_app_' || replace(current_database(), 'fieldloop_', '');
+        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = runtime_role) THEN
+            EXECUTE format('CREATE ROLE %I NOLOGIN', runtime_role);
+        END IF;
+        EXECUTE format('GRANT USAGE ON SCHEMA app TO %I', runtime_role);
+        EXECUTE format('GRANT SELECT, INSERT, UPDATE ON app.scenario, app.simulation_run, app.simulation_workspace TO %I', runtime_role);
+        EXECUTE format('GRANT SELECT, INSERT, DELETE ON app.simulation_command TO %I', runtime_role);
+        EXECUTE format('GRANT EXECUTE ON FUNCTION app.capture_simulation_baseline(text), app.restore_simulation_baseline(text) TO %I', runtime_role);
+        EXECUTE format('GRANT SELECT ON app.simulation_workspace TO %I', app_role);
+        FOREACH table_name IN ARRAY ARRAY['signal', 'evidence', 'geo_reference', 'health_proposal',
+            'health_change', 'risk_snapshot', 'action_request', 'command_package', 'notification'] LOOP
+            EXECUTE format('GRANT SELECT ON app.%I TO %I', 'current_' || table_name, app_role);
+        END LOOP;
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = identity) THEN
-            EXECUTE format('GRANT fieldloop_app TO %I', identity);
+            EXECUTE format('GRANT %I TO %I', runtime_role, identity);
         END IF;
     END IF;
 END $$;
 
+-- A queued executor cannot use a retired ActionRequest or relabel its children as real.
+CREATE FUNCTION guard_simulation_action_child() RETURNS trigger AS $$
+DECLARE
+    parent app.action_request%ROWTYPE;
+BEGIN
+    IF current_setting('app.simulation_reset', true) = 'on'
+        AND current_user::regrole = (SELECT relowner FROM pg_class WHERE oid = 'app.simulation_workspace'::regclass) THEN
+        RETURN NEW;
+    END IF;
+    SELECT * INTO STRICT parent FROM app.action_request WHERE id = NEW.action_request_id FOR SHARE;
+    IF parent.org_id <> NEW.org_id OR parent.simulated <> NEW.simulated OR parent.simulation_retired_at IS NOT NULL THEN
+        RAISE EXCEPTION 'ActionRequest child scope is invalid or retired' USING ERRCODE = 'check_violation';
+    END IF;
+    IF parent.simulation_run_id IS NOT NULL THEN
+        PERFORM app.assert_simulation_run(parent.simulation_run_id, parent.org_id);
+        IF TG_TABLE_NAME <> 'approval' THEN
+            IF NEW.simulation_run_id IS DISTINCT FROM parent.simulation_run_id THEN
+                RAISE EXCEPTION 'ActionRequest child belongs to another run' USING ERRCODE = 'check_violation';
+            END IF;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SET search_path = app, pg_temp;
+CREATE TRIGGER zz_guard_simulation_action_child BEFORE INSERT OR UPDATE ON notification
+FOR EACH ROW EXECUTE FUNCTION guard_simulation_action_child();
+CREATE TRIGGER zz_guard_simulation_action_child BEFORE INSERT OR UPDATE ON command_package
+FOR EACH ROW EXECUTE FUNCTION guard_simulation_action_child();
+CREATE TRIGGER zz_guard_simulation_action_child BEFORE INSERT ON approval
+FOR EACH ROW EXECUTE FUNCTION guard_simulation_action_child();
+
 -- migrate:down
 SET search_path = app, public;
+DROP TRIGGER zz_guard_simulation_action_child ON notification;
+DROP TRIGGER zz_guard_simulation_action_child ON command_package;
+DROP TRIGGER zz_guard_simulation_action_child ON approval;
+DROP FUNCTION guard_simulation_action_child();
 DROP TRIGGER guard_simulation_barrier ON barrier;
 DROP FUNCTION guard_simulation_barrier();
 ALTER TABLE notification DROP CONSTRAINT simulated_notification_sandbox;
@@ -202,8 +254,11 @@ BEGIN
     IF current_database() IN ('fieldloop_dev', 'fieldloop_demo') THEN
         identity := 'fl-v2-simulator-' || replace(current_database(), 'fieldloop_', '') || '@example-project.iam';
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = identity) THEN
-            EXECUTE format('REVOKE fieldloop_app FROM %I', identity);
+            EXECUTE format('REVOKE %I FROM %I', 'fieldloop_simulator_' || replace(current_database(), 'fieldloop_', ''), identity);
         END IF;
+        EXECUTE format('REVOKE USAGE ON SCHEMA app FROM %I', 'fieldloop_simulator_' || replace(current_database(), 'fieldloop_', ''));
+        EXECUTE format('REVOKE ALL ON app.scenario, app.simulation_run, app.simulation_workspace, app.simulation_command FROM %I', 'fieldloop_simulator_' || replace(current_database(), 'fieldloop_', ''));
+        EXECUTE format('REVOKE ALL ON FUNCTION app.capture_simulation_baseline(text), app.restore_simulation_baseline(text) FROM %I', 'fieldloop_simulator_' || replace(current_database(), 'fieldloop_', ''));
     END IF;
 END $$;
 DROP FUNCTION capture_simulation_baseline(text), restore_simulation_baseline(text);
