@@ -34,7 +34,7 @@ const continuousRule = { ...cpRule, id: randomUUID(), condition: { ...cpRule.con
   source: "mock-continuous", tag: "DL-01.rectifier.output.continuous", ruleId: "fixture-continuous-cp-zero",
   durationSeconds: 120, expectedIntervalSeconds: 60 } };
 // Persist the actual FL-78 pack-loader output, not a hand-copied rule snapshot.
-// Current PR #47 head 2a99d855ba2e9e3d7485b9ebc71f1b4cd966e606 emits a rain rate plus a
+// PR #47 source snapshot c141dde794885e8e3c2ce0fbd553d200e37b651a emits a rain rate plus a
 // separate 24-hour aggregate, and a pump Signal matching the pack's exact tag and unit.
 const intervals = { "mock-historian": { months: 3 }, "mock-patrol": { months: 3 }, "mock-hydro": 60, "mock-pumps": 60, "mock-continuous": 60 };
 const base = { schemaVersion: "signal.v1", orgId, source: "mock-historian", tag: "DL-01.rectifier.output", value: 0, unit: "A",
