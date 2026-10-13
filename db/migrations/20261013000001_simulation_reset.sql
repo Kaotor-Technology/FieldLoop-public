@@ -8,7 +8,8 @@ CREATE TABLE simulation_workspace (
     baseline jsonb NOT NULL,
     simulated boolean NOT NULL CHECK (simulated),
     classification text NOT NULL CHECK (classification IN ('PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED')),
-    created_at timestamptz NOT NULL DEFAULT now()
+    created_at timestamptz NOT NULL DEFAULT now(),
+    created_by text NOT NULL
 );
 CREATE TABLE simulation_command (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -19,6 +20,7 @@ CREATE TABLE simulation_command (
     simulated boolean NOT NULL CHECK (simulated),
     classification text NOT NULL CHECK (classification IN ('PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED')),
     created_at timestamptz NOT NULL DEFAULT now(),
+    created_by text NOT NULL,
     UNIQUE (org_id, command_key)
 );
 GRANT SELECT, INSERT, UPDATE ON simulation_workspace TO fieldloop_app;
@@ -130,11 +132,11 @@ BEGIN
         OR EXISTS (SELECT 1 FROM app.current_notification WHERE org_id = organisation AND simulated) THEN
         RAISE EXCEPTION 'A clean simulated baseline is required before the first run' USING ERRCODE = 'check_violation';
     END IF;
-    INSERT INTO app.simulation_workspace (org_id, baseline, simulated, classification)
+    INSERT INTO app.simulation_workspace (org_id, baseline, simulated, classification, created_by)
     VALUES (organisation, jsonb_build_object(
         'barriers', COALESCE((SELECT jsonb_agg(jsonb_build_object('id', id, 'health', health)) FROM app.barrier WHERE org_id = organisation AND simulated), '[]'::jsonb),
         'risks', COALESCE((SELECT jsonb_agg(to_jsonb(r)) FROM app.current_risk_snapshot r WHERE org_id = organisation AND simulated), '[]'::jsonb)
-    ), true, 'HIGHLY_RESTRICTED');
+    ), true, 'HIGHLY_RESTRICTED', 'simulator');
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = app, pg_temp;
 

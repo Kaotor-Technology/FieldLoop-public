@@ -144,7 +144,7 @@ class PostgresPlayerTransaction:
     def remember(self, key: str, digest: str, response: dict[str, object]) -> None:
         self.cursor.execute(
             "INSERT INTO app.simulation_command (org_id, command_key, body_hash, "
-            "response, simulated, classification) "
-            "VALUES (%s, %s, %s, %s::jsonb, true, 'HIGHLY_RESTRICTED')",
+            "response, simulated, classification, created_by) "
+            "VALUES (%s, %s, %s, %s::jsonb, true, 'HIGHLY_RESTRICTED', 'simulator')",
             (self.org_id, key, digest, json.dumps(response)),
         )

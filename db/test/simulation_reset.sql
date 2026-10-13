@@ -11,6 +11,15 @@ INSERT INTO scenario(id, org_id, file, simulated, classification) VALUES ('11111
 INSERT INTO simulation_run(id, org_id, scenario_id, state, simulated, classification) VALUES ('11111111-1111-4111-8111-111111111118', 'simulation-test', '11111111-1111-4111-8111-111111111117', 'paused', true, 'INTERNAL');
 SET LOCAL ROLE fieldloop_app;
 SELECT capture_simulation_baseline('simulation-test');
+INSERT INTO simulation_command(org_id, command_key, body_hash, response, simulated, classification, created_by)
+VALUES ('simulation-test', 'reset-test-command', 'test-hash', '{}'::jsonb, true, 'INTERNAL', 'simulator');
+DO $$
+BEGIN
+    IF (SELECT created_by FROM simulation_workspace WHERE org_id='simulation-test') <> 'simulator'
+        OR (SELECT created_by FROM simulation_command WHERE org_id='simulation-test' AND command_key='reset-test-command') <> 'simulator' THEN
+        RAISE EXCEPTION 'simulation records did not retain their creator';
+    END IF;
+END $$;
 UPDATE simulation_workspace SET active_run_id='11111111-1111-4111-8111-111111111118' WHERE org_id='simulation-test';
 SELECT set_config('app.simulation_run_id', '11111111-1111-4111-8111-111111111118', true);
 UPDATE barrier SET health='failed' WHERE id IN ('11111111-1111-4111-8111-111111111113', '11111111-1111-4111-8111-111111111115');
