@@ -68,5 +68,26 @@
       "type": "string",
       "const": "CONFIDENTIAL"
     }
+  },
+  "if": {
+    "properties": {
+      "kind": {
+        "const": "rain"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "unit": {
+        "const": "mm/h"
+      }
+    }
+  },
+  "else": {
+    "properties": {
+      "unit": {
+        "const": "m"
+      }
+    }
   }
 }

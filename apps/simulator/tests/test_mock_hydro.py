@@ -12,7 +12,7 @@ from fieldloop_common.signal import parse_signal
 from fieldloop_simulator.main import app
 from fieldloop_simulator.mock_hydro import SENSOR_PROFILES, SimulatedHydro
 from fieldloop_simulator.mock_signals import SimulatedSignalEmitter
-from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
 ROOT = Path(__file__).resolve().parents[3]
 BANGKOK = ROOT / "data/synthetic/bangkok"
@@ -138,6 +138,17 @@ def test_an_override_must_name_a_kind_a_timezone_and_a_finite_value(
     with pytest.raises(ValueError, match="finite"):
         hydro.add_override("rain", start=STORM, value=float("nan"))
     assert hydro.value_at("rain", STORM) == 0.0
+
+
+def test_the_schema_refuses_a_unit_that_does_not_fit_the_kind() -> None:
+    with TestClient(app) as client:
+        rain = client.get("/mock/hydro/rain").json()
+        tide = client.get("/mock/hydro/tide").json()
+    validator = Draft202012Validator(SCHEMA, format_checker=FormatChecker())
+    with pytest.raises(ValidationError):
+        validator.validate({**rain, "unit": "m"})
+    with pytest.raises(ValidationError):
+        validator.validate({**tide, "unit": "mm/h"})
 
 
 def test_a_write_changes_no_reading() -> None:
