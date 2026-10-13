@@ -23,6 +23,10 @@ class HeldValues[T]:
     def reset(self) -> None:
         self._held = {}
 
+    def starts(self, key: str) -> list[datetime]:
+        """The times at which a held value of ``key`` begins, in order."""
+        return sorted({start for start, _ in self._held.get(key, [])})
+
     def at(self, key: str, at: datetime) -> T | None:
         """The value held at ``at``, or ``None`` when the source is at its baseline."""
         if at.tzinfo is None:

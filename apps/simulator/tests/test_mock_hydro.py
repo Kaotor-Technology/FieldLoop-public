@@ -246,3 +246,80 @@ def test_the_sensors_are_the_sensor_facilities_of_the_bangkok_data() -> None:
     assert authored == {
         kind: (profile.asset_code, profile.zone_code) for kind, profile in SENSOR_PROFILES.items()
     }
+
+
+def rainfall_rule() -> dict[str, Any]:
+    golden = json.loads((ROOT / "domain-packs/flood-water/golden.json").read_text())
+    (rule,) = [rule for rule in golden["rules"] if rule["id"] == "rainfall-needs-fresh-evidence"]
+    return dict(rule)
+
+
+def test_rainfall_accumulates_over_the_last_24_hours_of_scenario_time(
+    hydro: SimulatedHydro,
+) -> None:
+    assert hydro.rain_accumulation(STORM) == 0.0
+    hydro.add_override("rain", start=STORM, value=60)
+    hydro.add_override("rain", start=STORM + timedelta(hours=3), value=10)
+    hydro.add_override("rain", start=STORM + timedelta(hours=5), value=0)
+    expected = {
+        timedelta(0): 0.0,
+        timedelta(minutes=90): 90.0,
+        timedelta(hours=3): 180.0,
+        timedelta(hours=4): 190.0,
+        timedelta(hours=5): 200.0,
+        timedelta(hours=24): 200.0,
+        # The window slides: the first hour of the storm has left it.
+        timedelta(hours=25): 140.0,
+        timedelta(hours=29): 0.0,
+    }
+    assert {after: hydro.rain_accumulation(STORM + after) for after in expected} == expected
+    hydro.reset()
+    assert hydro.rain_accumulation(STORM + timedelta(hours=3)) == 0.0
+
+
+def test_a_storm_crosses_the_flood_pack_rainfall_rule_as_a_validated_signal(
+    hydro: SimulatedHydro, emitter: SimulatedSignalEmitter, transport: InMemoryTransport
+) -> None:
+    rule = rainfall_rule()
+    hydro.add_override("rain", start=STORM, value=60)
+    before = hydro.observe_rain_accumulation(STORM + timedelta(hours=1))
+    after = hydro.observe_rain_accumulation(STORM + timedelta(hours=2))
+    asyncio.run(emitter.emit(after, run_id=RUN))
+
+    assert rule["operator"] == "gt"
+    assert isinstance(before.value, float) and before.value <= rule["threshold"]
+    ((_, data, _),) = transport.messages
+    signal = json.loads(data)
+    parse_signal(signal)
+    assert signal["value"] == 120
+    assert signal["value"] > rule["threshold"]
+    # The rule matches these three exactly, and sums over the same window.
+    assert (signal["source"], signal["tag"], signal["unit"]) == (
+        rule["source"],
+        rule["tag"],
+        rule["unit"],
+    )
+    assert signal["payload"] == {
+        "assetCode": "S-R1",
+        "zone": "Z3",
+        "kind": "rain",
+        "windowSeconds": rule["windowSeconds"],
+        "label": "SIMULATION",
+    }
+    assert (signal["simulated"], signal["classification"]) == (True, "CONFIDENTIAL")
+    assert signal["observedAt"] == "2026-10-12T08:00:00Z"
+
+
+def test_the_accumulation_is_its_own_signal_and_a_replay_keeps_its_id(
+    hydro: SimulatedHydro, emitter: SimulatedSignalEmitter
+) -> None:
+    hydro.add_override("rain", start=STORM, value=60)
+    at = STORM + timedelta(hours=2)
+    first = emitter.build(hydro.observe_rain_accumulation(at), RUN)
+    assert first == emitter.build(hydro.observe_rain_accumulation(at), RUN)
+    assert first["id"] != emitter.build(hydro.observe("rain", at), RUN)["id"]
+
+
+def test_an_accumulation_needs_a_timezone(hydro: SimulatedHydro) -> None:
+    with pytest.raises(ValueError, match="timezone"):
+        hydro.rain_accumulation(datetime(2026, 10, 12, 6, 0))  # noqa: DTZ001

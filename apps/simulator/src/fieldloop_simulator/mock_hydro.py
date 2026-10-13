@@ -8,6 +8,7 @@ read-only; a Scenario changes a reading in process through ``add_override``.
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from itertools import pairwise
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -23,6 +24,8 @@ from fieldloop_simulator.timestamps import triangle_wave
 
 SOURCE_ID = "mock-hydro"
 CLASSIFICATION: Classification = "CONFIDENTIAL"
+ACCUMULATION_TAG = "rain.accumulation.24h"
+ACCUMULATION_WINDOW = timedelta(hours=24)
 
 
 @dataclass(frozen=True)
@@ -91,6 +94,45 @@ class SimulatedHydro:
                 "assetCode": profile.asset_code,
                 "zone": profile.zone_code,
                 "kind": kind,
+                "label": LABEL,
+            },
+        )
+
+    def rain_accumulation(self, at: datetime) -> float:
+        """Rainfall in mm over the 24 hours that end at ``at``.
+
+        The rain rate is flat between the starts of its overrides, so the sum is exact: each
+        stretch of the window adds its rate times its length.
+        """
+        window_start = at - ACCUMULATION_WINDOW
+        inside = [start for start in self._overrides.starts("rain") if window_start < start < at]
+        edges = [window_start, *inside, at]
+        hours = timedelta(hours=1)
+        total = sum(
+            self.value_at("rain", begin) * ((end - begin) / hours) for begin, end in pairwise(edges)
+        )
+        return round(total, 3)
+
+    def observe_rain_accumulation(self, at: datetime) -> Observation:
+        """The 24 hour rainfall a Scenario publishes as a Signal.
+
+        It is what the flood pack rule ``rainfall-needs-fresh-evidence`` matches exactly:
+        ``mock-hydro``, ``rain.accumulation.24h``, unit ``mm``.
+        """
+        profile = SENSOR_PROFILES["rain"]
+        return Observation(
+            source=SOURCE_ID,
+            classification=CLASSIFICATION,
+            tag=ACCUMULATION_TAG,
+            value=self.rain_accumulation(at),
+            observed_at=at,
+            unit="mm",
+            subject=profile.asset_code,
+            payload={
+                "assetCode": profile.asset_code,
+                "zone": profile.zone_code,
+                "kind": "rain",
+                "windowSeconds": int(ACCUMULATION_WINDOW.total_seconds()),
                 "label": LABEL,
             },
         )

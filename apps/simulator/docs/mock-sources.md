@@ -357,11 +357,6 @@ Both sources share these points:
 - **No Barrier reference.** A Signal names its Facility, not a Barrier of
   Bowtie D. The flood pack rule chooses the Barriers (`pump-power-lost`
   proposes `pumping-stations`).
-- **No rainfall accumulation.** The flood pack rule
-  `rainfall-needs-fresh-evidence` matches `mock-hydro`, tag
-  `rain.accumulation.24h`, above 100 mm. This source publishes `rain.rate` in
-  `mm/h` only, so that rule cannot fire yet. Who sums the rate over 24 hours,
-  this source or the rule's window in the worker, is undecided (FL-24, FL-76).
 
 ### Mock hydrology (FL-145)
 
@@ -394,6 +389,19 @@ Both sources share these points:
 - The Signal is `source: mock-hydro`, the tag above, the reading as `value`,
   its `unit`, `observedAt` at the Scenario time, and
   `payload: {assetCode, zone, kind, label}`.
+- **Rainfall over 24 hours.** `observe_rain_accumulation(at)` gives a second
+  Signal for the rain sensor: `tag: rain.accumulation.24h`, `unit: mm`, and the
+  rainfall of the 24 hours of Scenario time that end at `at`, with
+  `payload: {assetCode, zone, kind, windowSeconds, label}`. The rate is flat
+  between overrides, so the sum is exact. It is what the flood pack rule
+  `rainfall-needs-fresh-evidence` matches (`mock-hydro`,
+  `rain.accumulation.24h`, above 100 mm), and a test holds the two together.
+  A storm held at 60 mm/h crosses the rule after 1 hour 40 minutes. The HTTP
+  API does not serve the sum; it is a Signal only.
+
+  ```python
+  await emitter.emit(hydro.observe_rain_accumulation(scenario_time), run_id=run_id)
+  ```
 
 ### Mock pump and gate status (FL-146)
 
