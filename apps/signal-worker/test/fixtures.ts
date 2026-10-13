@@ -8,7 +8,7 @@ export const signal: Signal = {
   source: "mock-historian", tag: "DL-01.rectifier.output", value: 0, unit: "A",
   observedAt: "2026-10-13T00:00:00Z", simulated: true, classification: "CONFIDENTIAL",
 };
-// Canonical samples pinned to PR #47 head 4edbd3b88f94764c59462c0ddbf6de4a80f1c3a4.
+// Canonical samples pinned to PR #47 head 2a99d855ba2e9e3d7485b9ebc71f1b4cd966e606.
 // This shared fixture stays independent of signal-cases.json.
 const sourceSamples: unknown = JSON.parse(readFileSync(new URL("./fixtures/pr47-signals.json", import.meta.url), "utf8"));
 function sourceSignal(name: string): Signal {
