@@ -115,11 +115,11 @@ def test_other_sources_are_not_judged_by_the_demo_b_rules() -> None:
         }
     )
     assert storm_events.check(event) is None
-    assert storm_events.stated(event) is None
+    assert storm_events.describe(event) is None
 
 
-def test_a_valid_event_is_stated_once_with_what_each_caller_needs() -> None:
-    described = [storm_events.stated(event) for event in load_scenario(FIXTURE).events]
+def test_a_valid_event_is_described_once_with_what_each_caller_needs() -> None:
+    described = [storm_events.describe(event) for event in load_scenario(FIXTURE).events]
     assert all(described)
     # (the Asset, counted by the rainfall, shown by a read)
     assert [(item.asset_code, item.rain_rate, item.holds_state) for item in described if item] == [
@@ -132,9 +132,9 @@ def test_a_valid_event_is_stated_once_with_what_each_caller_needs() -> None:
     ]
 
 
-def test_a_refused_event_is_not_stated() -> None:
+def test_a_refused_event_is_not_described() -> None:
     refused = document()["events"][PUMP] | {"unit": "boolean"}
-    assert storm_events.stated(Event.model_validate(refused)) is None
+    assert storm_events.describe(Event.model_validate(refused)) is None
 
 
 def test_rainfall_is_what_the_rain_rates_add_up_to_over_24_hours() -> None:

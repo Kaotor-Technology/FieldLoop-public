@@ -106,7 +106,7 @@ class SimulationService:
             for event in snapshot.scenario.events[: snapshot.run.next_event_index]:
                 # Only an event that a read shows is worth its value: a derived rainfall
                 # re-reads every rain event before it, and a run may hold hundreds.
-                described = storm_events.stated(event)
+                described = storm_events.describe(event)
                 held = described is not None and described.holds_state
                 if event.source != "mock-historian" and not held:
                     continue

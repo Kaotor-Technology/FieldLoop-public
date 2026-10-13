@@ -89,12 +89,12 @@ def validate_scenario(document: object) -> Scenario:
         # After the rules every source shares, so those keep their own error for an event.
         if refused := storm_events.check(event):
             raise ScenarioError(prefix + refused[0], refused[1])
-        if stated := storm_events.reading_of(event):
-            if (stated, event.at_seconds) in readings:
+        if reading := storm_events.reading_of(event):
+            if (reading, event.at_seconds) in readings:
                 raise ScenarioError(
                     prefix + "/atSeconds", "a second event for this tag and Asset at the same time"
                 )
-            readings.add((stated, event.at_seconds))
+            readings.add((reading, event.at_seconds))
     bookmark_ids: set[str] = set()
     for index, bookmark in enumerate(scenario.bookmarks):
         if bookmark.id in bookmark_ids or bookmark.at_seconds > scenario.duration_seconds:

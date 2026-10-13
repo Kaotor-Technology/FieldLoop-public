@@ -251,7 +251,7 @@ def reading(snapshot: PlayerSnapshot, event: Event) -> SignalValue:
         for item in snapshot.scenario.events:
             if item.id == event.id:
                 break
-            if (described := storm_events.stated(item)) and described.rain_rate:
+            if (described := storm_events.describe(item)) and described.rain_rate:
                 rate = cast(float, reading(snapshot, item))
                 rates.append((starts_at + timedelta(seconds=item.at_seconds), float(rate)))
         return storm_events.rainfall(rates, starts_at + timedelta(seconds=event.at_seconds))
@@ -270,7 +270,7 @@ def observation(snapshot: PlayerSnapshot, event: Event) -> Observation:
     value = reading(snapshot, event)
     at = _starts_at(snapshot)
     payload = dict(event.payload or {})
-    described = storm_events.stated(event)
+    described = storm_events.describe(event)
     if described:
         # A Demo B source states its own payload, so an author cannot contradict the source.
         payload.update(described.payload)

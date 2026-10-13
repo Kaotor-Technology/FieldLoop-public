@@ -100,7 +100,7 @@ def _check_pumps(event: Event) -> tuple[str, str] | None:
 
 
 @dataclass(frozen=True)
-class Stated:
+class SourceEvent:
     """A valid event of a Demo B source as the source states it, checked once for every caller."""
 
     # The Asset the Signal is about. It is the Signal's identity, as in the source's own
@@ -113,17 +113,19 @@ class Stated:
     holds_state: bool
 
 
-def stated(event: Event) -> Stated | None:
+def describe(event: Event) -> SourceEvent | None:
     """What the source says of a valid event; ``None`` for another source or a refused event."""
     if event.source not in _SOURCES or check(event) is not None:
         return None
     if _is_rainfall(event):
-        return Stated(event.target.id, mock_hydro.rainfall_payload(), False, False)
+        return SourceEvent(event.target.id, mock_hydro.rainfall_payload(), False, False)
     if event.source == mock_hydro.SOURCE_ID:
         kind = _KIND_OF_TAG[event.tag]
-        return Stated(event.target.id, mock_hydro.signal_payload(kind), kind == "rain", True)
+        return SourceEvent(event.target.id, mock_hydro.signal_payload(kind), kind == "rain", True)
     status = cast(PowerStatus, event.value)
-    return Stated(event.target.id, mock_pumps.signal_payload(event.target.id, status), False, True)
+    return SourceEvent(
+        event.target.id, mock_pumps.signal_payload(event.target.id, status), False, True
+    )
 
 
 def rainfall(rates: Iterable[tuple[datetime, float]], at: datetime) -> float:
@@ -141,7 +143,7 @@ def replay(
 ) -> None:
     """Make both sources' reads those of a run: its applied events and its clock.
 
-    Each item is an event that holds state (``Stated.holds_state``) with the value and time it
+    Each item is an event that holds state (``SourceEvent.holds_state``) with the value and time it
     was published at. An event a source cannot hold is the caller's to leave out: a run pinned
     before these rules existed must not turn every read of the source into an error. Each
     source is replaced in one step, so a read during a replay sees the old run or the new one.
