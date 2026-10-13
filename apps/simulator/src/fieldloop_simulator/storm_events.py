@@ -18,6 +18,8 @@ from fieldloop_simulator.mock_pumps import PUMPS_AND_GATES, PowerStatus, Simulat
 _SOURCES = (mock_hydro.SOURCE_ID, mock_pumps.SOURCE_ID)
 _KIND_OF_TAG = {profile.quantity: kind for kind, profile in SENSOR_PROFILES.items()}
 _RAIN_SENSOR = SENSOR_PROFILES["rain"].asset_code
+# Far beyond any rain rate or level, and small enough that a 24 hour sum stays finite.
+_LARGEST_READING = 1e6
 
 
 def _is_number(value: object) -> bool:
@@ -77,6 +79,8 @@ def _check_hydro(event: Event) -> tuple[str, str] | None:
         reading, noise = float(cast(float, event.value)), event.noise_amplitude or 0
         if profile.minimum is not None and reading - noise < profile.minimum:
             return "/value", "the value, less its noise, is below what the sensor can read"
+        if abs(reading) + noise > _LARGEST_READING:
+            return "/value", "the value, with its noise, is beyond what the sensor can read"
         unit, sensor = profile.unit, profile.asset_code
     if event.unit != unit:
         return "/unit", "unit differs from the source API"
