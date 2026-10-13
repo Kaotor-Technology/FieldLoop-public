@@ -1,8 +1,7 @@
 # Demo A mock source systems (FL-71)
 
 Read-only stand-ins for the Demo A source systems of PRD SIM-2, served by the
-simulator under `/mock/` (architecture §4.2). The mock CMMS belongs to FL-142 and
-is documented with that change.
+simulator under `/mock/` (architecture §4.2).
 
 ## Rules every source follows
 
@@ -127,6 +126,41 @@ uv run --locked --all-packages python scripts/generate_mock_source.py historian 
 `scripts/test_mock_signals.py` exercises the real SDK against a loopback
 Pub/Sub emulator (delivery, replay, quarantine); CI runs it in the "Signal
 publishers on Pub/Sub emulator" job.
+
+## Mock CMMS (FL-142)
+
+`GET /mock/cmms/work-orders?pmDue=<boolean>&asOf=<RFC 3339>`
+
+Four authored work orders for DL-01. Both parameters are optional, and the list
+is small and bounded, so it is not paginated.
+
+| Work order | Kind | Status | Due (UTC) |
+| --- | --- | --- | --- |
+| `SYN-CMMS-001` | `preventive` | `open` | 2026-10-09 00:00 |
+| `SYN-CMMS-002` | `preventive` | `open` | 2026-10-10 00:00 |
+| `SYN-CMMS-003` | `corrective` | `open` | 2026-10-11 00:00 |
+| `SYN-CMMS-004` | `preventive` | `completed` | 2026-10-08 00:00 |
+
+- **PM due.** `pmDue=true` returns only the open preventive work orders with
+  `dueAt` at or before `asOf`. Corrective and completed work is left out.
+  Without it, all four are returned.
+- **`asOf` is Scenario time, not the wall clock.** It is timezone-aware RFC 3339
+  with the same rules as the historian's `from` and `to`; anything else is
+  `400`. When omitted it is `2026-10-10T00:00:00Z`, so a bare read is
+  reproducible (SIM-5), and at that time `pmDue=true` returns `SYN-CMMS-001`
+  and `SYN-CMMS-002`. The response reports `asOf` in UTC.
+- **Organisation.** Each work order carries the Organisation in
+  `FIELDLOOP_ORG_ID`, as the historian and the patrol app do.
+- **Classification** is `INTERNAL`, lower than the historian (`CONFIDENTIAL`)
+  and the patrol app and ILI report (`HIGHLY_RESTRICTED`). No requirement fixes
+  the value for work orders and the owner has not confirmed it.
+- **No Signal yet.** PRD §8.1 lists the CMMS as a Demo A Signal source, but
+  this source has no `observe()` and announces nothing. Whether a work order or
+  a PM due date becomes a Signal is an open owner question; the emitter and
+  `Observation` would carry it without change.
+- **No write.** The simulator holds `SimulatedCmms` in `app.state.cmms` and has
+  no operation that creates, closes or changes a work order. Work in a real
+  CMMS is prepared as an Action Request (ADR-0006), never sent from here.
 
 ## Mock patrol app (FL-143)
 
@@ -317,7 +351,7 @@ infrastructure operator, in this order, and record the results in `docs/contexts
 
 ## What the Scenario player must account for (FL-74)
 
-- **The sources are on the app.** `app.state.historian`, `app.state.patrol` and `app.state.ili` are
+- **The sources are on the app.** `app.state.historian`, `app.state.cmms`, `app.state.patrol` and `app.state.ili` are
   the objects that the routes read. `tests/test_scenario_contract.py` is the executable form of
   what a player may rely on: a read follows an override, a read never publishes, a replay keeps
   its Signal ID, and a Signal is not labelled below its source's classification.
