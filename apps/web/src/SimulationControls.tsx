@@ -26,7 +26,7 @@ export function SimulationControls({ user }: { user: CurrentUser }) {
     const { data, response } = await api.GET("/v1/scenarios", { signal });
     if (!response.ok || !data) throw new SessionError(response.status);
     return data;
-  }, retry: false, enabled: canControl });
+  }, retry: false, enabled: canControl, meta: { includeInSimulationBanner: false } });
   const command = useMutation({ mutationFn: async ({ name, body = {} }: { name: Command; body?: components["schemas"]["PlayerCommand"] }) => {
     if (!run) throw new Error("SimulationRun is unavailable");
     const { data, response } = await api.POST(commandPaths[name], {
