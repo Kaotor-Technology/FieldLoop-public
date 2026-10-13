@@ -47,10 +47,10 @@ Without a `rain.accumulation.24h` event a run never publishes the total.
 ```yaml
 - {id: rain-starts, atSeconds: 0, source: mock-hydro, target: {kind: asset, id: S-R1},
    tag: rain.rate, value: 72, unit: mm/h}
-- {id: pump-loses-power, atSeconds: 7201, source: mock-pumps, target: {kind: asset, id: P-3},
-   tag: pump.power, value: lost, unit: state}
 - {id: rainfall-after-2h, atSeconds: 7200, source: mock-hydro, target: {kind: asset, id: S-R1},
    tag: rain.accumulation.24h, value: null, unit: mm}
+- {id: pump-loses-power, atSeconds: 7201, source: mock-pumps, target: {kind: asset, id: P-3},
+   tag: pump.power, value: lost, unit: state}
 ```
 
 Controls use the server clock. Forward bookmark jumps emit intervening events. An earlier bookmark restores the baseline,
@@ -83,7 +83,7 @@ in a Scenario file. Selecting another seed changes only the optional canal-level
 | Scenario | Key bookmarks and observations | Duration / classification |
 | --- | --- | --- |
 | `cp-rectifier-failure` | `rectifier-failure` (T+10m, output 0 A); `encroachment` (T+30m, two existing synthetic patrol GPS findings); `cp-evidence-overdue` (T+24h+1s); `outage-over-24h` (T+24h+10m+1s); `complete` | 48 h / HIGHLY_RESTRICTED |
-| `bangkok-storm` | `start` (72 mm/h rain in Z3); `pump-power-lost` (P-3 loses power at T+20m); `heavy-rainfall` (T+2h, 144 mm accumulated and rain stops); `forecast-24h`; `complete` (+72h) | 72 h / CONFIDENTIAL |
+| `bangkok-storm` | `start` (72 mm/h rain in Z3); `heavy-rainfall` (T+2h, 144 mm accumulated and rain stops); `pump-power-lost` (P-3 loses power at T+2h+1s); `forecast-24h`; `complete` (+72h) | 72 h / CONFIDENTIAL |
 
 ### Baseline and source references
 
@@ -96,11 +96,12 @@ in a Scenario file. Selecting another seed changes only the optional canal-level
   when the Scenario announces the finding. Platform ingestion owns snapping GPS to Chainage.
 - Bowtie D's `dual-power-generators` Barrier on P-3 is already **Degraded**. Its latest test is
   `dual-power-generators-check-2` from `2026-09-01`, with a one-month interval (due `2026-10-01`).
-  `generatorTest` on P-3's payload references this seeded overdue condition; it is context,
-  not a new CMMS work order or a command that changes Health.
+  The Scenario uses the already seeded condition as storyline context; its P-3 Signal contains
+  only the power reading owned by `mock-pumps`, not a fabricated CMMS observation.
 - The storm's 72 mm/h over two hours gives 144 mm in the trailing 24-hour window. It falls to
-  zero at T+26h. The authored accumulation events use the installed `rain.accumulation.24h`
-  tag and pass the flood pack's `>100 mm` condition. Actual proposals are downstream work.
+  zero at T+26h. The authored accumulation events use `value: null`; the player derives values
+  from prior rain-rate events, so the T+2h Signal reports 144 mm and passes the flood pack's
+  `>100 mm` condition before P-3 loses power. Actual proposals are downstream work.
 
 ### Test before merge or deployment
 
@@ -112,8 +113,9 @@ bash scripts/test-simulation.sh
 ```
 
 The first command loads the real YAML files through the validator and validating Signal
-publisher. It checks the Evidence/source references, P-3 just before and at T+20m, rainfall
-integration, seed/noise, 1x versus 60x, Step versus Play, Reset and all SIMULATION/sandbox flags.
+publisher. It checks the Evidence/source references, rainfall below and above the 100 mm
+threshold at T+2h, P-3 power loss at T+2h+1s, rainfall integration, seed/noise, 1x versus 60x,
+Step versus Play, Reset and all SIMULATION/sandbox flags.
 The second uses disposable PostgreSQL to check cold starts and durable reset/replay of both
 files. These run in the existing Python and database CI jobs; neither needs cloud credentials.
 
@@ -123,8 +125,7 @@ run. Step or pause and jump to the bookmarks above, inspect emitted Signals, the
 repeat with the same seed. The run IDs must change while observation values/times stay equal.
 The Docker image copies and validates this catalog at startup.
 
-Scope of this verification: Scenario loading, Signal emission and player persistence. The
-current player hydrates the historian HTTP read model; Demo B hydro/pump HTTP read models are
-not yet hydrated from the player's committed event index. Read emitted Signals to verify the
-storm/outage. Health/Risk projections, map overlays and sandbox notification delivery require
+Scope of this verification: Scenario loading, Signal emission, player persistence and hydration
+of historian, hydro and pump HTTP read models from the committed event index, including cold
+start and reset. Health/Risk projections, map overlays and sandbox notification delivery require
 their downstream integrations and a separate end-to-end check.
