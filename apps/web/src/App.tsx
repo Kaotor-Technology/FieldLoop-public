@@ -1,5 +1,5 @@
 import { SimulationBanner } from "./SimulationBanner";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect } from "react";
 import { Outlet } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { SessionGate } from "./SessionGate";
@@ -11,11 +11,13 @@ const SimulationControls = lazy(() => import("./SimulationControls").then(({ Sim
 export function App() {
   const { t, i18n } = useTranslation();
   const { language, nightShift, toggleLanguage, toggleNightShift } = usePreferences();
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.dataset["theme"] = nightShift ? "dark" : "light";
+  }, [language, nightShift]);
+  useEffect(() => {
     void i18n.changeLanguage(language);
-  }, [language, nightShift, i18n]);
+  }, [language, i18n]);
 
   return <SessionGate>{(user) => <div className="app-shell">
     <a className="skip-link" href="#main-content">{t("skip")}</a>
