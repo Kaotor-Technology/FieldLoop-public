@@ -82,6 +82,72 @@ describe("Independence Groups and paths", () => {
   });
 });
 
+describe("Threat frequency accumulation", () => {
+  it("retains small positive contributions at a calibrated band boundary regardless of Threat IDs", () => {
+    // SYNTHETIC numerical edge case, not Organisation calibration.
+    const value = basicInput();
+    value.barriers = [];
+    value.threats = [
+      { id: "a", frequencyPerYear: 1e16 },
+      { id: "b", frequencyPerYear: 1 },
+      { id: "c", frequencyPerYear: 1 },
+    ];
+    value.consequences = [{ id: "consequence", conditionalProbability: 1, severity: { people: 5 } }];
+    value.matrix.frequencyThresholds = [1, 10, 100, 10000000000000002];
+    value.paths = [
+      ...value.threats.map(threat => ({ id: `path-${threat.id}`, side: "preventive" as const, targetId: threat.id, barrierIds: [] })),
+      { id: "mitigative", side: "mitigative", targetId: "consequence", barrierIds: [] },
+    ];
+    const before = structuredClone(value);
+    const result = calculateRisk(value);
+    expect(result.topEventFrequencyPerYear).toBe(10000000000000002);
+    expect(result.consequences[0]?.frequencyPerYear).toBe(10000000000000002);
+    expect(result.cell).toEqual({ frequencyBand: 5, severityBand: 5, rank: 25, zone: "red" });
+    expect(value).toEqual(before);
+    value.threats = value.threats.map(threat => ({ ...threat, id: threat.id === "a" ? "c" : threat.id === "c" ? "a" : threat.id }));
+    expect(calculateRisk(value).topEventFrequencyPerYear).toBe(result.topEventFrequencyPerYear);
+    expect(calculateRisk(value).cell).toEqual(result.cell);
+  });
+
+  it.each([
+    [[0.009999999999999998, 8e-19, 8e-19, 8e-19], 0.01, 5],
+    [[0.009999999999999998, 8e-19], 0.009999999999999998, 4],
+    [[1e16, ...Array<number>(1000).fill(1)], 10000000000001000, 5],
+    [[1, 2 ** -53], 1, 5],
+    [[1 + 2 ** -52, 2 ** -53], 1 + 2 ** -51, 5],
+    [[Number.MIN_VALUE, Number.MIN_VALUE], 2 * Number.MIN_VALUE, 1],
+    [[2 ** -1022, Number.MIN_VALUE], 2 ** -1022 + Number.MIN_VALUE, 1],
+    [[Number.MAX_VALUE, 0], Number.MAX_VALUE, 5],
+    [[0, 0], 0, 1],
+  ] as const)("rounds the contribution sum %j once without epsilon promotion", (frequencies, expected, band) => {
+    const value = basicInput();
+    value.barriers = [];
+    value.threats = frequencies.map((frequencyPerYear, index) => ({ id: `threat-${index}`, frequencyPerYear }));
+    value.paths = [
+      ...value.threats.map(threat => ({ id: `path-${threat.id}`, side: "preventive" as const, targetId: threat.id, barrierIds: [] })),
+      { id: "mitigative", side: "mitigative", targetId: "consequence", barrierIds: [] },
+    ];
+    const result = calculateRisk(value);
+    expect(result.topEventFrequencyPerYear).toBe(expected);
+    expect(result.consequences[0]?.frequencyPerYear).toBe(expected);
+    expect(result.cell.frequencyBand).toBe(band);
+    value.threats = value.threats.map((threat, index) => ({ ...threat, id: `threat-${frequencies.length - index - 1}` }));
+    expect(calculateRisk(value).topEventFrequencyPerYear).toBe(expected);
+    expect(calculateRisk(value).cell).toEqual(result.cell);
+  });
+
+  it("rejects an exact sum exceeding MAX_VALUE even when ordinary addition rounds it down", () => {
+    const value = basicInput();
+    value.barriers = [];
+    value.threats = [{ id: "a", frequencyPerYear: Number.MAX_VALUE }, { id: "b", frequencyPerYear: Number.MIN_VALUE }];
+    value.paths = [
+      ...value.threats.map(threat => ({ id: `path-${threat.id}`, side: "preventive" as const, targetId: threat.id, barrierIds: [] })),
+      { id: "mitigative", side: "mitigative", targetId: "consequence", barrierIds: [] },
+    ];
+    expect(() => calculateRisk(value)).toThrow(/Top Event frequency overflow/);
+  });
+});
+
 describe("Risk Matrix", () => {
   it.each<[number, RiskBand]>([
     [0, 1], [0.999e-5, 1], [1e-5, 2], [0.999e-4, 2], [1e-4, 3],

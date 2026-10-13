@@ -51,6 +51,34 @@ function multiply(left: number, right: number, label: string): number {
   return value;
 }
 
+/** Sum nonnegative binary64 contributions exactly in units of 2^-1074, then
+ * round once to nearest, ties to even. No epsilon changes matrix boundaries.
+ * Products retain binary64 semantics; an exact sum beyond MAX_VALUE fails closed.
+ */
+function sumFrequencies(values: readonly number[]): number {
+  const bits = new DataView(new ArrayBuffer(8));
+  const fractionMask = (1n << 52n) - 1n;
+  let units = 0n;
+  for (const value of values) {
+    bits.setFloat64(0, value);
+    const encoded = bits.getBigUint64(0);
+    const exponent = Number((encoded >> 52n) & 0x7ffn);
+    const fraction = encoded & fractionMask;
+    units += exponent === 0 ? fraction : ((1n << 52n) | fraction) << BigInt(exponent - 1);
+  }
+  const maximumUnits = ((1n << 53n) - 1n) << 2045n;
+  if (units > maximumUnits) throw new RiskInputError("Top Event frequency overflow");
+  if (units === 0n) return 0;
+  const shift = Math.max(0, units.toString(2).length - 53);
+  let significand = units >> BigInt(shift);
+  if (shift > 0) {
+    const remainder = units - (significand << BigInt(shift));
+    const halfway = 1n << BigInt(shift - 1);
+    if (remainder > halfway || (remainder === halfway && (significand & 1n) !== 0n)) significand++;
+  }
+  return Number(significand) * 2 ** (shift - 1074);
+}
+
 function pathResult(path: RiskPath, barriers: Map<string, RiskBarrier>): RiskPathResult {
   const members = path.barrierIds.map(id => {
     const barrier = barriers.get(id);
@@ -141,15 +169,13 @@ export function calculateRisk(input: RiskInput): RiskSnapshot {
     if (results.has(path.targetId)) throw new RiskInputError(`Multiple ${path.side} paths for ${path.targetId}; correlation is unspecified`);
     results.set(path.targetId, pathResult(path, barriers));
   }
-  let topEventFrequencyPerYear = 0;
   const threats = [...input.threats].sort(byId).map(threat => {
     const path = preventive.get(threat.id);
     if (!path) throw new RiskInputError(`Threat ${threat.id} has no explicit preventive path`);
     const frequencyPerYear = multiply(threat.frequencyPerYear, path.pfd, `Threat ${threat.id}`);
-    topEventFrequencyPerYear += frequencyPerYear;
-    if (!Number.isFinite(topEventFrequencyPerYear)) throw new RiskInputError("Top Event frequency overflow");
     return { threatId: threat.id, frequencyPerYear, path };
   });
+  const topEventFrequencyPerYear = sumFrequencies(threats.map(threat => threat.frequencyPerYear));
   const consequences = [...input.consequences].sort(byId).map(consequence => {
     const path = mitigative.get(consequence.id);
     if (!path) throw new RiskInputError(`Consequence ${consequence.id} has no explicit mitigative path`);

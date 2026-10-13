@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isRiskSnapshot, type RiskInput } from "@fieldloop/contracts";
+import { isRiskSnapshot, type RiskInput, type RiskSnapshot } from "@fieldloop/contracts";
 import { calculateRisk } from "./index.js";
 import { seedInput, testMatrix } from "./test-fixtures.js";
 
@@ -11,9 +11,35 @@ function expectBinary64Equal(actual: number, expected: number): void {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(Math.abs(expected) * Number.EPSILON * 8);
 }
 
+/** Assert every non-frequency field against the authored synthetic input and
+ * explicit hand-selected common-cause credits, not a generated snapshot.
+ */
+function expectAuthoredMetadata(input: RiskInput, result: RiskSnapshot, uncredited: readonly string[]): void {
+  expect(result.bowtieId).toBe(input.bowtieId);
+  expect(result.threats.map(threat => threat.threatId)).toEqual(input.threats.map(threat => threat.id).sort());
+  expect(result.consequences.map(consequence => consequence.consequenceId)).toEqual(input.consequences.map(consequence => consequence.id).sort());
+  for (const threat of result.threats) expect(threat.path.targetId).toBe(threat.threatId);
+  for (const consequence of result.consequences) expect(consequence.path.targetId).toBe(consequence.consequenceId);
+  for (const { path } of [...result.threats, ...result.consequences]) {
+    const authored = input.paths.find(value => value.id === path.pathId);
+    expect(authored).toBeDefined();
+    expect(path.targetId).toBe(authored?.targetId);
+    expect(path.barriers.map(barrier => barrier.barrierId)).toEqual([...(authored?.barrierIds ?? [])].sort());
+    for (const credit of path.barriers) {
+      const barrier = input.barriers.find(value => value.id === credit.barrierId);
+      expect(barrier).toBeDefined();
+      expect(credit.health).toBe(barrier?.health);
+      expect(credit.effectivePfd).toBe(credit.barrierId === "dual-power-generators" ? 0.1 : barrier?.pfdBand);
+      expect(credit.credited).toBe(!uncredited.includes(credit.barrierId));
+    }
+  }
+}
+
 describe("PRD §6.1 synthetic Bowtie A golden", () => {
   it("reproduces all hand-calculated paths, frequencies and severity bands", () => {
-    const result = calculateRisk(seedInput(BOWTIE_A));
+    const input = seedInput(BOWTIE_A);
+    const result = calculateRisk(input);
+    expectAuthoredMetadata(input, result, ["remote-automatic-valve-closure"]);
     // 0.001 × (0.01 × 0.1 × 0.1) + 3 × 0.001 × (0.01 × 0.01 × 0.1).
     expect(result.topEventFrequencyPerYear).toBeCloseTo(1.3e-7, 18);
     for (const threat of result.threats) {
@@ -29,6 +55,10 @@ describe("PRD §6.1 synthetic Bowtie A golden", () => {
     expect(result.consequences.map(consequence => [consequence.consequenceId, consequence.severityBand, consequence.cell.frequencyBand])).toEqual([
       ["environmental-damage-at-river-crossing", 3, 1], ["jet-fire-near-high-consequence-area", 5, 1], ["supply-interruption", 4, 1],
     ]);
+    for (const consequence of result.consequences) {
+      expect(consequence.cell).toEqual({ frequencyBand: 1, severityBand: consequence.severityBand, rank: consequence.severityBand, zone: consequence.severityBand === 5 ? "amber" : "green" });
+    }
+    expect(result.cell).toEqual({ frequencyBand: 1, severityBand: 5, rank: 5, zone: "amber" });
     expect(result.worstConsequenceId).toBe("jet-fire-near-high-consequence-area");
     expect(isRiskSnapshot(result)).toBe(true);
   });
@@ -96,14 +126,30 @@ describe("PRD §6.1 B/C illustrative simulation golden", () => {
     ["B", 0.00201, 1e-5, 2.01e-9, "safety-system-impairment"],
     ["C", 0.010201, 1e-4, 1.0201e-7, "restricted-data-disclosure"],
   ] as const)("reproduces Bowtie %s using explicitly simulated calibration", (example, topEventFrequency, mitigativePfd, consequenceFrequency, worstId) => {
-    const result = calculateRisk(illustrativeInput(example));
+    const input = illustrativeInput(example);
+    const result = calculateRisk(input);
+    expectAuthoredMetadata(input, result, []);
+    const preventive = new Map(example === "B" ? [
+      ["phishing-pivot", 1e-5], ["vendor-access", 1e-3], ["infected-laptop", 1e-3],
+    ] : [
+      ["indirect-injection", 1e-6], ["restricted-data-paste", 1e-4], ["hallucinated-clause", 1e-4], ["agent-record-write", 0.01],
+    ]);
+    for (const threat of result.threats) {
+      const expected = preventive.get(threat.threatId);
+      if (expected === undefined) throw new Error(`Missing golden ${threat.threatId}`);
+      expectBinary64Equal(threat.path.pfd, expected);
+      expectBinary64Equal(threat.frequencyPerYear, expected);
+    }
     // B: 0.00001 + 0.001 + 0.001; C: 0.000001 + 0.0001 + 0.0001 + 0.01.
     expectBinary64Equal(result.topEventFrequencyPerYear, topEventFrequency);
     for (const consequence of result.consequences) {
       expectBinary64Equal(consequence.path.pfd, mitigativePfd);
       expectBinary64Equal(consequence.frequencyPerYear, consequenceFrequency);
-      expect(consequence.cell.frequencyBand).toBe(1);
+      const severityBand = consequence.consequenceId === worstId ? 5 : 4;
+      expect(consequence.severityBand).toBe(severityBand);
+      expect(consequence.cell).toEqual({ frequencyBand: 1, severityBand, rank: severityBand, zone: severityBand === 5 ? "amber" : "green" });
     }
+    expect(result.cell).toEqual({ frequencyBand: 1, severityBand: 5, rank: 5, zone: "amber" });
     expect(result.worstConsequenceId).toBe(worstId);
     expect(isRiskSnapshot(result)).toBe(true);
   });
@@ -111,7 +157,9 @@ describe("PRD §6.1 B/C illustrative simulation golden", () => {
 
 describe("PRD §6.1 synthetic Bowtie D golden", () => {
   it("reproduces rain, river, tide and degraded generator paths with shared response-team credit", () => {
-    const result = calculateRisk(seedInput(BOWTIE_D));
+    const input = seedInput(BOWTIE_D);
+    const result = calculateRisk(input);
+    expectAuthoredMetadata(input, result, ["traffic-diversion"]);
     // 2×0.00001 + 0.2×0.00001 + 0.5×0.001 + 0.1×(0.1×0.1) = 0.001522.
     expect(result.topEventFrequencyPerYear).toBeCloseTo(0.001522, 15);
     const preventive = new Map([
@@ -139,7 +187,10 @@ describe("PRD §6.1 synthetic Bowtie D golden", () => {
       expect(consequence.frequencyPerYear).toBeCloseTo(golden.frequency, 20);
       expect(consequence.cell.frequencyBand).toBe(1);
       expect(consequence.severityBand).toBe(golden.severity);
+      expect(consequence.cell).toEqual({ frequencyBand: 1, severityBand: golden.severity, rank: golden.severity, zone: golden.severity === 5 ? "amber" : "green" });
     }
+    expect(result.worstConsequenceId).toBe("electrocution-drowning");
+    expect(result.cell).toEqual({ frequencyBand: 1, severityBand: 5, rank: 5, zone: "amber" });
     expect(isRiskSnapshot(result)).toBe(true);
   });
 });
