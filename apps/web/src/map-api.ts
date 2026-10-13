@@ -1,13 +1,17 @@
 import type { MapFeatureCollection, MapLayerName } from "@fieldloop/map";
+import createClient from "openapi-fetch";
+import type { paths } from "@fieldloop/contracts";
+
+const client = createClient<paths>({ baseUrl: "/api", credentials: "same-origin" });
 
 interface MapConfig {
   mapsApiKey: string;
 }
 
 export async function getMapConfig(signal: AbortSignal): Promise<MapConfig> {
-  const response = await fetch("/api/v1/map/config", { credentials: "same-origin", cache: "no-store", signal });
-  if (!response.ok) throw new Error("Map configuration is unavailable");
-  return await response.json() as MapConfig;
+  const { data, error } = await client.GET("/v1/map/config", { signal });
+  if (error || !data) throw new Error("Map configuration is unavailable");
+  return data;
 }
 
 export async function getMapLayer(input: {
@@ -16,11 +20,10 @@ export async function getMapLayer(input: {
   zoom: number;
   signal: AbortSignal;
 }): Promise<MapFeatureCollection> {
-  const query = new URLSearchParams({ bbox: input.bbox.join(","), zoom: String(input.zoom) });
-  const response = await fetch(`/api/v1/map/layers/${input.layer}?${query}`, {
-    credentials: "same-origin", cache: "no-store", signal: input.signal,
-    headers: { Accept: "application/geo+json" },
+  const { data, error } = await client.GET("/v1/map/layers/{layer}", {
+    params: { path: { layer: input.layer }, query: { bbox: [...input.bbox], zoom: input.zoom } },
+    signal: input.signal,
   });
-  if (!response.ok) throw new Error("Map layers are unavailable for this Organisation or clearance");
-  return await response.json() as MapFeatureCollection;
+  if (error || !data) throw new Error("Map layers are unavailable for this Organisation or clearance");
+  return data;
 }

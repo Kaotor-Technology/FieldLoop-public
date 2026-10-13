@@ -27,7 +27,7 @@ test("SSO returns to the deep link and only an opaque HttpOnly cookie reaches br
 
 test("account switching sends CSRF, deletes the old session and obtains server-derived roles", async ({ page, request }) => {
   await signIn(page, "viewer");
-  await page.getByText("Change demo account", { exact: true }).click();
+  await page.locator(".account-switcher > summary").click();
   const logoutRequest = page.waitForRequest((req) => req.url().endsWith("/api/auth/logout"));
   await page.getByRole("button", { name: "Sign out and change account" }).click();
   expect((await logoutRequest).headers()["x-csrf-token"]).toBeTruthy();
@@ -35,6 +35,7 @@ test("account switching sends CSRF, deletes the old session and obtains server-d
   expect(await (await request.get("/test/status")).json()).toEqual({ sessions: 0 });
   await page.getByRole("link", { name: "Confirm logout" }).click();
   await page.getByRole("link", { name: "Sign in as manager" }).click();
+  await page.locator(".account-switcher > summary").click();
   await expect(page.getByText("fieldloop.manager", { exact: true })).toBeVisible();
   await expect(page.getByText("synthetic-viewer", { exact: true })).toHaveCount(0);
 });
@@ -81,13 +82,21 @@ for (const width of [390, 1280]) for (const colorScheme of ["light", "dark"] as 
     await page.setViewportSize({ width, height: 900 });
     await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
     await signIn(page);
-    await page.getByText("Change demo account", { exact: true }).click();
+    await page.locator(".account-switcher > summary").click();
     expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
     await page.getByRole("button", { name: "ภาษาไทย" }).click();
     await expect(page.locator("html")).toHaveAttribute("lang", "th");
     expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
     await page.setViewportSize({ width: 320, height: 900 });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const overflow = await page.evaluate(() => ({
+      width: document.documentElement.scrollWidth,
+      viewport: innerWidth,
+      elements: [...document.querySelectorAll("body *")]
+        .map((element) => ({ name: element.tagName.toLowerCase(), className: typeof element.className === "string" ? element.className : "", right: Math.ceil(element.getBoundingClientRect().right) }))
+        .filter((element) => element.right > innerWidth)
+        .slice(0, 8),
+    }));
+    expect(overflow.width, JSON.stringify(overflow)).toBeLessThanOrEqual(overflow.viewport);
     if (width === 1280 && colorScheme === "light") {
       await page.setViewportSize({ width, height: 900 });
       await page.getByRole("button", { name: "English" }).click();
@@ -103,6 +112,8 @@ test("all account and preference controls work by keyboard with visible focus", 
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "FieldLoop" })).toBeFocused();
   await page.keyboard.press("Tab");
+  await expect(page.locator(".account-switcher > summary")).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "ภาษาไทย" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.locator("html")).toHaveAttribute("lang", "th");
@@ -113,14 +124,20 @@ test("all account and preference controls work by keyboard with visible focus", 
   await page.keyboard.press("Enter");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await page.keyboard.press("Shift+Tab");
+  await expect(page.locator(".account-switcher > summary")).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Enter");
   await expect(page.locator("#main-content")).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(page.locator("summary")).toBeFocused();
-  expect(await page.locator("summary").evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
-  await page.keyboard.press("Enter");
-  await expect(page.locator("details")).toHaveAttribute("open", "");
+  await expect(page.getByRole("link", { name: "Map" })).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("button", { name: "Sign out and change account" })).toBeFocused();
+  await expect(page.getByRole("button", { name: "Layers" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".layer-control > summary")).toBeFocused();
+  expect(await page.locator(".layer-control > summary").evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".layer-control")).toHaveAttribute("open", "");
+  await page.keyboard.press("Tab");
+  await expect(page.locator(".layer-control input[type=checkbox]").first()).toBeFocused();
 });

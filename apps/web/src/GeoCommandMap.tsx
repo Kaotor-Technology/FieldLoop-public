@@ -3,16 +3,23 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
-import { GeoJsonLayer, TextLayer } from "@deck.gl/layers";
+import { GeoJsonLayer, IconLayer, ScatterplotLayer } from "@deck.gl/layers";
 import { GoogleMapsOverlay } from "@deck.gl/google-maps";
 import type { MapFeature, MapFeatureCollection, MapLayerName, MapViewport } from "@fieldloop/map";
 import { getMapConfig, getMapLayer } from "./map-api";
+import { countVisibleBarrierAlerts, searchVisibleFeatures, selectVisibleFeatures } from "./map-view";
 
 const LAYERS: MapLayerName[] = ["assets", "barriers", "consequences"];
 const DEFAULT_VIEW: MapViewport = { latitude: 13.775, longitude: 100.58, zoom: 13, heading: 0, tilt: 0 };
 const PIPELINE_VIEW: MapViewport = { latitude: 18.79258, longitude: 99.54886, zoom: 8, heading: 0, tilt: 0 };
 const FLOOD_VIEW: MapViewport = { latitude: 13.775, longitude: 100.58, zoom: 13, heading: 0, tilt: 0 };
 const SYMBOLS: Record<string, string> = { degraded: "▲", failed: "✖", unverified: "⬚" };
+const BARRIER_ICON_ATLAS = `data:image/svg+xml;charset=utf-8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="32" viewBox="0 0 96 32"><defs><mask id="hatch"><rect x="68" y="3" width="24" height="26" fill="white"/><path d="m67 11 9-9m-4 19L89 4m-8 25 13-13" stroke="black" stroke-width="4"/></mask></defs><path d="M16 2 30 29H2z" fill="white"/><path d="m39 7 18 18m0-18L39 25" stroke="white" stroke-width="4"/><rect x="68" y="3" width="24" height="26" fill="white" mask="url(#hatch)"/><path d="M68 3h24v26H68z" fill="none" stroke="white" stroke-width="2"/></svg>')}`;
+const BARRIER_ICON_MAPPING = {
+  degraded: { x: 0, y: 0, width: 32, height: 32, mask: true },
+  failed: { x: 32, y: 0, width: 32, height: 32, mask: true },
+  unverified: { x: 64, y: 0, width: 32, height: 32, mask: true },
+};
 const RISK_TOKEN: Record<string, string> = {
   intolerable: "--color-risk-intolerable",
   alarp: "--color-risk-alarp",
@@ -32,6 +39,8 @@ export function GeoCommandMap() {
   const mapElement = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
   const overlay = useRef<GoogleMapsOverlay | null>(null);
+  const baseLayers = useRef<NonNullable<ConstructorParameters<typeof GoogleMapsOverlay>[0]["layers"]>>([]);
+  const pulseOpacity = useRef(0.2);
   const [viewport, setViewport] = useState<MapViewport>(() => readViewportFromSearch(search));
   const initialViewport = useRef(viewport);
   const [bounds, setBounds] = useState<ViewportBounds | null>(null);
@@ -137,20 +146,18 @@ export function GeoCommandMap() {
     });
     return byLayer;
   }, [visibleLayers]);
-  const features = useMemo(() => [...collections.values()].flatMap((collection) => collection.features)
-    .filter((feature) => domain === "all" || feature.properties.domainPack === domain)
-    .filter((feature) => query.trim().length === 0 || `${feature.properties.name ?? ""} ${feature.properties.code ?? ""}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())),
-  [collections, domain, query]);
-  const isSimulated = features.some((feature) => feature.properties.simulated === true);
+  const visibleFeatures = useMemo(() => selectVisibleFeatures(LAYERS.map((layer, index) => ({
+    layer, features: visibleLayers[index]?.data?.features ?? [],
+  })), activeLayers, domain),
+  [activeLayers, domain, visibleLayers]);
+  const features = useMemo(() => searchVisibleFeatures(visibleFeatures, query),
+  [visibleFeatures, query]);
+  const isSimulated = visibleFeatures.some((feature) => feature.properties.simulated === true);
   const layerError = visibleLayers.some((result, index) => {
     const layer = LAYERS[index];
     return layer !== undefined && activeLayers.includes(layer) && result.isError;
   });
-  const featureCounts = useMemo(() => ({
-    degraded: features.filter((feature) => feature.properties.health === "degraded").length,
-    failed: features.filter((feature) => feature.properties.health === "failed").length,
-    unverified: features.filter((feature) => feature.properties.health === "unverified").length,
-  }), [features]);
+  const featureCounts = useMemo(() => countVisibleBarrierAlerts(visibleFeatures), [visibleFeatures]);
 
   useEffect(() => {
     if (!overlay.current) return;
@@ -168,8 +175,8 @@ export function GeoCommandMap() {
         filled: true,
         lineWidthMinPixels: 2,
         pointRadiusMinPixels: 5,
-        getLineColor: (feature) => riskColor(feature.properties.riskBand, "--color-primary", 220),
-        getFillColor: (feature) => riskColor(feature.properties.riskBand, "--color-primary", 100),
+        getLineColor: (feature) => riskColor(feature.properties.riskBand, "--color-neutral-600", 220),
+        getFillColor: (feature) => riskColor(feature.properties.riskBand, "--color-neutral-300", 100),
         getPointRadius: 6,
         onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
       }));
@@ -197,27 +204,63 @@ export function GeoCommandMap() {
         pickable: true,
         pointType: "circle",
         pointRadiusMinPixels: 22,
-        getPointRadius: 16,
-        getFillColor: (feature) => healthColor(feature.properties.health),
-        getLineColor: [255, 255, 255, 255],
-        lineWidthMinPixels: 2,
+        getPointRadius: 22,
+        getFillColor: [0, 0, 0, 0],
+        stroked: false,
         onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
       }));
-      layers.push(new TextLayer<MapFeature>({
-        id: "barrier-health-symbols",
+      layers.push(new IconLayer<MapFeature>({
+        id: "barrier-health-markers",
         data: mappedBarriers,
+        iconAtlas: BARRIER_ICON_ATLAS,
+        iconMapping: BARRIER_ICON_MAPPING,
         pickable: true,
         getPosition: (feature) => pointPosition(feature),
-        getText: (feature) => SYMBOLS[String(feature.properties.health)] ?? "",
-        getSize: 18,
+        getIcon: (feature) => feature.properties.health === "failed" ? "failed" : feature.properties.health === "degraded" ? "degraded" : "unverified",
+        getSize: 24,
         sizeUnits: "pixels",
-        getColor: tokenColor("--color-neutral-900", 255),
-        getTextAnchor: "middle",
-        getAlignmentBaseline: "center",
+        getColor: (feature) => healthColor(feature.properties.health),
         onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
       }));
     }
+    baseLayers.current = layers;
     overlay.current.setProps({ layers });
+  }, [activeLayers, collections, domain]);
+
+  useEffect(() => {
+    const mapBarriers = collections.get("barriers");
+    const failed = activeLayers.includes("barriers") && mapBarriers
+      ? filterCollection(mapBarriers, domain).features.filter((feature) => feature.properties.health === "failed")
+      : [];
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const renderPulse = () => {
+      if (!overlay.current) return;
+      const pulseLayer = failed.length === 0 ? [] : [new ScatterplotLayer<MapFeature>({
+        id: "failed-barrier-pulse",
+        data: failed,
+        pickable: false,
+        stroked: true,
+        filled: false,
+        lineWidthMinPixels: 2,
+        radiusUnits: "pixels",
+        getPosition: (feature) => pointPosition(feature),
+        getRadius: 19,
+        getLineColor: (feature) => {
+          const [red, green, blue] = healthColor(feature.properties.health);
+          return [red, green, blue, reducedMotion ? 150 : Math.round(pulseOpacity.current * 255)];
+        },
+      })];
+      overlay.current.setProps({ layers: [...baseLayers.current, ...pulseLayer] });
+    };
+
+    renderPulse();
+    if (failed.length === 0 || reducedMotion) return;
+    const timer = window.setInterval(() => {
+      const phase = (Date.now() % 1_600) / 1_600;
+      pulseOpacity.current = 0.15 + 0.65 * (0.5 - 0.5 * Math.cos(phase * Math.PI * 2));
+      renderPulse();
+    }, 160);
+    return () => window.clearInterval(timer);
   }, [activeLayers, collections, domain]);
 
   const moveToStory = (story: "pipeline-integrity" | "flood-water") => {
@@ -242,7 +285,7 @@ export function GeoCommandMap() {
       <a className="nav-rail-item nav-rail-item-active" href="/map" aria-current="page" aria-label={t("map")} title={t("map")}>
         <span aria-hidden="true">⌖</span><span>{t("map")}</span>
       </a>
-      <button className="nav-rail-item" type="button" aria-label={t("layers")} title={t("layers")} onClick={() => document.getElementById("map-layer-controls")?.focus()}>
+      <button className="nav-rail-item" type="button" aria-label={t("layers")} title={t("layers")} onClick={() => document.querySelector<HTMLElement>("#map-layer-controls > summary")?.focus()}>
         <span aria-hidden="true">▤</span><span>{t("layers")}</span>
       </button>
     </nav>
@@ -273,7 +316,7 @@ export function GeoCommandMap() {
 
       {isSimulated && <div className="simulation-banner" role="status">{t("simulationLabel")}</div>}
       <div className="map-canvas-wrap">
-        <div ref={mapElement} className="map-canvas" aria-label={t("interactiveMap")} />
+        <div ref={mapElement} className="map-canvas" role="region" aria-label={t("interactiveMap")} />
         {(!mapConfig.data || mapLoadFailed) && <div className="map-status" role={mapConfig.isError || mapLoadFailed ? "alert" : "status"}>
           <p>{mapLoadFailed ? t("mapLoadError") : mapConfig.isError ? t("mapConfigError") : t("mapLoading")}</p>
           {mapConfig.isError && <button type="button" onClick={() => { void mapConfig.refetch(); }}>{t("retry")}</button>}
@@ -310,7 +353,7 @@ export function GeoCommandMap() {
       <div className="context-tabs">
         <span className="context-tab-active">{t("overview")}</span>
       </div>
-      <div className="context-body">
+      <div className="context-body" tabIndex={0}>
         {selectedFeature ? <FeatureOverview feature={selectedFeature} /> : <p className="context-hint">{t("selectMapFeature")}</p>}
         <section className="feature-list-section" aria-labelledby="visible-features-title">
           <div className="section-heading"><h3 id="visible-features-title">{t("visibleFeatures")}</h3><span className="mono">{features.length}</span></div>
@@ -374,10 +417,14 @@ function selectMapFeature(value: unknown, setSelectedFeature: (feature: MapFeatu
 
 function pointPosition(feature: MapFeature): [number, number] {
   const geometry = feature.geometry;
-  if (geometry.type === "Point") return geometry.coordinates;
-  if (geometry.type === "LineString") return geometry.coordinates[0] ?? [0, 0];
-  if (geometry.type === "Polygon") return geometry.coordinates[0]?.[0] ?? [0, 0];
-  return geometry.coordinates[0]?.[0]?.[0] ?? [0, 0];
+  if (geometry.type === "Point") return [geometry.coordinates[0] ?? 0, geometry.coordinates[1] ?? 0];
+  if (geometry.type === "LineString") return toPosition(geometry.coordinates[0]);
+  if (geometry.type === "Polygon") return toPosition(geometry.coordinates[0]?.[0]);
+  return toPosition(geometry.coordinates[0]?.[0]?.[0]);
+}
+
+function toPosition(value: number[] | undefined): [number, number] {
+  return [value?.[0] ?? 0, value?.[1] ?? 0];
 }
 
 function healthColor(health: unknown): [number, number, number, number] {
