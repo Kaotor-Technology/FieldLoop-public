@@ -4,14 +4,19 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Event as ThreadEvent
+from threading import Lock, RLock, Thread
+from uuid import UUID
 
 import pytest
 from fieldloop_common.generated_scenario import Event
 from fieldloop_common.generated_simulation import PlayerCommand, RunCreate
 from fieldloop_common.memory_transport import InMemoryTransport
 from fieldloop_common.signal_publisher import SignalPublisher
+from fieldloop_simulator.mock_historian import SimulatedHistorian
 from fieldloop_simulator.mock_signals import SimulatedSignalEmitter
 from fieldloop_simulator.player import PlayerError, PlayerSnapshot, ScenarioPlayer
+from fieldloop_simulator.player_service import SimulationService
 from fieldloop_simulator.scenario import load_scenario
 
 
@@ -42,17 +47,19 @@ class MemoryTransaction:
 class MemoryStore:
     def __init__(self) -> None:
         self.tx = MemoryTransaction()
+        self._lock = RLock()
 
     @contextmanager
     def transaction(self) -> Iterator[MemoryTransaction]:
         import copy
 
-        before = copy.deepcopy(self.tx)
-        try:
-            yield self.tx
-        except Exception:
-            self.tx = before
-            raise
+        with self._lock:
+            before = copy.deepcopy(self.tx)
+            try:
+                yield self.tx
+            except Exception:
+                self.tx = before
+                raise
 
 
 def fixture() -> tuple[ScenarioPlayer, MemoryStore, InMemoryTransport, list[datetime]]:
@@ -213,6 +220,96 @@ def test_persistent_snapshot_survives_rebuilding_the_player() -> None:
     )
     now[0] += timedelta(seconds=80)
     assert asyncio.run(player.read(store.tx)).next_event_index == 3
+
+
+def test_reset_projection_cannot_be_overwritten_by_an_older_read() -> None:
+    player, store, _, _ = fixture()
+    historian = SimulatedHistorian(org_id="test-org")
+    service = SimulationService(player, lambda: store, historian)
+    created = service.execute(
+        "/v1/simulation/runs",
+        "create-player-test-01",
+        RunCreate(scenarioId="player-test", seed=42, speed=1),
+    )
+    run_id = UUID(str(created["id"]))
+    service.execute(
+        f"/v1/simulation/runs/{run_id}:step",
+        "step-player-test-01",
+        PlayerCommand(),
+        run_id,
+        "step",
+    )
+    assert historian._overrides
+
+    class ProbeRLock:
+        def __init__(self) -> None:
+            self.lock = RLock()
+            self.guard = Lock()
+            self.attempts = 0
+            self.second_attempt = ThreadEvent()
+
+        def __enter__(self):
+            with self.guard:
+                self.attempts += 1
+                if self.attempts == 2:
+                    self.second_attempt.set()
+            self.lock.acquire()
+            return self
+
+        def __exit__(self, *_: object) -> None:
+            self.lock.release()
+
+    projection_lock = ProbeRLock()
+    service._projection_lock = projection_lock  # type: ignore[assignment]
+    read_entered = ThreadEvent()
+    release_read = ThreadEvent()
+    original_reset = historian.reset
+    reset_lock = Lock()
+    reset_count = 0
+
+    def block_old_read(seed: int | None = None) -> None:
+        nonlocal reset_count
+        with reset_lock:
+            reset_count += 1
+            block = reset_count == 1
+        if block:
+            read_entered.set()
+            assert release_read.wait(5)
+        original_reset(seed)
+
+    historian.reset = block_old_read
+    failures: list[BaseException] = []
+
+    def read_current() -> None:
+        try:
+            service.current()
+        except BaseException as error:
+            failures.append(error)
+
+    def reset_run() -> None:
+        try:
+            service.execute(
+                f"/v1/simulation/runs/{run_id}:reset",
+                "reset-player-test-01",
+                PlayerCommand(),
+                run_id,
+                "reset",
+            )
+        except BaseException as error:
+            failures.append(error)
+
+    reader = Thread(target=read_current)
+    resetter = Thread(target=reset_run)
+    reader.start()
+    assert read_entered.wait(5), failures
+    resetter.start()
+    assert projection_lock.second_attempt.wait(5)
+    release_read.set()
+    reader.join(5)
+    resetter.join(5)
+
+    assert not reader.is_alive() and not resetter.is_alive() and not failures
+    assert historian._overrides == {}
 
 
 def test_a_publish_failure_can_be_retried_without_advancing_persistent_state() -> None:

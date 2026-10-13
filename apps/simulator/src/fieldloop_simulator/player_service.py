@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import threading
 import uuid
 from collections.abc import Callable
 from contextlib import AbstractContextManager
@@ -33,13 +34,15 @@ class SimulationService:
         self.player = player
         self.store = store
         self.historian = historian
+        self._projection_lock = threading.RLock()
 
     def current(self, run_id: uuid.UUID | None = None) -> dict[str, object] | None:
-        with self.store().transaction() as tx:
-            run = asyncio.run(asyncio.wait_for(self.player.read(tx, run_id), timeout=25))
-            snapshot = tx.snapshot
-        self._hydrate(snapshot)
-        return run.model_dump(mode="json", by_alias=True) if run else None
+        with self._projection_lock:
+            with self.store().transaction() as tx:
+                run = asyncio.run(asyncio.wait_for(self.player.read(tx, run_id), timeout=25))
+                snapshot = tx.snapshot
+            self._hydrate(snapshot)
+            return run.model_dump(mode="json", by_alias=True) if run else None
 
     def execute(
         self,
@@ -49,30 +52,34 @@ class SimulationService:
         run_id: uuid.UUID | None = None,
         command: Command | None = None,
     ) -> dict[str, object]:
-        digest = hashlib.sha256(
-            body.model_dump_json(by_alias=True, exclude_unset=True).encode()
-        ).hexdigest()
-        command_key = hashlib.sha256(f"{path}:{key}".encode()).hexdigest()
-        with self.store().transaction() as tx:
-            response = tx.lookup(command_key, digest)
-            if response is None:
-                if isinstance(body, RunCreate):
-                    run = self.player.create(tx, body)
-                else:
-                    assert command is not None and run_id is not None
-                    run = asyncio.run(
-                        asyncio.wait_for(self.player.command(tx, run_id, command, body), timeout=25)
-                    )
-                response = run.model_dump(mode="json", by_alias=True)
-                tx.remember(command_key, digest, response)
-            snapshot = tx.snapshot
-        self._hydrate(snapshot)
-        return response
+        with self._projection_lock:
+            digest = hashlib.sha256(
+                body.model_dump_json(by_alias=True, exclude_unset=True).encode()
+            ).hexdigest()
+            command_key = hashlib.sha256(f"{path}:{key}".encode()).hexdigest()
+            with self.store().transaction() as tx:
+                response = tx.lookup(command_key, digest)
+                if response is None:
+                    if isinstance(body, RunCreate):
+                        run = self.player.create(tx, body)
+                    else:
+                        assert command is not None and run_id is not None
+                        run = asyncio.run(
+                            asyncio.wait_for(
+                                self.player.command(tx, run_id, command, body), timeout=25
+                            )
+                        )
+                    response = run.model_dump(mode="json", by_alias=True)
+                    tx.remember(command_key, digest, response)
+                snapshot = tx.snapshot
+            self._hydrate(snapshot)
+            return response
 
     def hydrate_sources(self) -> None:
-        with self.store().transaction() as tx:
-            snapshot = tx.snapshot
-        self._hydrate(snapshot)
+        with self._projection_lock:
+            with self.store().transaction() as tx:
+                snapshot = tx.snapshot
+            self._hydrate(snapshot)
 
     def _hydrate(self, snapshot: PlayerSnapshot | None) -> None:
         # Rebuild from the committed index, including after a cold start or retry.
