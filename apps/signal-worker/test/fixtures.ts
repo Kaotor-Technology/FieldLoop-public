@@ -7,6 +7,20 @@ export const signal: Signal = {
   source: "mock-historian", tag: "DL-01.rectifier.output", value: 0, unit: "A",
   observedAt: "2026-10-13T00:00:00Z", simulated: true, classification: "CONFIDENTIAL",
 };
+// Published source shape pinned to PR #47 head ca30d5ab574da9e29dc51eb8a2dda21efbcbdf87.
+// Keep these worker-boundary samples independent of signal-cases.json, which PR #47 edits.
+export const pr47RainSignal: Signal = {
+  schemaVersion: "signal.v1", id: "00000000-0000-4000-8000-000000000147", orgId: "worker-fixture",
+  source: "mock-hydro", tag: "S-R1.rain.rate", value: 60, unit: "mm/h",
+  observedAt: "2026-10-12T06:00:00Z", simulated: true, classification: "CONFIDENTIAL",
+  payload: { assetCode: "S-R1", zoneCode: "Z3", kind: "rain", label: "SIMULATION" },
+};
+export const pr47PumpSignal: Signal = {
+  schemaVersion: "signal.v1", id: "00000000-0000-4000-8000-000000000148", orgId: "worker-fixture",
+  source: "mock-pumps", tag: "P-3.pump.power", value: "lost",
+  observedAt: "2026-10-12T06:20:00Z", simulated: true, classification: "CONFIDENTIAL",
+  payload: { assetCode: "P-3", facilityType: "pump", zoneCode: "Z3", operatingState: "stopped", label: "SIMULATION" },
+};
 export const rule: RegisteredSignalRule = {
   id: "00000000-0000-4000-8000-000000000158", pack: "pipeline-integrity", simulated: true, classification: "CONFIDENTIAL",
   condition: { kind: "signal", source: signal.source, tag: signal.tag, operator: "eq", threshold: 0, unit: "A",
