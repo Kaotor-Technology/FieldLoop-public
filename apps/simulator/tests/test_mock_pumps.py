@@ -1,16 +1,17 @@
 import asyncio
 import json
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 from fieldloop_common.memory_transport import InMemoryTransport
 from fieldloop_common.signal import parse_signal
 from fieldloop_simulator.main import app
-from fieldloop_simulator.mock_pumps import FACILITIES, Facility, SimulatedPumps
+from fieldloop_simulator.mock_pumps import PUMPS_AND_GATES, PumpOrGate, SimulatedPumps
 from fieldloop_simulator.mock_signals import SimulatedSignalEmitter
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
@@ -137,9 +138,9 @@ def test_a_power_change_must_name_a_facility_a_timezone_and_a_status(
 
 def test_a_facility_cannot_be_authored_in_a_state_of_the_other_type() -> None:
     with pytest.raises(ValueError, match="pump cannot be open"):
-        Facility("pump", "Z3", "open")
+        PumpOrGate("pump", "Z3", "open")
     with pytest.raises(ValueError, match="gate cannot be running"):
-        Facility("gate", "Z3", "running")
+        PumpOrGate("gate", "Z3", "running")
 
 
 def test_the_schema_refuses_a_state_that_does_not_fit_the_facility() -> None:
@@ -166,7 +167,10 @@ def test_a_write_commands_nothing(method: str) -> None:
 
 
 def test_power_lost_is_announced_as_a_validated_simulated_signal(
-    pumps: SimulatedPumps, emitter: SimulatedSignalEmitter, transport: InMemoryTransport
+    pumps: SimulatedPumps,
+    emitter: SimulatedSignalEmitter,
+    transport: InMemoryTransport,
+    signal_example: Callable[[str], dict[str, Any]],
 ) -> None:
     pumps.set_power("P-3", start=POWER_LOST, status="lost")
     outcome = asyncio.run(emitter.emit(pumps.observe("P-3", POWER_LOST), run_id=RUN))
@@ -185,8 +189,7 @@ def test_power_lost_is_announced_as_a_validated_simulated_signal(
     }
     assert (signal["simulated"], signal["classification"]) == (True, "CONFIDENTIAL")
     assert signal["simulationRunId"] == str(RUN)
-    cases = json.loads((ROOT / "packages/contracts/test/fixtures/signal-cases.json").read_text())
-    (example,) = [case["signal"] for case in cases if case["name"] == "pump power lost"]
+    example = signal_example("pump power lost")
     for member in ("source", "tag", "value", "classification", "simulated"):
         assert signal[member] == example[member], member
     # The rule that turns this Signal into a Health Proposal matches these four exactly.
@@ -241,5 +244,6 @@ def test_the_facilities_are_the_pumps_and_gates_of_the_bangkok_data() -> None:
         if feature["properties"]["facility_type"] in ("pump", "gate")
     }
     assert authored == {
-        code: (facility.facility_type, facility.zone_code) for code, facility in FACILITIES.items()
+        code: (facility.facility_type, facility.zone_code)
+        for code, facility in PUMPS_AND_GATES.items()
     }

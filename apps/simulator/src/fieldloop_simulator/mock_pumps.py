@@ -34,7 +34,7 @@ OPERATING_STATES: Mapping[FacilityType, tuple[OperatingState, ...]] = {
 
 
 @dataclass(frozen=True)
-class Facility:
+class PumpOrGate:
     """One synthetic pump or gate and the state it is in while it has power."""
 
     facility_type: FacilityType
@@ -49,13 +49,18 @@ class Facility:
 # Authored values, not the state of a real Facility. Each is a Facility in
 # ``data/synthetic/bangkok/facilities.geojson``; a test keeps the codes, types and zones in
 # step, because the simulator image does not carry ``data/``.
-FACILITIES: Mapping[str, Facility] = {
-    "P-1": Facility("pump", "Z3", "running"),
-    "P-2": Facility("pump", "Z4", "running"),
-    "P-3": Facility("pump", "Z3", "running"),
-    "G-1": Facility("gate", "Z3", "closed"),
-    "G-2": Facility("gate", "Z4", "closed"),
+PUMPS_AND_GATES: Mapping[str, PumpOrGate] = {
+    "P-1": PumpOrGate("pump", "Z3", "running"),
+    "P-2": PumpOrGate("pump", "Z4", "running"),
+    "P-3": PumpOrGate("pump", "Z3", "running"),
+    "G-1": PumpOrGate("gate", "Z3", "closed"),
+    "G-2": PumpOrGate("gate", "Z4", "closed"),
 }
+
+
+def _known(asset_code: str) -> PumpOrGate:
+    """The pump or gate of that code. ``KeyError`` for any other code."""
+    return PUMPS_AND_GATES[asset_code]
 
 
 class SimulatedPumps:
@@ -67,8 +72,7 @@ class SimulatedPumps:
 
     def set_power(self, asset_code: str, *, start: datetime, status: PowerStatus) -> None:
         """Hold a Facility's power at ``status`` from ``start`` on, until the next reset."""
-        if asset_code not in FACILITIES:
-            raise KeyError(asset_code)
+        _known(asset_code)
         if status not in get_args(PowerStatus):
             raise ValueError("Power status must be available or lost")
         self._power.hold(asset_code, start=start, value=status)
@@ -78,13 +82,12 @@ class SimulatedPumps:
         self._power.reset()
 
     def power_at(self, asset_code: str, at: datetime) -> PowerStatus:
-        if asset_code not in FACILITIES:
-            raise KeyError(asset_code)
+        _known(asset_code)
         return self._power.at(asset_code, at) or "available"
 
     def operating_state_at(self, asset_code: str, at: datetime) -> OperatingState:
         """A pump without power is stopped; a gate stays where it was."""
-        facility = FACILITIES[asset_code]
+        facility = _known(asset_code)
         if facility.facility_type == "pump" and self.power_at(asset_code, at) == "lost":
             return "stopped"
         return facility.operating_state
@@ -95,7 +98,7 @@ class SimulatedPumps:
         A pump's Signal is what the flood pack rule ``pump-power-lost`` matches exactly:
         ``mock-pumps``, ``pump.power``, ``eq lost``, unit ``state``.
         """
-        facility = FACILITIES[asset_code]
+        facility = _known(asset_code)
         return Observation(
             source=SOURCE_ID,
             classification=CLASSIFICATION,
@@ -116,7 +119,7 @@ class SimulatedPumps:
 
     def status(self, asset_code: str, as_of: datetime) -> MockPumpsStatus:
         """The status as the API serves it. ``KeyError`` for an unknown pump or gate."""
-        facility = FACILITIES[asset_code]
+        facility = _known(asset_code)
         return MockPumpsStatus.model_validate(
             {
                 "assetCode": asset_code,
