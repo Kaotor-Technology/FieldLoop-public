@@ -184,14 +184,14 @@ def test_hydro_signal_uses_the_demo_b_source_tag_and_payload() -> None:
 
     assert (signal["source"], signal["tag"], signal["unit"]) == (
         "mock-hydro",
-        "S-R1.rain.rate",
+        "rain.rate",
         "mm/h",
     )
     assert signal["classification"] == "CONFIDENTIAL"
     assert 58 <= signal["value"] <= 62
     assert signal["payload"] == {
         "assetCode": "S-R1",
-        "zoneCode": "Z3",
+        "zone": "Z3",
         "kind": "rain",
         "target": {"kind": "asset", "id": "S-R1"},
         "label": "SIMULATION",
@@ -208,12 +208,13 @@ def test_pump_signal_uses_the_demo_b_source_tag_and_payload() -> None:
             "atSeconds": 0,
             "source": "mock-pumps",
             "target": {"kind": "asset", "id": "P-3"},
-            "tag": "P-3.pump.power",
+            "tag": "pump.power",
             "value": "lost",
+            "unit": "state",
             "payload": {
                 "assetCode": "P-3",
                 "facilityType": "pump",
-                "zoneCode": "Z3",
+                "zone": "Z3",
                 "operatingState": "stopped",
             },
         }
@@ -225,15 +226,15 @@ def test_pump_signal_uses_the_demo_b_source_tag_and_payload() -> None:
 
     assert (signal["source"], signal["tag"], signal["value"]) == (
         "mock-pumps",
-        "P-3.pump.power",
+        "pump.power",
         "lost",
     )
-    assert "unit" not in signal
+    assert signal["unit"] == "state"
     assert signal["classification"] == "CONFIDENTIAL"
     assert signal["payload"] == {
         "assetCode": "P-3",
         "facilityType": "pump",
-        "zoneCode": "Z3",
+        "zone": "Z3",
         "operatingState": "stopped",
         "target": {"kind": "asset", "id": "P-3"},
         "label": "SIMULATION",
