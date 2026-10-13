@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { calculateRisk, RiskInputError } from "@fieldloop/domain/risk";
 import { riskInputErrors, type RiskInput, type RiskSnapshot, type RiskMatrix } from "@fieldloop/contracts";
 import type { Pool } from "pg";
@@ -217,7 +218,7 @@ export class PostgresRiskService implements RiskApiPort {
     const current = await this.latestSnapshot(user.orgId, bowtieId);
     if (current) assertClearance(user, current.classification);
     const sameSnapshot = current && canonicalJson(current.snapshot_json) === canonicalJson(snapshot)
-      && canonicalJson(current.input_json) === canonicalJson(loaded.stored);
+      && canonicalJson((current.input_json as StoredInput).input) === canonicalJson(loaded.stored.input);
     if (sameSnapshot) return snapshotEnvelope(current);
     const saved = await this.saveSnapshot({
       user, loaded, snapshot, trigger: current ? "recalculated" : "initial", healthChangeId: null,
@@ -513,7 +514,7 @@ export class PostgresRiskService implements RiskApiPort {
     if (!input.force && input.healthChangeId === null) {
       const current = await this.latestSnapshot(input.user.orgId, input.loaded.bowtie.id);
       if (current && canonicalJson(current.snapshot_json) === canonicalJson(input.snapshot)
-        && canonicalJson(current.input_json) === canonicalJson(input.loaded.stored)) return current;
+        && canonicalJson((current.input_json as StoredInput).input) === canonicalJson(input.loaded.stored.input)) return current;
     }
     let simulationRunId: string | null = null;
     if (input.loaded.bowtie.simulated) {
@@ -521,23 +522,32 @@ export class PostgresRiskService implements RiskApiPort {
       simulationRunId = rows[0]?.active_run_id ? String(rows[0].active_run_id) : null;
     }
     const cellMap = Object.fromEntries(input.snapshot.consequences.map((item) => [item.consequenceId, item.cell]));
+    const fingerprint = createHash("sha256").update(canonicalJson({ snapshot: input.snapshot, input: input.loaded.stored.input })).digest("hex");
+    const conflictClause = input.healthChangeId
+      ? "ON CONFLICT (org_id, bowtie_id, health_change_id) WHERE health_change_id IS NOT NULL DO NOTHING"
+      : "ON CONFLICT (org_id, bowtie_id, input_fingerprint) WHERE health_change_id IS NULL AND input_fingerprint IS NOT NULL AND simulation_retired_at IS NULL DO NOTHING";
     const { rows } = await this.pool.query(
       `INSERT INTO app.risk_snapshot
         (org_id, bowtie_id, top_event_freq, per_consequence_cells, trigger, simulated, classification,
-         created_by, snapshot_json, input_json, health_change_id, simulation_run_id)
-       VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::uuid,$12::uuid)
-       ON CONFLICT (org_id, bowtie_id, health_change_id) WHERE health_change_id IS NOT NULL DO NOTHING
+         created_by, snapshot_json, input_json, health_change_id, simulation_run_id, input_fingerprint)
+       VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9::jsonb,$10::jsonb,$11::uuid,$12::uuid,$13)
+       ${conflictClause}
        RETURNING id, created_at, trigger, snapshot_json, input_json`,
       [input.user.orgId, input.loaded.bowtie.id, input.snapshot.topEventFrequencyPerYear,
         JSON.stringify(cellMap), input.trigger, input.loaded.bowtie.simulated, input.loaded.classification,
-        input.user.sub, JSON.stringify(input.snapshot), JSON.stringify(input.loaded.stored), input.healthChangeId, simulationRunId],
+        input.user.sub, JSON.stringify(input.snapshot), JSON.stringify(input.loaded.stored), input.healthChangeId, simulationRunId, fingerprint],
     );
     if (rows[0]) return rows[0];
     const existing = input.healthChangeId ? await this.pool.query(
       `SELECT id, created_at, trigger, snapshot_json, input_json FROM app.risk_snapshot
        WHERE org_id = $1 AND bowtie_id = $2 AND health_change_id = $3 AND simulation_retired_at IS NULL LIMIT 1`,
       [input.user.orgId, input.loaded.bowtie.id, input.healthChangeId],
-    ) : null;
+    ) : await this.pool.query(
+      `SELECT id, created_at, trigger, snapshot_json, input_json FROM app.risk_snapshot
+       WHERE org_id = $1 AND bowtie_id = $2 AND input_fingerprint = $3
+         AND health_change_id IS NULL AND simulation_retired_at IS NULL LIMIT 1`,
+      [input.user.orgId, input.loaded.bowtie.id, fingerprint],
+    );
     if (existing?.rows[0]) return existing.rows[0];
     throw new RiskServiceError(503, "risk_snapshot_unavailable");
   }

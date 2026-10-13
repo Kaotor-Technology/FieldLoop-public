@@ -94,13 +94,23 @@ function fixture(approved = true, healthChanges: FakeHealthChange[] = []) {
       if (sql.startsWith("SELECT id, created_at, trigger, snapshot_json, input_json, classification")) {
         return { rows: snapshots.slice().sort(byNewest).slice(0, 1) };
       }
+      if (sql.startsWith("SELECT id, created_at, trigger, snapshot_json, input_json FROM app.risk_snapshot")) {
+        const rows = sql.includes("input_fingerprint = $3")
+          ? snapshots.filter((snapshot) => snapshot.input_fingerprint === values[2] && snapshot.health_change_id === null)
+          : snapshots.filter((snapshot) => snapshot.health_change_id === values[2]);
+        return { rows: rows.slice(0, 1) };
+      }
       if (sql.startsWith("SELECT DISTINCT b.id AS bowtie_id")) return { rows: [{ bowtie_id: ids.bowtie }] };
       if (sql.startsWith("INSERT INTO app.risk_snapshot")) {
+        const fingerprint = String(values[12]);
+        if (values[10] === null && snapshots.some((snapshot) => snapshot.input_fingerprint === fingerprint && snapshot.health_change_id === null)) {
+          return { rows: [] };
+        }
         const row = {
           id: `30000000-0000-4000-8000-${String(nextId++).padStart(12, "0")}`,
           created_at: new Date(Date.UTC(2026, 9, 13, 0, 0, nextId)), trigger: values[4],
           snapshot_json: sortJson(JSON.parse(String(values[8]))), input_json: sortJson(JSON.parse(String(values[9]))),
-          classification: values[6], health_change_id: values[10], bowtie_id: values[1],
+          classification: values[6], health_change_id: values[10], bowtie_id: values[1], input_fingerprint: fingerprint,
         };
         snapshots.push(row);
         return { rows: [row] };
@@ -138,6 +148,16 @@ describe("PostgresRiskService", () => {
     expect(testFixture.snapshots).toHaveLength(2);
     expect(explanation).toMatchObject({ hasPrevious: true, changes: [{ beforeHealth: "healthy", afterHealth: "degraded" }] });
     expect(explanation.changes[0]?.impact).toBeGreaterThan(0);
+  });
+
+  it("deduplicates simultaneous current snapshot requests", async () => {
+    const testFixture = fixture();
+    const [first, second] = await Promise.all([
+      testFixture.service.getRisk(user, ids.bowtie), testFixture.service.getRisk(user, ids.bowtie),
+    ]);
+
+    expect(first.id).toBe(second.id);
+    expect(testFixture.snapshots).toHaveLength(1);
   });
 
   it("refuses a stored snapshot above the caller's clearance", async () => {
