@@ -13,7 +13,11 @@ BEGIN
     IF NOT has_function_privilege(expected, 'app.restore_simulation_baseline(text)', 'EXECUTE')
         OR has_table_privilege(expected, 'app.audit_event', 'UPDATE')
         OR has_table_privilege(expected, 'app.approval', 'DELETE')
-        OR has_table_privilege(expected, 'app.user_session', 'SELECT') THEN
-        RAISE EXCEPTION 'simulator reset privileges bypass immutable history';
+        OR has_table_privilege(expected, 'app.user_session', 'SELECT')
+        OR has_table_privilege(expected, 'app.asset', 'SELECT')
+        OR NOT has_column_privilege(expected, 'app.asset', 'org_id', 'SELECT')
+        OR NOT has_column_privilege(expected, 'app.asset', 'attributes', 'SELECT')
+        OR has_column_privilege(expected, 'app.asset', 'id', 'SELECT') THEN
+        RAISE EXCEPTION 'simulator database privileges are too broad or incomplete';
     END IF;
 END $$;
