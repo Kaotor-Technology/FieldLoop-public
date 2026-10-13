@@ -72,7 +72,7 @@ export function SimulationControls({ user }: { user: CurrentUser }) {
           onValueChange={(value) => command.mutate({ name: "speed", body: { speed: Number(value) } })} />
         <Select label={t("bookmark")} placeholder={t("chooseBookmark")} value={draft.bookmarkId}
           disabled={pending || !connected || !paused} options={run.bookmarks.map((bookmark) => ({
-            value: bookmark.id, label: bookmark.name, disabled: bookmark.atSeconds < run.elapsedSeconds,
+            value: bookmark.id, label: bookmark.name,
           }))} onValueChange={draft.selectBookmark} />
         <button disabled={pending || !connected || !paused || !draft.bookmarkId} onClick={() => command.mutate({ name: "bookmark", body: { bookmarkId: draft.bookmarkId } })}>{t("jumpBookmark")}</button>
         <button disabled={pending} onClick={() => command.mutate({ name: "reset" })}>{t("resetSimulation")}</button>

@@ -31,6 +31,24 @@ test("controls mirror the server and reset changes identity and clears bookmark 
   await page.getByRole("option", { name: "60×", exact: true }).click();
   await expect(page.locator(".workspace-banner")).toContainText("60×");
 });
+test("jumping to an earlier bookmark starts a clean replay epoch", async ({ page }) => {
+  await createRun(page);
+  await page.getByLabel("Bookmark", { exact: true }).click();
+  await page.getByRole("option", { name: "Failure", exact: true }).click();
+  await page.getByRole("button", { name: "Jump to bookmark", exact: true }).click();
+  await expect(page.getByRole("progressbar")).toHaveAttribute("value", "60");
+  const previous = await page.evaluate(async () => (await fetch("/api/v1/simulation/runs/current")).json());
+  await page.getByLabel("Bookmark", { exact: true }).click();
+  await expect(page.getByRole("option", { name: "Start", exact: true })).toBeEnabled();
+  await page.getByRole("option", { name: "Start", exact: true }).click();
+  const responsePromise = page.waitForResponse((response) => response.url().includes(":bookmark") && response.request().method() === "POST");
+  await page.getByRole("button", { name: "Jump to bookmark", exact: true }).click();
+  const rewound = await (await responsePromise).json();
+  expect(rewound.id).not.toBe(previous.id);
+  expect(rewound.elapsedSeconds).toBe(0);
+  expect(rewound.nextEventIndex).toBe(1);
+  await expect(page.getByRole("progressbar")).toHaveAttribute("value", "0");
+});
 test("failed commands retain confirmed state and show an error", async ({ page }) => {
   await createRun(page);
   await page.route("**/api/v1/simulation/runs/*:step", (route) => route.fulfill({ status: 503, contentType: "application/problem+json", body: JSON.stringify({ type: "about:blank", status: 503, title: "Fixture unavailable" }) }));
@@ -85,6 +103,7 @@ test("timeline fields and commands are reachable in keyboard order", async ({ pa
   await page.keyboard.press("Tab");
   await expect(page.getByLabel("Bookmark", { exact: true })).toBeFocused();
   await page.keyboard.press("Space");
+  await page.keyboard.press("ArrowDown");
   await expect(page.getByRole("option", { name: "Failure", exact: true })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByLabel("Bookmark", { exact: true })).toBeFocused();

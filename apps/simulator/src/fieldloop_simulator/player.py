@@ -147,7 +147,11 @@ class ScenarioPlayer:
             if bookmark is None:
                 raise PlayerError(404, "bookmark_not_found")
             if bookmark.at_seconds < run.elapsed_seconds:
-                raise PlayerError(409, "reset_required")
+                scenario, seed, speed = snapshot.scenario, run.seed, run.speed
+                tx.restore_baseline()
+                run = self._new(tx, scenario, seed, speed)
+                assert tx.snapshot is not None
+                snapshot = tx.snapshot
             run.state = "paused"
             await self._advance(snapshot, bookmark.at_seconds)
         snapshot.anchor = self.now()

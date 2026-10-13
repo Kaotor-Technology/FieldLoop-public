@@ -14,7 +14,7 @@ function current() {
   return run;
 }
 function ready(seed, speed) {
-  return { id: randomUUID(), revision: ++revision, orgId: "synthetic-org", scenarioId: scenario.id, scenarioName: scenario.name, seed, speed, clock: "2026-10-13T00:00:00Z", elapsedSeconds: 0, durationSeconds: 120, state: "ready", nextEventIndex: 0, eventCount: 3, simulated: true, classification: scenario.classification, bookmarks: [{ id: "failure", name: "Failure", atSeconds: 60 }] };
+  return { id: randomUUID(), revision: ++revision, orgId: "synthetic-org", scenarioId: scenario.id, scenarioName: scenario.name, seed, speed, clock: "2026-10-13T00:00:00Z", elapsedSeconds: 0, durationSeconds: 120, state: "ready", nextEventIndex: 0, eventCount: 3, simulated: true, classification: scenario.classification, bookmarks: [{ id: "start", name: "Start", atSeconds: 0 }, { id: "failure", name: "Failure", atSeconds: 60 }] };
 }
 export function resetSimulationFixture() { run = null; revision = 0; responses.clear(); }
 export const simulator = {
@@ -28,6 +28,9 @@ export const simulator = {
     if (responses.has(key)) return responses.get(key);
     current();
     if (command === "reset") run = ready(run.seed, run.speed);
+    else if (command === "bookmark" && body.bookmarkId === "start" && run.elapsedSeconds > 0) {
+      run = { ...ready(run.seed, run.speed), state: "paused", nextEventIndex: 1 };
+    }
     else {
       run = { ...run, revision: ++revision };
       if (command === "play") run.state = "playing";

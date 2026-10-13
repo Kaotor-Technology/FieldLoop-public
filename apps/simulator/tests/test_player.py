@@ -113,14 +113,28 @@ def test_steps_group_simultaneous_events_and_finish_at_duration() -> None:
         execute(player, store, "play")
 
 
-def test_bookmarks_replay_intervening_events_and_reject_backwards_jumps() -> None:
+def test_backwards_bookmark_starts_a_new_run_and_replays_from_baseline() -> None:
     player, store, transport, _ = fixture()
     create(player, store)
-    assert execute(player, store, "bookmark", {"bookmarkId": "failure"}).elapsed_seconds == 60
+    original_id = store.tx.snapshot.run.id
+    first = execute(player, store, "bookmark", {"bookmarkId": "failure"})
+    assert first.elapsed_seconds == 60
     assert len(transport.messages) == 3
-    execute(player, store, "step")
-    with pytest.raises(PlayerError):
-        execute(player, store, "bookmark", {"bookmarkId": "failure"})
+
+    rewound = execute(player, store, "bookmark", {"bookmarkId": "start"})
+    assert rewound.id != first.id
+    assert rewound.id != original_id
+    assert rewound.state == "paused"
+    assert rewound.elapsed_seconds == 0
+    assert rewound.next_event_index == 1
+    assert store.tx.resets == 1
+    messages = [json.loads(data) for _, data, _ in transport.messages]
+    assert [message["simulationRunId"] for message in messages[:3]] == [str(first.id)] * 3
+    assert messages[3]["simulationRunId"] == str(rewound.id)
+    assert messages[3]["tag"] == "DL-01.rectifier.output"
+    assert {message["id"] for message in messages[:3]}.isdisjoint({messages[3]["id"]})
+    with pytest.raises(PlayerError, match="run_retired"):
+        asyncio.run(player.command(store.tx, original_id, "play", PlayerCommand()))
 
 
 def test_reset_reproduces_values_but_retires_message_identities() -> None:
