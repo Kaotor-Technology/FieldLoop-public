@@ -17,7 +17,11 @@ export function useSimulationEvents() {
   useEffect(() => {
     const stream = new EventSource("/api/v1/events");
     stream.onopen = () => setConnected(true);
-    stream.onerror = () => { setConnected(false); void client.invalidateQueries({ queryKey: simulationKey }); };
+    stream.onerror = () => {
+      setConnected(false);
+      void client.invalidateQueries({ queryKey: simulationKey });
+      void client.invalidateQueries({ queryKey: ["bowtie"] });
+    };
     let queue = Promise.resolve();
     const receive = (event: MessageEvent<string>) => {
       // Serialise cache resets with later ticks; discard older revisions received in flight.
@@ -28,6 +32,18 @@ export function useSimulationEvents() {
     };
     stream.addEventListener("simulation.state", receive);
     stream.addEventListener("simulation.reset", receive);
+    stream.addEventListener("risk.recalculated", (event: MessageEvent<string>) => {
+      try {
+        const payload: unknown = JSON.parse(event.data);
+        if (payload && typeof payload === "object" && "bowtieId" in payload && typeof payload.bowtieId === "string") {
+          void client.invalidateQueries({ queryKey: ["bowtie", payload.bowtieId, "risk"] });
+          void client.invalidateQueries({ queryKey: ["bowtie", payload.bowtieId, "risk", "explain"] });
+        }
+      } catch {
+        void client.invalidateQueries({ queryKey: ["bowtie"] });
+      }
+      setConnected(true);
+    });
     return () => { stream.close(); };
   }, [client]);
   return connected;
