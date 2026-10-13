@@ -74,6 +74,8 @@ try {
   await store.initialize(); await store.initialize();
   assert.equal(await count("signal_dependency"), 8);
   const healthBefore = await snapshot();
+  const cpBarrierBefore = (await sql`SELECT id, health FROM app.barrier WHERE org_id = ${orgId} AND code = 'cathodic-protection'`.execute(database)).rows[0];
+  assert.ok(cpBarrierBefore, "the seeded DL-01 CP Barrier must exist");
   const otherHealthBefore = (await sql`SELECT id, health FROM app.barrier WHERE org_id = ${otherOrg} ORDER BY id`.execute(database)).rows;
   await assert.rejects(sql`SELECT access_token FROM app.user_session LIMIT 1`.execute(application), /permission denied/);
   await assert.rejects(sql`UPDATE app.audit_event SET action = 'forged' WHERE false`.execute(application), /permission denied/);
@@ -81,6 +83,14 @@ try {
   await Promise.all(Array.from({ length: 10 }, () => store.ingest(first)));
   assert.equal(await count("signal"), 1); assert.equal(await count("signal_receipt"), 1);
   assert.equal(await count("health_proposal"), 1); assert.equal(await count("evidence", sql`AND signal_receipt_id IS NOT NULL`), 1);
+  const cpProposal = (await sql`SELECT p.proposed_health AS "proposedHealth", p.status, b.health AS "barrierHealth"
+    FROM app.health_proposal p JOIN app.barrier b ON b.id = p.barrier_id AND b.org_id = p.org_id
+    WHERE p.org_id = ${orgId} AND p.signal_receipt_id = ${first.id}::uuid`.execute(database)).rows[0];
+  assert.ok(cpProposal, "the pack's CP rule must create a proposal for the CP Barrier");
+  assert.equal(cpProposal.proposedHealth, cpRule.condition.effect.proposedHealth);
+  assert.equal(cpProposal.proposedHealth, "failed", "the current FL-78 CP pack effect is Failed");
+  assert.equal(cpProposal.status, "open");
+  assert.equal(cpProposal.barrierHealth, cpBarrierBefore.health, "a Signal proposal never applies Health");
   assert.deepEqual(await snapshot(), healthBefore, "Signal must never apply proposed Health");
   await assert.rejects(store.ingest({ ...first, value: 2 }), /identity reused/);
   await assert.rejects(store.ingest({ ...first, orgId: otherOrg }), /Organisation/);
