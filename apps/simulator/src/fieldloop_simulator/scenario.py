@@ -11,6 +11,7 @@ import yaml  # type: ignore[import-untyped]
 from fieldloop_common.generated_scenario import Scenario
 from jsonschema import Draft202012Validator, FormatChecker
 
+from fieldloop_simulator import storm_events
 from fieldloop_simulator.mock_historian import TAG_PROFILES
 from fieldloop_simulator.mock_signals import utc_text
 from fieldloop_simulator.timestamps import to_utc
@@ -83,6 +84,9 @@ def validate_scenario(document: object) -> Scenario:
             isinstance(event.value, bool) or not isinstance(event.value, (int, float))
         ):
             raise ScenarioError(prefix + "/noiseAmplitude", "noise requires a numeric value")
+        # After the rules every source shares, so those keep their own error for an event.
+        if refused := storm_events.check(event):
+            raise ScenarioError(prefix + refused[0], refused[1])
     bookmark_ids: set[str] = set()
     for index, bookmark in enumerate(scenario.bookmarks):
         if bookmark.id in bookmark_ids or bookmark.at_seconds > scenario.duration_seconds:
