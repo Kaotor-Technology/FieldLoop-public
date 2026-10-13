@@ -3,6 +3,7 @@ name = "fieldloop-common"
 version = "0.0.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "cloud-sql-python-connector[pg8000]==1.22.0",
     "google-cloud-pubsub==2.36.0",
     "jsonschema==4.26.0",
     "pydantic==2.14.0",

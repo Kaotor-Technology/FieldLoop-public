@@ -66,6 +66,9 @@ importers:
       kysely:
         specifier: 0.29.6
         version: 0.29.6
+      openapi-fetch:
+        specifier: 0.17.0
+        version: 0.17.0
       openid-client:
         specifier: 6.8.8
         version: 6.8.8
@@ -241,9 +244,15 @@ importers:
       '@google-cloud/storage':
         specifier: 8.4.0
         version: 8.4.0
+      google-auth-library:
+        specifier: 11.2.0
+        version: 11.2.0
       pg:
         specifier: 8.23.1
         version: 8.23.1
+      yaml:
+        specifier: 2.9.1
+        version: 2.9.1
     devDependencies:
       '@fieldloop/config':
         specifier: workspace:*
@@ -314,6 +323,10 @@ importers:
         version: 2.9.1
 
   packages/domain:
+    dependencies:
+      '@fieldloop/contracts':
+        specifier: workspace:*
+        version: link:../contracts
     devDependencies:
       '@fieldloop/config':
         specifier: workspace:*

@@ -35,6 +35,14 @@
       ],
       "outputs": []
     },
+    "@fieldloop/adapters#test": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/domain-packs/**"],
+      "outputs": []
+    },
+    "@fieldloop/api#test": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/domain-packs/**", "$TURBO_ROOT$/data/synthetic/dl-01/bowtie-a.json", "$TURBO_ROOT$/data/synthetic/bangkok/bowtie-d.json"],
+      "outputs": []
+    },
     "dev": {
       "cache": false,
       "persistent": true

@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 import pytest
 from fastapi.routing import APIRoute
@@ -21,8 +22,15 @@ def mock_paths() -> list[str]:
     return sorted(re.sub(r"\{\w+\}", "x", path) for path in templates)
 
 
-def test_the_guard_covers_something() -> None:
-    assert len(mock_paths()) >= 4
+def test_the_guard_covers_every_source_that_has_a_contract() -> None:
+    # Read from the contract files, so adding a source needs no edit here.
+    contracts = Path(__file__).resolve().parents[3] / "packages/contracts"
+    documented = {
+        path.name.removeprefix("mock-").removesuffix(".v1.openapi.json")
+        for path in contracts.glob("mock-*.v1.openapi.json")
+    }
+    assert documented
+    assert {path.split("/")[2] for path in mock_paths()} == documented
 
 
 @pytest.mark.parametrize("path", mock_paths())
@@ -51,7 +59,17 @@ def test_other_methods_are_refused_with_the_methods_the_path_serves(path: str, m
 
 @pytest.mark.parametrize("method", ["GET", "POST", "DELETE"])
 @pytest.mark.parametrize(
-    "path", ["/mock/nope", "/mock/historian/nope", "/mock/cmms/nope", "/mock/patrol/findings/1"]
+    "path",
+    [
+        "/mock/nope",
+        "/mock/historian/nope",
+        "/mock/cmms/nope",
+        "/mock/patrol/findings/1",
+        "/mock/hydro",
+        "/mock/hydro/rain/latest",
+        "/mock/pumps/P-3",
+        "/mock/pumps/P-3/status/power",
+    ],
 )
 def test_unknown_mock_paths_are_problem_json_not_found(method: str, path: str) -> None:
     with TestClient(app) as client:

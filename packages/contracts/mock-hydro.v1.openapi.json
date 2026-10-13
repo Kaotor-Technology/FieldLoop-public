@@ -1,0 +1,122 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FieldLoop internal mock hydrology sources",
+    "version": "1.0.0",
+    "description": "Simulated read-only simulator endpoint from architecture section 4.2. Not a web-api/BFF endpoint. Run behind Cloud Run invoker IAM in dev/demo; local reads need no credentials. No live public API, no real rain radar, gauge or tide connector and no write operation. A reading reaches the platform only as a signal.v1 message published in process.",
+    "contact": {
+      "name": "FieldLoop engineering",
+      "url": "https://github.com/Kaotor-Technology/FieldLoop-v2"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8082",
+      "description": "Local simulator as the repository README starts it. Deployed environments call the private simulator-{env} Cloud Run service with a Google OIDC ID token."
+    }
+  ],
+  "tags": [
+    {
+      "name": "mock-hydro",
+      "description": "Internal SIMULATION fixtures"
+    }
+  ],
+  "security": [
+    {
+      "serviceIdentity": []
+    }
+  ],
+  "paths": {
+    "/mock/hydro/{kind}": {
+      "get": {
+        "operationId": "readMockHydroReading",
+        "description": "Return the simulated reading of one kind at asOf: rain rate at sensor S-R1, canal level at S-L1 or tide level at S-T1. The value is a pure function of kind and asOf, plus any Scenario override; the clock is the caller's asOf, never wall time.",
+        "tags": [
+          "mock-hydro"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "description": "Served kinds: rain, level and tide. Any other kind is 404.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asOf",
+            "required": false,
+            "description": "Timezone-aware Scenario time, not wall time; the response reports it in UTC as observedAt. The default is the start of the Bangkok storm simulation, fixed for deterministic replay.",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "default": "2026-10-12T00:00:00Z"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deterministic simulated reading",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "mock-hydro.v1.schema.json"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid asOf, or an undeclared or repeated query parameter; code validation_failed, input values are not echoed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown kind; code not_found.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Only GET is served, so every other method is refused; code method_not_allowed, and Allow names the methods the path serves. No state mutation.",
+            "headers": {
+              "Allow": {
+                "schema": {
+                  "type": "string",
+                  "const": "GET"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "serviceIdentity": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Google OIDC",
+        "description": "Verified by Cloud Run invoker IAM, not proxy headers. The handler does not implement browser auth or independently validate IAM."
+      }
+    }
+  }
+}
