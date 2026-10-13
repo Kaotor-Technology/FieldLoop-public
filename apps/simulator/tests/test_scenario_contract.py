@@ -17,6 +17,7 @@ from fieldloop_common.memory_transport import InMemoryTransport
 from fieldloop_common.signal import parse_signal
 from fieldloop_common.signal_publisher import SignalPublisher
 from fieldloop_simulator.main import app
+from fieldloop_simulator.mock_cmms import SimulatedCmms
 from fieldloop_simulator.mock_historian import SimulatedHistorian
 from fieldloop_simulator.mock_ili import SimulatedIliDrop
 from fieldloop_simulator.mock_patrol import SimulatedPatrol
@@ -49,6 +50,7 @@ def readings(client: TestClient) -> dict[str, float]:
 
 def test_every_source_is_on_the_app_for_the_player() -> None:
     assert isinstance(app.state.historian, SimulatedHistorian)
+    assert isinstance(app.state.cmms, SimulatedCmms)
     assert isinstance(app.state.patrol, SimulatedPatrol)
     assert isinstance(app.state.ili, SimulatedIliDrop)
 
