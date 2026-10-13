@@ -123,7 +123,11 @@ function fixture(approved = true, healthChanges: FakeHealthChange[] = []) {
       throw new Error(`Unexpected SQL in RiskService test: ${sql}`);
     },
   } as unknown as Pool;
-  return { service: new PostgresRiskService(pool), snapshots, set health(value: string) { health = value; } };
+  return {
+    service: new PostgresRiskService(pool), snapshots,
+    set health(value: string) { health = value; },
+    setBarrierClassification(value: string) { for (const path of paths) path.barrier_classification = value; },
+  };
 }
 
 function byNewest(left: Record<string, unknown>, right: Record<string, unknown>): number {
@@ -167,6 +171,14 @@ describe("PostgresRiskService", () => {
     if (!row) throw new Error("Snapshot fixture did not persist");
     row.classification = "HIGHLY_RESTRICTED";
     await expect(testFixture.service.getRisk(user, ids.bowtie)).rejects.toBeInstanceOf(RiskServiceError);
+  });
+
+  it("checks a Barrier's classification independently from its path classification", async () => {
+    const testFixture = fixture();
+    testFixture.setBarrierClassification("HIGHLY_RESTRICTED");
+
+    await expect(testFixture.service.getRisk(user, ids.bowtie))
+      .rejects.toMatchObject({ status: 403, code: "clearance_denied" });
   });
 
   it("persists an idempotent snapshot for each affected Health change", async () => {

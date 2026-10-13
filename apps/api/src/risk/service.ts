@@ -182,7 +182,11 @@ export class PostgresRiskService implements RiskApiPort {
           OR (bp.consequence_id IN (SELECT id FROM app.consequence WHERE org_id = $1 AND bowtie_id = $2)))
        ORDER BY bp.position, bp.id`, [user.orgId, bowtieId],
     );
-    for (const row of [...threats, ...consequences, ...barriers, ...pathRows]) assertClearance(user, row.classification ?? row.path_classification ?? row.barrier_classification);
+    for (const row of [...threats, ...consequences, ...barriers, ...pathRows]) {
+      for (const classification of [row.classification, row.path_classification, row.barrier_classification]) {
+        if (classification !== undefined && classification !== null) assertClearance(user, classification);
+      }
+    }
     const factorsByBarrier = new Map<string, string[]>();
     for (const barrier of barriers) {
       const factors = barrier.factors as { description: string; classification: string }[];
@@ -412,7 +416,9 @@ export class PostgresRiskService implements RiskApiPort {
     }
     if (!isSeverityCriteria(organisation.risk_severity_criteria)) throw new RiskServiceError(409, "risk_matrix_invalid");
     for (const row of [...threatsResult.rows, ...consequencesResult.rows, ...groupsResult.rows, ...pathsResult.rows]) {
-      assertClearance(user, row.classification ?? row.path_classification ?? row.barrier_classification);
+      for (const classification of [row.classification, row.path_classification, row.barrier_classification]) {
+        if (classification !== undefined && classification !== null) assertClearance(user, classification);
+      }
     }
     const barrierRows = new Map<string, Record<string, unknown>>();
     const pathGroups = new Map<string, { id: string; side: "preventive" | "mitigative"; targetId: string; barrierIds: string[] }>();
