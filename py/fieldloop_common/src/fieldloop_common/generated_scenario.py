@@ -23,14 +23,7 @@ class Event(BaseModel):
     id: Annotated[str, Field(max_length=128, min_length=1, pattern="^[A-Za-z0-9][A-Za-z0-9._:-]*$")]
     at_seconds: Annotated[float, Field(alias="atSeconds", ge=0.0, le=2678400.0)]
     source: Literal[
-        "mock-historian",
-        "mock-cmms",
-        "mock-patrol",
-        "mock-ili",
-        "mock-rain",
-        "mock-level",
-        "mock-tide",
-        "mock-pump",
+        "mock-historian", "mock-cmms", "mock-patrol", "mock-ili", "mock-hydro", "mock-pumps"
     ]
     target: Target
     tag: Annotated[

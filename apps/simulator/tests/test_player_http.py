@@ -86,4 +86,4 @@ def test_missing_key_is_a_problem_response(client: TestClient) -> None:
 
 
 def test_public_classification_cannot_downgrade_source_data(client: TestClient) -> None:
-    assert client.get("/v1/scenarios").json()[0]["classification"] == "HIGHLY_RESTRICTED"
+    assert client.get("/v1/scenarios").json()[0]["classification"] == "CONFIDENTIAL"

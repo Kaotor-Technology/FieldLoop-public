@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+from fieldloop_common.generated_scenario import Event
 from fieldloop_common.generated_simulation import PlayerCommand, RunCreate
 from fieldloop_common.memory_transport import InMemoryTransport
 from fieldloop_common.signal_publisher import SignalPublisher
@@ -133,6 +134,74 @@ def test_reset_reproduces_values_but_retires_message_identities() -> None:
     assert all(s["simulated"] and s["payload"]["sandbox"] for s in second)
     with pytest.raises(PlayerError, match="run_retired"):
         asyncio.run(player.command(store.tx, initial_id, "play", PlayerCommand()))
+
+
+def test_hydro_signal_uses_the_demo_b_source_tag_and_payload() -> None:
+    player, store, transport, _ = fixture()
+    scenario = player.catalog["player-test"]
+    rain = next(event for event in scenario.events if event.id == "rain")
+    player.catalog[scenario.id] = scenario.model_copy(update={"events": [rain]})
+    create(player, store)
+    execute(player, store, "step")
+    signal = json.loads(transport.messages[0][1])
+
+    assert (signal["source"], signal["tag"], signal["unit"]) == (
+        "mock-hydro",
+        "S-R1.rain.rate",
+        "mm/h",
+    )
+    assert signal["classification"] == "CONFIDENTIAL"
+    assert 58 <= signal["value"] <= 62
+    assert signal["payload"] == {
+        "assetCode": "S-R1",
+        "zoneCode": "Z3",
+        "kind": "rain",
+        "target": {"kind": "asset", "id": "S-R1"},
+        "label": "SIMULATION",
+        "sandbox": True,
+    }
+
+
+def test_pump_signal_uses_the_demo_b_source_tag_and_payload() -> None:
+    player, store, transport, _ = fixture()
+    scenario = player.catalog["player-test"]
+    pump_event = Event.model_validate(
+        {
+            "id": "pump-loss",
+            "atSeconds": 0,
+            "source": "mock-pumps",
+            "target": {"kind": "asset", "id": "P-3"},
+            "tag": "P-3.pump.power",
+            "value": "lost",
+            "payload": {
+                "assetCode": "P-3",
+                "facilityType": "pump",
+                "zoneCode": "Z3",
+                "operatingState": "stopped",
+            },
+        }
+    )
+    player.catalog[scenario.id] = scenario.model_copy(update={"events": [pump_event]})
+    create(player, store)
+    execute(player, store, "step")
+    signal = json.loads(transport.messages[0][1])
+
+    assert (signal["source"], signal["tag"], signal["value"]) == (
+        "mock-pumps",
+        "P-3.pump.power",
+        "lost",
+    )
+    assert "unit" not in signal
+    assert signal["classification"] == "CONFIDENTIAL"
+    assert signal["payload"] == {
+        "assetCode": "P-3",
+        "facilityType": "pump",
+        "zoneCode": "Z3",
+        "operatingState": "stopped",
+        "target": {"kind": "asset", "id": "P-3"},
+        "label": "SIMULATION",
+        "sandbox": True,
+    }
 
 
 def test_persistent_snapshot_survives_rebuilding_the_player() -> None:

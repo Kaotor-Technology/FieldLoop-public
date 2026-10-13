@@ -658,11 +658,15 @@ components:
           minLength: 1
           maxLength: 128
           pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
+          not:
+            pattern: '[\r\n]'
         scenarioId:
           type: string
           minLength: 1
           maxLength: 128
           pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
+          not:
+            pattern: '[\r\n]'
         scenarioName:
           type: string
         seed:
@@ -715,6 +719,8 @@ components:
                 minLength: 1
                 maxLength: 128
                 pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
+                not:
+                  pattern: '[\r\n]'
               name:
                 type: string
                 minLength: 1
@@ -756,6 +762,8 @@ components:
           minLength: 1
           maxLength: 128
           pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
+          not:
+            pattern: '[\r\n]'
         seed:
           type: integer
           minimum: 0
@@ -781,6 +789,8 @@ components:
           minLength: 1
           maxLength: 128
           pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
+          not:
+            pattern: '[\r\n]'
       required: []
     ScenarioSummary:
       type: object
@@ -791,6 +801,8 @@ components:
           minLength: 1
           maxLength: 128
           pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
+          not:
+            pattern: '[\r\n]'
         name:
           type: string
         version:

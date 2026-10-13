@@ -16,6 +16,16 @@ historian's override from the event time onwards. Other sources publish their de
 observation through `signal.v1`; source-specific read models can hydrate from the pinned
 Scenario and committed event index. Those integrations belong to their source issues.
 
+Use the publisher's source ID in each event. Demo B rain, level and tide readings use
+`source: mock-hydro` with tags `S-R1.rain.rate`, `S-L1.water.level` and `S-T1.tide.level`;
+pump and gate status use `source: mock-pumps` with tags such as `P-3.pump.power` and
+`G-1.gate.power`. Their Signals carry `assetCode` and `zoneCode`; pump/gate Signals also carry
+`facilityType` and `operatingState`. These IDs and fields match the source observations in
+[PR #47](https://github.com/Kaotor-Technology/FieldLoop-v2/pull/47) at `ca30d5a`. That PR's
+source examples changed in the same branch as their regression tests, so use the source
+observations themselves as the mapping reference and get FL-73/FL-24 owner sign-off before
+writing Signal rules from those examples.
+
 Controls use the server clock. Forward bookmark jumps emit intervening events; to return to
 an earlier bookmark, reset and jump forward. Reset preserves seed and speed, creates a new
 run ID, restores the baseline atomically and retires the previous run. Values and observation

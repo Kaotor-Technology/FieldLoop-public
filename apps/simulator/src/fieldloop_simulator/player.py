@@ -198,6 +198,9 @@ def classification(
     classes = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"]
     minimums = {
         "mock-historian": HISTORIAN_CLASSIFICATION,
+        # Demo B publishes all three water sensors and pumps/gates under one source each.
+        "mock-hydro": "CONFIDENTIAL",
+        "mock-pumps": "CONFIDENTIAL",
         "mock-patrol": "HIGHLY_RESTRICTED",
         "mock-ili": "HIGHLY_RESTRICTED",
     }

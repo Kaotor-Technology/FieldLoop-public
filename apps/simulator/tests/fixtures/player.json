@@ -5,7 +5,7 @@
   "events": [
     {"id":"baseline", "atSeconds":0, "source":"mock-historian", "target":{"kind":"asset","id":"DL-01"}, "tag":"DL-01.rectifier.output", "value":10, "unit":"A", "noiseAmplitude":0.1},
     {"id":"failure", "atSeconds":60, "source":"mock-historian", "target":{"kind":"asset","id":"DL-01"}, "tag":"DL-01.rectifier.output", "value":0, "unit":"A"},
-    {"id":"rain", "atSeconds":60, "source":"mock-rain", "target":{"kind":"asset","id":"SYN-Z3"}, "tag":"SYN-Z3.rain", "value":60, "unit":"mm/h", "noiseAmplitude":2}
+    {"id":"rain", "atSeconds":60, "source":"mock-hydro", "target":{"kind":"asset","id":"S-R1"}, "tag":"S-R1.rain.rate", "value":60, "unit":"mm/h", "noiseAmplitude":2, "payload":{"assetCode":"S-R1","zoneCode":"Z3","kind":"rain"}}
   ],
   "bookmarks": [{"id":"failure", "name":"Failure", "atSeconds":60}]
 }

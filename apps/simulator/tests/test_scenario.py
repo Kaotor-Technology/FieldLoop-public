@@ -78,3 +78,20 @@ def test_timestamp_offsets_are_normalised_and_overflow_is_rejected() -> None:
     document["startsAt"] = "0001-01-01T00:00:00+07:00"
     with pytest.raises(ScenarioError):
         validate_scenario(document)
+
+
+def test_scenario_identifiers_cannot_invalidate_the_signal_contract() -> None:
+    document = json.loads(FIXTURE.read_text())
+    document["events"][2]["tag"] += "\n"
+    with pytest.raises(ScenarioError) as failure:
+        validate_scenario(document)
+    assert failure.value.pointer == "/events/2/tag"
+
+
+@pytest.mark.parametrize("source", ["mock-rain", "mock-level", "mock-tide", "mock-pump"])
+def test_scenario_source_names_are_publisher_ids_not_sensor_aliases(source: str) -> None:
+    document = json.loads(FIXTURE.read_text())
+    document["events"][2]["source"] = source
+    with pytest.raises(ScenarioError) as failure:
+        validate_scenario(document)
+    assert failure.value.pointer == "/events/2/source"

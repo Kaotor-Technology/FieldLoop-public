@@ -10,6 +10,6 @@ it("embeds exactly the canonical player schemas in the self-contained OpenAPI co
 });
 it("rejects coercion, non-simulation controls and invented fields at the BFF boundary", () => {
   expect(isRunCreate({ scenarioId: "player-test", seed: 42, speed: 1 })).toBe(true);
-  for (const body of [{ scenarioId: "player-test", seed: true, speed: 1 }, { scenarioId: "player-test", seed: 42, speed: "1" }, { scenarioId: "player-test", seed: 42, speed: 1, simulated: false }]) expect(isRunCreate(body)).toBe(false);
+  for (const body of [{ scenarioId: "player-test\n", seed: 42, speed: 1 }, { scenarioId: "player-test", seed: true, speed: 1 }, { scenarioId: "player-test", seed: 42, speed: "1" }, { scenarioId: "player-test", seed: 42, speed: 1, simulated: false }]) expect(isRunCreate(body)).toBe(false);
   expect(isPlayerCommand({ clock: "2026-10-13T00:00:00Z" })).toBe(false);
 });
