@@ -342,7 +342,10 @@ Both sources share these points:
   run, so a bare read shows what the run has applied; with no run it is
   `2026-10-12T00:00:00Z`, the `simulationStartsAt` of
   `data/synthetic/bangkok/bowtie-d.json`. The response reports it in UTC as
-  `observedAt`.
+  `observedAt`. The committed clock moves only when the player handles a
+  command or a read of the run: while a run plays, a bare read of a source
+  stays at the clock of the last of those, because a read of a mock source
+  never advances a run or publishes.
 - **Facilities come from the Bangkok data.** Sensor, pump and gate codes and
   their zones are the Facilities of `data/synthetic/bangkok/facilities.geojson`.
   The simulator image does not contain `data/`, so they are literals and a test
@@ -374,8 +377,8 @@ Both sources share these points:
     an operator's script. Both identify the Signal by its Asset, so one
     reading has one `id` whoever publishes it and a consumer deduplicates it.
     A test holds the two to one `id`, source, tag, value, unit, classification
-    and payload. The `id` carries no Scenario event: two events that state the
-    same reading of one Asset at one instant are one Signal.
+    and payload. The `id` carries no Scenario event, and a Scenario states a
+    reading of one tag and Asset only once at any one time.
   - **No `assetId`.** A Signal names its Asset in the payload (`assetCode`),
     not in `assetId`, because the source does not know the platform's UUIDs. A
     rule therefore cannot tell P-1 from P-3 by the envelope; `pump-power-lost`
@@ -383,8 +386,9 @@ Both sources share these points:
   - **Validated at load.** The Scenario validator refuses an event that the
     source could not publish, at the member that is wrong: an unknown tag, a
     unit or target Asset that is not the source's, a rain rate that its noise
-    could take below zero, a power status other than `available` or `lost`
-    (`storm_events.py`).
+    could take below zero, a power status other than `available` or `lost`,
+    or a second event for one tag and Asset at the same time, since a read can
+    hold only one value for an instant (`storm_events.py`).
   - **A run pinned earlier keeps its events.** A run stores the Scenario it was
     created with. If such a run holds an event that these rules now refuse, the
     player still publishes it exactly as before, an authored rainfall total

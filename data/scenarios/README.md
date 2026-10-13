@@ -12,9 +12,11 @@ is an absolute, uniform amplitude on numeric values, seeded by Scenario version 
 and `sandbox: true`. An event changes no Barrier Health directly.
 
 Historian events use the installed DL-01 tags and their exact units. They set the read-only
-historian's override from the event time onwards. Other sources publish their declared
-observation through `signal.v1`; source-specific read models can hydrate from the pinned
-Scenario and committed event index. Those integrations belong to their source issues.
+historian's override from the event time onwards. Demo B events do the same for `mock-hydro`
+and `mock-pumps`, as the next paragraph sets out. The CMMS, patrol and ILI sources publish
+their declared observation through `signal.v1`, and their reads do not follow a run; such a
+read model can hydrate from the pinned Scenario and committed event index, and belongs to
+that source's issue.
 
 Demo B events use the installed `mock-hydro` and `mock-pumps` tags, units and Assets, and the
 validator refuses anything else at the member that is wrong
@@ -29,7 +31,8 @@ validator refuses anything else at the member that is wrong
 | `mock-pumps` | `pump.power` | `available` or `lost` | `state` | `P-1`, `P-2` or `P-3` |
 | `mock-pumps` | `gate.power` | `available` or `lost` | `state` | `G-1` or `G-2` |
 
-Write no `payload` for these events: the source states the Asset code, zone and operating
+An event states a reading of one tag and Asset only once at any one time. Write no `payload`
+for these events: the source states the Asset code, zone and operating
 state, and the player adds `target` and `sandbox`. A read of the source follows the applied
 events, as of the run's clock when the caller names no `asOf`, whatever `startsAt` is. `rain.accumulation.24h` is derived: the player sums the `rain.rate` events before it
 over 24 hours, so place one where the run should report the total. It is what the Flood pack
