@@ -249,7 +249,7 @@ try {
   const unauthenticatedResponse = await postSignal(pushBody(periodicCpReading, "no-token"), {});
   assert.equal(unauthenticatedResponse.statusCode, 401, "push without an OIDC token is rejected");
   assert.match(String(unauthenticatedResponse.headers["content-type"]), /application\/problem\+json/);
-  assert.equal(await count("signal"), signalsBeforePush, "an unauthenticated push stores nothing");
+  assert.equal(await count("signal"), signalsBeforePush, "an unauthenticated push stores no Signal");
   assert.equal(await count("signal_receipt"), receiptsBeforePush);
   assert.equal((await postSignal(pushBody(periodicCpReading, "first-delivery"))).statusCode, 204);
   assert.equal(await count("signal"), signalsBeforePush + 1, "the authenticated push stores the Signal");
