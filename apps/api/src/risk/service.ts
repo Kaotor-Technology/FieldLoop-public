@@ -84,6 +84,14 @@ export interface RiskEvent {
   snapshot: RiskSnapshot;
 }
 
+interface HealthChangeCursor {
+  id: string;
+  barrierId: string;
+  createdAt: Date | string;
+  fromHealth: string | null;
+  toHealth: string;
+}
+
 export interface RiskApiPort {
   listBowties(user: CurrentUser): Promise<BowtieSummary[]>;
   getBowtie(user: CurrentUser, bowtieId: string): Promise<BowtieCanvas>;
@@ -315,7 +323,8 @@ export class PostgresRiskService implements RiskApiPort {
 
   async processHealthChanges(): Promise<number> {
     const { rows } = await this.pool.query(
-      `SELECT hc.id, hc.org_id, hc.barrier_id, hc.actor, hc.simulated, hc.classification
+      `SELECT hc.id, hc.org_id, hc.barrier_id, hc.actor, hc.from_health, hc.to_health,
+              hc.created_at, hc.simulated, hc.classification
        FROM app.health_change hc
        WHERE EXISTS (SELECT 1 FROM app.organisation org WHERE org.org_id = hc.org_id
            AND org.risk_matrix IS NOT NULL AND org.risk_severity_criteria IS NOT NULL
@@ -351,7 +360,10 @@ export class PostgresRiskService implements RiskApiPort {
       let changeHandled = affected.rows.length === 0;
       for (const affectedBowtie of affected.rows) {
         try {
-          const loaded = await this.loadRisk(user, String(affectedBowtie.bowtie_id));
+          const loaded = await this.loadRisk(user, String(affectedBowtie.bowtie_id), {
+            id: String(change.id), barrierId: String(change.barrier_id), createdAt: change.created_at,
+            fromHealth: change.from_health === null ? null : String(change.from_health), toHealth: String(change.to_health),
+          });
           loaded.classification = maxClassification([loaded.classification, change.classification]);
           const snapshot = calculateConfiguredRisk(loaded.stored.input);
           await this.saveSnapshot({
@@ -368,7 +380,7 @@ export class PostgresRiskService implements RiskApiPort {
     return processed;
   }
 
-  private async loadRisk(user: CurrentUser, bowtieId: string): Promise<LoadedRisk> {
+  private async loadRisk(user: CurrentUser, bowtieId: string, healthChange?: HealthChangeCursor): Promise<LoadedRisk> {
     if (!UUID_PATTERN.test(bowtieId)) throw new RiskServiceError(400, "validation_failed");
     const bowtieResult = await this.pool.query<BowtieRow>(
       `SELECT id, hazard, top_event, domain, status, simulated, classification
@@ -415,11 +427,30 @@ export class PostgresRiskService implements RiskApiPort {
     const barrierIds = [...barrierRows.keys()];
     const evidenceByBarrier: Record<string, string | null> = {};
     const barrierEvidence = new Map<string, { id: string; observedAt: Date; classification: string }>();
+    const healthAtChange = new Map(barrierIds.map((id) => [id, String(barrierRows.get(id)?.health ?? "")]));
+    if (healthChange && barrierIds.length) {
+      const history = await this.pool.query(
+        `SELECT id, barrier_id, from_health FROM app.health_change
+         WHERE org_id = $1 AND barrier_id = ANY($2::uuid[])
+           AND (created_at, id) > ($3::timestamptz, $4::uuid)
+         ORDER BY created_at DESC, id DESC`,
+        [user.orgId, barrierIds, healthChange.createdAt, healthChange.id],
+      );
+      for (const change of history.rows) {
+        if (change.from_health === null || change.from_health === undefined) {
+          throw new RiskServiceError(409, "risk_input_invalid");
+        }
+        healthAtChange.set(String(change.barrier_id), String(change.from_health));
+      }
+      healthAtChange.set(healthChange.barrierId, healthChange.toHealth);
+    }
     if (barrierIds.length) {
       const evidenceResult = await this.pool.query(
         `SELECT DISTINCT ON (barrier_id) id, barrier_id, observed_at, classification FROM app.evidence
-         WHERE org_id = $1 AND barrier_id = ANY($2::uuid[]) ORDER BY barrier_id, observed_at DESC, id DESC`,
-        [user.orgId, barrierIds],
+         WHERE org_id = $1 AND barrier_id = ANY($2::uuid[])
+           AND ($3::timestamptz IS NULL OR observed_at <= $3::timestamptz)
+         ORDER BY barrier_id, observed_at DESC, id DESC`,
+        [user.orgId, barrierIds, healthChange?.createdAt ?? null],
       );
       for (const row of evidenceResult.rows) {
         assertClearance(user, row.classification);
@@ -429,17 +460,18 @@ export class PostgresRiskService implements RiskApiPort {
       }
     }
     for (const id of barrierIds) evidenceByBarrier[id] ??= null;
+    const calculationTime = healthChange ? new Date(healthChange.createdAt).getTime() : Date.now();
     const barriers = barrierIds.map((id) => {
       const row = barrierRows.get(id);
       if (!row) throw new RiskServiceError(503, "risk_input_invalid");
       const latest = barrierEvidence.get(id);
       const intervalSeconds = row.evidence_interval === null || row.evidence_interval === undefined
         ? null : parseIntervalSeconds(String(row.evidence_interval));
-      const evidenceExpired = intervalSeconds === null ? false : !latest || Date.now() - latest.observedAt.getTime() > intervalSeconds * 1000;
+      const evidenceExpired = intervalSeconds === null ? false : !latest || calculationTime - latest.observedAt.getTime() > intervalSeconds * 1000;
       return {
         id, type: String(row.type) as RiskInput["barriers"][number]["type"],
         side: String(row.side) as RiskInput["barriers"][number]["side"],
-        pfdBand: numberValue(row.pfd_band), health: String(row.health) as RiskInput["barriers"][number]["health"],
+        pfdBand: numberValue(row.pfd_band), health: (healthAtChange.get(id) ?? String(row.health)) as RiskInput["barriers"][number]["health"],
         ...(row.independence_group_id ? { independenceGroupId: String(row.independence_group_id) } : {}),
         evidenceExpired,
       };

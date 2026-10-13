@@ -41,11 +41,19 @@ function sortJson(value: unknown): unknown {
   return value;
 }
 
-function fixture(approved = true, includeHealthChange = false) {
+interface FakeHealthChange {
+  id: string;
+  barrierId: string;
+  createdAt: string;
+  fromHealth: string | null;
+  toHealth: string;
+  reason: string;
+}
+
+function fixture(approved = true, healthChanges: FakeHealthChange[] = []) {
   const snapshots: Record<string, unknown>[] = [];
   let nextId = 1;
   let health = "healthy";
-  const healthChangeId = "40000000-0000-4000-8000-000000000001";
   const paths = [
     { id: "20000000-0000-4000-8000-000000000001", position: 1, threat_id: ids.threat, consequence_id: null, path_classification: "PUBLIC", barrier_id: ids.preventiveBarrier, type: "technical", side: "preventive", pfd_band: 0.01, independence_group_id: null, evidence_interval: null, barrier_classification: "PUBLIC" },
     { id: "20000000-0000-4000-8000-000000000002", position: 2, threat_id: null, consequence_id: ids.consequence, path_classification: "PUBLIC", barrier_id: ids.mitigativeBarrier, type: "technical", side: "mitigative", pfd_band: 0.01, independence_group_id: null, evidence_interval: null, barrier_classification: "PUBLIC" },
@@ -54,11 +62,13 @@ function fixture(approved = true, includeHealthChange = false) {
     query: async (statement: string, values: unknown[] = []) => {
       const sql = statement.replace(/\s+/g, " ").trim();
       if (sql.includes("FROM app.bowtie WHERE")) return { rows: [{ id: ids.bowtie, hazard: "Synthetic hazard", top_event: "Synthetic top event", domain: "pipeline", status: "active", simulated: false, classification: "PUBLIC" }] };
-      if (sql.startsWith("SELECT hc.id, hc.org_id, hc.barrier_id")) return {
-        rows: includeHealthChange && !snapshots.some((snapshot) => snapshot.health_change_id === healthChangeId)
-          ? [{ id: healthChangeId, org_id: user.orgId, barrier_id: ids.preventiveBarrier, actor: "synthetic-reviewer", simulated: false, classification: "PUBLIC" }]
-          : [],
-      };
+      if (sql.startsWith("SELECT hc.id, hc.org_id, hc.barrier_id")) return { rows: healthChanges
+        .filter((change) => !snapshots.some((snapshot) => snapshot.health_change_id === change.id))
+        .map((change) => ({
+          id: change.id, org_id: user.orgId, barrier_id: change.barrierId, actor: "synthetic-reviewer",
+          from_health: change.fromHealth, to_health: change.toHealth, created_at: new Date(change.createdAt),
+          simulated: false, classification: "PUBLIC",
+        })) };
       if (sql.includes("FROM app.organisation")) return { rows: approved ? [{
         risk_matrix: matrix(), risk_severity_criteria: criteria, risk_matrix_approved_at: new Date("2026-10-13T00:00:00Z"),
         risk_matrix_approved_by: "synthetic-authority", classification: "PUBLIC",
@@ -70,6 +80,16 @@ function fixture(approved = true, includeHealthChange = false) {
       if (sql.includes("SELECT DISTINCT ON (barrier_id)")) return { rows: [] };
       if (sql.startsWith("SELECT id, created_at, trigger, snapshot_json, input_json, health_change_id, classification")) {
         return { rows: snapshots.slice().sort(byNewest).slice(0, 2) };
+      }
+      if (sql.startsWith("SELECT id, barrier_id, from_health FROM app.health_change")) {
+        const [orgId, barrierIds, createdAt, changeId] = values;
+        if (orgId !== user.orgId || !Array.isArray(barrierIds)) return { rows: [] };
+        const cursorTime = new Date(String(createdAt)).getTime();
+        return { rows: healthChanges.filter((change) => barrierIds.includes(change.barrierId)
+          && (new Date(change.createdAt).getTime() > cursorTime
+            || (new Date(change.createdAt).getTime() === cursorTime && change.id > String(changeId))))
+          .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || right.id.localeCompare(left.id))
+          .map((change) => ({ id: change.id, barrier_id: change.barrierId, from_health: change.fromHealth })) };
       }
       if (sql.startsWith("SELECT id, created_at, trigger, snapshot_json, input_json, classification")) {
         return { rows: snapshots.slice().sort(byNewest).slice(0, 1) };
@@ -84,6 +104,10 @@ function fixture(approved = true, includeHealthChange = false) {
         };
         snapshots.push(row);
         return { rows: [row] };
+      }
+      if (sql.startsWith("SELECT reason, actor FROM app.health_change")) {
+        const change = healthChanges.find((item) => item.id === values[1]);
+        return { rows: change ? [{ reason: change.reason, actor: "synthetic-reviewer" }] : [] };
       }
       if (sql.includes("FROM app.health_change")) return { rows: [] };
       throw new Error(`Unexpected SQL in RiskService test: ${sql}`);
@@ -126,13 +150,39 @@ describe("PostgresRiskService", () => {
   });
 
   it("persists an idempotent snapshot for each affected Health change", async () => {
-    const testFixture = fixture(true, true);
+    const change = {
+      id: "40000000-0000-4000-8000-000000000001", barrierId: ids.preventiveBarrier,
+      createdAt: "2026-10-13T00:00:01.000Z", fromHealth: "healthy", toHealth: "degraded", reason: "Synthetic review",
+    };
+    const testFixture = fixture(true, [change]);
     testFixture.health = "degraded";
 
     expect(await testFixture.service.processHealthChanges()).toBe(1);
     expect(testFixture.snapshots).toHaveLength(1);
-    expect(testFixture.snapshots[0]).toMatchObject({ trigger: "health_change", health_change_id: "40000000-0000-4000-8000-000000000001" });
+    expect(testFixture.snapshots[0]).toMatchObject({ trigger: "health_change", health_change_id: change.id });
     expect(await testFixture.service.processHealthChanges()).toBe(0);
     expect(testFixture.snapshots).toHaveLength(1);
+  });
+
+  it("replays multiple queued Health changes against their event-time Barrier states", async () => {
+    const changes: FakeHealthChange[] = [
+      { id: "40000000-0000-4000-8000-000000000001", barrierId: ids.preventiveBarrier, createdAt: "2026-10-13T00:00:01.000Z", fromHealth: "healthy", toHealth: "degraded", reason: "First review" },
+      { id: "40000000-0000-4000-8000-000000000002", barrierId: ids.preventiveBarrier, createdAt: "2026-10-13T00:00:02.000Z", fromHealth: "degraded", toHealth: "failed", reason: "Second review" },
+    ];
+    const testFixture = fixture(true, changes);
+    testFixture.health = "failed";
+
+    expect(await testFixture.service.processHealthChanges()).toBe(2);
+    const firstSnapshot = testFixture.snapshots.find((snapshot) => snapshot.health_change_id === changes[0]?.id);
+    const secondSnapshot = testFixture.snapshots.find((snapshot) => snapshot.health_change_id === changes[1]?.id);
+    const healthFrom = (snapshot: Record<string, unknown> | undefined) => {
+      const stored = snapshot?.input_json as { input: { barriers: { id: string; health: string }[] } } | undefined;
+      return stored?.input.barriers.find((barrier) => barrier.id === ids.preventiveBarrier)?.health;
+    };
+    expect(healthFrom(firstSnapshot)).toBe("degraded");
+    expect(healthFrom(secondSnapshot)).toBe("failed");
+
+    const explanation = await testFixture.service.explain(user, ids.bowtie);
+    expect(explanation.changes).toMatchObject([{ beforeHealth: "degraded", afterHealth: "failed", reason: "Second review" }]);
   });
 });
