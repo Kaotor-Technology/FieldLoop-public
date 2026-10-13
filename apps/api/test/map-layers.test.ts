@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { AuthError, type AuthServicePort } from "../src/auth/service.js";
-import { BARRIER_LAYER_SQL, type MapFeatureCollection, type MapLayerStore } from "../src/map/layers.js";
+import { ASSET_LAYER_SQL, BARRIER_LAYER_SQL, RISK_INPUT_SQL, type MapFeatureCollection, type MapLayerStore } from "../src/map/layers.js";
 
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
@@ -52,6 +52,23 @@ describe("map layer API", () => {
     expect(latestSelection).toBeGreaterThanOrEqual(0);
     expect(viewportFilter).toBeGreaterThan(latestSelection);
     expect(BARRIER_LAYER_SQL).toContain("SELECT * FROM latest_location");
+  });
+
+  it("attaches each Segment's parent Asset ID for shared Bowtie risk coloring", () => {
+    expect(ASSET_LAYER_SQL).toContain("s.asset_id");
+    expect(ASSET_LAYER_SQL).toContain("asset_id::text, geometry");
+    expect(ASSET_LAYER_SQL).toContain("NULL::text AS risk_band");
+    expect(ASSET_LAYER_SQL).not.toContain("attributes->>'risk_band'");
+  });
+
+  it("scopes demo Risk Matrix calculations to complete, simulated seed data in the current Organisation", () => {
+    expect(RISK_INPUT_SQL).toContain("ba.org_id = $2");
+    expect(RISK_INPUT_SQL).toContain("classification = ANY($3::text[])");
+    expect(RISK_INPUT_SQL).toContain("a.simulated IS TRUE AND a.created_by IN ('seed:dl-01', 'seed:bangkok')");
+    expect(RISK_INPUT_SQL).toContain("NOT EXISTS (SELECT 1 FROM app.threat");
+    expect(RISK_INPUT_SQL).toContain("NOT EXISTS (SELECT 1 FROM app.consequence");
+    expect(RISK_INPUT_SQL).toContain("app.barrier_path bp");
+    expect(RISK_INPUT_SQL).toContain("app.independence_group ig");
   });
 });
 

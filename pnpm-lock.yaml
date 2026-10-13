@@ -60,6 +60,9 @@ importers:
       '@fieldloop/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@fieldloop/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@fieldloop/map':
         specifier: workspace:*
         version: link:../../packages/map

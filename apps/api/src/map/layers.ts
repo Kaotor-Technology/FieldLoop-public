@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
+import { calculateRiskScore, type RiskBarrier, type RiskConsequence, type RiskPath, type RiskThreat, type RiskZone } from "@fieldloop/domain";
 import type { MapFeature, MapFeatureCollection, MapGeometry, MapLayerName } from "@fieldloop/map";
 import type { AuthDatabase } from "../auth/postgres-store.js";
 
@@ -50,6 +51,10 @@ export class PostgresMapLayerStore implements MapLayerStore {
         ? await bindPostgisQuery<FeatureRow>(BARRIER_LAYER_SQL, bboxValues).execute(this.db)
         : await bindPostgisQuery<FeatureRow>(CONSEQUENCE_LAYER_SQL, bboxValues).execute(this.db);
 
+    const riskByAsset = input.layer === "assets"
+      ? await this.getRiskZonesForAssets(input, [...new Set(result.rows.flatMap((row) => row.asset_id ? [row.asset_id] : []))])
+      : new Map<string, RiskZone>();
+
     return {
       type: "FeatureCollection",
       features: result.rows.map((row) => ({
@@ -64,7 +69,7 @@ export class PostgresMapLayerStore implements MapLayerStore {
           simulated: row.simulated,
           label: row.label,
           health: parseHealth(row.health),
-          riskBand: parseRiskBand(row.risk_band),
+          riskBand: parseRiskBand(row.asset_id ? riskByAsset.get(row.asset_id) ?? null : row.risk_band),
           chainageFrom: row.chainage_from === null ? null : Number(row.chainage_from),
           chainageTo: row.chainage_to === null ? null : Number(row.chainage_to),
           evidenceObservedAt: row.evidence_observed_at,
@@ -72,6 +77,90 @@ export class PostgresMapLayerStore implements MapLayerStore {
         },
       })),
     };
+  }
+
+  private async getRiskZonesForAssets(input: {
+    orgId: string;
+    clearance: string;
+    allowSeededDemoGeometry: boolean;
+  }, assetIds: string[]): Promise<Map<string, RiskZone>> {
+    if (assetIds.length === 0 || !input.allowSeededDemoGeometry) return new Map();
+    const rows = await bindPostgisQuery<RiskInputRow>(RISK_INPUT_SQL, [
+      assetIds, input.orgId, classificationsThrough(input.clearance), input.allowSeededDemoGeometry,
+    ]).execute(this.db);
+    const byBowtie = new Map<string, {
+      assetIds: Set<string>;
+      threats: RiskThreat[];
+      consequences: RiskConsequence[];
+      barriers: Map<string, RiskBarrier>;
+      paths: RiskPath[];
+      pathIds: Set<string>;
+      incomplete: boolean;
+    }>();
+    for (const row of rows.rows) {
+      const group = byBowtie.get(row.bowtie_id) ?? {
+        assetIds: new Set<string>(), threats: [], consequences: [], barriers: new Map<string, RiskBarrier>(),
+        paths: [], pathIds: new Set<string>(), incomplete: false,
+      };
+      group.assetIds.add(row.asset_id);
+      if (row.entity_type === "threat" && row.frequency_per_year !== null) {
+        if (!group.threats.some((threat) => threat.id === row.entity_id)) {
+          group.threats.push({ id: row.entity_id, frequencyPerYear: Number(row.frequency_per_year) });
+        }
+      } else if (row.entity_type === "consequence" && row.conditional_probability !== null) {
+        if (!group.consequences.some((consequence) => consequence.id === row.entity_id)) {
+          const bands = severityBands(row.severity);
+          if (!bands) group.incomplete = true;
+          else group.consequences.push({
+            id: row.entity_id,
+            conditionalProbability: Number(row.conditional_probability),
+            severityBands: bands,
+          });
+        }
+      } else if (row.entity_type === "path" && row.target_id && row.target_type && row.barrier_id && row.barrier_side) {
+        const health = parseHealth(row.health);
+        if (row.pfd_band === null || health === null) group.incomplete = true;
+        group.barriers.set(row.barrier_id, {
+          id: row.barrier_id,
+          side: row.barrier_side,
+          pfd: row.pfd_band === null ? null : Number(row.pfd_band),
+          health,
+          independenceGroupId: row.independence_group_id,
+        });
+        if (!group.pathIds.has(row.entity_id)) {
+          group.paths.push({
+            targetType: row.target_type,
+            targetId: row.target_id,
+            barrierId: row.barrier_id,
+            position: row.position ?? 1,
+          });
+          group.pathIds.add(row.entity_id);
+        }
+      } else {
+        group.incomplete = true;
+      }
+      byBowtie.set(row.bowtie_id, group);
+    }
+    const result = new Map<string, RiskZone>();
+    const incompleteAssets = new Set<string>();
+    for (const group of byBowtie.values()) {
+      const zone = group.incomplete ? null : calculateRiskScore({
+          threats: group.threats,
+          consequences: group.consequences,
+          barriers: [...group.barriers.values()],
+          paths: group.paths,
+        }).worstZone;
+      if (!zone) {
+        for (const assetId of group.assetIds) incompleteAssets.add(assetId);
+        continue;
+      }
+      for (const assetId of group.assetIds) {
+        const previous = result.get(assetId);
+        if (!previous || riskZoneSeverity(zone) > riskZoneSeverity(previous)) result.set(assetId, zone);
+      }
+    }
+    for (const assetId of incompleteAssets) result.delete(assetId);
+    return result;
   }
 }
 
@@ -92,6 +181,7 @@ function bindPostgisQuery<Row>(queryText: string, values: readonly unknown[]) {
 
 interface FeatureRow {
   id: string;
+  asset_id?: string;
   geometry: string | Record<string, unknown>;
   name: string | null;
   code: string | null;
@@ -106,6 +196,110 @@ interface FeatureRow {
   evidence_observed_at: string | null;
   domain_pack: string | null;
 }
+
+interface RiskInputRow {
+  asset_id: string;
+  bowtie_id: string;
+  entity_type: "threat" | "consequence" | "path";
+  entity_id: string;
+  target_type: "threat" | "consequence" | null;
+  target_id: string | null;
+  frequency_per_year: number | string | null;
+  conditional_probability: number | string | null;
+  severity: unknown;
+  barrier_id: string | null;
+  barrier_side: "preventive" | "mitigative" | null;
+  pfd_band: number | string | null;
+  health: string | null;
+  independence_group_id: string | null;
+  position: number | null;
+}
+
+function severityBands(value: unknown): number[] | null {
+  let severity = value;
+  if (typeof severity === "string") {
+    try { severity = JSON.parse(severity); } catch { return null; }
+  }
+  if (!severity || typeof severity !== "object" || Array.isArray(severity)) return null;
+  const bands = Object.values(severity);
+  return bands.length > 0 && bands.every((band) => typeof band === "number" && Number.isInteger(band) && band >= 1 && band <= 5)
+    ? bands as number[] : null;
+}
+
+function riskZoneSeverity(zone: RiskZone): number {
+  return zone === "intolerable" ? 2 : zone === "alarp" ? 1 : 0;
+}
+
+export const RISK_INPUT_SQL = `
+WITH selected_bowtie AS (
+  SELECT DISTINCT ba.asset_id, ba.bowtie_id
+  FROM app.bowtie_asset ba
+  JOIN app.asset a ON a.id = ba.asset_id AND a.org_id = ba.org_id
+  JOIN app.bowtie bt ON bt.id = ba.bowtie_id AND bt.org_id = ba.org_id
+  WHERE ba.org_id = $2 AND ba.asset_id = ANY($1::uuid[])
+    AND (ba.classification = ANY($3::text[]) OR ($4::boolean AND ba.simulated IS TRUE AND ba.created_by IN ('seed:dl-01', 'seed:bangkok')))
+    AND (a.classification = ANY($3::text[]) OR ($4::boolean AND a.simulated IS TRUE AND a.created_by IN ('seed:dl-01', 'seed:bangkok')))
+    AND (bt.classification = ANY($3::text[]) OR ($4::boolean AND bt.simulated IS TRUE AND bt.created_by IN ('seed:dl-01', 'seed:bangkok')))
+    AND ba.simulated IS TRUE AND ba.created_by IN ('seed:dl-01', 'seed:bangkok')
+    AND a.simulated IS TRUE AND a.created_by IN ('seed:dl-01', 'seed:bangkok')
+    AND bt.simulated IS TRUE AND bt.created_by IN ('seed:dl-01', 'seed:bangkok')
+    AND NOT EXISTS (SELECT 1 FROM app.threat t WHERE t.org_id = $2 AND t.bowtie_id = bt.id
+      AND (t.simulated IS NOT TRUE OR COALESCE(t.created_by, '') NOT IN ('seed:dl-01', 'seed:bangkok')))
+    AND NOT EXISTS (SELECT 1 FROM app.consequence c WHERE c.org_id = $2 AND c.bowtie_id = bt.id
+      AND (c.simulated IS NOT TRUE OR COALESCE(c.created_by, '') NOT IN ('seed:dl-01', 'seed:bangkok')))
+    AND NOT EXISTS (
+      SELECT 1 FROM app.barrier_path bp
+      JOIN app.barrier b ON b.id = bp.barrier_id AND b.org_id = bp.org_id
+      LEFT JOIN app.threat t ON t.id = bp.threat_id AND t.org_id = bp.org_id
+      LEFT JOIN app.consequence c ON c.id = bp.consequence_id AND c.org_id = bp.org_id
+      LEFT JOIN app.independence_group ig ON ig.id = b.independence_group_id AND ig.org_id = b.org_id
+      WHERE bp.org_id = $2 AND ((t.bowtie_id = bt.id) OR (c.bowtie_id = bt.id))
+        AND (bp.simulated IS NOT TRUE OR COALESCE(bp.created_by, '') NOT IN ('seed:dl-01', 'seed:bangkok')
+          OR b.simulated IS NOT TRUE OR COALESCE(b.created_by, '') NOT IN ('seed:dl-01', 'seed:bangkok')
+          OR (t.id IS NOT NULL AND (t.simulated IS NOT TRUE OR COALESCE(t.created_by, '') NOT IN ('seed:dl-01', 'seed:bangkok')))
+          OR (c.id IS NOT NULL AND (c.simulated IS NOT TRUE OR COALESCE(c.created_by, '') NOT IN ('seed:dl-01', 'seed:bangkok')))
+          OR (ig.id IS NOT NULL AND (ig.simulated IS NOT TRUE OR COALESCE(ig.created_by, '') NOT IN ('seed:dl-01', 'seed:bangkok'))))
+    )
+), risk_input AS (
+  SELECT sb.asset_id, sb.bowtie_id, 'threat'::text AS entity_type, t.id::text AS entity_id,
+         NULL::text AS target_type, NULL::text AS target_id, t.frequency_per_year,
+         NULL::numeric AS conditional_probability, NULL::jsonb AS severity,
+         NULL::text AS barrier_id, NULL::text AS barrier_side, NULL::numeric AS pfd_band,
+         NULL::text AS health, NULL::text AS independence_group_id, NULL::integer AS position
+  FROM selected_bowtie sb JOIN app.threat t ON t.bowtie_id = sb.bowtie_id AND t.org_id = $2
+  WHERE (t.classification = ANY($3::text[]) OR ($4::boolean AND t.simulated IS TRUE AND t.created_by IN ('seed:dl-01', 'seed:bangkok')))
+  UNION ALL
+  SELECT sb.asset_id, sb.bowtie_id, 'consequence'::text, c.id::text,
+         NULL::text, NULL::text, NULL::numeric, c.p_conditional, c.severity,
+         NULL::text, NULL::text, NULL::numeric, NULL::text, NULL::text, NULL::integer
+  FROM selected_bowtie sb JOIN app.consequence c ON c.bowtie_id = sb.bowtie_id AND c.org_id = $2
+  WHERE (c.classification = ANY($3::text[]) OR ($4::boolean AND c.simulated IS TRUE AND c.created_by IN ('seed:dl-01', 'seed:bangkok')))
+  UNION ALL
+  SELECT sb.asset_id, sb.bowtie_id, 'path'::text, bp.id::text,
+         CASE WHEN bp.threat_id IS NOT NULL THEN 'threat' ELSE 'consequence' END,
+         COALESCE(bp.threat_id, bp.consequence_id)::text, NULL::numeric, NULL::numeric, NULL::jsonb,
+         b.id::text, b.side, b.pfd_band, b.health, b.independence_group_id::text, bp.position
+  FROM selected_bowtie sb
+  JOIN app.barrier_path bp ON bp.org_id = $2 AND (bp.threat_id IS NOT NULL OR bp.consequence_id IS NOT NULL)
+  JOIN app.barrier b ON b.id = bp.barrier_id AND b.org_id = bp.org_id
+  LEFT JOIN app.threat target_threat ON target_threat.id = bp.threat_id AND target_threat.org_id = bp.org_id
+  LEFT JOIN app.consequence target_consequence ON target_consequence.id = bp.consequence_id AND target_consequence.org_id = bp.org_id
+  LEFT JOIN app.independence_group ig ON ig.id = b.independence_group_id AND ig.org_id = b.org_id
+  WHERE b.id = bp.barrier_id AND (
+      (bp.threat_id IS NOT NULL AND target_threat.bowtie_id = sb.bowtie_id
+        AND (target_threat.classification = ANY($3::text[]) OR ($4::boolean AND target_threat.simulated IS TRUE AND target_threat.created_by IN ('seed:dl-01', 'seed:bangkok'))))
+      OR (bp.consequence_id IS NOT NULL AND target_consequence.bowtie_id = sb.bowtie_id
+        AND (target_consequence.classification = ANY($3::text[]) OR ($4::boolean AND target_consequence.simulated IS TRUE AND target_consequence.created_by IN ('seed:dl-01', 'seed:bangkok'))))
+    )
+    AND (bp.classification = ANY($3::text[]) OR ($4::boolean AND bp.simulated IS TRUE AND bp.created_by IN ('seed:dl-01', 'seed:bangkok')))
+    AND (b.classification = ANY($3::text[]) OR ($4::boolean AND b.simulated IS TRUE AND b.created_by IN ('seed:dl-01', 'seed:bangkok')))
+    AND (b.independence_group_id IS NULL OR (ig.id IS NOT NULL AND
+      (ig.classification = ANY($3::text[]) OR ($4::boolean AND ig.simulated IS TRUE AND ig.created_by IN ('seed:dl-01', 'seed:bangkok')))))
+)
+SELECT asset_id::text, bowtie_id::text, entity_type, entity_id, target_type, target_id,
+       frequency_per_year, conditional_probability, severity, barrier_id, barrier_side,
+       pfd_band, health, independence_group_id, position
+FROM risk_input`;
 
 export class MapServiceError extends Error {
   constructor(readonly code: "validation_failed" | "service_unavailable", readonly statusCode: 400 | 503, message: string) {
@@ -249,14 +443,14 @@ function featureLimitForZoom(zoom: number): number {
   return MAX_FEATURES;
 }
 
-const ASSET_LAYER_SQL = `
+export const ASSET_LAYER_SQL = `
 WITH visible_asset AS (
-  SELECT a.id, a.type, a.attributes, a.domain_pack, a.simulated, a.classification,
+  SELECT a.id, a.id AS asset_id, a.type, a.attributes, a.domain_pack, a.simulated, a.classification,
          ST_AsGeoJSON(a.geom)::jsonb AS geometry,
          COALESCE(a.attributes->>'name', a.attributes->>'asset_code', a.id::text) AS name,
          a.attributes->>'asset_code' AS code,
          a.attributes->>'label' AS label,
-         a.attributes->>'risk_band' AS risk_band
+         NULL::text AS risk_band
   FROM app.asset a
   WHERE a.org_id = $5 AND (a.classification = ANY($6::text[]) OR
     ($8::boolean AND a.simulated IS TRUE AND a.created_by IN ('seed:dl-01', 'seed:bangkok')))
@@ -268,13 +462,13 @@ WITH visible_asset AS (
   ORDER BY a.type, name
   LIMIT $7
 ), visible_segment AS (
-  SELECT s.id, s.chainage_from, s.chainage_to, s.simulated, s.classification,
+  SELECT s.id, s.asset_id, s.chainage_from, s.chainage_to, s.simulated, s.classification,
          ST_AsGeoJSON(s.geom)::jsonb AS geometry,
          COALESCE(a.attributes->>'name', a.attributes->>'asset_code', a.id::text) || ' · ' ||
            COALESCE(s.chainage_from::text, '?') || '–' || COALESCE(s.chainage_to::text, '?') || ' m' AS name,
          a.attributes->>'asset_code' AS code,
          a.attributes->>'label' AS label,
-         a.attributes->>'risk_band' AS risk_band,
+         NULL::text AS risk_band,
          a.domain_pack
   FROM app.segment s
   JOIN app.asset a ON a.id = s.asset_id AND a.org_id = s.org_id
@@ -287,12 +481,12 @@ WITH visible_asset AS (
   ORDER BY s.chainage_from NULLS LAST
   LIMIT $7
 )
-SELECT id::text, geometry, name, code, type AS feature_kind, classification, simulated, label,
+SELECT id::text, asset_id::text, geometry, name, code, type AS feature_kind, classification, simulated, label,
        NULL::text AS health, risk_band, NULL::numeric AS chainage_from, NULL::numeric AS chainage_to,
        NULL::text AS evidence_observed_at, domain_pack
 FROM visible_asset
 UNION ALL
-SELECT id::text, geometry, name, code, 'segment' AS feature_kind, classification, simulated, label,
+SELECT id::text, asset_id::text, geometry, name, code, 'segment' AS feature_kind, classification, simulated, label,
        NULL::text AS health, risk_band, chainage_from, chainage_to, NULL::text AS evidence_observed_at, domain_pack
 FROM visible_segment`;
 
