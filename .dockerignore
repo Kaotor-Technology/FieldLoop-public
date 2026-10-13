@@ -58,6 +58,10 @@
 !packages/contracts/registered-signal-rule.v1.schema.json
 !packages/contracts/worker-event.v1.schema.json
 !packages/contracts/signal-worker.v1.openapi.json
+!packages/contracts/domain-pack.v1.schema.json
+!packages/contracts/agent-definition.v1.schema.json
+!domain-packs/
+!domain-packs/**
 !packages/contracts/scripts/
 !packages/contracts/scripts/**
 !packages/ui/scripts/
