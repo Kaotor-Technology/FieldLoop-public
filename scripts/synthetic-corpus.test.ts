@@ -1,0 +1,345 @@
+import { execFileSync } from "node:child_process";
+import { cpSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+
+type CorpusManifest = {
+  documentCount: number;
+  review: { pending: number; passed: number; failedAndRemoved: number };
+  documents: {
+    documentId: string;
+    documentType: string;
+    language: "en" | "th";
+    revision: "A" | "B";
+    status: string;
+    reviewStatus: string;
+    folder: string;
+    simulated: boolean;
+    label: string;
+    supersedes: string | null;
+    supersededBy: string | null;
+    contentPath: string;
+  }[];
+};
+
+const DOCUMENT_TYPES = ["procedure", "ili-report", "patrol-log", "root-cause-analysis", "memo"];
+// Top-level folders of the Pipeline Domain Pack (PRD KL-2).
+const PACK_FOLDERS = ["Company Standards", "Integrity", "Maintenance", "Lessons Learned"];
+
+const repositoryRoot = resolve(".");
+const generator = resolve("data/synthetic/corpus/generate.mjs");
+const generatedDirectories: string[] = [];
+
+function temporaryDirectory() {
+  const directory = mkdtempSync(join(tmpdir(), "fieldloop-corpus-"));
+  generatedDirectories.push(directory);
+  return directory;
+}
+
+function generateInto(directory: string) {
+  execFileSync(process.execPath, [generator, "--output-dir", directory], {
+    cwd: repositoryRoot,
+  });
+}
+
+function readManifest(directory: string): CorpusManifest {
+  return JSON.parse(readFileSync(join(directory, "manifest.json"), "utf8")) as CorpusManifest;
+}
+
+function documentBody(directory: string, contentPath: string) {
+  const content = readFileSync(join(directory, contentPath), "utf8");
+  // Drop the front matter, the title and the revision-specific lines.
+  return content
+    .slice(content.indexOf("\n---\n") + 5)
+    .split("\n")
+    .filter((line) => !line.startsWith("# ") && !line.startsWith("- Revision: "))
+    .join("\n");
+}
+
+function recordDecisions(directory: string, decisions: Record<string, string[]>) {
+  const checklistFile = join(directory, "review-checklist.csv");
+  const source = readFileSync(checklistFile, "utf8");
+  const controlColumnCount = source.split("\n")[0]?.split(",").indexOf('"reviewer"') ?? 0;
+  const rows = source.trimEnd().split("\n").map((row) => {
+    const documentId = row.split(",")[0]?.replaceAll('"', "") ?? "";
+    const decision = decisions[documentId];
+    if (!decision) {
+      return row;
+    }
+    const cells = row.split('","').slice(0, controlColumnCount).join('","');
+    return `${cells}","${decision.join('","')}"`;
+  });
+  writeFileSync(checklistFile, `${rows.join("\n")}\n`, "utf8");
+}
+
+function compareBatch(committed: string) {
+  const directory = temporaryDirectory();
+  // Replay the complete bound review input, not a checklist detached from its text.
+  cpSync(join(committed, "documents"), join(directory, "documents"), { recursive: true });
+  writeFileSync(
+    join(directory, "review-checklist.csv"),
+    readFileSync(join(committed, "review-checklist.csv"), "utf8"),
+    "utf8",
+  );
+  generateInto(directory);
+  const filenames = readdirSync(join(directory, "documents")).sort();
+  expect(readdirSync(join(committed, "documents")).sort()).toEqual(filenames);
+  for (const path of ["manifest.json", "review-checklist.csv", ...filenames.map((name) => `documents/${name}`)]) {
+    expect(readFileSync(join(committed, path), "utf8"), path).toBe(readFileSync(join(directory, path), "utf8"));
+  }
+}
+
+afterEach(() => {
+  for (const directory of generatedDirectories.splice(0)) {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+describe("synthetic document corpus generator", () => {
+  it("fails a read-only delivery check while any human decision is pending", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    const before = readFileSync(join(directory, "review-checklist.csv"), "utf8");
+    expect(() => execFileSync(process.execPath, [generator, "--check-delivery", "--output-dir", directory], {
+      cwd: repositoryRoot, stdio: "pipe",
+    })).toThrow(/240 documents still require human review/);
+    expect(readFileSync(join(directory, "review-checklist.csv"), "utf8")).toBe(before);
+  });
+
+  it("accepts a complete reviewed fixture and rejects an edited delivery without rewriting it", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    const decisions = Object.fromEntries(readManifest(directory).documents.map(({ documentId }, index) => [
+      documentId, ["Fixture reviewer", index === 0 ? "fail" : "pass", "2026-10-12", "Test only"],
+    ]));
+    recordDecisions(directory, decisions);
+    generateInto(directory);
+    const check = () => execFileSync(process.execPath, [generator, "--check-delivery", "--output-dir", directory], {
+      cwd: repositoryRoot, encoding: "utf8", stdio: "pipe",
+    });
+    expect(check()).toContain("Delivery check passed: 239 human-reviewed documents");
+    const path = join(directory, readManifest(directory).documents[0]?.contentPath ?? "missing");
+    const edited = readFileSync(path, "utf8") + "\nUnreviewed fixture edit.\n";
+    writeFileSync(path, edited);
+    expect(check).toThrow(/does not match the reviewed delivery/);
+    expect(readFileSync(path, "utf8")).toBe(edited);
+  });
+
+  it("rejects a reviewed delivery below the retained document target", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    recordDecisions(directory, Object.fromEntries(readManifest(directory).documents.map(({ documentId }, index) => [
+      documentId, ["Fixture reviewer", index < 41 ? "fail" : "pass", "2026-10-12", "Test only"],
+    ])));
+    generateInto(directory);
+    expect(() => execFileSync(process.execPath, [generator, "--check-delivery", "--output-dir", directory], {
+      cwd: repositoryRoot, stdio: "pipe",
+    })).toThrow(/199 retained documents; requires 200–300/);
+  });
+
+  it("rejects a changed template before replacing reviewed content or decisions", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    recordDecisions(directory, {
+      "SYN-UC1-PROC-EN-001-A": ["Fixture reviewer", "pass", "2026-10-12", ""],
+    });
+    const checklist = readFileSync(join(directory, "review-checklist.csv"), "utf8");
+    const documentPath = join(directory, "documents/syn-uc1-proc-en-001-a.md");
+    const document = readFileSync(documentPath, "utf8");
+    const changedGenerator = join(realpathSync(temporaryDirectory()), "generate.mjs");
+    writeFileSync(changedGenerator, readFileSync(generator, "utf8").replace(
+      "surface rust at a coating defect on an exposed girth weld",
+      "a changed fictional finding that has not been reviewed",
+    ));
+    expect(() => execFileSync(process.execPath, [changedGenerator, "--output-dir", directory], {
+      cwd: repositoryRoot, stdio: "pipe",
+    })).toThrow(/reviewed content/);
+    expect(readFileSync(documentPath, "utf8")).toBe(document);
+    expect(readFileSync(join(directory, "review-checklist.csv"), "utf8")).toBe(checklist);
+  });
+
+  it("rejects a review of an edited candidate rather than replacing its text", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    const documentPath = join(directory, "documents/syn-uc1-proc-en-001-a.md");
+    writeFileSync(documentPath, readFileSync(documentPath, "utf8").replace("surface rust", "edited fictional finding"));
+    recordDecisions(directory, { "SYN-UC1-PROC-EN-001-A": ["Fixture reviewer", "pass", "2026-10-12", ""] });
+    expect(() => generateInto(directory)).toThrow(/reviewed content/);
+    expect(readFileSync(documentPath, "utf8")).toContain("edited fictional finding");
+  });
+
+  it("includes authored status-like lines in the review hash", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    const documentPath = join(directory, "documents/syn-uc1-proc-en-001-a.md");
+    writeFileSync(documentPath, readFileSync(documentPath, "utf8").replace("## Purpose", "review_status: unreviewed authored material\n\n## Purpose"));
+    recordDecisions(directory, { "SYN-UC1-PROC-EN-001-A": ["Fixture reviewer", "pass", "2026-10-12", ""] });
+    expect(() => generateInto(directory)).toThrow(/reviewed content/);
+  });
+
+  it("generates 240 documents with every document type in both languages", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    const manifest = readManifest(directory);
+
+    expect(manifest.documentCount).toBe(240);
+    expect(manifest.documents).toHaveLength(240);
+    for (const documentType of DOCUMENT_TYPES) {
+      for (const language of ["en", "th"]) {
+        for (const revision of ["A", "B"]) {
+          expect(manifest.documents.filter((document) =>
+            document.documentType === documentType
+            && document.language === language
+            && document.revision === revision)).toHaveLength(12);
+        }
+      }
+    }
+    for (const document of manifest.documents) {
+      expect(PACK_FOLDERS).toContain(document.folder.split("/")[0]);
+    }
+  });
+
+  it("keeps every generated record labelled, simulated, and pending human review", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    const manifest = readManifest(directory);
+
+    expect(manifest.review).toEqual({ pending: 240, passed: 0, failedAndRemoved: 0 });
+    for (const document of manifest.documents) {
+      expect(document.status).toBe("draft");
+      expect(document.reviewStatus).toBe("pending");
+      expect(document.simulated).toBe(true);
+      expect(document.label).toBe("SYNTHETIC");
+      const content = readFileSync(join(directory, document.contentPath), "utf8");
+      expect(content).toContain("> SYNTHETIC — ");
+      expect(content).toContain(document.language === "en"
+        ? "Human review is pending"
+        : "รอการทบทวนโดยบุคคล");
+      if (document.revision === "A") {
+        expect(document.supersededBy).not.toBeNull();
+        expect(document.supersedes).toBeNull();
+      } else {
+        expect(document.supersedes).not.toBeNull();
+        expect(document.supersededBy).toBeNull();
+      }
+    }
+  });
+
+  it("writes a distinct body for every document, with no unfilled placeholder", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    const manifest = readManifest(directory);
+
+    const bodies = manifest.documents.map(({ contentPath }) => documentBody(directory, contentPath));
+    expect(new Set(bodies).size).toBe(240);
+    for (const body of bodies) {
+      expect(body).not.toMatch(/\[[^\]]*\]|\{\w+\}/);
+    }
+  });
+
+  it("matches the committed batch", () => {
+    compareBatch(resolve("data/synthetic/corpus"));
+  });
+
+  it("replays a reviewed batch with passed and removed failed fixture documents", () => {
+    const fixture = temporaryDirectory();
+    generateInto(fixture);
+    recordDecisions(fixture, {
+      "SYN-UC1-PROC-EN-001-A": ["Fixture reviewer", "pass", "2026-10-12", "Test only"],
+      "SYN-UC1-MEMO-TH-002-B": ["Fixture reviewer", "fail", "2026-10-12", "Test only"],
+    });
+    generateInto(fixture);
+    expect(readManifest(fixture).review).toEqual({ pending: 238, passed: 1, failedAndRemoved: 1 });
+    compareBatch(fixture);
+  });
+
+  it("writes a deterministic review checklist without decisions prefilled", () => {
+    const firstDirectory = temporaryDirectory();
+    const secondDirectory = temporaryDirectory();
+    generateInto(firstDirectory);
+    generateInto(secondDirectory);
+
+    for (const filename of ["manifest.json", "review-checklist.csv"]) {
+      expect(readFileSync(join(firstDirectory, filename), "utf8")).toBe(
+        readFileSync(join(secondDirectory, filename), "utf8"),
+      );
+    }
+    const checklist = readFileSync(join(firstDirectory, "review-checklist.csv"), "utf8");
+    const rows = checklist.trimEnd().split("\n");
+    expect(rows).toHaveLength(241);
+    for (const row of rows.slice(1)) {
+      expect(row.endsWith(',"","","",""')).toBe(true);
+    }
+  });
+
+  it.each([40, 41])("diagnoses the retained delivery-count boundary after %i fixture failures", (failedCount) => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    const failures = Object.fromEntries(readManifest(directory).documents.slice(0, failedCount).map(({ documentId }) => [
+      documentId, ["Fixture reviewer", "fail", "2026-10-12", "Test only"],
+    ]));
+    recordDecisions(directory, failures);
+    const result = execFileSync(process.execPath, [generator, "--output-dir", directory], {
+      cwd: repositoryRoot, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    });
+    const manifest = readManifest(directory);
+    expect(manifest.documentCount).toBe(240 - failedCount);
+    expect(manifest.review.failedAndRemoved).toBe(failedCount);
+    expect(readdirSync(join(directory, "documents"))).toHaveLength(240 - failedCount);
+    if (failedCount === 41) {
+      expect(result).toContain("Delivery target unmet: 199 retained documents; requires 200–300 after removals. Human review remains required.");
+    } else {
+      expect(result).not.toContain("Delivery target unmet");
+    }
+  });
+
+  it("keeps recorded review decisions and removes failed documents on a rerun", () => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    recordDecisions(directory, {
+      "SYN-UC1-PROC-EN-001-A": ["Reviewer One", "pass", "2026-10-11", "Clear, and labelled."],
+      "SYN-UC1-PROC-EN-001-B": ["Reviewer One", "PASS", "2026-10-11", ""],
+      "SYN-UC1-MEMO-TH-002-A": ["Reviewer Two", "pass", "2026-10-11", ""],
+      "SYN-UC1-MEMO-TH-002-B": ["Reviewer Two", "fail", "2026-10-11", 'Unclear ""scope"", remove.'],
+    });
+    const reviewedChecklist = readFileSync(join(directory, "review-checklist.csv"), "utf8")
+      .replace('"PASS"', '"pass"');
+
+    generateInto(directory);
+    const manifest = readManifest(directory);
+    const byId = new Map(manifest.documents.map((document) => [document.documentId, document]));
+
+    expect(readFileSync(join(directory, "review-checklist.csv"), "utf8")).toBe(reviewedChecklist);
+    expect(manifest.review).toEqual({ pending: 236, passed: 3, failedAndRemoved: 1 });
+    expect(manifest.documentCount).toBe(239);
+    expect(byId.has("SYN-UC1-MEMO-TH-002-B")).toBe(false);
+    expect(readdirSync(join(directory, "documents"))).not.toContain("syn-uc1-memo-th-002-b.md");
+    expect(byId.get("SYN-UC1-PROC-EN-001-A")).toMatchObject({ status: "superseded", reviewStatus: "passed" });
+    expect(byId.get("SYN-UC1-PROC-EN-001-B")).toMatchObject({ status: "current", reviewStatus: "passed" });
+    expect(byId.get("SYN-UC1-MEMO-TH-002-A")).toMatchObject({ status: "current", supersededBy: null });
+    expect(readFileSync(join(directory, "documents/syn-uc1-proc-en-001-b.md"), "utf8"))
+      .toContain("Human review passed");
+  });
+
+  it.each([
+    [["", "pass", "2026-10-11", ""], /requires a reviewer and reviewed_at/],
+    [["Reviewer One", "maybe", "2026-10-11", ""], /must be "pass", "fail" or blank/],
+  ])("rejects an incomplete or unknown review decision", (decision, expectedError) => {
+    const directory = temporaryDirectory();
+    generateInto(directory);
+    recordDecisions(directory, { "SYN-UC1-ILI-EN-004-A": decision });
+
+    expect(() => execFileSync(process.execPath, [generator, "--output-dir", directory], {
+      cwd: repositoryRoot,
+      stdio: "pipe",
+    })).toThrow(expectedError);
+  });
+
+  it("rejects unsupported command-line arguments", () => {
+    expect(() => execFileSync(process.execPath, [generator, "--unknown"], {
+      cwd: repositoryRoot,
+      stdio: "pipe",
+    })).toThrow(/Unknown argument: --unknown/);
+  });
+});

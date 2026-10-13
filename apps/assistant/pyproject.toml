@@ -2,10 +2,17 @@
 name = "fieldloop-assistant"
 version = "0.0.0"
 requires-python = ">=3.12,<3.13"
-dependencies = ["fastapi==0.135.4", "uvicorn==0.42.0", "fieldloop-common"]
+dependencies = [
+    "fastapi==0.135.4",
+    "uvicorn==0.42.0",
+    "fieldloop-common",
+    "fieldloop-adapters",
+    "psycopg[binary,pool]==3.3.6",
+]
 
 [tool.uv.sources]
 fieldloop-common = { workspace = true }
+fieldloop-adapters = { workspace = true }
 
 [build-system]
 requires = ["hatchling==1.29.0"]

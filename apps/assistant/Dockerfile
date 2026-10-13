@@ -7,6 +7,7 @@ COPY pyproject.toml uv.lock ./
 COPY apps/assistant ./apps/assistant
 COPY apps/simulator ./apps/simulator
 COPY py/fieldloop_common ./py/fieldloop_common
+COPY packages/adapters/python ./packages/adapters/python
 RUN uv sync --locked --no-dev --no-editable --package fieldloop-assistant
 
 FROM python:3.12-slim-bookworm AS runtime

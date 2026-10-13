@@ -1,0 +1,146 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MockPatrolPage",
+  "description": "Read-only synthetic right-of-way patrol findings with GPS fixes along DL-01 (SIM-2). Fixed fixtures, not observations of a real asset.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "items",
+    "total",
+    "label",
+    "simulated",
+    "classification"
+  ],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PatrolFinding"
+      }
+    },
+    "total": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "label": {
+      "type": "string",
+      "const": "SYNTHETIC"
+    },
+    "simulated": {
+      "type": "boolean",
+      "const": true
+    },
+    "classification": {
+      "type": "string",
+      "const": "HIGHLY_RESTRICTED"
+    }
+  },
+  "$defs": {
+    "PatrolFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "orgId",
+        "assetCode",
+        "kind",
+        "severity",
+        "status",
+        "observedAt",
+        "summary",
+        "gps",
+        "label",
+        "simulated",
+        "classification"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^SYN-PATROL-[0-9]{3}$"
+        },
+        "orgId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "assetCode": {
+          "type": "string",
+          "const": "DL-01"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "encroachment",
+            "marker_damage",
+            "erosion"
+          ]
+        },
+        "severity": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "closed"
+          ]
+        },
+        "observedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gps": {
+          "$ref": "#/$defs/GpsFix"
+        },
+        "label": {
+          "type": "string",
+          "const": "SYNTHETIC"
+        },
+        "simulated": {
+          "type": "boolean",
+          "const": true
+        },
+        "classification": {
+          "type": "string",
+          "const": "HIGHLY_RESTRICTED"
+        }
+      }
+    },
+    "GpsFix": {
+      "type": "object",
+      "description": "A device fix beside the route. The platform snaps it to Chainage; the source does not supply one.",
+      "additionalProperties": false,
+      "required": [
+        "latitude",
+        "longitude",
+        "accuracyM"
+      ],
+      "properties": {
+        "latitude": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "longitude": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "accuracyM": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    }
+  }
+}

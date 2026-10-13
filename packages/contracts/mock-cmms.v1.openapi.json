@@ -1,0 +1,113 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FieldLoop internal mock CMMS",
+    "version": "1.0.0",
+    "description": "Synthetic read-only simulator endpoint from architecture section 4.2. Not a web-api/BFF endpoint. Run behind Cloud Run invoker IAM in dev/demo; local fixtures need no credentials. No real CMMS connector, no write operation and no Signal publication.",
+    "contact": {
+      "name": "FieldLoop engineering",
+      "url": "https://github.com/Kaotor-Technology/FieldLoop-v2"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8082",
+      "description": "Local simulator as the repository README starts it. Deployed environments call the private simulator-{env} Cloud Run service with a Google OIDC ID token."
+    }
+  ],
+  "tags": [
+    {
+      "name": "mock-cmms",
+      "description": "Internal SYNTHETIC fixtures"
+    }
+  ],
+  "security": [
+    {
+      "serviceIdentity": []
+    }
+  ],
+  "paths": {
+    "/mock/cmms/work-orders": {
+      "get": {
+        "operationId": "listMockCmmsWorkOrders",
+        "description": "Return four deterministic synthetic work orders for DL-01, each naming the Barrier it maintains, or the open preventive ones due at or before asOf when pmDue=true. Each carries the Organisation the simulator is configured for; no source write, database, publisher or remote IO. This bounded internal fixture list is not the paginated public platform list API.",
+        "tags": [
+          "mock-cmms"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "pmDue",
+            "required": false,
+            "description": "Only open preventive work due at or before asOf.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "in": "query",
+            "name": "asOf",
+            "required": false,
+            "description": "Timezone-aware Scenario time, not wall time; the response reports it in UTC. The default is the start of the DL-01 simulation, fixed for deterministic replay.",
+            "schema": {
+              "type": "string",
+              "format": "date-time",
+              "default": "2026-10-12T00:00:00Z"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deterministic synthetic snapshot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "mock-cmms.v1.schema.json"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query, including an undeclared or repeated query parameter; code validation_failed, input values are not echoed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Only GET is allowed; code method_not_allowed. No state mutation.",
+            "headers": {
+              "Allow": {
+                "schema": {
+                  "type": "string",
+                  "const": "GET"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "serviceIdentity": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Google OIDC",
+        "description": "Verified by Cloud Run invoker IAM, not proxy headers. The handler does not implement browser auth or independently validate IAM."
+      }
+    }
+  }
+}

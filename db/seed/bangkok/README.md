@@ -43,9 +43,11 @@ migrations, late-error rollback, two identical loads, spatial/path assertions,
 seed ownership cleanup, stale foreign-reference rollback, two Organisations,
 DL-01 coexistence and image runtime checks. It requires Docker.
 
-Cloud SQL has not been seeded by this change. Follow the accepted FL-303
-on-demand Cloud Run job pattern with a digest-pinned image and environment-specific
-migration identity; do not extract the migration secret to a workstation.
-The trusted release publishes `v2-db-seed-bangkok:<release-sha>` and reports its
-digest; it never runs either seed. FL-22 should record dev/demo load evidence and
-configure the Bangkok job.
+Terraform's `bangkok_seed_images` configures on-demand `db-seed-bangkok-<env>` jobs
+with digest-pinned images and environment-specific migration identities; do not
+extract the migration secret to a workstation. The trusted release publishes
+`v2-db-seed-bangkok:<release-sha>` and reports its digest; it never runs either seed.
+Follow [the operator workflow](../../../infra/terraform/README.md#bangkok-seed-job-fl-22)
+and keep load evidence in [FL-22's context](../../../docs/contexts/FL-22.md).
+The local image tests use a Docker internal network with no public API egress
+and verify corruption rejection, initial Health, scope links and rerun stability.
