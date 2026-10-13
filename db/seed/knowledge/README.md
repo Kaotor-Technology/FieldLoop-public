@@ -40,6 +40,19 @@ the failed document retains its prior index. Database lifecycle changes are
 never promoted back to current by the job. Synthetic geometry is clipped to
 the document's Chainage and has `HIGHLY_RESTRICTED` spatial access.
 
+Each chunk stores `indexed_licence`, the licence bound to its verified full-text
+source. Retrieval requires an exact match to the current Controlled Document
+licence in both candidate branches. A changed, missing or empty licence therefore
+revokes old full-text results immediately, without relying on a reindex attempt.
+This is not an allowlist inferred from free-form licence wording: only the existing
+reviewed corpus/eligible legal handoff supplies full-text sources to this job.
+Migration `20261013000000` leaves existing chunks unbound (not retrievable); rerun
+the verified indexing job to rebuild them. The unchanged-index shortcut checks
+this binding too. No legal/Document Controller decision is promoted by migration.
+Controlled Document title/revision/licence metadata is retained. This full-text
+primitive does not return reference-only text; FL-88 must use authorised metadata
+for KL-9 reference-only citations and label them "not verified against source text".
+
 ## Retrieval handoff to FL-88
 
 `fieldloop_assistant.knowledge.KnowledgeSearch` accepts a reusable async

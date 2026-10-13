@@ -336,21 +336,67 @@ def test_database_and_embedding_deadlines_fail_closed() -> None:
     asyncio.run(exercise())
 
 
-def test_a_human_licence_change_prevents_reindexing() -> None:
+@pytest.mark.parametrize("licence", ["reference-only", "unreviewed terms", "", None])
+def test_a_human_licence_change_revokes_retrieval_and_prevents_reindexing(
+    licence: str | None,
+) -> None:
     async def exercise() -> None:
         item = source()
+        org = f"licence-{item.id}"
         embeddings = FakeEmbeddings()
         async with await AsyncConnection.connect(
             DSN, row_factory=dict_row, autocommit=True
-        ) as connection:
-            await index_document(connection, "licence-fixture", item, embeddings)
+        ) as connection, AsyncConnectionPool(DSN, kwargs={"row_factory": dict_row}) as pool:
+            await index_document(connection, org, item, embeddings)
+            search = KnowledgeSearch(
+                pool, embeddings, KnowledgeScope(org, (item.folder,), ("INTERNAL",))
+            )
+            # Matching text exercises the union; a non-match exercises semantic-only retrieval.
+            for query in ("cathodic protection", "no-lexical-match"):
+                assert len(await search.search_knowledge(query, [item.folder])) == 1
             await connection.execute(
                 "UPDATE app.controlled_document SET licence=%s WHERE id=%s",
-                ("reference-only", item.id),
+                (licence, item.id),
             )
+            # Revocation takes effect without a reindex or destructive deletion of metadata.
+            for query in ("cathodic protection", "no-lexical-match"):
+                assert await search.search_knowledge(query, [item.folder]) == []
             with pytest.raises(ValueError, match="metadata differs"):
-                await index_document(connection, "licence-fixture", item, embeddings)
-            assert embeddings.calls == ["RETRIEVAL_DOCUMENT"]
+                await index_document(connection, org, item, embeddings)
+            assert embeddings.calls.count("RETRIEVAL_DOCUMENT") == 1
+            row = await (
+                await connection.execute(
+                    "SELECT title, revision, licence FROM app.controlled_document WHERE id=%s",
+                    (item.id,),
+                )
+            ).fetchone()
+            assert row == {"title": item.title, "revision": item.revision, "licence": licence}
+
+    asyncio.run(exercise())
+
+
+def test_unbound_chunks_fail_closed_until_verified_reindex() -> None:
+    async def exercise() -> None:
+        item = source()
+        org = f"legacy-{item.id}"
+        embeddings = FakeEmbeddings()
+        async with await AsyncConnection.connect(
+            DSN, row_factory=dict_row, autocommit=True
+        ) as connection, AsyncConnectionPool(DSN, kwargs={"row_factory": dict_row}) as pool:
+            assert await index_document(connection, org, item, embeddings) == 1
+            # The additive migration does not backfill unverified permissions on old chunks.
+            await connection.execute(
+                "UPDATE app.document_chunk SET indexed_licence=NULL WHERE document_id=%s",
+                (item.id,),
+            )
+            search = KnowledgeSearch(
+                pool, embeddings, KnowledgeScope(org, (item.folder,), ("INTERNAL",))
+            )
+            assert await search.search_knowledge("cathodic protection", [item.folder]) == []
+            assert await index_document(connection, org, item, embeddings) == 1
+            assert len(await search.search_knowledge("cathodic protection", [item.folder])) == 1
+            assert await index_document(connection, org, item, embeddings) == 0
+            assert embeddings.calls.count("RETRIEVAL_DOCUMENT") == 2
 
     asyncio.run(exercise())
 

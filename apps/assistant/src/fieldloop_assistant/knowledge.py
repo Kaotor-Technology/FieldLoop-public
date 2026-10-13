@@ -33,12 +33,14 @@ class KnowledgeScope:
 
 
 # Filter in both candidate branches, before LIMIT: other tenants cannot exhaust candidates.
+# A changed licence or a legacy NULL binding revokes full text; wording is never interpreted here.
 FILTER = """
     JOIN app.controlled_document d ON d.id = c.document_id AND d.org_id = c.org_id
     WHERE c.org_id = %(org)s AND d.status = 'current' AND d.superseded_by IS NULL
       AND d.folder = ANY(%(folders)s) AND d.classification = ANY(%(classes)s)
       AND c.classification = ANY(%(classes)s) AND c.embedding IS NOT NULL
       AND c.embedding_model = %(model)s
+      AND c.indexed_licence = d.licence
 """
 SPATIAL = """
       AND c.geom_classification = ANY(%(classes)s)

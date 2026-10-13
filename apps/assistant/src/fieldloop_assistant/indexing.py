@@ -117,7 +117,7 @@ async def index_document(
         cursor = await connection.execute(
             """
             SELECT chunk_index, source_hash, embedding_model, content, page, clause,
-                   embedding IS NOT NULL AS embedded
+                   indexed_licence, embedding IS NOT NULL AS embedded
             FROM app.document_chunk WHERE org_id = %s AND document_id = %s ORDER BY chunk_index
         """,
             (org_id, source.id),
@@ -126,6 +126,7 @@ async def index_document(
         if len(existing) == len(chunks) and all(
             row["chunk_index"] == i
             and row["source_hash"] == digest
+            and row["indexed_licence"] == source.licence
             and row["embedding_model"] == embeddings.model
             and row["embedded"]
             and row["content"] == chunk.content
@@ -148,9 +149,9 @@ async def index_document(
                 INSERT INTO app.document_chunk
                     (id, org_id, document_id, content, embedding, page, clause, simulated,
                      classification, created_by, chunk_index, source_hash, embedding_model,
-                     geom, geom_classification)
+                     geom, geom_classification, indexed_licence)
                 VALUES (%s, %s, %s, %s, %s::vector, %s, %s, %s, %s, %s, %s, %s, %s,
-                        ST_GeomFromText(%s, 4326), %s)
+                        ST_GeomFromText(%s, 4326), %s, %s)
             """,
                 [
                     (
@@ -169,6 +170,7 @@ async def index_document(
                         embeddings.model,
                         geom,
                         geom_classification,
+                        source.licence,
                     )
                     for i, (chunk, vector) in enumerate(zip(chunks, vectors, strict=True))
                 ],
