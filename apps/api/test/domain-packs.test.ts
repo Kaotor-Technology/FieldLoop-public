@@ -1,4 +1,4 @@
-import { readFile, mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { readFile, readdir, mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -10,6 +10,20 @@ describe("web-api Domain Pack startup", () => {
     const packs = await loadDemoDomainPacks();
     const app = buildApp({ domainPacks: packs });
     expect(app.domainPacks.flatMap(({ agents }) => agents).map(({ id }) => id)).toContain("flood-situation");
+    const pipeline = app.domainPacks.find(({ content }) => content.id === "pipeline-integrity");
+    expect(pipeline?.content.signalRules.map(({ id }) => id)).toEqual(expect.arrayContaining([
+      "cp-rectifier-output-lost",
+      "encroachment-detected",
+      "evidence-ageing",
+    ]));
+    expect(pipeline?.content.signalRules.every(({ effect }) => effect.kind === "health_proposal")).toBe(true);
+    expect(pipeline?.agents.map(({ id }) => id)).toEqual(expect.arrayContaining([
+      "integrity-orchestrator",
+      "code-standard",
+      "regulatory",
+      "inspection-data-prep",
+      "report-generator",
+    ]));
     expect((await app.inject({ url: "/health" })).statusCode).toBe(200);
     await app.close();
   });
@@ -46,5 +60,20 @@ describe("web-api Domain Pack startup", () => {
         for (const code of rule.targetBarrierSelector.barrierCodes) expect(seed.barriers.map(({ id }) => id)).toContain(code);
       }
     }
+  });
+
+  it("keeps Pipeline attributes out of core migration columns", async () => {
+    const migrations = new URL("../../../db/migrations/", import.meta.url);
+    const names = await readdir(migrations);
+    const sources = await Promise.all(names.filter((name) => name.endsWith(".sql"))
+      .map((name) => readFile(new URL(name, migrations), "utf8")));
+    const columns = sources.flatMap((source) => [
+      ...[...source.matchAll(/^ {4}([a-z][a-z0-9_]*)\s+\S+/gm)].map(([, name]) => name),
+      ...[...source.matchAll(/\bADD\s+COLUMN(?:\s+IF\s+NOT\s+EXISTS)?\s+([a-z][a-z0-9_]*)\b/gi)]
+        .map(([, name]) => name),
+    ]);
+    const pipelinePackFields = new Set(["right_of_way", "location_class", "hca"]);
+
+    expect(columns.some((column) => pipelinePackFields.has(column ?? ""))).toBe(false);
   });
 });
