@@ -77,6 +77,21 @@ describe("OIDC Signal push boundary", () => {
     expect(config.identity.verify).toHaveBeenCalledWith("test-service-token", config.audience, config.schedulerEmail);
     expect(config.store.detectSilence).toHaveBeenCalledWith(expect.any(Date));
   });
+  it("ages Evidence through the authenticated hourly Scheduler route", async () => {
+    const { app, config } = fixture();
+    const response = await app.inject({ method: "POST", url: "/internal/jobs/ageing", headers });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ changed: 1, notified: 2 });
+    expect(config.identity.verify).toHaveBeenCalledWith("test-service-token", config.audience, config.schedulerEmail);
+    expect(config.store.ageEvidence).toHaveBeenCalledWith(expect.any(Date));
+    expect(config.store.publishPending).toHaveBeenCalledWith(config.publish);
+  });
+  it("rejects Evidence ageing without Scheduler OIDC", async () => {
+    const { app, config } = fixture();
+    const response = await app.inject({ method: "POST", url: "/internal/jobs/ageing" });
+    expect(response.statusCode).toBe(401);
+    expect(config.store.ageEvidence).not.toHaveBeenCalled();
+  });
   it("fails closed while scaffold health is available", async () => {
     const app = buildApp(); apps.push(app);
     expect((await app.inject({ method: "POST", url: "/internal/pubsub/signals", headers, payload: push() })).statusCode).toBe(503);

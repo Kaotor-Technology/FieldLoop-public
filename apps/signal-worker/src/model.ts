@@ -7,6 +7,7 @@ export class WorkerError extends Error {
 export interface WorkerStore {
   ingest(signal: Signal): Promise<void>;
   detectSilence(now: Date): Promise<number>;
+  ageEvidence(now: Date): Promise<{ changed: number; notified: number }>;
   publishPending(publish: (event: WorkerEvent) => Promise<void>): Promise<void>;
 }
 export interface WorkerRuntime {

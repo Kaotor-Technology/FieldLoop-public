@@ -36,9 +36,10 @@ DECLARE
     parent_run_id uuid;
     parent_retired_at timestamptz;
 BEGIN
-    IF current_setting('app.simulation_reset', true) = 'on'
-        AND current_user::regrole = (SELECT relowner FROM pg_class WHERE oid = 'app.simulation_workspace'::regclass) THEN
-        RETURN NEW;
+    IF current_setting('app.simulation_reset', true) = 'on' THEN
+        IF current_user = pg_get_userbyid((SELECT relowner FROM pg_class WHERE oid = 'app.simulation_workspace'::regclass)) THEN
+            RETURN NEW;
+        END IF;
     END IF;
 
     IF NEW.action_request_id IS NOT NULL THEN
@@ -48,11 +49,11 @@ BEGIN
     ELSIF NEW.health_change_id IS NOT NULL THEN
         SELECT org_id, simulated, simulation_run_id, simulation_retired_at
         INTO STRICT parent_org, parent_simulated, parent_run_id, parent_retired_at
-        FROM app.health_change WHERE id = NEW.health_change_id FOR SHARE;
+        FROM app.health_change WHERE id = NEW.health_change_id;
     ELSIF NEW.evidence_id IS NOT NULL THEN
         SELECT org_id, simulated, simulation_run_id, simulation_retired_at
         INTO STRICT parent_org, parent_simulated, parent_run_id, parent_retired_at
-        FROM app.evidence WHERE id = NEW.evidence_id FOR SHARE;
+        FROM app.evidence WHERE id = NEW.evidence_id;
     ELSE
         RAISE EXCEPTION 'Notification must reference one supported subject' USING ERRCODE = 'check_violation';
     END IF;
@@ -78,7 +79,7 @@ BEGIN
     IF current_database() IN ('fieldloop_dev', 'fieldloop_demo') THEN
         worker_role := 'fl-v2-signal-worker-' || replace(current_database(), 'fieldloop_', '') || '@example-project.iam';
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = worker_role) THEN
-            EXECUTE format('GRANT INSERT ON app.notification TO %I', worker_role);
+            EXECUTE format('GRANT SELECT (id), INSERT ON app.notification TO %I', worker_role);
         END IF;
     END IF;
 END $$;
@@ -94,7 +95,7 @@ BEGIN
     IF current_database() IN ('fieldloop_dev', 'fieldloop_demo') THEN
         worker_role := 'fl-v2-signal-worker-' || replace(current_database(), 'fieldloop_', '') || '@example-project.iam';
         IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = worker_role) THEN
-            EXECUTE format('REVOKE INSERT ON app.notification FROM %I', worker_role);
+            EXECUTE format('REVOKE SELECT (id), INSERT ON app.notification FROM %I', worker_role);
         END IF;
     END IF;
 END $$;

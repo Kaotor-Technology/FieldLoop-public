@@ -36,6 +36,6 @@ export async function appendAuditEvent<Database>(connection: PostgresConnection<
 }
 
 export async function appendWorkerEvent<Database>(connection: PostgresConnection<Database>, event: WorkerEvent, createdBy: string): Promise<void> {
-  await sql`INSERT INTO app.signal_event_outbox (id, org_id, event, simulated, classification, created_by)
-    VALUES (${event.id}::uuid, ${event.orgId}, ${JSON.stringify(event)}::jsonb, ${event.simulated}, ${event.classification}, ${createdBy})`.execute(connection);
+  await sql`INSERT INTO app.signal_event_outbox (id, org_id, event, simulated, classification, created_by, created_at)
+    VALUES (${event.id}::uuid, ${event.orgId}, ${JSON.stringify(event)}::jsonb, ${event.simulated}, ${event.classification}, ${createdBy}, clock_timestamp())`.execute(connection);
 }

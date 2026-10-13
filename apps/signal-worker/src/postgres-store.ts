@@ -12,6 +12,12 @@ interface RuleRow {
   simulated: boolean; classification: WorkerEvent["classification"];
 }
 interface Target { id: string; classification: WorkerEvent["classification"]; }
+interface AgeCandidate { id: string; }
+interface AgeState {
+  id: string; health: string; created_at: Date; expires_at: Date; owner_id: string | null;
+  simulated: boolean; barrier_classification: WorkerEvent["classification"];
+  evidence_id: string | null; observed_at: Date | null; evidence_classification: WorkerEvent["classification"] | null;
+}
 export type SourceInterval = number | { months: number };
 
 export class PostgresWorkerStore implements WorkerStore {
@@ -197,7 +203,7 @@ export class PostgresWorkerStore implements WorkerStore {
               + make_interval(months => expected_interval_months)) AT TIME ZONE ${this.calendarTimeZone}
             ELSE COALESCE(last_received_at, created_at) + expected_interval_seconds * INTERVAL '1 second' END < ${now}`.execute(trx)).rows[0];
         if (!stale) continue;
-        const barrier = (await sql<{ health: string; classification: WorkerEvent["classification"] }>`SELECT health, classification FROM app.barrier
+        const barrier = (await sql<{ health: string; classification: WorkerEvent["classification"]; owner_id: string | null }>`SELECT health, classification, owner_id FROM app.barrier
           WHERE org_id = ${this.orgId} AND id = ${dependency.barrier_id}::uuid AND simulated = ${dependency.simulated}
           FOR UPDATE`.execute(trx)).rows[0];
         if (!barrier || !["healthy", "degraded"].includes(barrier.health)) continue;
@@ -215,11 +221,109 @@ export class PostgresWorkerStore implements WorkerStore {
           simulated: dependency.simulated, classification, createdBy: "signal-worker",
         });
         await this.event(trx, "barrier.health_changed", change.id, dependency.barrier_id, dependency.simulated, classification);
+        if (barrier.owner_id) await this.notifyOwner(trx, {
+          ownerId: barrier.owner_id, subject: "health_change", subjectId: change.id,
+          barrierId: dependency.barrier_id, simulated: dependency.simulated, classification,
+        });
         // No approval is fabricated. Failed stays Failed; receipt alone never restores Health.
         count++;
       }
       return count;
     });
+  }
+
+  async ageEvidence(now: Date): Promise<{ changed: number; notified: number }> {
+    return this.db.transaction().execute(async (trx) => {
+      const workspace = (await sql<{ active_run_id: string | null }>`SELECT active_run_id FROM app.simulation_workspace
+        WHERE org_id = ${this.orgId}`.execute(trx)).rows[0];
+      if (workspace?.active_run_id) {
+        await sql`SELECT set_config('app.simulation_run_id', ${workspace.active_run_id}, true)`.execute(trx);
+      }
+
+      // Lock Barriers first, using the same parent-row fence as Evidence inserts. Re-read the
+      // latest Evidence after each lock so an insertion committed while this statement waited
+      // cannot age a Barrier against an older snapshot.
+      const candidates = (await sql<AgeCandidate>`SELECT b.id FROM app.barrier b
+        LEFT JOIN LATERAL (
+          SELECT e.id, e.observed_at FROM app.evidence e
+          WHERE e.org_id = b.org_id AND e.barrier_id = b.id AND e.simulated = b.simulated
+            AND e.simulation_retired_at IS NULL
+          ORDER BY e.observed_at DESC, e.id DESC LIMIT 1
+        ) latest ON true
+        WHERE b.org_id = ${this.orgId} AND b.evidence_interval IS NOT NULL
+          AND ((b.health IN ('healthy', 'degraded') AND COALESCE(latest.observed_at, b.created_at) + b.evidence_interval < ${now})
+            OR (b.owner_id IS NOT NULL AND latest.id IS NOT NULL
+              AND (latest.observed_at + b.evidence_interval) > ${now}::timestamptz
+              AND (latest.observed_at + b.evidence_interval) <= (${now}::timestamptz + INTERVAL '1 hour')))
+        ORDER BY b.id FOR UPDATE OF b SKIP LOCKED`.execute(trx)).rows;
+
+      let changed = 0;
+      let notified = 0;
+      for (const candidate of candidates) {
+        const barrier = (await sql<AgeState>`SELECT b.id, b.health, b.created_at,
+            COALESCE(latest.observed_at, b.created_at) + b.evidence_interval AS expires_at,
+            b.owner_id, b.simulated, b.classification AS barrier_classification,
+            latest.id AS evidence_id, latest.observed_at, latest.classification AS evidence_classification
+          FROM app.barrier b
+          LEFT JOIN LATERAL (
+            SELECT e.id, e.observed_at, e.classification FROM app.evidence e
+            WHERE e.org_id = b.org_id AND e.barrier_id = b.id AND e.simulated = b.simulated
+              AND e.simulation_retired_at IS NULL
+            ORDER BY e.observed_at DESC, e.id DESC LIMIT 1
+          ) latest ON true
+          WHERE b.org_id = ${this.orgId} AND b.id = ${candidate.id}::uuid`.execute(trx)).rows[0];
+        if (!barrier) continue;
+        const classification = maximumClassification(barrier.barrier_classification,
+          ...(barrier.evidence_classification ? [barrier.evidence_classification] : []));
+        const expiry = barrier.expires_at.getTime();
+        if (barrier.owner_id && barrier.evidence_id && expiry > now.getTime() && expiry <= now.getTime() + 3_600_000) {
+          if (await this.notifyOwner(trx, {
+            ownerId: barrier.owner_id, subject: "evidence", subjectId: barrier.evidence_id,
+            barrierId: barrier.id, simulated: barrier.simulated, classification,
+          })) notified++;
+        }
+        if (expiry >= now.getTime() || !["healthy", "degraded"].includes(barrier.health)) continue;
+
+        const reason = "Latest Evidence is older than the Barrier evidence interval";
+        await sql`UPDATE app.barrier SET health = 'unverified'
+          WHERE org_id = ${this.orgId} AND id = ${barrier.id}::uuid AND health IN ('healthy', 'degraded')`.execute(trx);
+        const change = (await sql<{ id: string }>`INSERT INTO app.health_change
+          (org_id, barrier_id, from_health, to_health, reason, actor, simulated, classification, created_by)
+          VALUES (${this.orgId}, ${barrier.id}::uuid, ${barrier.health}, 'unverified', ${reason}, 'ageing',
+            ${barrier.simulated}, ${classification}, 'signal-worker') RETURNING id`.execute(trx)).rows[0];
+        if (!change) throw new Error("Health change insert returned no identity");
+        await appendAuditEvent(trx, {
+          orgId: this.orgId, actor: "signal-worker:ageing", action: "barrier.health_changed", entity: barrier.id,
+          before: { barrierId: barrier.id, health: barrier.health }, after: { barrierId: barrier.id, health: "unverified" },
+          simulated: barrier.simulated, classification, createdBy: "signal-worker",
+        });
+        await this.event(trx, "barrier.health_changed", change.id, barrier.id, barrier.simulated, classification);
+        if (barrier.owner_id && await this.notifyOwner(trx, {
+          ownerId: barrier.owner_id, subject: "health_change", subjectId: change.id,
+          barrierId: barrier.id, simulated: barrier.simulated, classification,
+        })) notified++;
+        changed++;
+      }
+      return { changed, notified };
+    });
+  }
+
+  private async notifyOwner(connection: Connection, input: {
+    ownerId: string; subject: "health_change" | "evidence"; subjectId: string; barrierId: string;
+    simulated: boolean; classification: WorkerEvent["classification"];
+  }): Promise<boolean> {
+    const recipient = input.simulated ? `sandbox:${input.ownerId}` : input.ownerId;
+    const healthChangeId = input.subject === "health_change" ? input.subjectId : null;
+    const evidenceId = input.subject === "evidence" ? input.subjectId : null;
+    const row = (await sql<{ id: string }>`INSERT INTO app.notification
+      (org_id, health_change_id, evidence_id, channel, recipient_ref, status, receipt, sandbox, simulated, classification, created_by)
+      VALUES (${this.orgId}, ${healthChangeId}::uuid, ${evidenceId}::uuid, 'in_app', ${recipient}, 'delivered',
+        ${JSON.stringify({ deliveredAt: new Date().toISOString() })}::jsonb,
+        ${input.simulated}, ${input.simulated}, ${input.classification}, 'signal-worker')
+      ON CONFLICT DO NOTHING RETURNING id`.execute(connection)).rows[0];
+    if (!row) return false;
+    await this.event(connection, "notification.delivered", row.id, input.barrierId, input.simulated, input.classification);
+    return true;
   }
 
   async publishPending(publish: (event: WorkerEvent) => Promise<void>): Promise<void> {
@@ -235,6 +339,7 @@ export class PostgresWorkerStore implements WorkerStore {
     });
   }
 }
+
 
 function isLocation(value: unknown): value is { type: "Point"; coordinates: [number, number] } {
   if (!value || typeof value !== "object" || !("type" in value) || value.type !== "Point" || !("coordinates" in value)) return false;
