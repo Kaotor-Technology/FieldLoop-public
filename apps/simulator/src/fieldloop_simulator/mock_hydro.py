@@ -76,18 +76,20 @@ class SimulatedHydro:
         return round(profile.base + profile.swing * triangle_wave(at, profile.period), 3)
 
     def observe(self, kind: str, at: datetime) -> Observation:
-        """The reading a Scenario publishes as a Signal; the tag names the sensor."""
+        """The reading a Scenario publishes as a Signal; the payload names the sensor."""
         profile = SENSOR_PROFILES[kind]
         return Observation(
             source=SOURCE_ID,
             classification=CLASSIFICATION,
-            tag=f"{profile.asset_code}.{profile.quantity}",
+            # The tag of the signal.v1 examples and the flood pack rules, which match it exactly.
+            tag=profile.quantity,
             value=self.value_at(kind, at),
             observed_at=at,
             unit=profile.unit,
+            subject=profile.asset_code,
             payload={
                 "assetCode": profile.asset_code,
-                "zoneCode": profile.zone_code,
+                "zone": profile.zone_code,
                 "kind": kind,
                 "label": LABEL,
             },

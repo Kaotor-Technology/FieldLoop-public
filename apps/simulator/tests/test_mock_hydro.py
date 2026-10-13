@@ -198,7 +198,7 @@ def test_the_storm_is_announced_as_a_validated_simulated_signal(
     assert (topic, attributes["simulated"]) == ("signals", "true")
     assert {key: signal[key] for key in ("source", "tag", "value", "unit", "observedAt")} == {
         "source": "mock-hydro",
-        "tag": "S-R1.rain.rate",
+        "tag": "rain.rate",
         "value": 60,
         "unit": "mm/h",
         "observedAt": "2026-10-12T06:00:00Z",
@@ -208,10 +208,11 @@ def test_the_storm_is_announced_as_a_validated_simulated_signal(
     example = signal_example("flood observation")
     for member in ("source", "tag", "value", "unit", "classification", "simulated"):
         assert signal[member] == example[member], member
-    assert signal["payload"].items() <= example["payload"].items()
+    for member in ("zone", "label"):
+        assert signal["payload"][member] == example["payload"][member], member
     assert signal["payload"] == {
         "assetCode": "S-R1",
-        "zoneCode": "Z3",
+        "zone": "Z3",
         "kind": "rain",
         "label": "SIMULATION",
     }
@@ -219,9 +220,9 @@ def test_the_storm_is_announced_as_a_validated_simulated_signal(
 
 @pytest.mark.parametrize(
     ("kind", "tag"),
-    [("rain", "S-R1.rain.rate"), ("level", "S-L1.water.level"), ("tide", "S-T1.tide.level")],
+    [("rain", "rain.rate"), ("level", "water.level"), ("tide", "tide.level")],
 )
-def test_each_kind_has_its_own_tag_and_a_replay_keeps_the_signal_id(
+def test_each_kind_has_the_tag_of_its_quantity_and_a_replay_keeps_the_signal_id(
     kind: str, tag: str, hydro: SimulatedHydro, emitter: SimulatedSignalEmitter
 ) -> None:
     first = emitter.build(hydro.observe(kind, STORM), RUN)

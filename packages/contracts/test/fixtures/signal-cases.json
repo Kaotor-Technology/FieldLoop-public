@@ -37,18 +37,11 @@
       "id": "00000000-0000-4000-8000-000000000073",
       "orgId": "fieldloop-demo",
       "source": "mock-pumps",
-      "tag": "P-3.pump.power",
+      "tag": "pump.power",
       "value": "lost",
       "observedAt": "2026-10-12T00:00:00Z",
       "simulated": true,
-      "classification": "CONFIDENTIAL",
-      "payload": {
-        "assetCode": "P-3",
-        "facilityType": "pump",
-        "zoneCode": "Z3",
-        "operatingState": "stopped",
-        "label": "SIMULATION"
-      }
+      "classification": "CONFIDENTIAL"
     }
   },
   {
@@ -59,16 +52,14 @@
       "id": "00000000-0000-4000-8000-000000000073",
       "orgId": "fieldloop-demo",
       "source": "mock-hydro",
-      "tag": "S-R1.rain.rate",
+      "tag": "rain.rate",
       "value": 60,
       "observedAt": "2026-10-12T00:00:00Z",
       "simulated": true,
       "classification": "CONFIDENTIAL",
       "unit": "mm/h",
       "payload": {
-        "assetCode": "S-R1",
-        "zoneCode": "Z3",
-        "kind": "rain",
+        "zone": "Z3",
         "label": "SIMULATION",
         "detail": "พายุจำลอง"
       }

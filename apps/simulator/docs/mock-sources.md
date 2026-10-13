@@ -343,15 +343,25 @@ Both sources share these points:
   The simulator image does not contain `data/`, so they are literals and a test
   keeps them in step. A response carries no coordinates.
 - **Classification** is `CONFIDENTIAL`, as the historian's readings are and as
-  the `signal.v1` example cases for these two sources state. Those cases
-  (`packages/contracts/test/fixtures/signal-cases.json`) are the shape a Signal
-  rule may be written from, and a test holds each source's Signal to its case. The Facility
+  the `signal.v1` example cases for these two sources state. The Facility
   positions are `HIGHLY_RESTRICTED` in the seed and are not served here.
+- **Signal names come from the contract.** Source, tag and value are those of
+  the "flood observation" and "pump power lost" cases in
+  `packages/contracts/test/fixtures/signal-cases.json`, and a test holds each
+  source's Signal to its case. A flood pack rule matches a tag exactly, so the
+  tag carries no Facility code: the payload's `assetCode` names the Facility,
+  and it takes part in the Signal `id`, so two pumps at one instant stay
+  distinct.
 - **Scenario state is per process**, as the historian's overrides are, and is
   dropped by `reset()` and by scale-to-zero.
-- **No Barrier reference.** The tag names the Facility, not a Barrier of
-  Bowtie D. Mapping `P-3` to `pumping-stations` or `dual-power-generators`
-  belongs to the Signal rules of the flood pack.
+- **No Barrier reference.** A Signal names its Facility, not a Barrier of
+  Bowtie D. The flood pack rule chooses the Barriers (`pump-power-lost`
+  proposes `pumping-stations`).
+- **No rainfall accumulation.** The flood pack rule
+  `rainfall-needs-fresh-evidence` matches `mock-hydro`, tag
+  `rain.accumulation.24h`, above 100 mm. This source publishes `rain.rate` in
+  `mm/h` only, so that rule cannot fire yet. Who sums the rate over 24 hours,
+  this source or the rule's window in the worker, is undecided (FL-24, FL-76).
 
 ### Mock hydrology (FL-145)
 
@@ -359,9 +369,9 @@ Both sources share these points:
 
 | Kind | Sensor | Zone | Unit | Baseline | Signal tag |
 | --- | --- | --- | --- | --- | --- |
-| `rain` | `S-R1` | `Z3` | `mm/h` | 0 | `S-R1.rain.rate` |
-| `level` | `S-L1` | `Z3` | `m` | 0.6 | `S-L1.water.level` |
-| `tide` | `S-T1` | `Z4` | `m` | 0.3 to 1.5, a 12 hour triangle wave | `S-T1.tide.level` |
+| `rain` | `S-R1` | `Z3` | `mm/h` | 0 | `rain.rate` |
+| `level` | `S-L1` | `Z3` | `m` | 0.6 | `water.level` |
+| `tide` | `S-T1` | `Z4` | `m` | 0.3 to 1.5, a 12 hour triangle wave | `tide.level` |
 
 - Any other kind is `404`. The baselines are authored simulation values, not
   measurements or forecasts of a real place, and levels have no stated datum.
@@ -383,7 +393,7 @@ Both sources share these points:
   may be negative, because it is relative to a datum.
 - The Signal is `source: mock-hydro`, the tag above, the reading as `value`,
   its `unit`, `observedAt` at the Scenario time, and
-  `payload: {assetCode, zoneCode, kind, label}`.
+  `payload: {assetCode, zone, kind, label}`.
 
 ### Mock pump and gate status (FL-146)
 
@@ -415,9 +425,11 @@ Both sources share these points:
   `set_power(id, start, status)` holds from `start` on, with the same
   precedence as a hydrology override, so `status="available"` at a later start
   restores power. `reset()` forgets every change.
-- The Signal is `source: mock-pumps`, `tag: <id>.<type>.power` (for example
-  `P-3.pump.power`), `value: lost` or `available`, no `unit`, and
-  `payload: {assetCode, facilityType, zoneCode, operatingState, label}`.
+- The Signal is `source: mock-pumps`, `tag: pump.power` (`gate.power` for a
+  gate), `value: lost` or `available`, `unit: state`, and
+  `payload: {assetCode, facilityType, zone, operatingState, label}`. For a pump
+  that is exactly what the flood pack rule `pump-power-lost` matches, and a
+  test holds the two together.
 - **No command.** There is no operation that starts, stops, opens or closes a
   Facility. Operating a real pump or gate is an L1 Command Package (ADR-0006),
   never sent from here.

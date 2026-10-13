@@ -90,18 +90,25 @@ class SimulatedPumps:
         return facility.operating_state
 
     def observe(self, asset_code: str, at: datetime) -> Observation:
-        """The power status a Scenario publishes as a Signal; the tag names the Facility."""
+        """The power status a Scenario publishes as a Signal; the payload names the Facility.
+
+        A pump's Signal is what the flood pack rule ``pump-power-lost`` matches exactly:
+        ``mock-pumps``, ``pump.power``, ``eq lost``, unit ``state``.
+        """
         facility = FACILITIES[asset_code]
         return Observation(
             source=SOURCE_ID,
             classification=CLASSIFICATION,
-            tag=f"{asset_code}.{facility.facility_type}.power",
+            tag=f"{facility.facility_type}.power",
             value=self.power_at(asset_code, at),
             observed_at=at,
+            unit="state",
+            # Two pumps share a tag, so the Facility takes part in the Signal's identity.
+            subject=asset_code,
             payload={
                 "assetCode": asset_code,
                 "facilityType": facility.facility_type,
-                "zoneCode": facility.zone_code,
+                "zone": facility.zone_code,
                 "operatingState": self.operating_state_at(asset_code, at),
                 "label": LABEL,
             },

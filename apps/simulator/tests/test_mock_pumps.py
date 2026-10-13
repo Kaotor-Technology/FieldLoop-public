@@ -176,38 +176,52 @@ def test_power_lost_is_announced_as_a_validated_simulated_signal(
     signal = json.loads(data)
     parse_signal(signal)
     assert (topic, attributes["simulated"]) == ("signals", "true")
-    assert {key: signal[key] for key in ("source", "tag", "value", "observedAt")} == {
+    assert {key: signal[key] for key in ("source", "tag", "value", "unit", "observedAt")} == {
         "source": "mock-pumps",
-        "tag": "P-3.pump.power",
+        "tag": "pump.power",
         "value": "lost",
+        "unit": "state",
         "observedAt": "2026-10-12T06:20:00Z",
     }
-    assert "unit" not in signal
     assert (signal["simulated"], signal["classification"]) == (True, "CONFIDENTIAL")
     assert signal["simulationRunId"] == str(RUN)
     cases = json.loads((ROOT / "packages/contracts/test/fixtures/signal-cases.json").read_text())
     (example,) = [case["signal"] for case in cases if case["name"] == "pump power lost"]
-    for member in ("source", "tag", "value", "classification", "simulated", "payload"):
+    for member in ("source", "tag", "value", "classification", "simulated"):
         assert signal[member] == example[member], member
+    # The rule that turns this Signal into a Health Proposal matches these four exactly.
+    golden = json.loads((ROOT / "domain-packs/flood-water/golden.json").read_text())
+    (rule,) = [rule for rule in golden["rules"] if rule["id"] == "pump-power-lost"]
+    assert (rule["operator"], rule["source"], rule["tag"], rule["threshold"], rule["unit"]) == (
+        "eq",
+        signal["source"],
+        signal["tag"],
+        signal["value"],
+        signal["unit"],
+    )
     assert signal["payload"] == {
         "assetCode": "P-3",
         "facilityType": "pump",
-        "zoneCode": "Z3",
+        "zone": "Z3",
         "operatingState": "stopped",
         "label": "SIMULATION",
     }
 
 
-def test_each_facility_has_its_own_tag_and_a_replay_keeps_the_signal_id(
+def test_pumps_share_a_tag_and_each_facility_keeps_its_own_signal_id_on_replay(
     pumps: SimulatedPumps, emitter: SimulatedSignalEmitter
 ) -> None:
     signals = {code: emitter.build(pumps.observe(code, POWER_LOST), RUN) for code in EXPECTED}
     assert {code: signal["tag"] for code, signal in signals.items()} == {
-        "P-1": "P-1.pump.power",
-        "P-2": "P-2.pump.power",
-        "P-3": "P-3.pump.power",
-        "G-1": "G-1.gate.power",
-        "G-2": "G-2.gate.power",
+        "P-1": "pump.power",
+        "P-2": "pump.power",
+        "P-3": "pump.power",
+        "G-1": "gate.power",
+        "G-2": "gate.power",
+    }
+    # One tag for every pump, so the Facility in the payload and the identity tell them apart.
+    assert {code: signal["payload"]["assetCode"] for code, signal in signals.items()} == {
+        code: code for code in EXPECTED
     }
     assert len({signal["id"] for signal in signals.values()}) == len(EXPECTED)
     assert signals["P-3"] == emitter.build(pumps.observe("P-3", POWER_LOST), RUN)
