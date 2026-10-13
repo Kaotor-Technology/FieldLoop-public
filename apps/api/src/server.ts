@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 const authRuntime = await createProductionAuthRuntime();
 const app = buildApp({
   auth: authRuntime.auth,
+  mapLayers: authRuntime.mapLayers,
   ...(process.env["FIELDLOOP_BASE_URL"] ? { baseUrl: process.env["FIELDLOOP_BASE_URL"] } : {}),
 });
 app.addHook("onClose", authRuntime.close);

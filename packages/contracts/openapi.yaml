@@ -24,6 +24,8 @@ tags:
     description: OIDC sign-in, sign-out and session reauthentication.
   - name: Session
     description: Current signed-in user's BFF session.
+  - name: Map
+    description: Organisation-scoped map configuration and viewport layers.
   - name: Internal Auth
     description: Internal token verification keys; contains no user data.
 paths:
@@ -162,6 +164,55 @@ paths:
               schema: { $ref: "#/components/schemas/CurrentUser" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/map/config:
+    get:
+      operationId: getMapConfig
+      summary: Get browser map configuration
+      description: Returns the referrer-restricted Google Maps JavaScript API key for the authenticated session.
+      tags: [Map]
+      responses:
+        "200":
+          description: Browser map configuration.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapConfig" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/map/layers/{layer}:
+    get:
+      operationId: getMapLayer
+      summary: Get map features within the current viewport
+      description: Returns an Organisation- and clearance-filtered GeoJSON layer for a bounded viewport. Demo roles may also read only the explicitly seeded DL-01 and Bangkok records when they are marked simulated.
+      tags: [Map]
+      parameters:
+        - name: layer
+          in: path
+          required: true
+          schema: { type: string, enum: [assets, barriers, consequences] }
+        - name: bbox
+          in: query
+          required: true
+          description: West, south, east and north longitude/latitude values in WGS84.
+          style: form
+          explode: false
+          schema:
+            type: array
+            minItems: 4
+            maxItems: 4
+            items: { type: number }
+        - name: zoom
+          in: query
+          required: true
+          schema: { type: integer, minimum: 0, maximum: 22 }
+      responses:
+        "200":
+          description: Features visible in the requested viewport.
+          content:
+            application/geo+json:
+              schema: { $ref: "#/components/schemas/MapFeatureCollection" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /internal/auth/jwks:
     get:
       operationId: getInternalAuthJwks
@@ -234,6 +285,34 @@ components:
         minimum: 0
 
   schemas:
+    MapConfig:
+      type: object
+      required: [mapsApiKey]
+      properties:
+        mapsApiKey:
+          type: string
+          description: Browser key restricted to the FieldLoop HTTPS referrers and Maps JavaScript API.
+
+    MapFeatureCollection:
+      type: object
+      required: [type, features]
+      properties:
+        type: { type: string, const: FeatureCollection }
+        features:
+          type: array
+          items:
+            type: object
+            required: [type, id, geometry, properties]
+            properties:
+              type: { type: string, const: Feature }
+              id: { type: string }
+              geometry:
+                type: object
+                description: WGS84 GeoJSON Point, LineString or Polygon geometry.
+              properties:
+                type: object
+                additionalProperties: true
+
     CurrentUser:
       type: object
       required: [sub, roles, persona, orgId, clearance, csrfToken, authTime]

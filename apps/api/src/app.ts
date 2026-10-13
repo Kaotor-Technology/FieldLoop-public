@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import { registerAuthRoutes } from "./auth/routes.js";
 import { UnavailableAuthService } from "./auth/runtime.js";
 import type { AuthServicePort } from "./auth/service.js";
+import { registerMapLayerRoutes, UnavailableMapLayerStore, type MapLayerStore } from "./map/layers.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -9,7 +10,12 @@ declare module "fastify" {
   }
 }
 
-export function buildApp(options: { auth?: AuthServicePort; baseUrl?: string } = {}) {
+export function buildApp(options: {
+  auth?: AuthServicePort;
+  baseUrl?: string;
+  mapLayers?: MapLayerStore;
+  mapsApiKey?: string;
+} = {}) {
   const app = Fastify({ logger: { serializers: { req: serializeRequestForLog } } });
   const auth = options.auth ?? new UnavailableAuthService();
   app.decorate("fieldLoopAuth", auth);
@@ -17,6 +23,7 @@ export function buildApp(options: { auth?: AuthServicePort; baseUrl?: string } =
   // Cloud Run reserves some paths ending in z; use this route for remote probes.
   app.get("/health", async () => ({ status: "ok" }));
   registerAuthRoutes(app, auth, options.baseUrl ?? process.env["FIELDLOOP_BASE_URL"]);
+  registerMapLayerRoutes(app, options.mapLayers ?? new UnavailableMapLayerStore(), options.mapsApiKey ?? process.env["FIELDLOOP_MAPS_API_KEY"]);
   return app;
 }
 

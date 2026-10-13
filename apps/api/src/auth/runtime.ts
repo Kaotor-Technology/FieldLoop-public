@@ -4,6 +4,7 @@ import { KmsEnvelopeCrypto } from "./envelope-crypto.js";
 import { SecretManagerInternalTokenService } from "./internal-tokens.js";
 import { KeycloakOidcProvider } from "./keycloak-oidc.js";
 import { createAuthDatabase, createCloudSqlAuthDatabase, PostgresAuthStore } from "./postgres-store.js";
+import { PostgresMapLayerStore, UnavailableMapLayerStore, type MapLayerStore } from "../map/layers.js";
 
 export class UnavailableAuthService implements AuthServicePort {
   async startLogin(): Promise<URL> { return this.unavailable(); }
@@ -22,6 +23,7 @@ export class UnavailableAuthService implements AuthServicePort {
 
 export async function createProductionAuthRuntime(): Promise<{
   auth: AuthServicePort;
+  mapLayers: MapLayerStore;
   close: () => Promise<void>;
 }> {
   const baseUrl = process.env["FIELDLOOP_BASE_URL"];
@@ -38,7 +40,7 @@ export async function createProductionAuthRuntime(): Promise<{
       : undefined;
 
   if (!baseUrl || !defaultOrgId || !kmsKeyName || !projectId || (!databaseUrl && !cloudSqlConfig)) {
-    return { auth: new UnavailableAuthService(), close: async () => {} };
+    return { auth: new UnavailableAuthService(), mapLayers: new UnavailableMapLayerStore(), close: async () => {} };
   }
 
   const database = databaseUrl
@@ -46,7 +48,7 @@ export async function createProductionAuthRuntime(): Promise<{
     : cloudSqlConfig
       ? await createCloudSqlAuthDatabase(cloudSqlConfig)
       : undefined;
-  if (!database) return { auth: new UnavailableAuthService(), close: async () => {} };
+  if (!database) return { auth: new UnavailableAuthService(), mapLayers: new UnavailableMapLayerStore(), close: async () => {} };
   const secrets = new GoogleCloudSecretReader(projectId);
   const oidc = new KeycloakOidcProvider(
     process.env["KEYCLOAK_ISSUER"] ?? "https://auth.example.com/realms/example-realm",
@@ -70,6 +72,7 @@ export async function createProductionAuthRuntime(): Promise<{
 
   return {
     auth,
+    mapLayers: new PostgresMapLayerStore(database.db),
     close: async () => {
       if ("close" in database && typeof database.close === "function") await database.close();
       else await database.db.destroy();
