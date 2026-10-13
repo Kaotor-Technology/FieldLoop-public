@@ -361,7 +361,8 @@ Both sources share these points:
   event names the source, its tag, its unit and the target Asset. The player
   publishes the Signal, and the service replays every applied event into the
   source, so a read of `/mock/hydro/…` or `/mock/pumps/…` follows the run and
-  returns to its baseline on reset. It does so on every command and every
+  returns to its baseline on reset. Each source is replaced whole, so a
+  concurrent read never sees part of a run. It does so on every command and every
   read of the run, and, when a database is configured, before every `/mock/`
   read, which is what rebuilds the reads after a cold start.
   - **One payload.** The player takes a Demo B Signal's payload from the
@@ -581,8 +582,9 @@ infrastructure operator, in this order, and record the results in `docs/contexts
   sources test their own Scenario state, and the classification case covers all six sources.
 - **State is per process.** Overrides, pump and gate power changes and the run's seed live in the instance, so Terraform caps
   the service at one instance.
-- **Reset every source.** `historian.reset()`, `hydro.reset()` and `pumps.reset()` are separate calls. The
-  service resets all three and replays the applied events of the committed run on every command and read.
+- **Rebuilt from the committed run.** On every command and read the service resets the historian and replays the
+  run's applied events into it, and replaces what `hydro` and `pumps` hold, with the run's clock, in one step
+  each (`restore`), so a read of a Demo B source during a rebuild sees the run as it was or as it is.
 - **An idle instance forgets.** The service has `min_instance_count = 0` and request-based CPU
   (`cpu_idle = true`; `cpu-throttling: true` on the live service). Scale-to-zero drops the
   overrides and the seed, and CPU is throttled between requests, so a player that advances
