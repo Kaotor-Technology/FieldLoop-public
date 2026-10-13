@@ -154,6 +154,17 @@ describe("Risk Matrix", () => {
     expect(calculateRisk({ ...basicInput(), matrix: DEMO_RISK_MATRIX }).cell.zone).toBe("amber");
   });
 
+  it("keeps the PRD 4×4 example ALARP in the monotonic demo matrix", () => {
+    const input = basicInput();
+    input.barriers = [];
+    input.paths = input.paths.map(path => ({ ...path, barrierIds: [] }));
+    input.threats = [{ id: "threat", frequencyPerYear: 1e-3 }];
+    input.consequences = [{ id: "consequence", conditionalProbability: 1, severity: { people: 4 } }];
+
+    expect(calculateRisk({ ...input, matrix: DEMO_RISK_MATRIX }).cell)
+      .toMatchObject({ frequencyBand: 4, severityBand: 4, zone: "amber" });
+  });
+
   it.each<[number, RiskBand]>([
     [0, 1], [0.999e-5, 1], [1e-5, 2], [0.999e-4, 2], [1e-4, 3],
     [0.999e-3, 3], [1e-3, 4], [0.999e-2, 4], [1e-2, 5], [1, 5],

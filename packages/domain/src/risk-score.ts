@@ -6,8 +6,8 @@ export const DEMO_RISK_MATRIX: RiskMatrix = {
   cells: [
     ["green", "green", "green", "green", "amber"],
     ["green", "green", "amber", "amber", "amber"],
-    ["green", "amber", "amber", "red", "red"],
-    ["green", "amber", "amber", "red", "red"],
+    ["green", "amber", "amber", "amber", "red"],
+    ["green", "amber", "amber", "amber", "red"],
     ["amber", "amber", "amber", "red", "red"],
   ].map((row, frequencyIndex) => row.map((zone, severityIndex) => ({
     zone: zone as RiskZone,
