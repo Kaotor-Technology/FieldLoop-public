@@ -9,7 +9,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from itertools import pairwise
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
@@ -24,6 +24,8 @@ from fieldloop_simulator.timestamps import triangle_wave
 
 SOURCE_ID = "mock-hydro"
 CLASSIFICATION: Classification = "CONFIDENTIAL"
+# The units the response schema allows: mm/h for rain, m for a level.
+Unit = Literal["mm/h", "m"]
 ACCUMULATION_TAG = "rain.accumulation.24h"
 ACCUMULATION_WINDOW = timedelta(hours=24)
 
@@ -39,7 +41,7 @@ class SensorProfile:
     asset_code: str
     zone_code: str
     quantity: str
-    unit: str
+    unit: Unit
     base: float
     swing: float = 0.0
     period: timedelta = timedelta(hours=12)
