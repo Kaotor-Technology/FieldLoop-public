@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from fieldloop_common.memory_transport import InMemoryTransport
 from fieldloop_common.signal import parse_signal
 from fieldloop_simulator.main import app
-from fieldloop_simulator.mock_pumps import FACILITIES, SimulatedPumps
+from fieldloop_simulator.mock_pumps import FACILITIES, Facility, SimulatedPumps
 from fieldloop_simulator.mock_signals import SimulatedSignalEmitter
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
@@ -133,6 +133,13 @@ def test_a_power_change_must_name_a_facility_a_timezone_and_a_status(
     with pytest.raises(ValueError, match="available or lost"):
         pumps.set_power("P-3", start=POWER_LOST, status="off")  # type: ignore[arg-type]
     assert pumps.power_at("P-3", POWER_LOST) == "available"
+
+
+def test_a_facility_cannot_be_authored_in_a_state_of_the_other_type() -> None:
+    with pytest.raises(ValueError, match="pump cannot be open"):
+        Facility("pump", "Z3", "open")
+    with pytest.raises(ValueError, match="gate cannot be running"):
+        Facility("gate", "Z3", "running")
 
 
 def test_the_schema_refuses_a_state_that_does_not_fit_the_facility() -> None:

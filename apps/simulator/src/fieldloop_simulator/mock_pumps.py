@@ -8,7 +8,7 @@ through ``set_power``; operating a real pump or gate is an L1 Command Package (A
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Literal, get_args
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
@@ -23,18 +23,27 @@ from fieldloop_simulator.scenario_overrides import HeldValues
 SOURCE_ID = "mock-pumps"
 CLASSIFICATION: Classification = "CONFIDENTIAL"
 
+FacilityType = Literal["pump", "gate"]
 PowerStatus = Literal["available", "lost"]
-# running or stopped for a pump; open or closed for a gate.
 OperatingState = Literal["running", "stopped", "open", "closed"]
+# The states each type of Facility can be in, as the response schema pairs them.
+OPERATING_STATES: Mapping[FacilityType, tuple[OperatingState, ...]] = {
+    "pump": ("running", "stopped"),
+    "gate": ("open", "closed"),
+}
 
 
 @dataclass(frozen=True)
 class Facility:
     """One synthetic pump or gate and the state it is in while it has power."""
 
-    facility_type: Literal["pump", "gate"]
+    facility_type: FacilityType
     zone_code: str
     operating_state: OperatingState
+
+    def __post_init__(self) -> None:
+        if self.operating_state not in OPERATING_STATES[self.facility_type]:
+            raise ValueError(f"A {self.facility_type} cannot be {self.operating_state}")
 
 
 # Authored values, not the state of a real Facility. Each is a Facility in
@@ -60,7 +69,7 @@ class SimulatedPumps:
         """Hold a Facility's power at ``status`` from ``start`` on, until the next reset."""
         if asset_code not in FACILITIES:
             raise KeyError(asset_code)
-        if status not in ("available", "lost"):
+        if status not in get_args(PowerStatus):
             raise ValueError("Power status must be available or lost")
         self._power.hold(asset_code, start=start, value=status)
 
