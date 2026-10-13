@@ -1,6 +1,7 @@
 """Bounded YAML/JSON Scenario loading with schema and timeline error locations (SIM-1)."""
 
 import json
+import math
 from datetime import datetime, timedelta
 from importlib.resources import files
 from pathlib import Path
@@ -11,6 +12,8 @@ from fieldloop_common.generated_scenario import Scenario
 from jsonschema import Draft202012Validator, FormatChecker
 
 from fieldloop_simulator.mock_historian import TAG_PROFILES
+from fieldloop_simulator.mock_signals import utc_text
+from fieldloop_simulator.timestamps import to_utc
 
 MAX_SCENARIO_BYTES = 1024 * 1024
 SCHEMA = json.loads(files("fieldloop_common").joinpath("scenario.v1.schema.json").read_text())
@@ -24,7 +27,27 @@ class ScenarioError(ValueError):
         super().__init__(f"{pointer or '/'}: {reason}")
 
 
+def _bounded_json(value: object, pointer: str = "", depth: int = 0) -> None:
+    if depth > 64:
+        raise ScenarioError(pointer, "JSON nesting exceeds 64 levels")
+    if isinstance(value, (float, int)) and not isinstance(value, bool):
+        try:
+            finite = math.isfinite(value)
+        except OverflowError:
+            finite = False
+        if not finite:
+            raise ScenarioError(pointer, "numbers must be finite")
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            escaped = str(key).replace("~", "~0").replace("/", "~1")
+            _bounded_json(item, pointer + "/" + escaped, depth + 1)
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            _bounded_json(item, pointer + f"/{index}", depth + 1)
+
+
 def validate_scenario(document: object) -> Scenario:
+    _bounded_json(document)
     errors = sorted(VALIDATOR.iter_errors(document), key=lambda e: str(list(e.absolute_path)))
     if errors:
         error = errors[0]
@@ -41,6 +64,8 @@ def validate_scenario(document: object) -> Scenario:
         if event.id in event_ids:
             raise ScenarioError(prefix + "/id", "duplicate event ID")
         event_ids.add(event.id)
+        if len(json.dumps(event.model_dump(mode="json", by_alias=True)).encode()) > 240 * 1024:
+            raise ScenarioError(prefix, "event exceeds the Signal publication size budget")
         if event.source == "mock-historian":
             profile = TAG_PROFILES.get(event.tag)
             if profile is None:
@@ -64,9 +89,11 @@ def validate_scenario(document: object) -> Scenario:
             raise ScenarioError(f"/bookmarks/{index}", "duplicate bookmark or time beyond duration")
         bookmark_ids.add(bookmark.id)
     try:
-        datetime.fromisoformat(
-            scenario.starts_at.replace("Z", "+00:00").replace("z", "+00:00")
-        ) + timedelta(seconds=scenario.duration_seconds)
+        starts_at = to_utc(
+            datetime.fromisoformat(scenario.starts_at.replace("Z", "+00:00").replace("z", "+00:00"))
+        )
+        starts_at + timedelta(seconds=scenario.duration_seconds)
+        scenario.starts_at = utc_text(starts_at)
     except (ValueError, OverflowError) as error:
         raise ScenarioError("/startsAt", "timeline is outside the supported date range") from error
     return scenario
@@ -85,7 +112,9 @@ def load_scenario(path: Path) -> Scenario:
             if any(isinstance(event, yaml.AliasEvent) for event in yaml.parse(text)):
                 raise ScenarioError("/", "YAML aliases are not allowed")
             document = yaml.load(text, Loader=_ScenarioLoader)
-    except (UnicodeError, json.JSONDecodeError, yaml.YAMLError) as error:
+    except ScenarioError:
+        raise
+    except (UnicodeError, ValueError, RecursionError, yaml.YAMLError) as error:
         mark = getattr(error, "problem_mark", None)
         location = f"line {mark.line + 1}, column {mark.column + 1}" if mark else "/"
         raise ScenarioError(location, "invalid UTF-8, JSON or YAML") from error

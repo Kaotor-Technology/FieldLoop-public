@@ -13,6 +13,7 @@ from fieldloop_common.generated_scenario import Event, Scenario
 from fieldloop_common.generated_simulation import PlayerCommand, RunCreate, SimulationRun
 from pydantic import BaseModel
 
+from fieldloop_simulator.mock_historian import CLASSIFICATION as HISTORIAN_CLASSIFICATION
 from fieldloop_simulator.mock_signals import Observation, SimulatedSignalEmitter, utc_text
 
 Command = Literal["play", "pause", "step", "speed", "bookmark", "reset"]
@@ -64,6 +65,7 @@ class ScenarioPlayer:
         run = SimulationRun.model_validate(
             {
                 "id": str(uuid.uuid4()),
+                "revision": tx.snapshot.run.revision + 1 if tx.snapshot else 1,
                 "orgId": self.org_id,
                 "scenarioId": scenario.id,
                 "scenarioName": scenario.name,
@@ -95,6 +97,7 @@ class ScenarioPlayer:
             return None
         self._check_id(snapshot, run_id)
         await self._catch_up(snapshot)
+        snapshot.run.revision += 1
         tx.save(snapshot)
         return snapshot.run
 
@@ -148,6 +151,7 @@ class ScenarioPlayer:
             run.state = "paused"
             await self._advance(snapshot, bookmark.at_seconds)
         snapshot.anchor = self.now()
+        run.revision += 1
         tx.save(snapshot)
         return run
 
@@ -193,7 +197,7 @@ def classification(
     # sources whose APIs are not installed yet. A Scenario cannot downgrade a source.
     classes = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"]
     minimums = {
-        "mock-historian": "CONFIDENTIAL",
+        "mock-historian": HISTORIAN_CLASSIFICATION,
         "mock-patrol": "HIGHLY_RESTRICTED",
         "mock-ili": "HIGHLY_RESTRICTED",
     }

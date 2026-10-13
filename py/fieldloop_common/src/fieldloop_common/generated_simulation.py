@@ -48,6 +48,7 @@ class SimulationRun(BaseModel):
     simulated: Literal[True]
     classification: Literal["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"]
     bookmarks: list[Bookmark]
+    revision: Annotated[int, Field(ge=1, le=9007199254740991)]
 
 
 class RunCreate(BaseModel):

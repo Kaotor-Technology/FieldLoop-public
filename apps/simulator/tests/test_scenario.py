@@ -53,3 +53,28 @@ def test_duplicate_keys_and_aliases_are_rejected(tmp_path: Path, text: str) -> N
     path.write_text(text)
     with pytest.raises(ScenarioError):
         load_scenario(path)
+
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), 10**400])
+def test_nonfinite_measurements_are_rejected_at_their_position(value: object) -> None:
+    document = json.loads(FIXTURE.read_text())
+    document["events"][0]["value"] = value
+    with pytest.raises(ScenarioError) as failure:
+        validate_scenario(document)
+    assert failure.value.pointer == "/events/0/value"
+
+
+def test_event_size_is_checked_before_a_run_can_start() -> None:
+    document = json.loads(FIXTURE.read_text())
+    document["events"][0]["payload"] = {"oversized": "x" * (256 * 1024)}
+    with pytest.raises(ScenarioError, match="publication size budget"):
+        validate_scenario(document)
+
+
+def test_timestamp_offsets_are_normalised_and_overflow_is_rejected() -> None:
+    document = json.loads(FIXTURE.read_text())
+    document["startsAt"] = "2026-10-13T07:00:00+07:00"
+    assert validate_scenario(document).starts_at == "2026-10-13T00:00:00Z"
+    document["startsAt"] = "0001-01-01T00:00:00+07:00"
+    with pytest.raises(ScenarioError):
+        validate_scenario(document)

@@ -59,7 +59,6 @@ def emitter() -> SimulatedSignalEmitter:
     return SimulatedSignalEmitter(signal_publisher_from_environment(os.environ), org_id=ORG_ID)
 
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
@@ -133,6 +132,10 @@ async def private_surface(
             if not loopback:
                 return problem(403, "Local simulation requires a loopback caller", "caller_denied")
     # Rehydrate source reads after a cold start without advancing or publishing from GET /mock.
-    if request.url.path.startswith("/mock/") and _store is not None:
+    if request.url.path.startswith("/mock/") and (
+        _store is not None
+        or "FIELDLOOP_DATABASE_URL" in os.environ
+        or "FIELDLOOP_DB_NAME" in os.environ
+    ):
         await asyncio.to_thread(app.state.simulation.hydrate_sources)
     return await call_next(request)

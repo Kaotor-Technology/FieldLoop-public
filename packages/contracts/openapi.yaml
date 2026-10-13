@@ -726,6 +726,10 @@ components:
             - id
             - name
             - atSeconds
+        revision:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
       required:
       - id
       - orgId
@@ -742,6 +746,7 @@ components:
       - simulated
       - classification
       - bookmarks
+      - revision
     RunCreate:
       type: object
       additionalProperties: false

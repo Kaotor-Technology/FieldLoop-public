@@ -104,6 +104,11 @@
               "atSeconds"
             ]
           }
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
         }
       },
       "required": [
@@ -121,7 +126,8 @@
         "eventCount",
         "simulated",
         "classification",
-        "bookmarks"
+        "bookmarks",
+        "revision"
       ]
     },
     "RunCreate": {
