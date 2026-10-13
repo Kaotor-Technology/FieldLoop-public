@@ -54,6 +54,16 @@ def test_only_a_completed_work_order_has_a_completion_time() -> None:
     assert not any("completedAt" in item for item in items if item["status"] == "open")
 
 
+def test_a_read_before_the_completion_time_shows_the_work_order_open() -> None:
+    with TestClient(app) as client:
+        before = client.get(URL, params={"asOf": "2026-09-14T23:59:59Z"}).json()["items"]
+        at = client.get(URL, params={"asOf": "2026-09-15T00:00:00Z"}).json()["items"]
+    survey = next(item for item in before if item["id"] == "SYN-CMMS-004")
+    assert survey["status"] == "open"
+    assert "completedAt" not in survey
+    assert next(item for item in at if item["id"] == "SYN-CMMS-004")["status"] == "completed"
+
+
 def pm_due(client: TestClient, as_of: str | None = None) -> list[str]:
     params = {"pmDue": "true"} | ({} if as_of is None else {"asOf": as_of})
     response = client.get(URL, params=params)
@@ -293,6 +303,12 @@ def test_the_overdue_flag_follows_the_due_date_and_the_status(
     assert completed["value"] == 0
     assert isinstance(completed["payload"], dict)
     assert completed["payload"]["completedAt"] == "2026-09-15T00:00:00Z"
+    # Observed before its completion time, the same work order is still open and not yet due.
+    earlier = emit(emitter, transport, "SYN-CMMS-004", datetime(2026, 9, 14, tzinfo=UTC))
+    assert earlier["value"] == 0
+    assert isinstance(earlier["payload"], dict)
+    assert earlier["payload"]["status"] == "open"
+    assert "completedAt" not in earlier["payload"]
 
 
 def test_each_barrier_has_its_own_tag_and_a_replay_keeps_its_signal_id(

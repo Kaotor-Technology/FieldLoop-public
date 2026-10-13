@@ -175,6 +175,8 @@ and the list is small and bounded, so it is not paginated.
   Bowtie file.
 - **Completion.** `completedAt` is present exactly when `status` is
   `completed`, and is absent, not null, otherwise. The schema enforces both.
+  A read or an observation at a time before `completedAt` shows the work order
+  as it was then: `open`, with no `completedAt`.
 - **Organisation.** Each work order carries the Organisation in
   `FIELDLOOP_ORG_ID`, as the historian and the patrol app do.
 - **Classification** is `INTERNAL`, lower than the historian (`CONFIDENTIAL`)

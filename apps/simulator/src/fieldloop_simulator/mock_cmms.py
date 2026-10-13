@@ -88,6 +88,13 @@ _WORK_ORDERS = (
 _WORK_ORDERS_BY_ID = {order.id: order for order in _WORK_ORDERS}
 
 
+def _state_at(order: WorkOrder, at: datetime) -> WorkOrder:
+    """The work order as the CMMS held it at ``at``: open until its completion time."""
+    if order.completed_at is None or order.completed_at <= at:
+        return order
+    return order.model_copy(update={"status": "open", "completed_at": None})
+
+
 class SimulatedCmms:
     def __init__(self, *, org_id: str = DEMO_ORG_ID) -> None:
         self._org_id = require_org_id(org_id)
@@ -107,7 +114,7 @@ class SimulatedCmms:
         """
         if at.tzinfo is None:
             raise ValueError("Observation times need a timezone")
-        order = _WORK_ORDERS_BY_ID[work_order_id]
+        order = _state_at(_WORK_ORDERS_BY_ID[work_order_id], at)
         payload: dict[str, object] = {
             "assetCode": order.asset_code,
             "workOrderId": order.id,
@@ -135,7 +142,7 @@ class SimulatedCmms:
         """Every work order, or with ``pm_due`` the open preventive ones due by ``as_of``."""
         orders = [
             order
-            for order in _WORK_ORDERS
+            for order in (_state_at(order, as_of) for order in _WORK_ORDERS)
             if not pm_due
             or (order.kind == "preventive" and order.status == "open" and order.due_at <= as_of)
         ]
