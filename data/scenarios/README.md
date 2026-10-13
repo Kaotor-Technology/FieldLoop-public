@@ -16,15 +16,18 @@ historian's override from the event time onwards. Other sources publish their de
 observation through `signal.v1`; source-specific read models can hydrate from the pinned
 Scenario and committed event index. Those integrations belong to their source issues.
 
-Use the publisher's source ID in each event. Demo B rain, level and tide readings use
-`source: mock-hydro` with tags `S-R1.rain.rate`, `S-L1.water.level` and `S-T1.tide.level`;
-pump and gate status use `source: mock-pumps` with tags such as `P-3.pump.power` and
-`G-1.gate.power`. Their Signals carry `assetCode` and `zoneCode`; pump/gate Signals also carry
-`facilityType` and `operatingState`. These IDs and fields match the source observations in
-[PR #47](https://github.com/Kaotor-Technology/FieldLoop-v2/pull/47) at `ca30d5a`. That PR's
-source examples changed in the same branch as their regression tests, so use the source
-observations themselves as the mapping reference and get FL-73/FL-24 owner sign-off before
-writing Signal rules from those examples.
+Use the publisher's source ID in each event. The current Demo B sources in
+[PR #47](https://github.com/Kaotor-Technology/FieldLoop-v2/pull/47) at
+[`ebaf194`](https://github.com/Kaotor-Technology/FieldLoop-v2/tree/ebaf194f0d52c5437c45d471424ab17001bb1cb6)
+use `mock-hydro` tags `rain.rate`, `water.level` and `tide.level`, and `mock-pumps` tags
+`pump.power` and `gate.power`. Hydro Signals carry `assetCode`, `zone`, `kind` and `label`;
+pump/gate Signals carry `assetCode`, `facilityType`, `zone`, `operatingState` and `label`.
+Keep the Facility in `target` and payload even when multiple Facilities share a tag. The PR
+body says `signal-cases.json` is unchanged from `main`; these source tags and payload shapes
+are taken from the source observations in PR #47, not inferred from a test editing those cases.
+The PR also records that `rainfall-needs-fresh-evidence` expects `rain.accumulation.24h` while
+the source publishes `rain.rate` only; the 24-hour aggregation remains unresolved (FL-24, FL-76).
+Get FL-73/FL-24 owner sign-off on the rule mapping and aggregation before authoring Signal rules.
 
 Controls use the server clock. Forward bookmark jumps emit intervening events; to return to
 an earlier bookmark, reset and jump forward. Reset preserves seed and speed, creates a new
