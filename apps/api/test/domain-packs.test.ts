@@ -10,6 +10,36 @@ describe("web-api Domain Pack startup", () => {
     const packs = await loadDemoDomainPacks();
     const app = buildApp({ domainPacks: packs });
     expect(app.domainPacks.flatMap(({ agents }) => agents).map(({ id }) => id)).toContain("flood-situation");
+    const flood = app.domainPacks.find(({ content }) => content.id === "flood-water");
+    if (!flood) throw new Error("Flood & Water pack was not registered");
+    expect(flood.content).toMatchObject({ label: "SIMULATION", simulated: true });
+    const rainfall = flood.content.signalRules.find(({ id }) => id === "rainfall-needs-fresh-evidence");
+    const pumpPower = flood.content.signalRules.find(({ id }) => id === "pump-power-lost");
+    expect(rainfall).toMatchObject({
+      condition: { kind: "signal", source: "mock-hydro", tag: "rain.accumulation.24h", operator: "gt", threshold: 100, unit: "mm", windowSeconds: 86400 },
+      targetBarrierSelector: { pack: "flood-water", bowtieCode: "bangkok-bowtie-d", barrierCodes: ["pumping-stations", "water-gates", "tidal-gates"] },
+      effect: { kind: "health_proposal", proposedHealth: "unverified" },
+    });
+    expect(pumpPower).toMatchObject({
+      condition: { kind: "signal", source: "mock-pumps", tag: "pump.power", operator: "eq", threshold: "lost", unit: "state" },
+      targetBarrierSelector: { pack: "flood-water", bowtieCode: "bangkok-bowtie-d", barrierCodes: ["pumping-stations"] },
+      effect: { kind: "health_proposal", proposedHealth: "degraded" },
+    });
+    const floodAgent = flood.agents.find(({ id }) => id === "flood-situation");
+    expect(floodAgent).toMatchObject({ id: "flood-situation", useCase: "UC-4", kind: "coordinator" });
+    const warning = flood.content.warningTemplates.find(({ id }) => id === "district-flood-warning");
+    expect(warning).toMatchObject({
+      actionLevel: "L2",
+      approvalRequired: true,
+      placeholders: ["district", "observedAt", "situation", "advice"],
+    });
+    expect(warning?.en).toContain("{{district}}");
+    expect(warning?.th).toContain("{{district}}");
+    expect(warning?.en).toContain("SIMULATION");
+    expect(warning?.th).toContain("SIMULATION");
+    expect(warning?.en).toContain("District");
+    expect(warning?.th).toContain("เขต");
+    expect(warning?.th).toContain("คำแนะนำ");
     const pipeline = app.domainPacks.find(({ content }) => content.id === "pipeline-integrity");
     expect(pipeline?.content.signalRules.map(({ id }) => id)).toEqual(expect.arrayContaining([
       "cp-rectifier-output-lost",
