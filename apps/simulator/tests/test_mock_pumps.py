@@ -117,6 +117,21 @@ def test_power_can_return_and_the_pump_runs_again(pumps: SimulatedPumps) -> None
     assert pumps.operating_state_at("P-3", POWER_LOST + timedelta(hours=1)) == "running"
 
 
+def test_a_run_is_restored_whole_or_not_at_all(pumps: SimulatedPumps) -> None:
+    pumps.restore([("P-3", POWER_LOST, "lost")], clock=POWER_LOST)
+    assert (pumps.clock, pumps.power_at("P-3", POWER_LOST)) == (POWER_LOST, "lost")
+    assert pumps.status("P-3").operating_state == "stopped"
+
+    later = POWER_LOST + timedelta(hours=1)
+    with pytest.raises(KeyError):
+        pumps.restore([("P-1", later, "lost"), ("P-9", later, "lost")], clock=later)
+    # The refused run left the earlier one as it was: no new clock, and P-1 still has power.
+    assert (pumps.clock, pumps.power_at("P-1", later)) == (POWER_LOST, "available")
+
+    pumps.restore([], clock=later)
+    assert (pumps.clock, pumps.power_at("P-3", later)) == (later, "available")
+
+
 def test_a_gate_without_power_stays_where_it_was(pumps: SimulatedPumps) -> None:
     pumps.set_power("G-1", start=POWER_LOST, status="lost")
     with TestClient(app) as client:

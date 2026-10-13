@@ -122,9 +122,21 @@ importers:
 
   apps/signal-worker:
     dependencies:
+      '@fieldloop/adapters':
+        specifier: workspace:*
+        version: link:../../packages/adapters
+      '@fieldloop/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       fastify:
         specifier: 5.12.5
         version: 5.12.5
+      kysely:
+        specifier: 0.29.6
+        version: 0.29.6
+      pg:
+        specifier: 8.23.1
+        version: 8.23.1
     devDependencies:
       '@fieldloop/config':
         specifier: workspace:*
@@ -132,6 +144,9 @@ importers:
       '@types/node':
         specifier: 22.20.5
         version: 22.20.5
+      '@types/pg':
+        specifier: 8.23.1
+        version: 8.23.1
       typescript:
         specifier: 5.9.3
         version: 5.9.3

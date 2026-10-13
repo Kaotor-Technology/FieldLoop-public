@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "scenario.v1", "id": "storm-test", "name": "Demo B verification fixture",
+  "version": "1", "startsAt": "2026-10-12T00:00:00Z", "durationSeconds": 14400,
+  "classification": "CONFIDENTIAL", "simulated": true,
+  "events": [
+    {"id":"rain-starts", "atSeconds":0, "source":"mock-hydro", "target":{"kind":"asset","id":"S-R1"}, "tag":"rain.rate", "value":60, "unit":"mm/h"},
+    {"id":"pump-loses-power", "atSeconds":1200, "source":"mock-pumps", "target":{"kind":"asset","id":"P-3"}, "tag":"pump.power", "value":"lost", "unit":"state"},
+    {"id":"rainfall-after-1h", "atSeconds":3600, "source":"mock-hydro", "target":{"kind":"asset","id":"S-R1"}, "tag":"rain.accumulation.24h", "value":null, "unit":"mm"},
+    {"id":"rainfall-after-2h", "atSeconds":7200, "source":"mock-hydro", "target":{"kind":"asset","id":"S-R1"}, "tag":"rain.accumulation.24h", "value":null, "unit":"mm"},
+    {"id":"rain-eases", "atSeconds":10800, "source":"mock-hydro", "target":{"kind":"asset","id":"S-R1"}, "tag":"rain.rate", "value":10, "unit":"mm/h"},
+    {"id":"canal-rises", "atSeconds":10800, "source":"mock-hydro", "target":{"kind":"asset","id":"S-L1"}, "tag":"water.level", "value":1.9, "unit":"m"}
+  ],
+  "bookmarks": [
+    {"id":"start", "name":"Start", "atSeconds":0},
+    {"id":"power-lost", "name":"P-3 power lost", "atSeconds":1200},
+    {"id":"rainfall-rule", "name":"Rainfall passes the rule", "atSeconds":7200}
+  ]
+}

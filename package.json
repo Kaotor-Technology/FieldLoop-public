@@ -28,6 +28,7 @@
     "test:seed": "bash scripts/test-seed.sh",
     "test:seed:legal": "node scripts/test-legal-seed.mjs",
     "test:seed:bangkok": "bash scripts/test-bangkok-seed.sh",
+    "test:signals": "pnpm exec turbo run build --filter=@fieldloop/signal-worker... --filter=@fieldloop/api... && node scripts/test-signal-worker.mjs",
     "test:domain-packs": "pnpm exec turbo run build --filter=@fieldloop/api... && bash scripts/test-domain-packs.sh"
   },
   "devDependencies": {
