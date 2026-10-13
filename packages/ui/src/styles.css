@@ -178,3 +178,5 @@
 :where(.fl-map-marker, .fl-nav-link, .fl-wordmark):focus-visible { outline: var(--spacing-focus-ring-width) solid var(--fl-focus); outline-offset: var(--spacing-focus-ring-offset); }
 @keyframes fl-failed { from { transform: scale(.9); opacity: .5; } to { transform: scale(1.1); opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .fl-map-marker[data-health="failed"] > span::after { animation: none; outline: var(--spacing-indicator-width) solid var(--color-health-failed); outline-offset: var(--spacing-indicator-width); } }
+
+.fl-option.fl-mono { font-family: var(--type-mono-md-font-family), monospace; }
