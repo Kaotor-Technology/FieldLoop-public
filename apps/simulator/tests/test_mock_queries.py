@@ -1,8 +1,12 @@
 """Query rules every mock source shares: a request says exactly what it means, or it is a 400."""
 
+from typing import Annotated
+
 import pytest
+from fastapi import APIRouter, Depends, FastAPI, Query
 from fastapi.testclient import TestClient
 from fieldloop_simulator.main import app
+from fieldloop_simulator.mock_http import install_problem_handlers, known_query_only
 
 CMMS = "/mock/cmms/work-orders"
 HISTORIAN = "/mock/historian/tags/DL-01.pressure.line"
@@ -70,3 +74,41 @@ def test_a_timestamp_carries_at_most_microseconds() -> None:
     # A finer fraction would be truncated without a word, so it is refused.
     assert_refused(f"{CMMS}?asOf=2026-10-13T00:00:00.1234567Z")
     assert_refused(f"{HISTORIAN}?from=2026-10-12T00:00:00.000000001Z&to=2026-10-12T00:05:00Z")
+
+
+def guarded_app() -> FastAPI:
+    """One guarded route under /mock/ and one elsewhere; a dependency declares the parameter."""
+
+    def page_size(limit: Annotated[int, Query()] = 10) -> int:
+        return limit
+
+    guarded = FastAPI()
+    install_problem_handlers(guarded)
+    router = APIRouter(dependencies=[Depends(known_query_only)])
+
+    @router.get("/mock/stand-in")
+    @router.get("/elsewhere")
+    def read(limit: Annotated[int, Depends(page_size)]) -> dict[str, int]:
+        return {"limit": limit}
+
+    guarded.include_router(router)
+    return guarded
+
+
+def test_a_parameter_declared_by_a_dependency_of_the_route_is_known() -> None:
+    with TestClient(guarded_app()) as client:
+        assert client.get("/mock/stand-in?limit=3").json() == {"limit": 3}
+        assert client.get("/mock/stand-in?limit=3&unknown=1").status_code == 400
+
+
+def test_outside_the_mock_namespace_the_guard_answers_a_readable_422() -> None:
+    with TestClient(guarded_app()) as client:
+        response = client.get("/elsewhere?unknown=1")
+    assert response.status_code == 422
+    assert response.json()["detail"] == [
+        {
+            "type": "extra_forbidden",
+            "loc": ["query"],
+            "msg": "Undeclared or repeated query parameter",
+        }
+    ]

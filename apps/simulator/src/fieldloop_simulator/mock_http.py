@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import FastAPI, Request, Response
+from fastapi.dependencies.utils import get_flat_dependant
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -63,11 +64,23 @@ def known_query_only(request: Request) -> None:
     """
     route = request.scope.get("route")
     if not isinstance(route, APIRoute):
-        return
-    declared = {parameter.alias for parameter in route.dependant.query_params}
+        # Only an APIRoute runs dependencies, so anything else is a wiring mistake.
+        raise RuntimeError("known_query_only is a dependency of an API route")
+    # Flat, so a parameter that one of the route's own dependencies declares counts too.
+    declared = {parameter.alias for parameter in get_flat_dependant(route.dependant).query_params}
     given = [name for name, _ in request.query_params.multi_items()]
     if len(given) != len(set(given)) or not set(given) <= declared:
-        raise RequestValidationError([])
+        # Under /mock/ this becomes the 400 problem. The entry names no value, so a route
+        # elsewhere that used this guard would still answer a readable 422.
+        raise RequestValidationError(
+            [
+                {
+                    "type": "extra_forbidden",
+                    "loc": ("query",),
+                    "msg": "Undeclared or repeated query parameter",
+                }
+            ]
+        )
 
 
 def problem(
