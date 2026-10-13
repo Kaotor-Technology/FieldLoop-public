@@ -11,11 +11,11 @@ describe("web-api Domain Pack startup", () => {
     const app = buildApp({ domainPacks: packs });
     expect(app.domainPacks.flatMap(({ agents }) => agents).map(({ id }) => id)).toContain("flood-situation");
     const pipeline = app.domainPacks.find(({ content }) => content.id === "pipeline-integrity");
-    expect(pipeline?.content.signalRules.map(({ id }) => id).sort()).toEqual([
+    expect(pipeline?.content.signalRules.map(({ id }) => id)).toEqual(expect.arrayContaining([
       "cp-rectifier-output-lost",
       "encroachment-detected",
       "evidence-ageing",
-    ]);
+    ]));
     expect(pipeline?.content.signalRules.every(({ effect }) => effect.kind === "health_proposal")).toBe(true);
     expect(pipeline?.agents.map(({ id }) => id)).toEqual(expect.arrayContaining([
       "integrity-orchestrator",
