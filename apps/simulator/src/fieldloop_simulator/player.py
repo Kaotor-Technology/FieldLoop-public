@@ -118,7 +118,9 @@ class ScenarioPlayer:
         if command == "reset":
             tx.restore_baseline()
             return self._new(tx, snapshot.scenario, snapshot.run.seed, snapshot.run.speed)
-        if command in ("step", "bookmark") and snapshot.run.state not in ("ready", "paused"):
+        if command == "step" and snapshot.run.state not in ("ready", "paused"):
+            raise PlayerError(409, "pause_required")
+        if command == "bookmark" and snapshot.run.state == "playing":
             raise PlayerError(409, "pause_required")
         if command == "play" and snapshot.run.state == "finished":
             raise PlayerError(409, "reset_required")

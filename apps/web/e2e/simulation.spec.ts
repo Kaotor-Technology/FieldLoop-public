@@ -49,6 +49,24 @@ test("jumping to an earlier bookmark starts a clean replay epoch", async ({ page
   expect(rewound.nextEventIndex).toBe(1);
   await expect(page.getByRole("progressbar")).toHaveAttribute("value", "0");
 });
+test("a finished run can jump back to an earlier bookmark", async ({ page }) => {
+  await createRun(page);
+  await page.getByRole("button", { name: "Step", exact: true }).click();
+  await page.getByRole("button", { name: "Step", exact: true }).click();
+  await page.getByRole("button", { name: "Step", exact: true }).click();
+  await expect(page.locator(".simulation-status")).toContainText("Finished");
+  await expect(page.getByLabel("Bookmark", { exact: true })).toBeEnabled();
+  await page.getByLabel("Bookmark", { exact: true }).click();
+  await page.getByRole("option", { name: "Start", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Jump to bookmark", exact: true })).toBeEnabled();
+  const previous = await page.evaluate(async () => (await fetch("/api/v1/simulation/runs/current")).json());
+  const responsePromise = page.waitForResponse((response) => response.url().includes(":bookmark") && response.request().method() === "POST");
+  await page.getByRole("button", { name: "Jump to bookmark", exact: true }).click();
+  const rewound = await (await responsePromise).json();
+  expect(rewound.id).not.toBe(previous.id);
+  expect(rewound.elapsedSeconds).toBe(0);
+  await expect(page.getByRole("progressbar")).toHaveAttribute("value", "0");
+});
 test("failed commands retain confirmed state and show an error", async ({ page }) => {
   await createRun(page);
   await page.route("**/api/v1/simulation/runs/*:step", (route) => route.fulfill({ status: 503, contentType: "application/problem+json", body: JSON.stringify({ type: "about:blank", status: 503, title: "Fixture unavailable" }) }));

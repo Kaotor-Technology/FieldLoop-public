@@ -137,6 +137,22 @@ def test_backwards_bookmark_starts_a_new_run_and_replays_from_baseline() -> None
         asyncio.run(player.command(store.tx, original_id, "play", PlayerCommand()))
 
 
+def test_finished_run_can_jump_back_to_a_bookmark() -> None:
+    player, store, _, _ = fixture()
+    create(player, store)
+    execute(player, store, "step")
+    execute(player, store, "step")
+    finished = execute(player, store, "step")
+    assert finished.state == "finished"
+
+    rewound = execute(player, store, "bookmark", {"bookmarkId": "start"})
+
+    assert rewound.id != finished.id
+    assert rewound.state == "paused"
+    assert rewound.elapsed_seconds == 0
+    assert store.tx.resets == 1
+
+
 def test_reset_reproduces_values_but_retires_message_identities() -> None:
     player, store, transport, _ = fixture()
     create(player, store)

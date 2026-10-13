@@ -50,7 +50,8 @@ export function SimulationControls({ user }: { user: CurrentUser }) {
   }, onSuccess: async (data) => { await applySimulationEvent(client, "simulation.state", data); } });
   const pending = command.isPending || create.isPending;
   const error = current.isError || catalog.isError || command.isError || create.isError;
-  const paused = run?.state === "paused" || run?.state === "ready";
+  const canStep = run?.state === "paused" || run?.state === "ready";
+  const canJumpToBookmark = run?.state !== "playing";
 
   return <section className="simulation-controls" aria-labelledby="simulation-title" aria-busy={pending}>
     <h2 id="simulation-title">{t("scenarioPlayer")}</h2>
@@ -66,15 +67,15 @@ export function SimulationControls({ user }: { user: CurrentUser }) {
       {canControl ? <div className="simulation-actions">
         <button disabled={pending || !connected || run.state === "playing" || run.state === "finished"} onClick={() => command.mutate({ name: "play" })}>{t("play")}</button>
         <button disabled={pending || !connected || run.state !== "playing"} onClick={() => command.mutate({ name: "pause" })}>{t("pause")}</button>
-        <button disabled={pending || !connected || !paused} onClick={() => command.mutate({ name: "step" })}>{t("step")}</button>
+        <button disabled={pending || !connected || !canStep} onClick={() => command.mutate({ name: "step" })}>{t("step")}</button>
         <Select label={t("speed")} mono value={String(run.speed)} disabled={pending || !connected}
           options={[...new Set([1, 10, 60, 3600, run.speed])].map((speed) => ({ value: String(speed), label: `${speed}×` }))}
           onValueChange={(value) => command.mutate({ name: "speed", body: { speed: Number(value) } })} />
         <Select label={t("bookmark")} placeholder={t("chooseBookmark")} value={draft.bookmarkId}
-          disabled={pending || !connected || !paused} options={run.bookmarks.map((bookmark) => ({
+          disabled={pending || !canJumpToBookmark} options={run.bookmarks.map((bookmark) => ({
             value: bookmark.id, label: bookmark.name,
           }))} onValueChange={draft.selectBookmark} />
-        <button disabled={pending || !connected || !paused || !draft.bookmarkId} onClick={() => command.mutate({ name: "bookmark", body: { bookmarkId: draft.bookmarkId } })}>{t("jumpBookmark")}</button>
+        <button disabled={pending || !canJumpToBookmark || !draft.bookmarkId} onClick={() => command.mutate({ name: "bookmark", body: { bookmarkId: draft.bookmarkId } })}>{t("jumpBookmark")}</button>
         <button disabled={pending} onClick={() => command.mutate({ name: "reset" })}>{t("resetSimulation")}</button>
       </div> : <p>{t("simulationReadOnly")}</p>}
     </> : null}
