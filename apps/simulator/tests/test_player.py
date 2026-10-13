@@ -102,13 +102,17 @@ def test_server_clock_speed_and_pause() -> None:
     assert asyncio.run(player.read(store.tx)).elapsed_seconds == 30
 
 
-def test_steps_group_simultaneous_events_and_finish_at_duration() -> None:
+def test_each_step_emits_one_event_even_when_timestamps_match() -> None:
     player, store, transport, _ = fixture()
     create(player, store)
     assert execute(player, store, "step").elapsed_seconds == 0
+    assert len(transport.messages) == 1
+    assert execute(player, store, "step").elapsed_seconds == 60
+    assert len(transport.messages) == 2
     assert execute(player, store, "step").elapsed_seconds == 60
     assert len(transport.messages) == 3
     assert execute(player, store, "step").state == "finished"
+    assert len(transport.messages) == 3
     with pytest.raises(PlayerError, match="reset_required"):
         execute(player, store, "play")
 
@@ -140,6 +144,7 @@ def test_backwards_bookmark_starts_a_new_run_and_replays_from_baseline() -> None
 def test_finished_run_can_jump_back_to_a_bookmark() -> None:
     player, store, _, _ = fixture()
     create(player, store)
+    execute(player, store, "step")
     execute(player, store, "step")
     execute(player, store, "step")
     finished = execute(player, store, "step")
