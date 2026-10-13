@@ -77,15 +77,19 @@ export class PostgresWorkerStore implements WorkerStore {
         const targets = await this.targets(trx, rule);
         if (!targets.length) throw new Error(`Unresolved Barrier selector for ${rule.condition.ruleId}; reload seeds with content codes`);
         for (const target of targets) {
-          await sql`INSERT INTO app.signal_dependency (org_id, rule_id, barrier_id, expected_interval_seconds, expected_interval_months, simulated, classification, created_by)
+          const dependency = (await sql<{ id: string; classification: WorkerEvent["classification"] }>`INSERT INTO app.signal_dependency
+            (org_id, rule_id, barrier_id, expected_interval_seconds, expected_interval_months, simulated, classification, created_by)
             VALUES (${this.orgId}, ${rule.id}::uuid, ${target.id}::uuid, ${interval.seconds}, ${interval.months}, ${rule.simulated},
               ${maximumClassification(rule.classification, target.classification)}, 'signal-worker')
             ON CONFLICT (org_id, rule_id, barrier_id) DO UPDATE SET expected_interval_seconds = EXCLUDED.expected_interval_seconds,
-              expected_interval_months = EXCLUDED.expected_interval_months,
-              classification = CASE WHEN signal_dependency.classification = 'HIGHLY_RESTRICTED' THEN 'HIGHLY_RESTRICTED'
-                WHEN signal_dependency.classification = 'CONFIDENTIAL' AND EXCLUDED.classification IN ('PUBLIC', 'INTERNAL') THEN 'CONFIDENTIAL'
-                WHEN signal_dependency.classification = 'INTERNAL' AND EXCLUDED.classification = 'PUBLIC' THEN 'INTERNAL'
-                ELSE EXCLUDED.classification END`.execute(trx);
+              expected_interval_months = EXCLUDED.expected_interval_months
+            RETURNING id, classification`.execute(trx)).rows[0];
+          if (!dependency) throw new Error("Signal dependency insert returned no identity");
+          const classification = maximumClassification(dependency.classification, rule.classification, target.classification);
+          if (classification !== dependency.classification) {
+            await sql`UPDATE app.signal_dependency SET classification = ${classification}
+              WHERE org_id = ${this.orgId} AND id = ${dependency.id}::uuid`.execute(trx);
+          }
         }
       }
     });
@@ -134,10 +138,12 @@ export class PostgresWorkerStore implements WorkerStore {
         } else matches = matchesRule(rule, signal, [], interval.seconds ?? 0);
         for (const target of await this.targets(trx, rule, signal)) {
           // Match Scheduler's lock order before Evidence's Barrier foreign-key lock.
-          const dependency = (await sql<{ id: string }>`SELECT id FROM app.signal_dependency WHERE org_id = ${this.orgId} AND rule_id = ${rule.id}::uuid
+          const dependency = (await sql<{ id: string; classification: WorkerEvent["classification"] }>`SELECT id, classification FROM app.signal_dependency
+            WHERE org_id = ${this.orgId} AND rule_id = ${rule.id}::uuid
             AND barrier_id = ${target.id}::uuid FOR UPDATE`.execute(trx)).rows[0];
           if (!dependency) throw new Error("Signal rule dependency is not initialized; restart the worker after pack registration");
           const classification = maximumClassification(signal.classification, rule.classification, target.classification);
+          const dependencyClassification = maximumClassification(dependency.classification, classification);
           const evidence = (await sql<{ id: string }>`INSERT INTO app.evidence
             (org_id, barrier_id, kind, source, observed_at, simulated, classification, created_by, signal_receipt_id)
             VALUES (${this.orgId}, ${target.id}::uuid, 'observation', 'signal', ${signal.observedAt}::timestamptz,
@@ -146,9 +152,7 @@ export class PostgresWorkerStore implements WorkerStore {
           if (evidence) await this.event(trx, "evidence.created", evidence.id, target.id, signal.simulated, classification);
           // Old observations remain history, but do not hide a silent source or raise stale proposals.
           const fresh = isFresh ? (await sql<{ id: string }>`UPDATE app.signal_dependency SET last_received_at = clock_timestamp(),
-              classification = CASE WHEN classification = 'HIGHLY_RESTRICTED' OR ${classification} = 'HIGHLY_RESTRICTED' THEN 'HIGHLY_RESTRICTED'
-                WHEN classification = 'CONFIDENTIAL' OR ${classification} = 'CONFIDENTIAL' THEN 'CONFIDENTIAL'
-                WHEN classification = 'INTERNAL' OR ${classification} = 'INTERNAL' THEN 'INTERNAL' ELSE 'PUBLIC' END,
+              classification = ${dependencyClassification},
               last_observed_at = GREATEST(last_observed_at, ${signal.observedAt}::timestamptz)
             WHERE org_id = ${this.orgId} AND rule_id = ${rule.id}::uuid AND barrier_id = ${target.id}::uuid
               RETURNING id`.execute(trx)).rows[0] : undefined;
