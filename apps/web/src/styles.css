@@ -118,7 +118,7 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 .map-layer-control fieldset { top: calc(100% + var(--spacing-space-2)); right: 0; }
 .map-legend { position: absolute; right: var(--spacing-space-4); bottom: var(--spacing-space-4); display: flex; flex-wrap: wrap; gap: var(--spacing-space-2) var(--spacing-space-3); max-width: calc(100% - var(--spacing-space-8)); padding: var(--spacing-space-2) var(--spacing-space-3); color: var(--ink); background: var(--surface); border: var(--spacing-border-hairline) solid var(--outline); border-radius: var(--rounded-md); box-shadow: var(--elevation-level-1); }
 .legend-group { display: flex; align-items: center; flex-wrap: wrap; gap: var(--spacing-space-1) var(--spacing-space-2); }
-.legend-group h3 { flex: 0 0 100%; }
+.legend-group h2 { flex: 0 0 100%; font-size: var(--type-label-lg-font-size); font-weight: var(--type-label-lg-font-weight); line-height: var(--type-label-lg-line-height); }
 .legend-group > span { display: inline-flex; align-items: center; gap: var(--spacing-space-1); white-space: nowrap; }
 .legend-risk-group { padding-left: var(--spacing-space-3); border-left: var(--spacing-border-hairline) solid var(--outline); }
 .legend-health { font-size: var(--type-body-sm-font-size); }
@@ -234,7 +234,7 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
   .map-overlay-top { top: var(--spacing-space-2); right: var(--spacing-space-2); flex-direction: column; align-items: flex-end; }
   .map-view-controls { max-width: 100%; }
   .map-legend { left: var(--spacing-space-3); right: var(--spacing-space-3); bottom: var(--spacing-space-3); max-width: none; }
-  .legend-group h3 { flex-basis: auto; }
+  .legend-group h2 { flex-basis: auto; }
   .legend-risk-group { padding-left: 0; border-left: 0; }
 }
 @media (max-width: 599px) {

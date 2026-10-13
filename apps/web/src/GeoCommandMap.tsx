@@ -372,13 +372,13 @@ export function GeoCommandMap() {
         </div>
         <div className="map-legend" aria-label={t("mapLegend")}>
           <div className="legend-group">
-            <h3>{t("barrierHealth")}</h3>
+            <h2>{t("barrierHealth")}</h2>
             <span className="legend-health"><i className="health-failed" aria-hidden="true">{SYMBOLS.failed}</i>{t("failed")}</span>
             <span className="legend-health"><i className="health-degraded" aria-hidden="true">{SYMBOLS.degraded}</i>{t("degraded")}</span>
             <span className="legend-health"><i className="health-unverified" aria-hidden="true">{SYMBOLS.unverified}</i>{t("unverified")}</span>
           </div>
           <div className="legend-group legend-risk-group">
-            <h3>{t("riskLegend")}</h3>
+            <h2>{t("riskLegend")}</h2>
             <span><i className="legend-risk legend-intolerable" />{t("intolerable")}</span>
             <span><i className="legend-risk legend-alarp" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M2 14 14 2M2 8 8 2M8 14l6-6" /></svg></i>{t("alarp")}</span>
             <span><i className="legend-risk legend-acceptable" />{t("acceptable")}</span>
