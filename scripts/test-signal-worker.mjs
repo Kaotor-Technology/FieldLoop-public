@@ -402,16 +402,16 @@ try {
   const acceptedProposalId = randomUUID();
   await sql`INSERT INTO app.health_proposal (id, org_id, barrier_id, proposed_health, status, simulated, classification, created_by)
     VALUES (${acceptedProposalId}::uuid, ${orgId}, ${patrolOwnerBarrier.id}::uuid, 'degraded', 'open', true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
-  const decision = { user: owner, proposalId: acceptedProposalId, decision: "accept", reason: "Inspection confirms degradation.", idempotencyKey: "health-decision-fixture-001" };
+  const decision = { user: owner, proposalId: acceptedProposalId, decision: "accept", reason: "Inspection confirms degradation.", idempotencyKey: "aaaaaaaaaaaaaaaa" };
   const acceptedAuditBefore = await count("audit_event", sql`AND action = 'health_proposal.accepted' AND entity = ${acceptedProposalId}`);
   const changesBeforeDecision = await count("health_change", sql`AND barrier_id = ${patrolOwnerBarrier.id}::uuid`);
   const firstDecision = await healthStore.decide(decision);
   assert.deepEqual(firstDecision, { healthProposalId: acceptedProposalId, status: "accepted", barrierId: patrolOwnerBarrier.id, health: "degraded" });
   assert.deepEqual(await healthStore.decide(decision), firstDecision, "a retry with the same key and body returns the first decision");
   await assert.rejects(healthStore.decide({ ...decision, reason: "Different command body." }), (error) => error.status === 409 && error.code === "idempotency_key_reused");
-  await assert.rejects(healthStore.decide({ ...decision, idempotencyKey: "health-decision-fixture-003" }),
+  await assert.rejects(healthStore.decide({ ...decision, idempotencyKey: "bbbbbbbbbbbbbbbb" }),
     (error) => error.status === 409 && error.code === "conflict");
-  await assert.rejects(healthStore.decide({ ...decision, user: { ...owner, sub: "another-synthetic-user" }, idempotencyKey: "health-decision-other-001" }),
+  await assert.rejects(healthStore.decide({ ...decision, user: { ...owner, sub: "another-synthetic-user" }, idempotencyKey: "cccccccccccccccc" }),
     (error) => error.status === 403 && error.code === "forbidden");
   assert.equal(await count("health_change", sql`AND barrier_id = ${patrolOwnerBarrier.id}::uuid`), changesBeforeDecision + 1);
   assert.equal((await sql`SELECT status, decided_by, reason FROM app.health_proposal WHERE org_id = ${orgId} AND id = ${acceptedProposalId}::uuid`.execute(database)).rows[0].status, "accepted");
@@ -422,7 +422,7 @@ try {
   await sql`INSERT INTO app.health_proposal (id, org_id, barrier_id, proposed_health, status, simulated, classification, created_by)
     VALUES (${rejectedProposalId}::uuid, ${orgId}, ${failedOwnerBarrier.id}::uuid, 'healthy', 'open', true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
   const rejectedDecision = await healthStore.decide({ ...decision, proposalId: rejectedProposalId, decision: "reject",
-    reason: "Evidence does not support this change.", idempotencyKey: "health-decision-fixture-002" });
+    reason: "Evidence does not support this change.", idempotencyKey: "dddddddddddddddd" });
   assert.equal(await count("audit_event", sql`AND action = 'health_proposal.rejected' AND entity = ${rejectedProposalId}`), 1);
   assert.equal(rejectedDecision.status, "rejected"); assert.equal(rejectedDecision.health, "failed");
   assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${failedOwnerBarrier.id}::uuid`.execute(database)).rows[0].health, "failed");

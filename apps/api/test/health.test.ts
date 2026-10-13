@@ -22,7 +22,7 @@ function fixture() {
     listEvents: vi.fn().mockResolvedValue([]),
   };
   const app = buildApp({ auth, health }); apps.push(app);
-  const headers = { cookie: "fl_session=valid", "x-csrf-token": "fixture-csrf", "idempotency-key": "health-decision-001" };
+  const headers = { cookie: "fl_session=valid", "x-csrf-token": "fixture-csrf", "idempotency-key": "eeeeeeeeeeeeeeee" };
   return { app, user, health, headers };
 }
 
