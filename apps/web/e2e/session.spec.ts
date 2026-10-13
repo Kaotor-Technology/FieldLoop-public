@@ -77,7 +77,7 @@ test("an unavailable IdP shows a retry state, then recovers without a login loop
   await expect(page.getByRole("heading", { name: "Geo Command Map", exact: true })).toBeVisible();
 });
 
-for (const width of [390, 1280]) for (const colorScheme of ["light", "dark"] as const) {
+for (const width of [390, 1024, 1280]) for (const colorScheme of ["light", "dark"] as const) {
   test(`map entry and switcher accessibility: ${colorScheme}, ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
@@ -100,6 +100,7 @@ for (const width of [390, 1280]) for (const colorScheme of ["light", "dark"] as 
     if (width === 1280 && colorScheme === "light") {
       await page.setViewportSize({ width, height: 900 });
       await page.getByRole("button", { name: "English" }).click();
+      await page.locator(".account-switcher > summary").click();
       await page.screenshot({ path: "test-results/map-entry.png", fullPage: true });
     }
   });
@@ -110,7 +111,7 @@ test("all account and preference controls work by keyboard with visible focus", 
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "Skip to main content" })).toBeFocused();
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("link", { name: "FieldLoop" })).toBeFocused();
+  await expect(page.getByRole("link", { name: "FieldLoop-v2" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.locator(".account-switcher > summary")).toBeFocused();
   await page.keyboard.press("Tab");
@@ -136,6 +137,8 @@ test("all account and preference controls work by keyboard with visible focus", 
   await page.keyboard.press("Enter");
   await expect(page.locator(".layer-control > summary")).toBeFocused();
   expect(await page.locator(".layer-control > summary").evaluate((element) => getComputedStyle(element).outlineStyle)).toBe("solid");
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".layer-control")).not.toHaveAttribute("open", "");
   await page.keyboard.press("Enter");
   await expect(page.locator(".layer-control")).toHaveAttribute("open", "");
   await page.keyboard.press("Tab");

@@ -17,10 +17,10 @@ export function App() {
     void i18n.changeLanguage(language);
   }, [language, nightShift, i18n]);
 
-  return <SessionGate>{(user) => <>
+  return <SessionGate>{(user) => <div className="app-shell">
     <a className="skip-link" href="#main-content">{t("skip")}</a>
     <header className="top-bar">
-      <a href="/map" className="wordmark" aria-label="FieldLoop">Field<span>Loop</span></a>
+      <a href="/map" className="wordmark" aria-label="FieldLoop-v2">FieldLoop-<span>v2</span></a>
       <div className="preferences">
         <AccountSwitcher user={user} />
         <button onClick={toggleLanguage} lang={language === "en" ? "th" : "en"}>{language === "en" ? "ภาษาไทย" : "English"}</button>
@@ -30,5 +30,5 @@ export function App() {
     <SimulationBanner />
     <Outlet />
     <Suspense fallback={<p className="simulation-controls" role="status">{t("simulationLoading")}</p>}><SimulationControls user={user} /></Suspense>
-  </>}</SessionGate>;
+  </div>}</SessionGate>;
 }

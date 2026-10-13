@@ -10,9 +10,9 @@ import { getMapConfig, getMapLayer } from "./map-api";
 import { countVisibleBarrierAlerts, searchVisibleFeatures, selectVisibleFeatures } from "./map-view";
 
 const LAYERS: MapLayerName[] = ["assets", "barriers", "consequences"];
-const DEFAULT_VIEW: MapViewport = { latitude: 13.775, longitude: 100.58, zoom: 13, heading: 0, tilt: 0 };
-const PIPELINE_VIEW: MapViewport = { latitude: 18.79258, longitude: 99.54886, zoom: 8, heading: 0, tilt: 0 };
-const FLOOD_VIEW: MapViewport = { latitude: 13.775, longitude: 100.58, zoom: 13, heading: 0, tilt: 0 };
+const DEFAULT_VIEW: MapViewport = { latitude: 13.775, longitude: 100.58, zoom: 13, heading: 0, tilt: 45 };
+const PIPELINE_VIEW: MapViewport = { latitude: 18.79258, longitude: 99.54886, zoom: 8, heading: 0, tilt: 45 };
+const FLOOD_VIEW: MapViewport = { latitude: 13.775, longitude: 100.58, zoom: 13, heading: 0, tilt: 45 };
 const SYMBOLS: Record<string, string> = { degraded: "▲", failed: "✖", unverified: "⬚" };
 const BARRIER_ICON_ATLAS = `data:image/svg+xml;charset=utf-8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="32" viewBox="0 0 96 32"><defs><mask id="hatch"><rect x="68" y="3" width="24" height="26" fill="white"/><path d="m67 11 9-9m-4 19L89 4m-8 25 13-13" stroke="black" stroke-width="4"/></mask></defs><path d="M16 2 30 29H2z" fill="white"/><path d="m39 7 18 18m0-18L39 25" stroke="white" stroke-width="4"/><rect x="68" y="3" width="24" height="26" fill="white" mask="url(#hatch)"/><path d="M68 3h24v26H68z" fill="none" stroke="white" stroke-width="2"/></svg>')}`;
 const BARRIER_ICON_MAPPING = {
@@ -273,6 +273,10 @@ export function GeoCommandMap() {
     if (mapInstance) mapInstance.setZoom((mapInstance.getZoom() ?? viewport.zoom) + difference);
   };
 
+  const changeTilt = (tilt: 0 | 45) => {
+    map.current?.moveCamera({ tilt, heading: tilt === 0 ? 0 : viewport.heading });
+  };
+
   const chooseFeature = (feature: MapFeature) => {
     setSelectedFeature(feature);
     const position = pointPosition(feature);
@@ -281,8 +285,8 @@ export function GeoCommandMap() {
 
   return <main id="main-content" className="geo-command-map" tabIndex={-1}>
     <nav className="nav-rail" aria-label={t("primaryNavigation")}>
-      <a className="nav-rail-item nav-rail-item-active" href="/map" aria-current="page" aria-label={t("map")} title={t("map")}>
-        <span aria-hidden="true">⌖</span><span>{t("map")}</span>
+      <a className="nav-rail-item nav-rail-item-active" href="/map" aria-current="page" aria-label={t("mapNav")} title={t("mapNav")}>
+        <span aria-hidden="true">⌖</span><span>{t("mapNav")}</span>
       </a>
       <button className="nav-rail-item" type="button" aria-label={t("layers")} title={t("layers")} onClick={() => document.querySelector<HTMLElement>("#map-layer-controls > summary")?.focus()}>
         <span aria-hidden="true">▤</span><span>{t("layers")}</span>
@@ -292,7 +296,7 @@ export function GeoCommandMap() {
     <section className="map-stage" aria-label={t("map") }>
       <div className="map-toolbar">
         <div className="map-heading">
-          <div><p className="eyebrow">FIELDLOOP · {t("mapHome")}</p><h1>{t("map")}</h1></div>
+          <div><h1>{t("map")}</h1></div>
           <label className="map-search-label" htmlFor="map-search">{t("searchMap")}</label>
           <input id="map-search" className="map-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchPlaceholder")} />
         </div>
@@ -300,16 +304,6 @@ export function GeoCommandMap() {
           <button type="button" className="filter-chip" aria-pressed={domain === "all"} onClick={() => setDomain("all")}>{t("allDomains")}</button>
           <button type="button" className="filter-chip" aria-pressed={domain === "pipeline-integrity"} onClick={() => moveToStory("pipeline-integrity")}>{t("pipelineStory")}</button>
           <button type="button" className="filter-chip" aria-pressed={domain === "flood-water"} onClick={() => moveToStory("flood-water")}>{t("floodStory")}</button>
-          <details className="layer-control" id="map-layer-controls">
-            <summary>{t("layers")}</summary>
-            <fieldset>
-              <legend>{t("visibleMapLayers")}</legend>
-              {LAYERS.map((layer) => <label key={layer} className="layer-option">
-                <input type="checkbox" checked={activeLayers.includes(layer)} onChange={() => setActiveLayers((current) => current.includes(layer) ? current.filter((item) => item !== layer) : [...current, layer])} />
-                <span>{t(layer)}</span>
-              </label>)}
-            </fieldset>
-          </details>
         </div>
       </div>
 
@@ -321,15 +315,37 @@ export function GeoCommandMap() {
           {mapLoadFailed && <button type="button" onClick={() => { setMapLoadFailed(false); setMapRetry((current) => current + 1); }}>{t("retry")}</button>}
         </div>}
         {mapConfig.data && layerError && <p className="map-inline-alert" role="alert">{t("mapLayerError")}</p>}
-        <div className="map-controls" aria-label={t("mapControls")}>
-          <button type="button" aria-label={t("zoomIn")} onClick={() => changeZoom(1)}>+</button>
-          <button type="button" aria-label={t("zoomOut")} onClick={() => changeZoom(-1)}>−</button>
+        <div className="map-overlay-top">
+          <div className="map-view-controls" aria-label={t("mapControls")}>
+            <button type="button" className="map-view-preset" aria-label={t("obliqueView")} aria-pressed={viewport.tilt >= 30} onClick={() => changeTilt(45)}><span className="mono">45°</span></button>
+            <button type="button" className="map-view-preset" aria-label={t("topDownView")} aria-pressed={viewport.tilt === 0} onClick={() => changeTilt(0)}><span className="mono">0°</span></button>
+            <button type="button" aria-label={t("zoomIn")} onClick={() => changeZoom(1)}>+</button>
+            <button type="button" aria-label={t("zoomOut")} onClick={() => changeZoom(-1)}>−</button>
+          </div>
+          <details className="layer-control map-layer-control" id="map-layer-controls" open>
+            <summary>{t("layers")}</summary>
+            <fieldset>
+              <legend>{t("visibleMapLayers")}</legend>
+              {LAYERS.map((layer) => <label key={layer} className="layer-option">
+                <input type="checkbox" checked={activeLayers.includes(layer)} onChange={() => setActiveLayers((current) => current.includes(layer) ? current.filter((item) => item !== layer) : [...current, layer])} />
+                <span>{t(layer)}</span>
+              </label>)}
+            </fieldset>
+          </details>
         </div>
         <div className="map-legend" aria-label={t("riskLegend")}>
-          <span><i className="legend-risk legend-intolerable" />{t("intolerable")}</span>
-          <span><i className="legend-risk legend-alarp" />{t("alarp")}</span>
-          <span><i className="legend-risk legend-acceptable" />{t("acceptable")}</span>
-          <span><i className="legend-risk legend-unverified" />{t("riskNotRecorded")}</span>
+          <div className="legend-group">
+            <h3>{t("barrierHealth")}</h3>
+            <span className="legend-health"><i className="health-failed" aria-hidden="true">{SYMBOLS.failed}</i>{t("failed")}</span>
+            <span className="legend-health"><i className="health-degraded" aria-hidden="true">{SYMBOLS.degraded}</i>{t("degraded")}</span>
+            <span className="legend-health"><i className="health-unverified" aria-hidden="true">{SYMBOLS.unverified}</i>{t("unverified")}</span>
+          </div>
+          <div className="legend-group legend-risk-group">
+            <h3>{t("riskLegend")}</h3>
+            <span><i className="legend-risk legend-intolerable" />{t("intolerable")}</span>
+            <span><i className="legend-risk legend-alarp" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M2 14 14 2M2 8 8 2M8 14l6-6" /></svg></i>{t("alarp")}</span>
+            <span><i className="legend-risk legend-acceptable" />{t("acceptable")}</span>
+          </div>
         </div>
       </div>
       <footer className="timeline-bar">
@@ -345,7 +361,10 @@ export function GeoCommandMap() {
 
     <aside className="context-panel" aria-label={t("contextPanel")}>
       <header className="context-header">
-        <div><p className="eyebrow">{t("mapSelection")}</p><h2>{selectedFeature?.properties.name ?? t("overview")}</h2></div>
+        <div><p className="eyebrow">{t("mapSelection")}</p><h2>{selectedFeature?.properties.name ?? t("overview")}</h2>
+          {selectedFeature?.properties.chainageFrom !== null && selectedFeature?.properties.chainageFrom !== undefined &&
+            <p className="context-chainage mono">{t("chainage")} {formatChainage(selectedFeature.properties.chainageFrom)}–{formatChainage(selectedFeature.properties.chainageTo ?? selectedFeature.properties.chainageFrom)} m</p>}
+        </div>
         {selectedFeature?.properties.code && <code className="context-code">{selectedFeature.properties.code}</code>}
       </header>
       <div className="context-tabs">
@@ -459,7 +478,7 @@ function readViewportFromSearch(params: Record<string, unknown>): MapViewport {
     longitude,
     zoom: Number.isInteger(zoom) && zoom >= 0 && zoom <= 22 ? zoom : DEFAULT_VIEW.zoom,
     heading: Number.isFinite(heading) ? heading : DEFAULT_VIEW.heading,
-    tilt: tilt === 0 ? 0 : DEFAULT_VIEW.tilt,
+    tilt: tilt === 0 ? 0 : tilt === 45 ? 45 : DEFAULT_VIEW.tilt,
   };
 }
 
