@@ -25,6 +25,7 @@
     "@google-cloud/pubsub": "6.2.0",
     "@google-cloud/secret-manager": "7.1.1",
     "@google-cloud/storage": "8.4.0",
+    "google-auth-library": "11.2.0",
     "pg": "8.23.1"
   },
   "devDependencies": {

@@ -1,3 +1,4 @@
+import { simulationClientFromEnvironment } from "./simulation/client.js";
 import { buildApp } from "./app.js";
 import { createProductionAuthRuntime } from "./auth/runtime.js";
 import { registerSpa } from "./spa.js";
@@ -5,8 +6,10 @@ import { registerReference } from "./reference.js";
 import { fileURLToPath } from "node:url";
 
 const authRuntime = await createProductionAuthRuntime();
+const simulator = simulationClientFromEnvironment();
 const app = buildApp({
   auth: authRuntime.auth,
+  ...(simulator ? { simulator } : {}),
   ...(process.env["FIELDLOOP_BASE_URL"] ? { baseUrl: process.env["FIELDLOOP_BASE_URL"] } : {}),
 });
 app.addHook("onClose", authRuntime.close);
