@@ -90,7 +90,8 @@ try:
         service.execute("/reset", "reset-player-fixture", PlayerCommand(), run_id, "reset") == reset
     )
     assert reset["id"] != created["id"] and reset["nextEventIndex"] == 0
-    assert service.hydro.read("rain").value == 0.0  # reset returns the read to its baseline
+    # Reset drops what the run held: no rain even at the time the old run had it.
+    assert service.hydro.read("rain", rain.observed_at).value == 0.0
     result = service.execute(
         "/bookmark",
         "replay-player-fixture",
