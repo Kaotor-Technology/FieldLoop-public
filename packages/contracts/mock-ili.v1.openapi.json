@@ -56,6 +56,16 @@
               }
             }
           },
+          "400": {
+            "description": "The path takes no query, so any query parameter is refused: an undeclared or repeated query parameter; code validation_failed, input values are not echoed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "404": {
             "description": "Unknown report; code not_found.",
             "content": {

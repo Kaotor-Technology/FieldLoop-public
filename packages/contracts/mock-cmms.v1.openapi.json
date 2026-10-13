@@ -69,7 +69,7 @@
             }
           },
           "400": {
-            "description": "Invalid query; code validation_failed, input values are not echoed.",
+            "description": "Invalid query, including an undeclared or repeated query parameter; code validation_failed, input values are not echoed.",
             "content": {
               "application/problem+json": {
                 "schema": {

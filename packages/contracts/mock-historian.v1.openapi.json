@@ -78,7 +78,7 @@
             }
           },
           "400": {
-            "description": "Missing or invalid window; code validation_failed, input values are not echoed.",
+            "description": "Missing or invalid window, or an undeclared or repeated query parameter; code validation_failed, input values are not echoed.",
             "content": {
               "application/problem+json": {
                 "schema": {

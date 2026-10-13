@@ -68,4 +68,6 @@ def test_the_contract_serves_its_own_schema_and_documents_the_refused_methods(so
         assert responses["200"]["content"]["application/json"]["schema"] == {
             "$ref": f"mock-{source}.v1.schema.json"
         }
+        # Every route refuses an undeclared or repeated query parameter (known_query_only).
+        assert "400" in responses
         assert "405" in responses

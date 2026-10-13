@@ -45,6 +45,16 @@
               }
             }
           },
+          "400": {
+            "description": "The path takes no query, so any query parameter is refused: an undeclared or repeated query parameter; code validation_failed, input values are not echoed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "405": {
             "description": "Only GET is served, so every other method is refused; code method_not_allowed, and Allow names the methods the path serves. No state mutation.",
             "headers": {
