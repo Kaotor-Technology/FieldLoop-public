@@ -18,6 +18,10 @@ READS = [
     f"{HISTORIAN}?{WINDOW}",
     "/mock/patrol/findings",
     "/mock/ili/reports/SYN-ILI-2026-001",
+    "/mock/hydro/rain",
+    "/mock/hydro/tide?asOf=2026-10-12T06:00:00Z",
+    "/mock/pumps/P-3/status",
+    "/mock/pumps/G-1/status?asOf=2026-10-12T06:20:00Z",
 ]
 
 
@@ -45,12 +49,22 @@ def test_a_misspelt_filter_is_refused_and_not_ignored(query: str) -> None:
     assert_refused(f"{CMMS}?{query}")
 
 
+@pytest.mark.parametrize("path", ["/mock/hydro/rain", "/mock/pumps/P-3/status"])
+@pytest.mark.parametrize("query", ["asof=2026-10-12T06:00:00Z", "as_of=2026-10-12T06:00:00Z"])
+def test_a_misspelt_scenario_time_is_refused_and_not_read_as_the_default(
+    path: str, query: str
+) -> None:
+    assert_refused(f"{path}?{query}")
+
+
 @pytest.mark.parametrize(
     "url",
     [
         f"{CMMS}?asOf=2026-10-12T00:00:00Z&asOf=2026-10-13T00:00:00Z",
         f"{CMMS}?pmDue=true&pmDue=false",
         f"{HISTORIAN}?{WINDOW}&to=2026-10-12T00:10:00Z",
+        "/mock/hydro/rain?asOf=2026-10-12T00:00:00Z&asOf=2026-10-12T06:00:00Z",
+        "/mock/pumps/P-3/status?asOf=2026-10-12T00:00:00Z&asOf=2026-10-12T06:20:00Z",
     ],
 )
 def test_a_repeated_query_parameter_is_refused(url: str) -> None:

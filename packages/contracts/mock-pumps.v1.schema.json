@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MockPumpsStatus",
+  "description": "Read-only simulated status of one synthetic pump or gate for the Bangkok storm Scenario (SIM-2). Authored simulation values, not the state of a real Facility.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "assetCode",
+    "facilityType",
+    "zoneCode",
+    "operatingState",
+    "powerStatus",
+    "observedAt",
+    "orgId",
+    "label",
+    "simulated",
+    "classification"
+  ],
+  "properties": {
+    "assetCode": {
+      "type": "string",
+      "pattern": "^[PG]-[0-9]+$"
+    },
+    "facilityType": {
+      "type": "string",
+      "enum": [
+        "pump",
+        "gate"
+      ]
+    },
+    "zoneCode": {
+      "description": "The simulated drainage zone the Facility stands in.",
+      "type": "string",
+      "pattern": "^Z[0-9]+$"
+    },
+    "operatingState": {
+      "description": "running or stopped for a pump; open or closed for a gate.",
+      "type": "string",
+      "enum": [
+        "running",
+        "stopped",
+        "open",
+        "closed"
+      ]
+    },
+    "powerStatus": {
+      "type": "string",
+      "enum": [
+        "available",
+        "lost"
+      ]
+    },
+    "observedAt": {
+      "description": "The Scenario time the status is for.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "orgId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "label": {
+      "type": "string",
+      "const": "SIMULATION"
+    },
+    "simulated": {
+      "type": "boolean",
+      "const": true
+    },
+    "classification": {
+      "type": "string",
+      "const": "CONFIDENTIAL"
+    }
+  },
+  "if": {
+    "properties": {
+      "facilityType": {
+        "const": "pump"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "operatingState": {
+        "enum": [
+          "running",
+          "stopped"
+        ]
+      }
+    }
+  },
+  "else": {
+    "properties": {
+      "operatingState": {
+        "enum": [
+          "open",
+          "closed"
+        ]
+      }
+    }
+  }
+}
