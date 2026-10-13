@@ -1,0 +1,47 @@
+id: flood-water
+version: 1.0.0
+label: SIMULATION
+simulated: true
+classification: CONFIDENTIAL
+parameterBasis: >-
+  Authored Bangkok storm demonstration. The 100 mm/24 h rain threshold and power-loss
+  value are illustrative simulation inputs, not forecasts, measurements or official warning criteria.
+knowledgeFolders: [Flood Response Plans, Regulatory, Templates, Golden Examples]
+threatCategories:
+  - {code: heavy-convective-rainfall, name: Heavy convective rainfall}
+  - {code: high-upstream-flow, name: High upstream flow}
+  - {code: high-tide-storm-surge, name: High tide / storm surge}
+  - {code: pump-station-outage, name: Pump station outage}
+signalRules:
+  - id: rainfall-needs-fresh-evidence
+    condition: {kind: signal, source: mock-hydro, tag: rain.accumulation.24h, operator: gt, threshold: 100, unit: mm, windowSeconds: 86400}
+    targetBarrierSelector:
+      pack: flood-water
+      bowtieCode: bangkok-bowtie-d
+      barrierCodes: [pumping-stations, water-gates, tidal-gates]
+    effect:
+      kind: health_proposal
+      proposedHealth: unverified
+      reason: SIMULATION heavy 24-hour rainfall requires fresh pump and gate Evidence before human review.
+  - id: pump-power-lost
+    condition: {kind: signal, source: mock-pumps, tag: pump.power, operator: eq, threshold: lost, unit: state}
+    targetBarrierSelector:
+      pack: flood-water
+      bowtieCode: bangkok-bowtie-d
+      barrierCodes: [pumping-stations]
+    effect:
+      kind: health_proposal
+      proposedHealth: degraded
+      reason: SIMULATION pump power is lost; a person must decide the proposed Health change.
+agentFiles: [agents/flood-situation.yaml]
+warningTemplates:
+  - id: district-flood-warning
+    actionLevel: L2
+    approvalRequired: true
+    placeholders: [district, observedAt, situation, advice]
+    en: >-
+      SIMULATION — District {{district}} at {{observedAt}}: {{situation}}.
+      Guidance for this exercise: {{advice}}. Draft warning; Commander approval required before sandbox delivery.
+    th: >-
+      SIMULATION — เขต {{district}} เวลา {{observedAt}}: {{situation}}
+      คำแนะนำสำหรับการฝึกซ้อม: {{advice}} ข้อความร่างต้องได้รับอนุมัติจากผู้บัญชาการก่อนส่งผ่านช่องทางทดสอบ
