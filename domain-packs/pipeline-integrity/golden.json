@@ -2,8 +2,8 @@
   "label": "SIMULATION",
   "agents": ["code-standard", "inspection-data-prep", "integrity-orchestrator", "regulatory", "report-generator"],
   "rules": [
-    { "id": "cp-rectifier-output-lost", "source": "mock-historian", "tag": "DL-01.rectifier.output", "operator": "eq", "threshold": 0, "health": "failed", "barriers": ["cathodic-protection"] },
-    { "id": "encroachment-detected", "source": "mock-patrol", "tag": "DL-01.encroachment.detected", "operator": "eq", "threshold": 1, "health": "degraded", "barriers": ["right-of-way-patrol", "excavation-permit-one-call"] },
+    { "id": "cp-rectifier-output-lost", "source": "mock-historian", "tag": "DL-01.rectifier.output", "operator": "eq", "threshold": 0, "unit": "A", "health": "failed", "barriers": ["cathodic-protection"] },
+    { "id": "encroachment-detected", "source": "mock-patrol", "tag": "DL-01.encroachment.detected", "operator": "eq", "threshold": 1, "unit": "boolean", "health": "degraded", "barriers": ["right-of-way-patrol", "excavation-permit-one-call"] },
     { "id": "evidence-ageing", "intervalSource": "barrier.evidence_interval", "health": "unverified", "barriers": ["cathodic-protection", "coating", "right-of-way-patrol", "excavation-permit-one-call"] }
   ]
 }

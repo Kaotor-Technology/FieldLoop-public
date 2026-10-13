@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import type { Signal } from "@fieldloop/contracts";
 import { loadDomainPacks } from "../src/domain-pack-loader.js";
 
 const root = new URL("../../../domain-packs/", import.meta.url);
@@ -42,13 +43,42 @@ describe("Domain Pack loading (FL-78 / D10 / D11)", () => {
           id: rule.id,
           ...(rule.condition.kind === "signal" ? {
             source: rule.condition.source, tag: rule.condition.tag, operator: rule.condition.operator,
-            threshold: rule.condition.threshold,
+            threshold: rule.condition.threshold, unit: rule.condition.unit,
             ...(rule.condition.windowSeconds ? { windowSeconds: rule.condition.windowSeconds } : {}),
           } : { intervalSource: rule.condition.intervalSource }),
           health: rule.effect.proposedHealth, barriers: rule.targetBarrierSelector.barrierCodes,
         })),
       }).toEqual(golden);
     }
+  });
+
+  it("keeps categorical flood rules aligned with the shared Signal fixture", async () => {
+    const fixtures = JSON.parse(await readFile(new URL("../../contracts/test/fixtures/signal-cases.json", import.meta.url), "utf8")) as Array<{ name: string; signal: Signal }>;
+    const pump = fixtures.find(({ name }) => name === "pump power lost");
+    const floodPack = (await loadDomainPacks(root, tools)).find(({ content }) => content.id === "flood-water");
+    const rule = floodPack?.content.signalRules.find(({ id }) => id === "pump-power-lost");
+    if (!pump || !rule || rule.condition.kind !== "signal") throw new Error("pump Signal fixture or pack rule is missing");
+    expect({
+      source: rule.condition.source,
+      tag: rule.condition.tag,
+      operator: rule.condition.operator,
+      threshold: rule.condition.threshold,
+      unit: rule.condition.unit,
+    }).toEqual({
+      source: pump.signal.source,
+      tag: pump.signal.tag,
+      operator: "eq",
+      threshold: pump.signal.value,
+      unit: "state",
+    });
+  });
+
+  it("rejects text thresholds for ordered Signal comparisons", async () => {
+    const directory = await fixture((pack) => {
+      const rules = pack["signalRules"] as Array<Record<string, unknown>>;
+      if (rules[0]) rules[0]["condition"] = { kind: "signal", source: "mock-historian", tag: "status", operator: "gt", threshold: "lost", unit: "state" };
+    });
+    await expect(loadDomainPacks(directory, tools)).rejects.toThrow(/pack.yaml.*threshold/);
   });
 
   it("rejects invalid pack schema with the source filename", async () => {

@@ -33,6 +33,9 @@ Rules use `targetBarrierSelector` with pack, Bowtie code and Barrier codes from 
 DL-01 and Bangkok seeds. Database `signal_rule.condition` stores the condition
 plus `ruleId`, `packVersion` and `effect`; `spatialGeometry`, when present, becomes
 `signal_rule.spatial_geom` (SRID 4326). No domain-specific core columns are added.
+Signal `gt`/`lt` thresholds are numeric; `eq` thresholds can match numeric, string
+or boolean Signal values. The pump outage rule matches the shared fixture's
+categorical `pump.power = "lost"` status.
 Rule evaluation, resolving selectors to seeded rows and creating Health Proposals
 belong to FL-76. Every effect is a proposal; loading packs never changes Health.
 Evidence ageing in this initial pack also requests human review; an automatic

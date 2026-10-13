@@ -24,7 +24,7 @@ signalRules:
       proposedHealth: unverified
       reason: SIMULATION heavy 24-hour rainfall requires fresh pump and gate Evidence before human review.
   - id: pump-power-lost
-    condition: {kind: signal, source: mock-pumps, tag: pump.power, operator: eq, threshold: 0, unit: boolean}
+    condition: {kind: signal, source: mock-pumps, tag: pump.power, operator: eq, threshold: lost, unit: state}
     targetBarrierSelector:
       pack: flood-water
       bowtieCode: bangkok-bowtie-d

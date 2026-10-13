@@ -40,10 +40,20 @@
               "source": { "type": "string", "minLength": 1 },
               "tag": { "type": "string", "minLength": 1 },
               "operator": { "enum": ["gt", "lt", "eq"] },
-              "threshold": { "type": "number" },
+              "threshold": {
+                "oneOf": [
+                  { "type": "number" },
+                  { "type": "string", "minLength": 1 },
+                  { "type": "boolean" }
+                ]
+              },
               "unit": { "type": "string", "minLength": 1 },
               "windowSeconds": { "type": "integer", "minimum": 1 }
-            }
+            },
+            "allOf": [{
+              "if": { "properties": { "operator": { "enum": ["gt", "lt"] } }, "required": ["operator"] },
+              "then": { "properties": { "threshold": { "type": "number" } } }
+            }]
           },
           {
             "type": "object", "additionalProperties": false, "required": ["kind", "intervalSource"],
