@@ -7,14 +7,20 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Literal, Protocol
+from typing import Literal, Protocol, cast
 
 from fieldloop_common.generated_scenario import Event, Scenario
 from fieldloop_common.generated_simulation import PlayerCommand, RunCreate, SimulationRun
 from pydantic import BaseModel
 
+from fieldloop_simulator import storm_events
 from fieldloop_simulator.mock_historian import CLASSIFICATION as HISTORIAN_CLASSIFICATION
-from fieldloop_simulator.mock_signals import Observation, SimulatedSignalEmitter, utc_text
+from fieldloop_simulator.mock_signals import (
+    Observation,
+    SignalValue,
+    SimulatedSignalEmitter,
+    utc_text,
+)
 
 Command = Literal["play", "pause", "step", "speed", "bookmark", "reset"]
 
@@ -139,7 +145,7 @@ class ScenarioPlayer:
                 if (run.next_event_index < run.event_count)
                 else run.duration_seconds
             )
-            await self._advance(snapshot, target)
+            await self._advance(snapshot, target, max_events=1)
         elif command == "speed":
             if body.speed is None:
                 raise PlayerError(400, "invalid_speed")
@@ -173,10 +179,13 @@ class ScenarioPlayer:
             await self._advance(snapshot, snapshot.run.elapsed_seconds + delta * snapshot.run.speed)
         snapshot.anchor = now
 
-    async def _advance(self, snapshot: PlayerSnapshot, target: float) -> None:
+    async def _advance(
+        self, snapshot: PlayerSnapshot, target: float, *, max_events: int | None = None
+    ) -> None:
         run = snapshot.run
         target = min(target, run.duration_seconds)
         emitter: SimulatedSignalEmitter | None = None
+        emitted = 0
         while run.next_event_index < run.event_count:
             event = snapshot.scenario.events[run.next_event_index]
             if event.at_seconds > target:
@@ -189,6 +198,9 @@ class ScenarioPlayer:
                 raise PlayerError(503, "signal_quarantined")
             # A failed transaction re-emits the same IDs; consumers deduplicate (at-least-once).
             run.next_event_index += 1
+            emitted += 1
+            if max_events is not None and emitted >= max_events:
+                break
         run.elapsed_seconds = target
         at = datetime.fromisoformat(snapshot.scenario.starts_at.replace("Z", "+00:00"))
         run.clock = utc_text(at + timedelta(seconds=target))
@@ -226,7 +238,23 @@ def classification(
     return cast(Classification, classes[highest])
 
 
-def observation(snapshot: PlayerSnapshot, event: Event) -> Observation:
+def _starts_at(snapshot: PlayerSnapshot) -> datetime:
+    return datetime.fromisoformat(snapshot.scenario.starts_at.replace("Z", "+00:00"))
+
+
+def reading(snapshot: PlayerSnapshot, event: Event) -> SignalValue:
+    """The value an event publishes: as authored, with its seeded noise, or derived."""
+    if storm_events.is_derived_rainfall(event):
+        # Summed from the rain rates before this event, so no author states a total.
+        starts_at = _starts_at(snapshot)
+        rates: list[tuple[datetime, float]] = []
+        for item in snapshot.scenario.events:
+            if item.id == event.id:
+                break
+            if (described := storm_events.describe(item)) and described.rain_rate:
+                rate = cast(float, reading(snapshot, item))
+                rates.append((starts_at + timedelta(seconds=item.at_seconds), float(rate)))
+        return storm_events.rainfall(rates, starts_at + timedelta(seconds=event.at_seconds))
     value = event.value
     if event.noise_amplitude:
         assert isinstance(value, (float, int)) and not isinstance(value, bool)
@@ -235,8 +263,17 @@ def observation(snapshot: PlayerSnapshot, event: Event) -> Observation:
         )
         rng = random.Random(int.from_bytes(hashlib.sha256(identity.encode()).digest(), "big"))
         value = float(value) + rng.uniform(-event.noise_amplitude, event.noise_amplitude)
-    at = datetime.fromisoformat(snapshot.scenario.starts_at.replace("Z", "+00:00"))
+    return value
+
+
+def observation(snapshot: PlayerSnapshot, event: Event) -> Observation:
+    value = reading(snapshot, event)
+    at = _starts_at(snapshot)
     payload = dict(event.payload or {})
+    described = storm_events.describe(event)
+    if described:
+        # A Demo B source states its own payload, so an author cannot contradict the source.
+        payload.update(described.payload)
     payload.update(target=event.target.model_dump(), label="SIMULATION", sandbox=True)
     return Observation(
         source=event.source,
@@ -246,5 +283,6 @@ def observation(snapshot: PlayerSnapshot, event: Event) -> Observation:
         unit=event.unit,
         observed_at=at + timedelta(seconds=event.at_seconds),
         payload=payload,
-        subject=event.id,
+        # A Demo B Signal is identified by its Asset, as the source identifies it; others by event.
+        subject=described.asset_code if described else event.id,
     )

@@ -14,6 +14,8 @@ from fieldloop_common.generated_simulation import PlayerCommand, RunCreate
 from fieldloop_common.memory_transport import InMemoryTransport
 from fieldloop_common.signal_publisher import SignalPublisher
 from fieldloop_simulator.mock_historian import SimulatedHistorian
+from fieldloop_simulator.mock_hydro import SimulatedHydro
+from fieldloop_simulator.mock_pumps import SimulatedPumps
 from fieldloop_simulator.mock_signals import SimulatedSignalEmitter
 from fieldloop_simulator.player import PlayerError, PlayerSnapshot, ScenarioPlayer
 from fieldloop_simulator.player_service import SimulationService
@@ -102,13 +104,17 @@ def test_server_clock_speed_and_pause() -> None:
     assert asyncio.run(player.read(store.tx)).elapsed_seconds == 30
 
 
-def test_steps_group_simultaneous_events_and_finish_at_duration() -> None:
+def test_each_step_emits_one_event_even_when_timestamps_match() -> None:
     player, store, transport, _ = fixture()
     create(player, store)
     assert execute(player, store, "step").elapsed_seconds == 0
+    assert len(transport.messages) == 1
+    assert execute(player, store, "step").elapsed_seconds == 60
+    assert len(transport.messages) == 2
     assert execute(player, store, "step").elapsed_seconds == 60
     assert len(transport.messages) == 3
     assert execute(player, store, "step").state == "finished"
+    assert len(transport.messages) == 3
     with pytest.raises(PlayerError, match="reset_required"):
         execute(player, store, "play")
 
@@ -140,6 +146,7 @@ def test_backwards_bookmark_starts_a_new_run_and_replays_from_baseline() -> None
 def test_finished_run_can_jump_back_to_a_bookmark() -> None:
     player, store, _, _ = fixture()
     create(player, store)
+    execute(player, store, "step")
     execute(player, store, "step")
     execute(player, store, "step")
     finished = execute(player, store, "step")
@@ -256,7 +263,9 @@ def test_persistent_snapshot_survives_rebuilding_the_player() -> None:
 def test_reset_projection_cannot_be_overwritten_by_an_older_read() -> None:
     player, store, _, _ = fixture()
     historian = SimulatedHistorian(org_id="test-org")
-    service = SimulationService(player, lambda: store, historian)
+    service = SimulationService(
+        player, lambda: store, historian, SimulatedHydro(), SimulatedPumps()
+    )
     created = service.execute(
         "/v1/simulation/runs",
         "create-player-test-01",

@@ -1,3 +1,4 @@
+import asyncio
 import json
 from copy import deepcopy
 from pathlib import Path
@@ -45,6 +46,50 @@ def test_semantic_errors_locate_the_event() -> None:
     document["events"][2]["value"] = True
     with pytest.raises(ScenarioError, match="noise requires"):
         validate_scenario(document)
+
+
+def test_loading_rejects_unknown_asset_targets_with_a_json_pointer(tmp_path: Path) -> None:
+    document = json.loads(FIXTURE.read_text())
+    document["events"][1]["target"]["id"] = "UNKNOWN-ASSET"
+    path = tmp_path / "unknown-asset.json"
+    path.write_text(json.dumps(document))
+    with pytest.raises(ScenarioError) as failure:
+        load_scenario(path, asset_codes={"DL-01", "S-R1"})
+    assert failure.value.pointer == "/events/1/target/id"
+
+
+def test_loading_accepts_asset_targets_in_the_organisation() -> None:
+    scenario = load_scenario(FIXTURE, asset_codes={"DL-01", "S-R1"})
+    assert scenario.events[0].target.id == "DL-01"
+
+
+def test_service_catalog_validation_fails_before_startup_for_an_unknown_asset(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import fieldloop_simulator.main as simulator_main
+
+    document = json.loads(FIXTURE.read_text())
+    document["events"][1]["target"]["id"] = "UNKNOWN-ASSET"
+    scenario = validate_scenario(document)
+
+    class FakeAssetStore:
+        def asset_codes(self) -> set[str]:
+            return {"DL-01", "S-R1"}
+
+    fake_store = FakeAssetStore()
+
+    def store() -> FakeAssetStore:
+        return fake_store
+
+    monkeypatch.setattr(simulator_main, "store", store)
+    monkeypatch.setattr(simulator_main, "catalog", {scenario.id: scenario})
+
+    async def start_service() -> None:
+        async with simulator_main.lifespan(simulator_main.app):
+            pass
+
+    with pytest.raises(RuntimeError, match="/events/1/target/id: unknown Asset"):
+        asyncio.run(start_service())
 
 
 @pytest.mark.parametrize("text", ['{"id":1,"id":2}', "id: 1\nid: 2", "id: &x []\nevents: *x"])

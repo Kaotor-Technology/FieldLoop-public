@@ -172,6 +172,32 @@ def test_the_schema_refuses_a_rain_rate_below_zero_but_not_a_level() -> None:
         validator.validate({**rain, "value": -0.1})
 
 
+def test_a_run_is_restored_whole_or_not_at_all(hydro: SimulatedHydro) -> None:
+    hydro.restore([("rain", STORM, 60.0)], clock=STORM)
+    assert (hydro.clock, hydro.value_at("rain", STORM)) == (STORM, 60.0)
+
+    later = STORM + timedelta(hours=1)
+    with pytest.raises(ValueError, match="below"):
+        hydro.restore([("level", later, 1.9), ("rain", later, -1.0)], clock=later)
+    # The refused run left the earlier one as it was: no new clock, no new level.
+    assert (hydro.clock, hydro.value_at("rain", later)) == (STORM, 60.0)
+    assert hydro.value_at("level", later) == 0.6
+
+    hydro.restore([], clock=later)
+    assert (hydro.clock, hydro.value_at("rain", later)) == (later, 0.0)
+
+
+def test_a_read_that_names_no_time_is_as_of_the_clock(hydro: SimulatedHydro) -> None:
+    hydro.restore([("rain", STORM, 60.0)], clock=STORM)
+    with TestClient(app) as client:
+        bare = client.get("/mock/hydro/rain").json()
+        named = client.get("/mock/hydro/rain", params={"asOf": "2026-10-12T05:00:00Z"}).json()
+    assert (bare["observedAt"], bare["value"]) == ("2026-10-12T06:00:00Z", 60.0)
+    assert (named["observedAt"], named["value"]) == ("2026-10-12T05:00:00Z", 0.0)
+    hydro.reset()
+    assert hydro.read("rain").observed_at == datetime(2026, 10, 12, tzinfo=UTC)
+
+
 def test_a_write_changes_no_reading() -> None:
     with TestClient(app) as client:
         before = client.get("/mock/hydro/rain").json()
@@ -273,6 +299,15 @@ def test_rainfall_accumulates_over_the_last_24_hours_of_scenario_time(
     assert {after: hydro.rain_accumulation(STORM + after) for after in expected} == expected
     hydro.reset()
     assert hydro.rain_accumulation(STORM + timedelta(hours=3)) == 0.0
+
+
+def test_the_rainfall_takes_the_last_rate_added_among_equal_starts(hydro: SimulatedHydro) -> None:
+    hydro.add_override("rain", start=STORM, value=60)
+    hydro.add_override("rain", start=STORM, value=30)
+    hydro.add_override("rain", start=STORM - timedelta(hours=30), value=5)
+    # 30 mm/h for the hour since the storm, and 5 mm/h for the 23 hours of the window before it.
+    assert hydro.value_at("rain", STORM) == 30.0
+    assert hydro.rain_accumulation(STORM + timedelta(hours=1)) == 30 + 23 * 5
 
 
 def test_a_storm_crosses_the_flood_pack_rainfall_rule_as_a_validated_signal(

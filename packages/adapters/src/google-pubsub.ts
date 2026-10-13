@@ -9,3 +9,8 @@ export class GooglePubSubTransport implements MessageTransport {
     return this.client.topic(topic).publishMessage({ data: Buffer.from(data), attributes });
   }
 }
+
+export function createGooglePubSubTransport(projectId: string): { transport: MessageTransport; close: () => Promise<void> } {
+  const client = new PubSub({ projectId });
+  return { transport: new GooglePubSubTransport(client), close: () => client.close() };
+}
