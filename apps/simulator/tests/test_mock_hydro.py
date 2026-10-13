@@ -167,6 +167,16 @@ def test_the_schema_refuses_a_unit_that_does_not_fit_the_kind() -> None:
         validator.validate({**tide, "unit": "mm/h"})
 
 
+def test_the_schema_refuses_a_rain_rate_below_zero_but_not_a_level() -> None:
+    with TestClient(app) as client:
+        rain = client.get("/mock/hydro/rain").json()
+        tide = client.get("/mock/hydro/tide").json()
+    validator = Draft202012Validator(SCHEMA, format_checker=FormatChecker())
+    validator.validate({**tide, "value": -0.2})
+    with pytest.raises(ValidationError):
+        validator.validate({**rain, "value": -0.1})
+
+
 def test_a_write_changes_no_reading() -> None:
     with TestClient(app) as client:
         before = client.get("/mock/hydro/rain").json()

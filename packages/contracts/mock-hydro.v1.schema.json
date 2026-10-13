@@ -80,6 +80,9 @@
     "properties": {
       "unit": {
         "const": "mm/h"
+      },
+      "value": {
+        "minimum": 0
       }
     }
   },
