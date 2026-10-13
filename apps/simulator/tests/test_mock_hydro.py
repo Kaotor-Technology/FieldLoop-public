@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from fieldloop_common.memory_transport import InMemoryTransport
 from fieldloop_common.signal import parse_signal
 from fieldloop_simulator.main import app
-from fieldloop_simulator.mock_hydro import DEFAULT_AS_OF, SENSOR_PROFILES, SimulatedHydro
+from fieldloop_simulator.mock_hydro import SENSOR_PROFILES, SimulatedHydro
 from fieldloop_simulator.mock_signals import SimulatedSignalEmitter
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -204,9 +204,3 @@ def test_the_sensors_are_the_sensor_facilities_of_the_bangkok_data() -> None:
     assert authored == {
         kind: (profile.sensor_code, profile.zone_code) for kind, profile in SENSOR_PROFILES.items()
     }
-
-
-def test_the_default_time_is_the_start_of_the_simulation() -> None:
-    bowtie = json.loads((BANGKOK / "bowtie-d.json").read_text())
-    starts_at = datetime.fromisoformat(bowtie["metadata"]["simulationStartsAt"])
-    assert starts_at == DEFAULT_AS_OF

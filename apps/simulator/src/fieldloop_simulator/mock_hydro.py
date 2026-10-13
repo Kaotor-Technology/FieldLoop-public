@@ -9,12 +9,13 @@ import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Final
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from fieldloop_common.generated_mock_hydro import MockHydroReading
 
+from fieldloop_simulator.bangkok_storm import LABEL, SIMULATION_STARTS_AT
 from fieldloop_simulator.mock_http import Rfc3339, app_state, known_query_only, problem
 from fieldloop_simulator.mock_signals import Classification, Observation
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
@@ -22,9 +23,6 @@ from fieldloop_simulator.scenario_overrides import HeldValues
 
 SOURCE_ID = "mock-hydro"
 CLASSIFICATION: Classification = "CONFIDENTIAL"
-# The Scenario time a read uses when it names none: the start of the Bangkok storm simulation,
-# so a bare read is reproducible (SIM-5).
-DEFAULT_AS_OF: Final = datetime(2026, 10, 12, tzinfo=UTC)
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
@@ -95,7 +93,7 @@ class SimulatedHydro:
                 "assetCode": profile.sensor_code,
                 "zoneCode": profile.zone_code,
                 "kind": kind,
-                "label": "SIMULATION",
+                "label": LABEL,
             },
         )
 
@@ -111,7 +109,7 @@ class SimulatedHydro:
                 "unit": profile.unit,
                 "observedAt": as_of,
                 "orgId": self.org_id,
-                "label": "SIMULATION",
+                "label": LABEL,
                 "simulated": True,
                 "classification": CLASSIFICATION,
             }
@@ -129,7 +127,7 @@ get_hydro = app_state("hydro", SimulatedHydro)
 def read_kind(
     kind: str,
     hydro: Annotated[SimulatedHydro, Depends(get_hydro)],
-    as_of: Annotated[Rfc3339, Query(alias="asOf")] = DEFAULT_AS_OF,
+    as_of: Annotated[Rfc3339, Query(alias="asOf")] = SIMULATION_STARTS_AT,
 ) -> MockHydroReading | JSONResponse:
     try:
         return hydro.read(kind, as_of)

@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from fieldloop_common.memory_transport import InMemoryTransport
 from fieldloop_common.signal import parse_signal
 from fieldloop_simulator.main import app
-from fieldloop_simulator.mock_pumps import DEFAULT_AS_OF, FACILITIES, SimulatedPumps
+from fieldloop_simulator.mock_pumps import FACILITIES, SimulatedPumps
 from fieldloop_simulator.mock_signals import SimulatedSignalEmitter
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
@@ -218,9 +218,3 @@ def test_the_facilities_are_the_pumps_and_gates_of_the_bangkok_data() -> None:
     assert authored == {
         code: (facility.facility_type, facility.zone_code) for code, facility in FACILITIES.items()
     }
-
-
-def test_the_default_time_is_the_start_of_the_simulation() -> None:
-    bowtie = json.loads((BANGKOK / "bowtie-d.json").read_text())
-    starts_at = datetime.fromisoformat(bowtie["metadata"]["simulationStartsAt"])
-    assert starts_at == DEFAULT_AS_OF

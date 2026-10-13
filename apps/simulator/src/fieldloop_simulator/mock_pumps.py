@@ -7,13 +7,14 @@ through ``set_power``; operating a real pump or gate is an L1 Command Package (A
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from typing import Annotated, Final, Literal
+from datetime import datetime
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from fieldloop_common.generated_mock_pumps import MockPumpsStatus
 
+from fieldloop_simulator.bangkok_storm import LABEL, SIMULATION_STARTS_AT
 from fieldloop_simulator.mock_http import Rfc3339, app_state, known_query_only, problem
 from fieldloop_simulator.mock_signals import Classification, Observation
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
@@ -21,9 +22,6 @@ from fieldloop_simulator.scenario_overrides import HeldValues
 
 SOURCE_ID = "mock-pumps"
 CLASSIFICATION: Classification = "CONFIDENTIAL"
-# The Scenario time a read uses when it names none: the start of the Bangkok storm simulation,
-# so a bare read is reproducible (SIM-5).
-DEFAULT_AS_OF: Final = datetime(2026, 10, 12, tzinfo=UTC)
 
 PowerStatus = Literal["available", "lost"]
 
@@ -92,7 +90,7 @@ class SimulatedPumps:
                 "facilityType": facility.facility_type,
                 "zoneCode": facility.zone_code,
                 "operatingState": self.operating_state_at(asset_code, at),
-                "label": "SIMULATION",
+                "label": LABEL,
             },
         )
 
@@ -108,7 +106,7 @@ class SimulatedPumps:
                 "powerStatus": self.power_at(asset_code, as_of),
                 "observedAt": as_of,
                 "orgId": self.org_id,
-                "label": "SIMULATION",
+                "label": LABEL,
                 "simulated": True,
                 "classification": CLASSIFICATION,
             }
@@ -126,7 +124,7 @@ get_pumps = app_state("pumps", SimulatedPumps)
 def read_status(
     id: str,
     pumps: Annotated[SimulatedPumps, Depends(get_pumps)],
-    as_of: Annotated[Rfc3339, Query(alias="asOf")] = DEFAULT_AS_OF,
+    as_of: Annotated[Rfc3339, Query(alias="asOf")] = SIMULATION_STARTS_AT,
 ) -> MockPumpsStatus | JSONResponse:
     try:
         return pumps.status(id, as_of)
