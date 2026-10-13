@@ -5,6 +5,9 @@ import { registerAuthRoutes } from "./auth/routes.js";
 import { UnavailableAuthService } from "./auth/runtime.js";
 import type { AuthServicePort } from "./auth/service.js";
 import type { LoadedDomainPack } from "@fieldloop/adapters";
+import { registerHealthRoutes } from "./health/routes.js";
+import type { HealthServicePort } from "./health/model.js";
+import { registerLiveEventRoute } from "./live-events.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -17,6 +20,7 @@ export function buildApp(options: {
   auth?: AuthServicePort;
   baseUrl?: string;
   simulator?: SimulationPort;
+  health?: HealthServicePort;
   domainPacks?: LoadedDomainPack[];
 } = {}) {
   const app = Fastify({ logger: { serializers: { req: serializeRequestForLog } } });
@@ -28,6 +32,8 @@ export function buildApp(options: {
   app.get("/health", async () => ({ status: "ok" }));
   registerAuthRoutes(app, auth, options.baseUrl ?? process.env["FIELDLOOP_BASE_URL"]);
   registerSimulationRoutes(app, options.simulator);
+  registerHealthRoutes(app, options.health);
+  registerLiveEventRoute(app, options.simulator, options.health);
   return app;
 }
 

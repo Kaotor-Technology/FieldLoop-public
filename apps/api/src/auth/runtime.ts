@@ -5,6 +5,9 @@ import { KmsEnvelopeCrypto } from "./envelope-crypto.js";
 import { SecretManagerInternalTokenService } from "./internal-tokens.js";
 import { KeycloakOidcProvider } from "./keycloak-oidc.js";
 import { createAuthDatabase, createCloudSqlAuthDatabase, PostgresAuthStore } from "./postgres-store.js";
+import { PostgresHealthStore } from "../health/postgres-store.js";
+import type { HealthServicePort } from "../health/model.js";
+import type { Kysely } from "kysely";
 
 export class UnavailableAuthService implements AuthServicePort {
   async startLogin(): Promise<URL> { return this.unavailable(); }
@@ -23,6 +26,7 @@ export class UnavailableAuthService implements AuthServicePort {
 
 export async function createProductionAuthRuntime(): Promise<{
   auth: AuthServicePort;
+  health?: HealthServicePort;
   close: () => Promise<void>;
   registerPacks?: (packs: LoadedDomainPack[]) => Promise<void>;
 }> {
@@ -50,6 +54,7 @@ export async function createProductionAuthRuntime(): Promise<{
       : undefined;
   if (!database) return { auth: new UnavailableAuthService(), close: async () => {} };
   const packRuntime = {
+    health: new PostgresHealthStore(database.db as unknown as Kysely<Record<string, never>>),
     registerPacks: (packs: LoadedDomainPack[]) => registerDomainPackRecords(database.db, defaultOrgId, packs),
     close: async () => {
       if ("close" in database && typeof database.close === "function") await database.close();
