@@ -6,7 +6,7 @@ import { RiskServiceError, type RiskApiPort } from "../src/risk/service.js";
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
-function fixture() {
+function fixture(riskOverrides: Partial<RiskApiPort> = {}) {
   const user: CurrentUser = {
     sub: "synthetic-reviewer", roles: ["fieldloop.viewer"], persona: "Executive",
     orgId: "synthetic-org", clearance: "INTERNAL", csrfToken: "fixture-csrf", authTime: new Date("2026-10-13T00:00:00Z"),
@@ -33,6 +33,7 @@ function fixture() {
     getEvidence: async () => { throw new RiskServiceError(404, "not_found"); },
     riskEventsAfter: async () => [],
     processHealthChanges: async () => 0,
+    ...riskOverrides,
   };
   const app = buildApp({ auth, risk });
   apps.push(app);
@@ -62,6 +63,20 @@ describe("risk API routes", () => {
     expect(response.json()).toMatchObject({
       status: 409, code: "risk_matrix_unconfigured", title: "Organisation Risk Matrix is not approved",
     });
+  });
+
+  it.each([
+    { internalCode: "clearance_denied", status: 403, publicCode: "forbidden" },
+    { internalCode: "risk_snapshot_unavailable", status: 503, publicCode: "risk_service_unavailable" },
+  ])("maps internal $internalCode errors to the OpenAPI code $publicCode", async ({ internalCode, status, publicCode }) => {
+    const { app, headers } = fixture({
+      getBowtie: async () => { throw new RiskServiceError(status, internalCode); },
+    });
+    const response = await app.inject({ method: "GET", url: "/api/v1/bowties/19b46b91-1cec-4502-96da-7d6ec03af16e", headers });
+
+    expect(response.statusCode).toBe(status);
+    expect(response.headers["content-type"]).toContain("application/problem+json");
+    expect(response.json().code).toBe(publicCode);
   });
 
   it("rejects malformed Bowtie IDs before calling the service", async () => {

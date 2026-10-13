@@ -44,6 +44,9 @@ function uuidParam(request: FastifyRequest, field: string): string {
 }
 
 function sendProblem(reply: FastifyReply, status: number, code: string) {
+  const publicCode = code === "session_required" ? "unauthenticated"
+    : code === "clearance_denied" ? "forbidden"
+      : code === "risk_snapshot_unavailable" ? "risk_service_unavailable" : code;
   const titles: Record<string, string> = {
     risk_matrix_unconfigured: "Organisation Risk Matrix is not approved",
     risk_matrix_invalid: "Organisation risk calibration is invalid",
@@ -54,6 +57,6 @@ function sendProblem(reply: FastifyReply, status: number, code: string) {
     validation_failed: "Request could not be processed",
   };
   return reply.code(status).type("application/problem+json").send({
-    type: "about:blank", status, title: titles[code] ?? "Risk request could not be completed", code,
+    type: "about:blank", status, title: titles[publicCode] ?? "Risk request could not be completed", code: publicCode,
   });
 }
