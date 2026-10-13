@@ -536,8 +536,8 @@ FROM visible_segment
 ORDER BY feature_kind, name, id
 LIMIT $7`;
 
-// Barrier locations come only from a confirmed GeoReference attached to evidence. The database
-// seed has no exact Chainage for several pipeline Barriers; those are deliberately not placed.
+// Barrier locations come only from a confirmed GeoReference attached to evidence. A GeoReference
+// to a full linear Asset does not locate its Barrier, so line geometries are deliberately omitted.
 export const BARRIER_LAYER_SQL = `
 WITH latest_location AS (
   SELECT DISTINCT ON (b.id)
@@ -559,6 +559,7 @@ WITH latest_location AS (
     AND (a.classification = ANY($6::text[]) OR
       ($8::boolean AND a.simulated IS TRUE AND a.created_by IN ('seed:dl-01', 'seed:bangkok')))
     AND gr.status = 'confirmed' AND gr.geom IS NOT NULL
+    AND GeometryType(gr.geom) NOT IN ('LINESTRING', 'MULTILINESTRING')
   ORDER BY b.id, e.observed_at DESC, gr.created_at DESC
 ), visible_location AS (
   SELECT * FROM latest_location

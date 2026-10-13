@@ -54,6 +54,10 @@ describe("map layer API", () => {
     expect(BARRIER_LAYER_SQL).toContain("SELECT * FROM latest_location");
   });
 
+  it("does not place Barriers at an arbitrary point on their full linear Asset", () => {
+    expect(BARRIER_LAYER_SQL).toContain("GeometryType(gr.geom) NOT IN ('LINESTRING', 'MULTILINESTRING')");
+  });
+
   it("attaches each Segment's parent Asset ID for shared Bowtie risk coloring", () => {
     expect(ASSET_LAYER_SQL).toContain("s.asset_id");
     expect(ASSET_LAYER_SQL).toContain("asset_id::text, geometry");
