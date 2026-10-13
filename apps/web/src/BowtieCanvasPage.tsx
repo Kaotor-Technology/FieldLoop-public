@@ -164,6 +164,13 @@ function ExplanationPanel({ explanation, t }: { explanation: RiskExplain; t: Ret
       {change.consequenceFrequencyDeltasPerYear.map((delta) => <p className="mono" key={delta.consequenceId}>{delta.consequenceId}: {delta.delta.toExponential(3)} / {t("year")}</p>)}
       {change.sourceEvidenceHref ? <a href={change.sourceEvidenceHref}>{t("openSourceEvidence")} <span className="mono">{change.sourceEvidenceId}</span></a> : <p>{t("noSourceEvidence")}</p>}
     </li>)}</ol> : explanation.hasPrevious ? <p>{t("noInputChanges")}</p> : null}
+    {explanation.riskInputChanges.length ? <section aria-label={t("otherRiskInputs")}>
+      <h3>{t("otherRiskInputs")}</h3>
+      <ol className="risk-change-list">{explanation.riskInputChanges.map((change) => <li key={change.path}>
+        <p className="mono">{change.path}</p>
+        <p className="mono">{change.beforeValue ?? "—"} → {change.afterValue ?? "—"}</p>
+      </li>)}</ol>
+    </section> : null}
   </>;
 }
 

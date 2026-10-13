@@ -28,7 +28,8 @@ const previous = {
 async function mockRiskApi(page: Page, configured: boolean) {
   await page.route(`**/api/v1/bowties/${bowtieId}/risk/explain`, (route) => configured
     ? route.fulfill({ json: {
-      bowtieId, hasPrevious: true, summary: "Risk changed after the listed Barrier input changes.", previous, current,
+      bowtieId, hasPrevious: true, summary: "Risk changed after the listed Barrier and risk input changes.", previous, current,
+      riskInputChanges: [{ path: `riskInput/threats/${threatId}/frequencyPerYear`, beforeValue: "0.01", afterValue: "0.02" }],
       changes: [{
         barrierId, beforeHealth: "healthy", afterHealth: "degraded", reason: "Health accepted by a reviewer.",
         sourceEvidenceId: null, sourceEvidenceHref: null, topEventFrequencyDeltaPerYear: 0.001,
@@ -78,6 +79,8 @@ test("Bowtie canvas shows Organisation severity dimensions and explains changed 
   await expect(page.getByRole("heading", { name: "Explain score" })).toBeVisible();
   await expect(page.getByText("Health accepted by a reviewer.")).toBeVisible();
   await expect(page.getByText(/Healthy → Degraded/)).toBeVisible();
+  await expect(page.getByText(`riskInput/threats/${threatId}/frequencyPerYear`)).toBeVisible();
+  await expect(page.getByText("0.01 → 0.02")).toBeVisible();
   await expect(page.getByText("SYNTHETIC-ORG-RISK-STD").first()).toBeVisible();
   await expect(page.getByText("2026.1", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);

@@ -1111,7 +1111,7 @@ components:
     RiskExplain:
       type: object
       additionalProperties: false
-      required: [bowtieId, hasPrevious, summary, previous, current, changes]
+      required: [bowtieId, hasPrevious, summary, previous, current, changes, riskInputChanges]
       properties:
         bowtieId: { type: string, format: uuid }
         hasPrevious: { type: boolean }
@@ -1142,6 +1142,16 @@ components:
                     consequenceId: { type: string, format: uuid }
                     delta: { type: number }
               impact: { type: number, minimum: 0 }
+        riskInputChanges:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [path, beforeValue, afterValue]
+            properties:
+              path: { type: string, minLength: 1 }
+              beforeValue: { oneOf: [{ type: string }, { type: 'null' }] }
+              afterValue: { oneOf: [{ type: string }, { type: 'null' }] }
     EvidenceSummary:
       type: object
       additionalProperties: false
