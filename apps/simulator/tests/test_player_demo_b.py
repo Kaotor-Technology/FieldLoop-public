@@ -9,6 +9,7 @@ from typing import Any
 from uuid import UUID
 
 import pytest
+from fastapi.testclient import TestClient
 from fieldloop_common.generated_scenario import Event, Scenario
 from fieldloop_common.generated_simulation import PlayerCommand, RunCreate
 from fieldloop_common.memory_transport import InMemoryTransport
@@ -245,6 +246,36 @@ def test_a_run_and_its_sources_state_one_signal_with_one_id(run: Run) -> None:
         (event,) = [item for item in run.scenario.events if item.id == event_id]
         envelope = {"target": {"kind": "asset", "id": event.target.id}, "sandbox": True}
         assert signal["payload"] == {**(observation.payload or {}), **envelope}, event_id
+
+
+def test_a_read_that_names_no_time_is_as_of_the_clock_of_the_run(run: Run) -> None:
+    previous = app.state.hydro, app.state.pumps
+    app.state.hydro, app.state.pumps = run.hydro, run.pumps
+    try:
+        with TestClient(app) as client:
+            before = client.get("/mock/pumps/P-3/status").json()
+            run.command("bookmark", {"bookmarkId": "power-lost"})
+            pump = client.get("/mock/pumps/P-3/status").json()
+            rain = client.get("/mock/hydro/rain").json()
+            earlier = client.get("/mock/pumps/P-3/status?asOf=2026-10-12T00:19:59Z").json()
+            run.command("reset")
+            after_reset = client.get("/mock/pumps/P-3/status").json()
+    finally:
+        app.state.hydro, app.state.pumps = previous
+
+    assert (before["observedAt"], before["powerStatus"]) == ("2026-10-12T00:00:00Z", "available")
+    assert (pump["observedAt"], pump["powerStatus"], pump["operatingState"]) == (
+        "2026-10-12T00:20:00Z",
+        "lost",
+        "stopped",
+    )
+    assert (rain["observedAt"], rain["value"]) == ("2026-10-12T00:20:00Z", 60.0)
+    # A caller that names a time still gets that time.
+    assert (earlier["observedAt"], earlier["powerStatus"]) == ("2026-10-12T00:19:59Z", "available")
+    assert (after_reset["observedAt"], after_reset["powerStatus"]) == (
+        "2026-10-12T00:00:00Z",
+        "available",
+    )
 
 
 def test_a_reset_returns_the_reads_to_their_baseline(run: Run) -> None:

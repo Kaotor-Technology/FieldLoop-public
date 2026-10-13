@@ -30,7 +30,7 @@
     "/mock/pumps/{id}/status": {
       "get": {
         "operationId": "readMockPumpsStatus",
-        "description": "Return the simulated operating state and power status at asOf of one synthetic pump (P-1, P-2, P-3) or gate (G-1, G-2). The status is a pure function of the Facility and asOf, plus any Scenario power change; the clock is the caller's asOf, never wall time. It commands nothing.",
+        "description": "Return the simulated operating state and power status at asOf of one synthetic pump (P-1, P-2, P-3) or gate (G-1, G-2). The status is a pure function of the Facility and asOf, plus any Scenario power change; the clock is the caller's asOf or the committed run's, never wall time. It commands nothing.",
         "tags": [
           "mock-pumps"
         ],
@@ -48,11 +48,10 @@
             "in": "query",
             "name": "asOf",
             "required": false,
-            "description": "Timezone-aware Scenario time, not wall time; the response reports it in UTC as observedAt. The default is the start of the Bangkok storm simulation, fixed for deterministic replay.",
+            "description": "Timezone-aware Scenario time, not wall time; the response reports it in UTC as observedAt. When omitted it is the clock of the Scenario player's committed run, or the start of the Bangkok storm simulation (2026-10-12T00:00:00Z) when there is no run.",
             "schema": {
               "type": "string",
-              "format": "date-time",
-              "default": "2026-10-12T00:00:00Z"
+              "format": "date-time"
             }
           }
         ],

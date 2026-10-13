@@ -6,11 +6,13 @@ import threading
 import uuid
 from collections.abc import Callable
 from contextlib import AbstractContextManager
+from datetime import datetime
 from typing import Protocol
 
 from fieldloop_common.generated_simulation import PlayerCommand, RunCreate
 
 from fieldloop_simulator import storm_events
+from fieldloop_simulator.bangkok_storm import SIMULATION_STARTS_AT
 from fieldloop_simulator.mock_historian import DEMO_SEED, SimulatedHistorian
 from fieldloop_simulator.mock_hydro import SimulatedHydro
 from fieldloop_simulator.mock_pumps import SimulatedPumps
@@ -94,6 +96,13 @@ class SimulationService:
         self.historian.reset(snapshot.run.seed if snapshot else DEMO_SEED)
         self.hydro.reset()
         self.pumps.reset()
+        # A read that names no time is as of the run's clock, so it shows what the run applied.
+        clock = (
+            datetime.fromisoformat(snapshot.run.clock.replace("Z", "+00:00"))
+            if snapshot
+            else SIMULATION_STARTS_AT
+        )
+        self.hydro.clock = self.pumps.clock = clock
         if snapshot:
             for event in snapshot.scenario.events[: snapshot.run.next_event_index]:
                 # Only an event that a read shows is worth its value: a derived rainfall

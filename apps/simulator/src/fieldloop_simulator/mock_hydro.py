@@ -78,6 +78,9 @@ class SimulatedHydro:
     def __init__(self, *, org_id: str = DEMO_ORG_ID) -> None:
         self.org_id = require_org_id(org_id)
         self._overrides: HeldValues[float] = HeldValues()
+        # The Scenario time a read uses when it names none: the start of the simulation, or the
+        # clock of the committed run once the Scenario player has set it.
+        self.clock = SIMULATION_STARTS_AT
 
     def add_override(self, kind: str, *, start: datetime, value: float) -> None:
         """Hold a kind at ``value`` from ``start`` on, until the next reset."""
@@ -184,9 +187,9 @@ get_hydro = app_state("hydro", SimulatedHydro)
 def read_kind(
     kind: str,
     hydro: Annotated[SimulatedHydro, Depends(get_hydro)],
-    as_of: Annotated[Rfc3339, Query(alias="asOf")] = SIMULATION_STARTS_AT,
+    as_of: Annotated[Rfc3339 | None, Query(alias="asOf")] = None,
 ) -> MockHydroReading | JSONResponse:
     try:
-        return hydro.read(kind, as_of)
+        return hydro.read(kind, as_of or hydro.clock)
     except KeyError:
         return problem(404, "Unknown hydrology source", "not_found")
