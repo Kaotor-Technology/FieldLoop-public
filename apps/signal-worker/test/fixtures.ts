@@ -1,4 +1,5 @@
-import type { PubSubPush, RegisteredSignalRule, Signal } from "@fieldloop/contracts";
+import { isSignal, type PubSubPush, type RegisteredSignalRule, type Signal } from "@fieldloop/contracts";
+import { readFileSync } from "node:fs";
 import type { WorkerRuntime } from "../src/model.js";
 import { vi } from "vitest";
 
@@ -7,29 +8,19 @@ export const signal: Signal = {
   source: "mock-historian", tag: "DL-01.rectifier.output", value: 0, unit: "A",
   observedAt: "2026-10-13T00:00:00Z", simulated: true, classification: "CONFIDENTIAL",
 };
-// Published source shape pinned to PR #47 head 4edbd3b88f94764c59462c0ddbf6de4a80f1c3a4.
-// Keep these worker-boundary samples independent of signal-cases.json.
-export const pr47RainRateSignal: Signal = {
-  schemaVersion: "signal.v1", id: "00000000-0000-4000-8000-000000000147", orgId: "worker-fixture",
-  source: "mock-hydro", tag: "rain.rate", value: 60, unit: "mm/h",
-  observedAt: "2026-10-12T06:00:00Z", simulated: true, classification: "CONFIDENTIAL",
-  simulationRunId: "00000000-0000-4000-8000-000000000149",
-  payload: { assetCode: "S-R1", zone: "Z3", kind: "rain", label: "SIMULATION" },
-};
-export const pr47RainAccumulationSignal: Signal = {
-  schemaVersion: "signal.v1", id: "00000000-0000-4000-8000-000000000150", orgId: "worker-fixture",
-  source: "mock-hydro", tag: "rain.accumulation.24h", value: 101, unit: "mm",
-  observedAt: "2026-10-12T06:01:00Z", simulated: true, classification: "CONFIDENTIAL",
-  simulationRunId: "00000000-0000-4000-8000-000000000149",
-  payload: { assetCode: "S-R1", zone: "Z3", kind: "rain", windowSeconds: 86400, label: "SIMULATION" },
-};
-export const pr47PumpSignal: Signal = {
-  schemaVersion: "signal.v1", id: "00000000-0000-4000-8000-000000000148", orgId: "worker-fixture",
-  source: "mock-pumps", tag: "pump.power", value: "lost", unit: "state",
-  observedAt: "2026-10-12T06:20:00Z", simulated: true, classification: "CONFIDENTIAL",
-  simulationRunId: "00000000-0000-4000-8000-000000000149",
-  payload: { assetCode: "P-3", facilityType: "pump", zone: "Z3", operatingState: "stopped", label: "SIMULATION" },
-};
+// Canonical samples pinned to PR #47 head 4edbd3b88f94764c59462c0ddbf6de4a80f1c3a4.
+// This shared fixture stays independent of signal-cases.json.
+const sourceSamples: unknown = JSON.parse(readFileSync(new URL("./fixtures/pr47-signals.json", import.meta.url), "utf8"));
+function sourceSignal(name: string): Signal {
+  const candidate = typeof sourceSamples === "object" && sourceSamples !== null
+    ? Reflect.get(sourceSamples, name)
+    : undefined;
+  if (!isSignal(candidate)) throw new Error(`Invalid PR #47 Signal fixture: ${name}`);
+  return candidate;
+}
+export const pr47RainRateSignal = sourceSignal("rainRate");
+export const pr47RainAccumulationSignal = sourceSignal("rainAccumulation");
+export const pr47PumpSignal = sourceSignal("pump");
 export const rule: RegisteredSignalRule = {
   id: "00000000-0000-4000-8000-000000000158", pack: "pipeline-integrity", simulated: true, classification: "CONFIDENTIAL",
   condition: { kind: "signal", source: signal.source, tag: signal.tag, operator: "eq", threshold: 0, unit: "A",

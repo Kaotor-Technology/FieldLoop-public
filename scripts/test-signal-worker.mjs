@@ -20,6 +20,7 @@ const docker = (...args) => execFileSync("docker", args, { encoding: "utf8", std
 const orgId = "worker-fixture", otherOrg = "other-worker-fixture";
 let database, application, app;
 const loadedPacks = await loadDemoDomainPacks();
+const pr47Signals = JSON.parse(readFileSync("apps/signal-worker/test/fixtures/pr47-signals.json", "utf8"));
 const rules = loadedPacks.flatMap(({ content }) => content.signalRules
   .filter((rule) => rule.condition.kind === "signal")
   .map((rule) => ({ pack: content.id,
@@ -106,15 +107,11 @@ try {
   // Independent source fields from PR #47's Observation + SimulatedSignalEmitter, not signal-cases.json.
   // The rate does not imply a 24-hour total; the source separately publishes that aggregate.
   const sourceRun = randomUUID();
-  const rainRateSourceSample = reading({ source: "mock-hydro", tag: "rain.rate", value: 60, unit: "mm/h",
-    simulationRunId: sourceRun, observedAt: "2026-10-13T00:02:00Z",
-    payload: { assetCode: "S-R1", zone: "Z3", kind: "rain", label: "SIMULATION" } });
-  const rainAccumulationSourceSample = reading({ source: "mock-hydro", tag: "rain.accumulation.24h", value: 101, unit: "mm",
-    simulationRunId: sourceRun, observedAt: "2026-10-13T00:02:01Z",
-    payload: { assetCode: "S-R1", zone: "Z3", kind: "rain", windowSeconds: 86400, label: "SIMULATION" } });
-  const pumpSourceSample = reading({ source: "mock-pumps", tag: "pump.power", value: "lost", unit: "state",
-    simulationRunId: sourceRun, observedAt: "2026-10-13T00:03:00Z",
-    payload: { assetCode: "P-3", facilityType: "pump", zone: "Z3", operatingState: "stopped", label: "SIMULATION" } });
+  const sourceReading = (sample, observedAt) => reading({ ...sample, id: randomUUID(), orgId,
+    simulationRunId: sourceRun, observedAt });
+  const rainRateSourceSample = sourceReading(pr47Signals.rainRate, "2026-10-13T00:02:00Z");
+  const rainAccumulationSourceSample = sourceReading(pr47Signals.rainAccumulation, "2026-10-13T00:02:01Z");
+  const pumpSourceSample = sourceReading(pr47Signals.pump, "2026-10-13T00:03:00Z");
   const proposalsBeforeSourceSamples = await count("health_proposal");
   const evidenceBeforeSourceSamples = await count("evidence", sql`AND signal_receipt_id IS NOT NULL`);
   await store.ingest(rainRateSourceSample);
