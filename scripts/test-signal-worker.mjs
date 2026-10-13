@@ -214,8 +214,7 @@ try {
 
   // Calendar months follow Bangkok local dates rather than assuming 90 days or UTC day-of-month.
   const patrolBarrierCodes = ["right-of-way-patrol", "excavation-permit-one-call"];
-  const patrolCodeList = sql.join(patrolBarrierCodes);
-  await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code IN (${patrolCodeList})`.execute(database);
+  await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code IN (${sql.join(patrolBarrierCodes)})`.execute(database);
   await sql`UPDATE app.signal_dependency SET last_received_at = NULL, created_at = '2026-02-28T20:30:00Z'::timestamptz
     WHERE org_id = ${orgId} AND rule_id = ${patrolRule.id}::uuid`.execute(database);
   assert.equal(await store.detectSilence(new Date("2026-05-28T20:30:00Z")), 0);
@@ -296,7 +295,8 @@ try {
   const aged = await sql`UPDATE app.signal_dependency SET last_received_at = ${new Date(Date.now() - 270 * 86_400_000)}
     WHERE org_id = ${orgId} AND (rule_id IN (${patrolRule.id}::uuid, ${cpRule.id}::uuid) OR barrier_id = ${floodBarrierId}::uuid)
     RETURNING id`.execute(database);
-  assert.equal(aged.rows.length, patrolBarrierCodes.length + 2, "patrol, CP and flood-rain dependencies are aged");
+  const cpAndFloodDependencies = 2; // the CP rule's and tidal-gates' rain-rule dependency
+  assert.equal(aged.rows.length, patrolBarrierCodes.length + cpAndFloodDependencies, "patrol, CP and flood-rain dependencies are aged");
   const healthChangedSince = (index) => publishedEvents.slice(index).filter(({ type }) => type === "barrier.health_changed");
   const eventsBeforeCheck = publishedEvents.length;
   const sourceCheck = await runSourceCheck(serviceHeaders);
