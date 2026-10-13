@@ -104,9 +104,11 @@ bash scripts/test-migrations.sh
 ```
 
 `test:signals` needs Docker and uses a disposable PostgreSQL 16 with PostGIS and
-pgvector, both synthetic seeds and FL-78-compatible persisted rule fixtures. It
-checks scoped worker grants, concurrent deduplication, rollback, periodic
-CP/patrol, aggregate rain and pump rules, duration boundaries, spatial coverage,
-quarterly Bangkok dates, silence/audit, Scenario reset and outbox retry. It also
-prints local latency and an `EXPLAIN (ANALYZE, BUFFERS)` history query. These results
-do not establish Cloud Run latency, billing, browser SSE or end-to-end GCP delivery.
+pgvector, both synthetic seeds and a persisted-rule snapshot from FL-78 PR #44.
+It checks scoped worker grants, concurrent deduplication, rollback, periodic
+CP/patrol, the registered aggregate-rain and boolean-pump rule forms, duration
+boundaries, spatial coverage, quarterly Bangkok dates, silence/audit and outbox
+retry. It separately ingests the pinned PR #47 rain/pump source samples and verifies
+that unmatched data cannot create false Evidence or Proposals. It also prints local
+latency and an `EXPLAIN (ANALYZE, BUFFERS)` history query. These results do not
+establish Cloud Run latency, billing, browser SSE or end-to-end GCP delivery.
