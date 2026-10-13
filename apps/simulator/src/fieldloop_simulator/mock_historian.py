@@ -19,6 +19,7 @@ from fieldloop_common.generated_mock_historian import MockHistorianSeries
 from fieldloop_simulator.mock_http import Rfc3339, app_state, known_query_only, problem
 from fieldloop_simulator.mock_signals import Classification, Observation
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
+from fieldloop_simulator.scenario_overrides import HeldValues
 
 SOURCE_ID = "mock-historian"
 CLASSIFICATION: Classification = "CONFIDENTIAL"
@@ -66,17 +67,11 @@ TAG_PROFILES: Mapping[str, TagProfile] = {
 }
 
 
-@dataclass(frozen=True)
-class _Override:
-    start: datetime
-    value: float
-
-
 class SimulatedHistorian:
     def __init__(self, *, seed: int = DEMO_SEED, org_id: str = DEMO_ORG_ID) -> None:
         self.seed = seed
         self.org_id = require_org_id(org_id)
-        self._overrides: dict[str, list[_Override]] = {}
+        self._overrides: HeldValues[float] = HeldValues()
 
     def profile(self, tag: str) -> TagProfile:
         return TAG_PROFILES[tag]
@@ -85,26 +80,20 @@ class SimulatedHistorian:
         """Hold a tag at ``value`` from ``start`` on, until the next reset."""
         if tag not in TAG_PROFILES:
             raise KeyError(tag)
-        if start.tzinfo is None:
-            raise ValueError("Override times need a timezone")
         if not math.isfinite(value):
             raise ValueError("Override value must be finite")
-        # Copy on write: readers on other threads never see a half-updated list.
-        self._overrides[tag] = [*self._overrides.get(tag, []), _Override(start, float(value))]
+        self._overrides.hold(tag, start=start, value=float(value))
 
     def reset(self, seed: int | None = None) -> None:
         """Forget every override, and take a new seed for the next run if one is given (SIM-5)."""
-        self._overrides = {}
+        self._overrides.reset()
         if seed is not None:
             self.seed = seed
 
     def value_at(self, tag: str, at: datetime) -> float:
-        if at.tzinfo is None:
-            raise ValueError("Reading times need a timezone")
-        held = [item for item in self._overrides.get(tag, []) if item.start <= at]
-        if held:
-            # The latest start wins; among equal starts, the override added last.
-            return max(reversed(held), key=lambda item: item.start).value
+        held = self._overrides.at(tag, at)
+        if held is not None:
+            return held
         profile = TAG_PROFILES[tag]
         second = (at - _EPOCH) // timedelta(seconds=1)
         # A triangle wave and a hash keep this to correctly rounded IEEE operations, so it is
