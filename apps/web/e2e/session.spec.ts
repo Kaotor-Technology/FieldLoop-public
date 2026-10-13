@@ -40,6 +40,18 @@ test("account switching sends CSRF, deletes the old session and obtains server-d
   await expect(page.getByText("synthetic-viewer", { exact: true })).toHaveCount(0);
 });
 
+test("the Geo Command Map Overview renders scoped summaries and unavailable Action Request data", async ({ page }) => {
+  await signIn(page);
+  const panel = page.getByRole("complementary", { name: "Map context panel" });
+  await expect(panel.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+  await expect(panel.getByRole("heading", { name: "Risk summary", exact: true })).toBeVisible();
+  await expect(panel.locator(".risk-summary-row strong")).toHaveText(["0", "0", "0"]);
+  await expect(panel.getByRole("heading", { name: "Barriers by Health", exact: true })).toBeVisible();
+  await expect(panel.locator(".barrier-summary-row strong")).toHaveText(["0", "0", "0", "0"]);
+  await expect(panel.getByRole("heading", { name: "Open Action Requests", exact: true })).toBeVisible();
+  await expect(panel.getByText("Action Request data is not available in the current map view.", { exact: true })).toBeVisible();
+});
+
 test("missing CSRF gets 403 without deleting the active session", async ({ page }) => {
   await signIn(page);
   const result = await page.request.post("/api/auth/logout");

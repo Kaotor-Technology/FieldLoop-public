@@ -9,7 +9,16 @@ import type { FillStyleExtensionProps, PathStyleExtensionProps } from "@deck.gl/
 import { GoogleMapsOverlay } from "@deck.gl/google-maps";
 import type { MapFeature, MapFeatureCollection, MapLayerName, MapViewport } from "@fieldloop/map";
 import { getMapConfig, getMapLayer } from "./map-api";
-import { countVisibleBarrierAlerts, searchVisibleFeatures, selectVisibleFeatures } from "./map-view";
+import {
+  barrierMarkerStatus,
+  countVisibleBarrierAlerts,
+  filterFeaturesByDomain,
+  riskBandVisualStyle,
+  searchVisibleFeatures,
+  selectBarrierMarkerFeatures,
+  selectVisibleFeatures,
+  summarizeVisibleFeatures,
+} from "./map-view";
 
 const LAYERS: MapLayerName[] = ["assets", "barriers", "consequences"];
 const DEFAULT_VIEW: MapViewport = { latitude: 13.775, longitude: 100.58, zoom: 13, heading: 0, tilt: 45 };
@@ -23,11 +32,6 @@ const BARRIER_ICON_MAPPING = {
   degraded: { x: 0, y: 0, width: 32, height: 32, mask: true },
   failed: { x: 32, y: 0, width: 32, height: 32, mask: true },
   unverified: { x: 64, y: 0, width: 32, height: 32, mask: true },
-};
-const RISK_TOKEN: Record<string, string> = {
-  intolerable: "--color-risk-intolerable",
-  alarp: "--color-risk-alarp",
-  acceptable: "--color-risk-acceptable",
 };
 let configuredMapsApiKey: string | undefined;
 
@@ -184,13 +188,13 @@ export function GeoCommandMap() {
         lineWidthMinPixels: lineWidth,
         pointRadiusMinPixels: assetPointRadius,
         extensions: [new PathStyleExtension({ dash: true })],
-        getDashArray: (feature) => feature.properties.riskBand === "alarp" ? [1, 1] : [0, 0],
-        getLineColor: (feature) => riskColor(feature.properties.riskBand, "--color-neutral-600", 220),
-        getFillColor: (feature) => riskColor(feature.properties.riskBand, "--color-neutral-300", 100),
+        getDashArray: (feature) => riskBandVisualStyle(feature.properties.riskBand).dashed ? [1, 1] : [0, 0],
+        getLineColor: (feature) => tokenColor(riskBandVisualStyle(feature.properties.riskBand).lineToken, 220),
+        getFillColor: (feature) => tokenColor(riskBandVisualStyle(feature.properties.riskBand).fillToken, 100),
         getPointRadius: assetPointRadius,
         onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
       }));
-      const alarpAssets = filtered.features.filter((feature) => feature.properties.riskBand === "alarp");
+      const alarpAssets = filtered.features.filter((feature) => riskBandVisualStyle(feature.properties.riskBand).patterned);
       if (alarpAssets.length > 0) {
         const hatchTileSize = designTokenPixels("--spacing-space-12");
         const hatchStrokeWidth = designTokenPixels("--spacing-border-hairline");
@@ -224,8 +228,7 @@ export function GeoCommandMap() {
       }));
     }
     if (activeLayers.includes("barriers") && barriers) {
-      const mappedBarriers = filterCollection(barriers, domain).features
-        .filter((feature) => feature.properties.health !== "healthy");
+      const mappedBarriers = selectBarrierMarkerFeatures(filterCollection(barriers, domain).features);
       const barrierCollection: MapFeatureCollection = { type: "FeatureCollection", features: mappedBarriers };
       layers.push(new GeoJsonLayer<MapFeature["properties"]>({
         id: "barrier-marker-hit-area",
@@ -245,7 +248,7 @@ export function GeoCommandMap() {
         iconMapping: BARRIER_ICON_MAPPING,
         pickable: true,
         getPosition: (feature) => pointPosition(feature),
-        getIcon: (feature) => feature.properties.health === "failed" ? "failed" : feature.properties.health === "degraded" ? "degraded" : "unverified",
+        getIcon: (feature) => barrierMarkerStatus(feature.properties.health) ?? "unverified",
         getSize: barrierMarkerSize,
         sizeUnits: "pixels",
         getColor: (feature) => healthColor(feature.properties.health),
@@ -482,19 +485,6 @@ function FeatureOverview({ feature }: { feature: MapFeature }) {
   </dl>;
 }
 
-function summarizeVisibleFeatures(features: readonly MapFeature[]) {
-  const summary = {
-    riskBands: { intolerable: 0, alarp: 0, acceptable: 0 },
-    barrierHealth: { healthy: 0, degraded: 0, failed: 0, unverified: 0 },
-  };
-  for (const feature of features) {
-    const { riskBand, featureKind, health } = feature.properties;
-    if (riskBand === "intolerable" || riskBand === "alarp" || riskBand === "acceptable") summary.riskBands[riskBand]++;
-    if (featureKind === "barrier" && (health === "healthy" || health === "degraded" || health === "failed" || health === "unverified")) summary.barrierHealth[health]++;
-  }
-  return summary;
-}
-
 function HealthBadge({ health }: { health: string }) {
   const { t } = useTranslation();
   return <span className={`health-badge health-${health}`}><span aria-hidden="true">{SYMBOLS[health] ?? "●"}</span>{t(health)}</span>;
@@ -508,7 +498,8 @@ function FeatureSymbol({ feature }: { feature: MapFeature }) {
 }
 
 function filterCollection(collection: MapFeatureCollection, domain: "all" | "pipeline-integrity" | "flood-water"): MapFeatureCollection {
-  return domain === "all" ? collection : { type: "FeatureCollection", features: collection.features.filter((feature) => feature.properties.domainPack === domain) };
+  if (domain === "all") return collection;
+  return { type: "FeatureCollection", features: filterFeaturesByDomain(collection.features, domain) };
 }
 
 function selectMapFeature(value: unknown, setSelectedFeature: (feature: MapFeature) => void): boolean {
@@ -535,11 +526,6 @@ function healthColor(health: unknown): [number, number, number, number] {
   if (health === "degraded") return tokenColor("--color-health-degraded", 240);
   if (health === "failed") return tokenColor("--color-health-failed", 240);
   return tokenColor("--color-health-unverified", 240);
-}
-
-function riskColor(riskBand: unknown, fallbackToken: string, alpha: number): [number, number, number, number] {
-  const token = typeof riskBand === "string" ? RISK_TOKEN[riskBand.toLowerCase()] : undefined;
-  return tokenColor(token ?? fallbackToken, alpha);
 }
 
 function tokenColor(token: string, alpha: number): [number, number, number, number] {
