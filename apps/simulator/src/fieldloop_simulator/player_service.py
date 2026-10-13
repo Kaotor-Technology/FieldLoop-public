@@ -9,6 +9,7 @@ from contextlib import AbstractContextManager
 from datetime import datetime
 from typing import Protocol
 
+from fieldloop_common.generated_scenario import Event
 from fieldloop_common.generated_simulation import PlayerCommand, RunCreate
 
 from fieldloop_simulator import storm_events
@@ -94,15 +95,13 @@ class SimulationService:
     def _hydrate(self, snapshot: PlayerSnapshot | None) -> None:
         # Rebuild from the committed index, including after a cold start or retry.
         self.historian.reset(snapshot.run.seed if snapshot else DEMO_SEED)
-        self.hydro.reset()
-        self.pumps.reset()
         # A read that names no time is as of the run's clock, so it shows what the run applied.
         clock = (
             datetime.fromisoformat(snapshot.run.clock.replace("Z", "+00:00"))
             if snapshot
             else SIMULATION_STARTS_AT
         )
-        self.hydro.clock = self.pumps.clock = clock
+        applied: list[tuple[Event, object, datetime]] = []
         if snapshot:
             for event in snapshot.scenario.events[: snapshot.run.next_event_index]:
                 # Only an event that a read shows is worth its value: a derived rainfall
@@ -113,9 +112,7 @@ class SimulationService:
                     continue
                 reading = observation(snapshot, event)
                 if held:
-                    storm_events.apply(
-                        event, reading.value, reading.observed_at, self.hydro, self.pumps
-                    )
+                    applied.append((event, reading.value, reading.observed_at))
                 if event.source == "mock-historian":
                     if isinstance(reading.value, (float, int)) and not isinstance(
                         reading.value, bool
@@ -123,3 +120,4 @@ class SimulationService:
                         self.historian.add_override(
                             event.tag, start=reading.observed_at, value=float(reading.value)
                         )
+        storm_events.replay(applied, clock, self.hydro, self.pumps)

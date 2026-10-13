@@ -6,7 +6,7 @@ read-only; a Scenario changes a reading in process through ``add_override``.
 """
 
 import math
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from itertools import pairwise
@@ -20,7 +20,7 @@ from fieldloop_simulator.bangkok_storm import LABEL, SIMULATION_STARTS_AT
 from fieldloop_simulator.mock_http import Rfc3339, app_state, known_query_only, problem
 from fieldloop_simulator.mock_signals import Classification, Observation
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
-from fieldloop_simulator.scenario_overrides import HeldValues
+from fieldloop_simulator.scenario_overrides import HeldValues, RunState
 
 SOURCE_ID = "mock-hydro"
 CLASSIFICATION: Classification = "CONFIDENTIAL"
@@ -78,13 +78,31 @@ def rainfall_payload() -> dict[str, object]:
     return payload
 
 
+def _value(held: HeldValues[float], kind: str, at: datetime) -> float:
+    """The reading of a kind at a time, given what a run holds."""
+    profile = SENSOR_PROFILES[kind]
+    override = held.at(kind, at)
+    if override is not None:
+        return override
+    # A triangle wave keeps this to correctly rounded IEEE operations, so it is identical
+    # across platforms (a sine would depend on the C library).
+    phase = ((at - _EPOCH) % _WAVE_PERIOD) / _WAVE_PERIOD
+    return round(profile.base + profile.swing * (4 * abs(phase - 0.5) - 1), 3)
+
+
 class SimulatedHydro:
     def __init__(self, *, org_id: str = DEMO_ORG_ID) -> None:
         self.org_id = require_org_id(org_id)
-        self._overrides: HeldValues[float] = HeldValues()
-        # The Scenario time a read uses when it names none: the start of the simulation, or the
-        # clock of the committed run once the Scenario player has set it.
-        self.clock = SIMULATION_STARTS_AT
+        self._run: RunState[float] = RunState(HeldValues(), SIMULATION_STARTS_AT)
+
+    @property
+    def clock(self) -> datetime:
+        """The Scenario time a read uses when it names none.
+
+        The start of the simulation, or the clock of the committed run once the Scenario player
+        has restored one.
+        """
+        return self._run.clock
 
     def add_override(self, kind: str, *, start: datetime, value: float) -> None:
         """Hold a kind at ``value`` from ``start`` on, until the next reset."""
@@ -94,21 +112,25 @@ class SimulatedHydro:
             raise ValueError("Override value must be a finite number")
         if profile.minimum is not None and value < profile.minimum:
             raise ValueError("Override value is below what the sensor can read")
-        self._overrides.hold(kind, start=start, value=float(value))
+        self._run.held.hold(kind, start=start, value=float(value))
 
     def reset(self) -> None:
-        """Forget every override, so the next run starts from the baseline (SIM-5)."""
-        self._overrides.reset()
+        """Forget every override and the run's clock: the baseline of the next run (SIM-5)."""
+        self._run = RunState(HeldValues(), SIMULATION_STARTS_AT)
+
+    def restore(self, overrides: Iterable[tuple[str, datetime, float]], *, clock: datetime) -> None:
+        """Replace every override and the clock with those of a run, in one step.
+
+        Each override is ``(kind, start, value)`` and is held to the rules of ``add_override``.
+        If one is refused, nothing changes.
+        """
+        fresh = SimulatedHydro(org_id=self.org_id)
+        for kind, start, value in overrides:
+            fresh.add_override(kind, start=start, value=value)
+        self._run = RunState(fresh._run.held, clock)
 
     def value_at(self, kind: str, at: datetime) -> float:
-        profile = SENSOR_PROFILES[kind]
-        held = self._overrides.at(kind, at)
-        if held is not None:
-            return held
-        # A triangle wave keeps this to correctly rounded IEEE operations, so it is identical
-        # across platforms (a sine would depend on the C library).
-        phase = ((at - _EPOCH) % _WAVE_PERIOD) / _WAVE_PERIOD
-        return round(profile.base + profile.swing * (4 * abs(phase - 0.5) - 1), 3)
+        return _value(self._run.held, kind, at)
 
     def observe(self, kind: str, at: datetime) -> Observation:
         """The reading a Scenario publishes as a Signal; the payload names the sensor."""
@@ -133,12 +155,13 @@ class SimulatedHydro:
         """
         if at.tzinfo is None:
             raise ValueError("Reading times need a timezone")
+        held = self._run.held  # read once, so the sum is of one run
         window_start = at - ACCUMULATION_WINDOW
-        inside = [start for start in self._overrides.starts("rain") if window_start < start < at]
+        inside = [start for start in held.starts("rain") if window_start < start < at]
         edges = [window_start, *inside, at]
         hours = timedelta(hours=1)
         total = sum(
-            self.value_at("rain", begin) * ((end - begin) / hours) for begin, end in pairwise(edges)
+            _value(held, "rain", begin) * ((end - begin) / hours) for begin, end in pairwise(edges)
         )
         # Rounded only to shed float noise, far below what a rule threshold can tell apart.
         return round(total, 6)
@@ -161,15 +184,20 @@ class SimulatedHydro:
             payload=rainfall_payload(),
         )
 
-    def read(self, kind: str, as_of: datetime) -> MockHydroReading:
-        """The reading as the API serves it. ``KeyError`` for an unknown kind."""
+    def read(self, kind: str, as_of: datetime | None = None) -> MockHydroReading:
+        """The reading as the API serves it, as of the clock when no time is given.
+
+        ``KeyError`` for an unknown kind.
+        """
         profile = SENSOR_PROFILES[kind]
+        run = self._run  # read once, so the time and the value are of one run
+        as_of = as_of or run.clock
         return MockHydroReading.model_validate(
             {
                 "kind": kind,
                 "assetCode": profile.asset_code,
                 "zoneCode": profile.zone_code,
-                "value": self.value_at(kind, as_of),
+                "value": _value(run.held, kind, as_of),
                 "unit": profile.unit,
                 "observedAt": as_of,
                 "orgId": self.org_id,
@@ -194,6 +222,6 @@ def read_kind(
     as_of: Annotated[Rfc3339 | None, Query(alias="asOf")] = None,
 ) -> MockHydroReading | JSONResponse:
     try:
-        return hydro.read(kind, as_of or hydro.clock)
+        return hydro.read(kind, as_of)
     except KeyError:
         return problem(404, "Unknown hydrology source", "not_found")

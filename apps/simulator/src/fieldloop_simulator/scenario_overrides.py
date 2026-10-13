@@ -1,5 +1,6 @@
 """What a Scenario holds a source at, in process, until the next reset (SIM-5)."""
 
+from dataclasses import dataclass
 from datetime import datetime
 
 
@@ -15,9 +16,6 @@ class HeldValues[T]:
         # Copy on write: readers on other threads never see a half-updated list.
         self._held[key] = [*self._held.get(key, []), (start, value)]
 
-    def reset(self) -> None:
-        self._held = {}
-
     def starts(self, key: str) -> list[datetime]:
         """The times at which a held value of ``key`` begins, in order."""
         return sorted({start for start, _ in self._held.get(key, [])})
@@ -30,3 +28,15 @@ class HeldValues[T]:
         if not held:
             return None
         return max(reversed(held), key=lambda item: item[0])[1]
+
+
+@dataclass(frozen=True)
+class RunState[T]:
+    """What a run holds a source at, with the run's clock.
+
+    A source keeps one and replaces it whole, so a request that reads while a run is being
+    replayed sees the run as it was or as it is, never a part of either.
+    """
+
+    held: HeldValues[T]
+    clock: datetime

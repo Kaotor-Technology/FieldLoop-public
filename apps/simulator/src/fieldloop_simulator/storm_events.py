@@ -123,16 +123,25 @@ def rainfall(rates: Iterable[tuple[datetime, float]], at: datetime) -> float:
     return hydro.rain_accumulation(at)
 
 
-def apply(
-    event: Event, value: object, at: datetime, hydro: SimulatedHydro, pumps: SimulatedPumps
+def replay(
+    applied: Iterable[tuple[Event, object, datetime]],
+    clock: datetime,
+    hydro: SimulatedHydro,
+    pumps: SimulatedPumps,
 ) -> None:
-    """Make the source's reads show an applied event from ``at`` on.
+    """Make both sources' reads those of a run: its applied events and its clock.
 
-    Only for an event that holds state (``Stated.holds_state``). An event the source cannot
-    hold is the caller's to leave out: a run pinned before these rules existed must not turn
-    every read of the source into an error.
+    Each item is an event that holds state (``Stated.holds_state``) with the value and time it
+    was published at. An event a source cannot hold is the caller's to leave out: a run pinned
+    before these rules existed must not turn every read of the source into an error. Each
+    source is replaced in one step, so a read during a replay sees the old run or the new one.
     """
-    if event.source == mock_hydro.SOURCE_ID:
-        hydro.add_override(_KIND_OF_TAG[event.tag], start=at, value=float(cast(float, value)))
-    else:
-        pumps.set_power(event.target.id, start=at, status=cast(PowerStatus, value))
+    readings: list[tuple[str, datetime, float]] = []
+    power: list[tuple[str, datetime, PowerStatus]] = []
+    for event, value, at in applied:
+        if event.source == mock_hydro.SOURCE_ID:
+            readings.append((_KIND_OF_TAG[event.tag], at, float(cast(float, value))))
+        else:
+            power.append((event.target.id, at, cast(PowerStatus, value)))
+    hydro.restore(readings, clock=clock)
+    pumps.restore(power, clock=clock)
