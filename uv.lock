@@ -326,6 +326,7 @@ source = { editable = "apps/simulator" }
 dependencies = [
     { name = "fastapi" },
     { name = "fieldloop-common" },
+    { name = "pyyaml" },
     { name = "uvicorn" },
 ]
 
@@ -333,6 +334,7 @@ dependencies = [
 requires-dist = [
     { name = "fastapi", specifier = "==0.135.4" },
     { name = "fieldloop-common", editable = "py/fieldloop_common" },
+    { name = "pyyaml", specifier = "==6.0.3" },
     { name = "uvicorn", specifier = "==0.42.0" },
 ]
 

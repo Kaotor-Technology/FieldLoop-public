@@ -26,6 +26,8 @@ tags:
     description: Current signed-in user's BFF session.
   - name: Internal Auth
     description: Internal token verification keys; contains no user data.
+  - name: Simulation
+    description: Deterministic, sandboxed Scenario player.
 paths:
   /auth/login:
     get:
@@ -176,6 +178,415 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Jwks" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/scenarios:
+    get:
+      operationId: listScenarios
+      summary: List Scenarios
+      description: Lists the validated, installed Scenario catalog. All entries are simulated.
+      tags:
+      - Simulation
+      responses:
+        '200':
+          description: Available Scenarios.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScenarioSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/simulation/runs:
+    post:
+      operationId: createSimulationRun
+      summary: Create a SimulationRun
+      description: Captures the clean simulated baseline and creates a paused player. Requires Operator or Manager;
+        rejects another active run.
+      tags:
+      - Simulation
+      parameters:
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RunCreate'
+      responses:
+        '200':
+          description: Server-authoritative simulation state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationRun'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/simulation/runs/current:
+    get:
+      operationId: getCurrentSimulationRun
+      summary: Read the current SimulationRun
+      description: Returns the current run, or null if none has been created. Reading may advance a playing server
+        clock.
+      tags:
+      - Simulation
+      responses:
+        '200':
+          description: Current run or null.
+          content:
+            application/json:
+              schema:
+                anyOf:
+                - $ref: '#/components/schemas/SimulationRun'
+                - type: 'null'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/simulation/runs/{runId}:
+    get:
+      operationId: getSimulationRun
+      summary: Read a SimulationRun
+      description: Reads server state and advances a playing clock; never accepts client time.
+      tags:
+      - Simulation
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Current SimulationRun identity.
+      responses:
+        '200':
+          description: Server-authoritative simulation state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationRun'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/simulation/runs/{runId}:play:
+    post:
+      operationId: playSimulationRun
+      summary: Play a SimulationRun
+      description: Play the server clock. All events travel through the simulation-only Signal publisher.
+      tags:
+      - Simulation
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Current SimulationRun identity.
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayerCommand'
+      responses:
+        '200':
+          description: Server-authoritative simulation state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationRun'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/simulation/runs/{runId}:pause:
+    post:
+      operationId: pauseSimulationRun
+      summary: Pause a SimulationRun
+      description: Pause the server clock. All events travel through the simulation-only Signal publisher.
+      tags:
+      - Simulation
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Current SimulationRun identity.
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayerCommand'
+      responses:
+        '200':
+          description: Server-authoritative simulation state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationRun'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/simulation/runs/{runId}:step:
+    post:
+      operationId: stepSimulationRun
+      summary: Step a SimulationRun
+      description: Advances to the next event time while paused, emitting every event at that time.
+      tags:
+      - Simulation
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Current SimulationRun identity.
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayerCommand'
+      responses:
+        '200':
+          description: Server-authoritative simulation state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationRun'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/simulation/runs/{runId}:speed:
+    post:
+      operationId: speedSimulationRun
+      summary: Speed a SimulationRun
+      description: Changes the server clock speed after advancing at the previous speed.
+      tags:
+      - Simulation
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Current SimulationRun identity.
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayerCommand'
+      responses:
+        '200':
+          description: Server-authoritative simulation state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationRun'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/simulation/runs/{runId}:bookmark:
+    post:
+      operationId: bookmarkSimulationRun
+      summary: Bookmark a SimulationRun
+      description: Advances to a named bookmark while paused; earlier bookmarks require reset first. All intervening
+        events are emitted in order.
+      tags:
+      - Simulation
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Current SimulationRun identity.
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayerCommand'
+      responses:
+        '200':
+          description: Server-authoritative simulation state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationRun'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/simulation/runs/{runId}:reset:
+    post:
+      operationId: resetSimulationRun
+      summary: Reset a SimulationRun
+      description: Restores the simulated baseline atomically and returns a new ready run identity. History is retained
+        and previous-run writes are fenced. Reset can be retried using the same key.
+      tags:
+      - Simulation
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Current SimulationRun identity.
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlayerCommand'
+      responses:
+        '200':
+          description: Server-authoritative simulation state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SimulationRun'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/events:
+    get:
+      operationId: streamEvents
+      summary: Stream live simulation events
+      description: SSE emits simulation.state and simulation.reset snapshots from the server. Reconnect receives the
+        current snapshot. Reset invalidates all client caches. The stream is limited to a session validation window;
+        reconnect reauthenticates.
+      tags:
+      - Simulation
+      responses:
+        '200':
+          description: Event stream, named simulation.state or simulation.reset; data is SimulationRun JSON.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
 components:
   securitySchemes:
     sessionCookie:
@@ -234,6 +645,14 @@ components:
         minimum: 0
 
   schemas:
+    SimulationRun:
+      $ref: "./simulation.v1.schema.json#/$defs/SimulationRun"
+    RunCreate:
+      $ref: "./simulation.v1.schema.json#/$defs/RunCreate"
+    PlayerCommand:
+      $ref: "./simulation.v1.schema.json#/$defs/PlayerCommand"
+    ScenarioSummary:
+      $ref: "./simulation.v1.schema.json#/$defs/ScenarioSummary"
     CurrentUser:
       type: object
       required: [sub, roles, persona, orgId, clearance, csrfToken, authTime]
