@@ -1,7 +1,7 @@
-# Demo A mock source systems (FL-71)
+# Mock source systems (FL-71, FL-72)
 
-Read-only stand-ins for the Demo A source systems of PRD SIM-2, served by the
-simulator under `/mock/` (architecture §4.2).
+Read-only stand-ins for the Demo A and Demo B source systems of PRD SIM-2,
+served by the simulator under `/mock/` (architecture §4.2).
 
 ## Rules every source follows
 
@@ -10,8 +10,9 @@ simulator under `/mock/` (architecture §4.2).
   `application/problem+json`. A path with a trailing slash is first redirected
   (`307`) to its canonical form, so a write there is refused on the second
   request. Nothing a request carries changes what a later read returns.
-- **Synthetic and labelled.** Every response carries `label: SYNTHETIC`,
-  `simulated: true` and a `classification` (PRD §9.1). Values are illustrative,
+- **Synthetic and labelled.** Every response carries `label: SYNTHETIC`
+  (`SIMULATION` for the Demo B storm sources), `simulated: true` and a
+  `classification` (PRD §9.1). Values are illustrative,
   not operating figures of any real asset.
 - **Deterministic.** No wall clock and no randomness: a response is a function
   of the request, the fixed seed and any Scenario override, so a fixed seed
@@ -323,6 +324,100 @@ source is a Signal by the glossary's definition, as a patrol finding is. The own
 The bucket, the object and `FIELDLOOP_ILI_DROP_BUCKET` come from the Terraform
 change, which is **not applied**; nothing here has run against real storage.
 
+## Demo B sources (FL-72)
+
+Rain, canal level, tide and pump/gate status for the Bangkok storm Scenario
+(PRD §8.1 Demo B). They follow every rule above with two differences: the label
+is `SIMULATION`, because the storm is simulated, and there is no seed. No live
+public API is called (PRD Q49).
+
+Both sources share these points:
+
+- **`asOf` is Scenario time, not the wall clock.** It is optional,
+  timezone-aware RFC 3339 with the same rules as the CMMS `asOf`; anything else
+  is `400`. When omitted it is `2026-10-12T00:00:00Z`, the `simulationStartsAt`
+  of `data/synthetic/bangkok/bowtie-d.json`. The response reports it in UTC as
+  `observedAt`.
+- **Facilities come from the Bangkok data.** Sensor, pump and gate codes and
+  their zones are the Facilities of `data/synthetic/bangkok/facilities.geojson`.
+  The simulator image does not contain `data/`, so they are literals and a test
+  keeps them in step. A response carries no coordinates.
+- **Classification** is `CONFIDENTIAL`, as the historian's readings are and as
+  the `signal.v1` example cases for these two sources state. The Facility
+  positions are `HIGHLY_RESTRICTED` in the seed and are not served here.
+- **Scenario state is per process**, as the historian's overrides are, and is
+  dropped by `reset()` and by scale-to-zero.
+- **No Barrier reference.** The tag names the Facility, not a Barrier of
+  Bowtie D. Mapping `P-3` to `pumping-stations` or `dual-power-generators`
+  belongs to the Signal rules of the flood pack.
+
+### Mock hydrology (FL-145)
+
+`GET /mock/hydro/{kind}?asOf=<RFC 3339>` returns one reading.
+
+| Kind | Sensor | Zone | Unit | Baseline | Signal tag |
+| --- | --- | --- | --- | --- | --- |
+| `rain` | `S-R1` | `Z3` | `mm/h` | 0 | `S-R1.rain.rate` |
+| `level` | `S-L1` | `Z3` | `m` | 0.6 | `S-L1.water.level` |
+| `tide` | `S-T1` | `Z4` | `m` | 0.3 to 1.5, a 12 hour triangle wave | `S-T1.tide.level` |
+
+- Any other kind is `404`. The baselines are authored simulation values, not
+  measurements or forecasts of a real place, and levels have no stated datum.
+- The body is `kind`, `sensorCode`, `zoneCode`, `value`, `unit`, `observedAt`,
+  `orgId`, `label`, `simulated` and `classification`.
+- A Scenario holds a reading and announces it:
+
+  ```python
+  hydro = app.state.hydro
+  # T+0: a rain cell enters zone Z3 at 60 mm/h and stays until the run is reset.
+  hydro.add_override("rain", start=scenario_time, value=60.0)
+  await emitter.emit(hydro.observe("rain", scenario_time), run_id=run_id)
+  ```
+
+  `add_override(kind, start, value)` holds a kind at `value` from `start` on.
+  The latest `start` wins; among equal starts the override added last does.
+  `reset()` forgets every override.
+- The Signal is `source: mock-hydro`, the tag above, the reading as `value`,
+  its `unit`, `observedAt` at the Scenario time, and
+  `payload: {assetCode, zoneCode, kind, label}`.
+
+### Mock pump and gate status (FL-146)
+
+`GET /mock/pumps/{id}/status?asOf=<RFC 3339>` returns the status of one Facility.
+
+| Facility | Type | Zone | State with power |
+| --- | --- | --- | --- |
+| `P-1` | pump | `Z3` | `running` |
+| `P-2` | pump | `Z4` | `running` |
+| `P-3` | pump | `Z3` | `running` |
+| `G-1` | gate | `Z3` | `closed` |
+| `G-2` | gate | `Z4` | `closed` |
+
+- Any other id is `404`. The body is `assetCode`, `facilityType`, `zoneCode`,
+  `operatingState`, `powerStatus` (`available` or `lost`), `observedAt`,
+  `orgId`, `label`, `simulated` and `classification`. `operatingState` is
+  `running` or `stopped` for a pump and `open` or `closed` for a gate; the
+  schema enforces the pairing.
+- **Power lost.** A Scenario changes power, and that is the only thing it
+  changes. A pump without power is `stopped`; a gate stays where it was.
+
+  ```python
+  pumps = app.state.pumps
+  # T+20m: pump P-3 loses power.
+  pumps.set_power("P-3", start=scenario_time, status="lost")
+  await emitter.emit(pumps.observe("P-3", scenario_time), run_id=run_id)
+  ```
+
+  `set_power(id, start, status)` holds from `start` on, with the same
+  precedence as a hydrology override, so `status="available"` at a later start
+  restores power. `reset()` forgets every change.
+- The Signal is `source: mock-pumps`, `tag: <id>.<type>.power` (for example
+  `P-3.pump.power`), `value: lost` or `available`, no `unit`, and
+  `payload: {assetCode, facilityType, zoneCode, operatingState, label}`.
+- **No command.** There is no operation that starts, stops, opens or closes a
+  Facility. Operating a real pump or gate is an L1 Command Package (ADR-0006),
+  never sent from here.
+
 ## Verifying a deployment (operator)
 
 Nothing in this change is applied, so none of this is automated. Run it as the human
@@ -405,14 +500,16 @@ infrastructure operator, in this order, and record the results in `docs/contexts
 
 ## What the Scenario player must account for (FL-74)
 
-- **The sources are on the app.** `app.state.historian`, `app.state.cmms`, `app.state.patrol` and `app.state.ili` are
-  the objects that the routes read. `tests/test_scenario_contract.py` is the executable form of
+- **The sources are on the app.** `app.state.historian`, `app.state.cmms`, `app.state.patrol`, `app.state.ili`,
+  `app.state.hydro` and `app.state.pumps` are the objects that the routes read. `tests/test_scenario_contract.py` is the executable form of
   what a player may rely on: every source is on the app, a read follows an override, a read
   never publishes, a replay keeps its Signal ID, and a Signal is not labelled below its
-  source's classification. Only the historian has overrides, so the override and replay cases
-  use the historian; the classification case covers all four sources.
-- **State is per process.** Overrides and the run's seed live in the instance, so Terraform caps
+  source's classification. The override and replay cases use the historian; the hydrology and pump
+  sources test their own Scenario state, and the classification case covers all six sources.
+- **State is per process.** Overrides, pump and gate power changes and the run's seed live in the instance, so Terraform caps
   the service at one instance.
+- **Reset every source.** `historian.reset()`, `hydro.reset()` and `pumps.reset()` are separate calls; a
+  player that starts a run resets each source it changed.
 - **An idle instance forgets.** The service has `min_instance_count = 0` and request-based CPU
   (`cpu_idle = true`; `cpu-throttling: true` on the live service). Scale-to-zero drops the
   overrides and the seed, and CPU is throttled between requests, so a player that advances
