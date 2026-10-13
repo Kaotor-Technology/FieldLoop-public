@@ -25,6 +25,9 @@ served by the simulator under `/mock/` (architecture §4.2).
   unknown path) and `method_not_allowed` (405). Request values are never echoed.
   The handlers are installed on the app (`install_problem_handlers`), so any
   route added under `/mock/` gets them; paths elsewhere keep FastAPI's defaults.
+  With a database configured, a `/mock/` read first rehydrates the sources from
+  the Scenario player's committed run; if that fails the answer is `503`
+  `service_unavailable`.
 - **Strict queries.** A query parameter the route does not declare, a
   parameter given twice, a boolean that is not exactly `true` or `false`, and a
   timestamp with more than six fractional digits are each `400`. A misspelt
@@ -349,9 +352,19 @@ Both sources share these points:
   the "flood observation" and "pump power lost" cases in
   `packages/contracts/test/fixtures/signal-cases.json`, and a test holds each
   source's Signal to its case. A flood pack rule matches a tag exactly, so the
-  tag carries no Facility code: the payload's `assetCode` names the Facility,
-  and it takes part in the Signal `id`, so two pumps at one instant stay
-  distinct.
+  tag carries no Facility code: the payload's `assetCode` names the Facility.
+  In a Signal that a source's `observe()` builds, the Facility also takes part
+  in the Signal `id`, so two pumps at one instant stay distinct.
+- **The Scenario player does not use these two sources yet (FL-309).** The
+  player on `main` (FL-74) builds each Demo B Signal from its Scenario event,
+  with the event as the Signal's identity and `target` and `sandbox` in the
+  payload, and it rehydrates only the historian. So a read of `/mock/hydro/…` or
+  `/mock/pumps/…` stays at its baseline during a run, and `add_override`,
+  `set_power`, `observe()`, `observe_rain_accumulation()` and both `reset()`
+  calls below have no caller outside tests. The snippets below show the calls
+  as FL-309 will make them. Until then the player's Signals and these sources
+  agree on source, tag, unit and the payload's `assetCode`, `zone`, `kind` and
+  `label`, and differ in identity.
 - **Scenario state is per process**, as the historian's overrides are, and is
   dropped by `reset()` and by scale-to-zero.
 - **No Barrier reference.** A Signal names its Facility, not a Barrier of
@@ -373,7 +386,7 @@ Both sources share these points:
   The schema ties `unit` to `kind` and refuses a rain rate below zero.
 - The body is `kind`, `assetCode` (the sensor), `zoneCode`, `value`, `unit`, `observedAt`,
   `orgId`, `label`, `simulated` and `classification`.
-- A Scenario holds a reading and announces it:
+- In process, a caller holds a reading and builds its Signal:
 
   ```python
   hydro = app.state.hydro
@@ -393,11 +406,14 @@ Both sources share these points:
   Signal for the rain sensor: `tag: rain.accumulation.24h`, `unit: mm`, and the
   rainfall of the 24 hours of Scenario time that end at `at`, with
   `payload: {assetCode, zone, kind, windowSeconds, label}`. The rate is flat
-  between overrides, so the sum is exact. It is what the flood pack rule
+  between overrides, so nothing is sampled. It is what the flood pack rule
   `rainfall-needs-fresh-evidence` matches (`mock-hydro`,
   `rain.accumulation.24h`, above 100 mm), and a test holds the two together.
   A storm held at 60 mm/h crosses the rule after 1 hour 40 minutes. The HTTP
-  API does not serve the sum; it is a Signal only.
+  API does not serve the sum; it is a Signal only. The rule also carries
+  `windowSeconds: 86400`: the value is already the 24 hour sum, so the worker
+  that evaluates the rule (FL-76) must not sum it over that window again. No
+  Scenario publishes this Signal yet (FL-309).
 
   ```python
   await emitter.emit(hydro.observe_rain_accumulation(scenario_time), run_id=run_id)
@@ -420,8 +436,8 @@ Both sources share these points:
   `orgId`, `label`, `simulated` and `classification`. `operatingState` is
   `running` or `stopped` for a pump and `open` or `closed` for a gate; the
   schema enforces the pairing.
-- **Power lost.** A Scenario changes power, and that is the only thing it
-  changes. A pump without power is `stopped`; a gate stays where it was.
+- **Power lost.** A caller in process changes power, and that is the only
+  thing it changes. A pump without power is `stopped`; a gate stays where it was.
 
   ```python
   pumps = app.state.pumps
@@ -526,14 +542,15 @@ infrastructure operator, in this order, and record the results in `docs/contexts
 
 - **The sources are on the app.** `app.state.historian`, `app.state.cmms`, `app.state.patrol`, `app.state.ili`,
   `app.state.hydro` and `app.state.pumps` are the objects that the routes read. `tests/test_scenario_contract.py` is the executable form of
-  what a player may rely on: every source is on the app, a read follows an override, a read
+  what a caller in process may rely on: every source is on the app, a read follows an override, a read
   never publishes, a replay keeps its Signal ID, and a Signal is not labelled below its
   source's classification. The override and replay cases use the historian; the hydrology and pump
   sources test their own Scenario state, and the classification case covers all six sources.
 - **State is per process.** Overrides, pump and gate power changes and the run's seed live in the instance, so Terraform caps
   the service at one instance.
-- **Reset every source.** `historian.reset()`, `hydro.reset()` and `pumps.reset()` are separate calls; a
-  player that starts a run resets each source it changed.
+- **Reset every source.** `historian.reset()`, `hydro.reset()` and `pumps.reset()` are separate calls. The
+  player (FL-74) resets and rehydrates the historian on every command and read; it does not call the other two
+  yet (FL-309).
 - **An idle instance forgets.** The service has `min_instance_count = 0` and request-based CPU
   (`cpu_idle = true`; `cpu-throttling: true` on the live service). Scale-to-zero drops the
   overrides and the seed, and CPU is throttled between requests, so a player that advances
