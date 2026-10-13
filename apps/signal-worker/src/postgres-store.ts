@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { sql, type Kysely, type Transaction } from "kysely";
 import { parseRegisteredSignalRule, isWorkerEvent, type RegisteredSignalRule, type Signal, type WorkerEvent } from "@fieldloop/contracts";
-import { matchesRule, maximumClassification, streamKey } from "./rule-evaluator.js";
+import { isRuleSignal, matchesRule, maximumClassification, streamKey } from "./rule-evaluator.js";
 import { WorkerError, type WorkerStore } from "./model.js";
 
 type Database = Record<string, never>;
@@ -121,8 +121,7 @@ export class PostgresWorkerStore implements WorkerStore {
         WHERE org_id = ${this.orgId} AND stream_key = ${key} AND observed_at >= ${signal.observedAt}::timestamptz
           AND id <> ${signal.id}::uuid LIMIT 1`.execute(trx)).rows.length;
       for (const rule of await this.rules(trx, signal)) {
-        if (signal.simulated !== rule.simulated || signal.unit !== rule.condition.unit
-          || !(typeof signal.value === "number" || (typeof signal.value === "boolean" && rule.condition.unit === "boolean"))) continue;
+        if (!isRuleSignal(rule, signal)) continue;
         const interval = this.interval(rule);
         let matches: boolean;
         if (rule.condition.durationSeconds) {

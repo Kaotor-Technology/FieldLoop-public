@@ -6,6 +6,7 @@ import { setTimeout } from "node:timers/promises";
 import { performance } from "node:perf_hooks";
 import { Kysely, PostgresDialect, sql } from "kysely";
 import pg from "pg";
+import { domainPackRecordId, loadDemoDomainPacks } from "../apps/api/dist/domain-packs.js";
 import { PostgresWorkerStore } from "../apps/signal-worker/dist/postgres-store.js";
 import { buildApp } from "../apps/signal-worker/dist/app.js";
 import { loadSeed as loadDlSeed } from "../db/seed/dl-01/seed.mjs";
@@ -18,19 +19,17 @@ const container = `fieldloop-worker-fixture-${process.pid}`;
 const docker = (...args) => execFileSync("docker", args, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
 const orgId = "worker-fixture", otherOrg = "other-worker-fixture";
 let database, application, app;
-const condition = (ruleId, source, tag, threshold, unit, health, extra = {}) => ({ kind: "signal", ruleId, packVersion: "1.0.0", source, tag,
-  operator: "eq", threshold, unit, effect: { kind: "health_proposal", proposedHealth: health, reason: "SIMULATION periodic measurement requires human review" }, ...extra });
-const rules = [
-  { pack: "pipeline-integrity", condition: condition("cp-rectifier-output-lost", "mock-historian", "DL-01.rectifier.output", 0, "A", "failed"),
-    selector: { pack: "pipeline-integrity", bowtieCode: "dl-01-bowtie-a", barrierCodes: ["cathodic-protection"] } },
-  { pack: "pipeline-integrity", condition: condition("encroachment-detected", "mock-patrol", "DL-01.encroachment.detected", 1, "boolean", "degraded"),
-    selector: { pack: "pipeline-integrity", bowtieCode: "dl-01-bowtie-a", barrierCodes: ["right-of-way-patrol", "excavation-permit-one-call"] } },
-  { pack: "flood-water", condition: condition("rainfall-needs-fresh-evidence", "mock-hydro", "rain.accumulation.24h", 100, "mm", "unverified", { operator: "gt", windowSeconds: 86400 }),
-    selector: { pack: "flood-water", bowtieCode: "bangkok-bowtie-d", barrierCodes: ["pumping-stations", "water-gates", "tidal-gates"] } },
-  { pack: "flood-water", condition: condition("pump-power-lost", "mock-pumps", "pump.power", 0, "boolean", "degraded"),
-    selector: { pack: "flood-water", bowtieCode: "bangkok-bowtie-d", barrierCodes: ["pumping-stations"] } },
-];
-// These rule rows snapshot FL-78 PR #44 head 68b31d9563a3cd88d27fb3356e0140d00f59ce65.
+const loadedPacks = await loadDemoDomainPacks();
+const rules = loadedPacks.flatMap(({ content }) => content.signalRules
+  .filter((rule) => rule.condition.kind === "signal")
+  .map((rule) => ({ pack: content.id,
+    id: domainPackRecordId(orgId, content.id, "signal_rule", rule.id),
+    condition: { ...rule.condition, ruleId: rule.id, packVersion: content.version, effect: rule.effect },
+    selector: rule.targetBarrierSelector })));
+const cpRule = rules.find(({ condition }) => condition.ruleId === "cp-rectifier-output-lost");
+const patrolRule = rules.find(({ condition }) => condition.ruleId === "encroachment-detected");
+assert.ok(cpRule && patrolRule, "loaded FL-78 packs must include the CP and patrol Signal rules");
+// Persist the actual FL-78 pack-loader output, not a hand-copied rule snapshot.
 // PR #47 head ca30d5ab574da9e29dc51eb8a2dda21efbcbdf87 emits different rain and pump shapes;
 // the source-contract samples below do not infer conversions between those contracts.
 const intervals = { "mock-historian": { months: 3 }, "mock-patrol": { months: 3 }, "mock-hydro": 60, "mock-pumps": 60 };
@@ -57,7 +56,6 @@ try {
   for (const org of [orgId, otherOrg]) {
     await loadDlSeed(database, dlDataset(), org); await loadFloodSeed(database, floodDataset(), org);
     for (const rule of rules) {
-      rule.id ??= randomUUID();
       await sql`INSERT INTO app.signal_rule (id, org_id, pack, condition, target_barrier_selector, simulated, classification, created_by)
         VALUES (${org === orgId ? rule.id : randomUUID()}::uuid, ${org}, ${rule.pack}, ${JSON.stringify(rule.condition)}::jsonb, ${JSON.stringify(rule.selector)}::jsonb,
           true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
@@ -101,7 +99,7 @@ try {
   assert.equal(await count("health_proposal"), 3, "rain threshold is strictly greater than 100");
   await store.ingest(reading({ source: "mock-hydro", tag: "rain.accumulation.24h", value: 101, unit: "mm", observedAt: "2026-10-13T00:01:00Z" }));
   assert.equal(await count("health_proposal"), 6, "source reports a 24-hour aggregate, not a duration");
-  await store.ingest(reading({ source: "mock-pumps", tag: "pump.power", value: false, unit: "boolean" }));
+  await store.ingest(reading({ source: "mock-pumps", tag: "pump.power", value: "lost", unit: "state" }));
   assert.equal(await count("health_proposal"), 7);
   assert.deepEqual(await snapshot(), healthBefore);
 
@@ -121,36 +119,36 @@ try {
   assert.equal(await count("evidence", sql`AND signal_receipt_id IS NOT NULL`), evidenceBeforeSourceSamples);
 
   // Strict duration requires enough successive observations; sparse inspections never establish continuity.
-  await sql`UPDATE app.signal_rule SET condition = condition || '{"durationSeconds":120,"expectedIntervalSeconds":60}'::jsonb WHERE id = ${rules[0].id}::uuid`.execute(database);
+  await sql`UPDATE app.signal_rule SET condition = condition || '{"durationSeconds":120,"expectedIntervalSeconds":60}'::jsonb WHERE id = ${cpRule.id}::uuid`.execute(database);
   const run = randomUUID();
   for (const seconds of [0, 60, 120, 121]) await store.ingest(reading({ simulationRunId: run, observedAt: new Date(Date.parse(base.observedAt) + (600 + seconds) * 1000).toISOString() }));
   assert.equal(await count("health_proposal"), 8);
   const sparseRun = randomUUID();
   for (const seconds of [0, 180]) await store.ingest(reading({ simulationRunId: sparseRun, observedAt: new Date(Date.parse(base.observedAt) + (1000 + seconds) * 1000).toISOString() }));
   assert.equal(await count("health_proposal"), 8);
-  await sql`UPDATE app.signal_rule SET condition = condition - 'durationSeconds' - 'expectedIntervalSeconds' WHERE id = ${rules[0].id}::uuid`.execute(database);
+  await sql`UPDATE app.signal_rule SET condition = condition - 'durationSeconds' - 'expectedIntervalSeconds' WHERE id = ${cpRule.id}::uuid`.execute(database);
 
   // Spatial rule: boundary covered, outside/missing/invalid location do not match.
-  await sql`UPDATE app.signal_rule SET spatial_geom = ST_MakeEnvelope(100, 13, 101, 14, 4326) WHERE id = ${rules[0].id}::uuid`.execute(database);
+  await sql`UPDATE app.signal_rule SET spatial_geom = ST_MakeEnvelope(100, 13, 101, 14, 4326) WHERE id = ${cpRule.id}::uuid`.execute(database);
   for (const payload of [{}, { location: { type: "Point", coordinates: [102, 13.5] } }, { location: { type: "Point", coordinates: [999, 13.5] } }]) {
     await store.ingest(reading({ observedAt: "2026-10-13T01:00:00Z", payload }));
   }
   assert.equal(await count("health_proposal"), 8);
   await store.ingest(reading({ observedAt: "2026-10-13T01:00:01Z", payload: { location: { type: "Point", coordinates: [100, 13.5] } } }));
   assert.equal(await count("health_proposal"), 9);
-  await sql`UPDATE app.signal_rule SET spatial_geom = NULL WHERE id = ${rules[0].id}::uuid`.execute(database);
+  await sql`UPDATE app.signal_rule SET spatial_geom = NULL WHERE id = ${cpRule.id}::uuid`.execute(database);
 
   await store.ingest(reading({ simulationRunId: randomUUID(), observedAt: base.observedAt }));
   assert.equal(await count("health_proposal"), 10, "a new Scenario run must not inherit the previous run's observation watermark");
 
   // Transaction rollback after a later failure must remove receipt, Signal and Evidence as well.
   await sql`ALTER TABLE app.health_proposal ADD CONSTRAINT fixture_proposal_failure CHECK (reason <> 'rollback fixture') NOT VALID`.execute(database);
-  await sql`UPDATE app.signal_rule SET condition = jsonb_set(condition, '{effect,reason}', '"rollback fixture"') WHERE id = ${rules[0].id}::uuid`.execute(database);
+  await sql`UPDATE app.signal_rule SET condition = jsonb_set(condition, '{effect,reason}', '"rollback fixture"') WHERE id = ${cpRule.id}::uuid`.execute(database);
   const beforeRollback = await count("signal"), rejected = reading({ observedAt: "2026-10-13T02:00:00Z" });
   await assert.rejects(store.ingest(rejected), /fixture_proposal_failure/);
   assert.equal(await count("signal"), beforeRollback); assert.equal(await count("signal_receipt", sql`AND id = ${rejected.id}::uuid`), 0);
   await sql`ALTER TABLE app.health_proposal DROP CONSTRAINT fixture_proposal_failure`.execute(database);
-  await sql`UPDATE app.signal_rule SET condition = jsonb_set(condition, '{effect,reason}', '"SIMULATION periodic reading"') WHERE id = ${rules[0].id}::uuid`.execute(database);
+  await sql`UPDATE app.signal_rule SET condition = jsonb_set(condition, '{effect,reason}', '"SIMULATION periodic reading"') WHERE id = ${cpRule.id}::uuid`.execute(database);
 
   await store.ingest(reading({ source: "mock-patrol", tag: "DL-01.encroachment.detected", value: 0, unit: "boolean", classification: "HIGHLY_RESTRICTED", observedAt: "2026-10-13T02:00:00Z" }));
   await store.initialize();
@@ -179,7 +177,7 @@ try {
   // Calendar months follow Bangkok local dates rather than assuming 90 days or UTC day-of-month.
   await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code IN ('right-of-way-patrol', 'excavation-permit-one-call')`.execute(database);
   await sql`UPDATE app.signal_dependency SET last_received_at = NULL, created_at = '2026-02-28T20:30:00Z'::timestamptz
-    WHERE org_id = ${orgId} AND rule_id = ${rules[1].id}::uuid`.execute(database);
+    WHERE org_id = ${orgId} AND rule_id = ${patrolRule.id}::uuid`.execute(database);
   assert.equal(await store.detectSilence(new Date("2026-05-28T20:30:00Z")), 0);
   assert.equal(await store.detectSilence(new Date("2026-05-31T20:30:00Z")), 0);
   assert.equal(await store.detectSilence(new Date("2026-05-31T20:30:00.001Z")), 2);
@@ -216,7 +214,7 @@ try {
     WHERE org_id = ${orgId} AND stream_key = (SELECT stream_key FROM app.signal_receipt WHERE org_id = ${orgId} LIMIT 1)
       AND observed_at >= '2026-10-13T00:00:00Z'::timestamptz ORDER BY observed_at`.execute(database);
   console.log(plan.rows.map((row) => row["QUERY PLAN"]).join("\n"));
-  console.log("Worker PostGIS integration passed: concurrent producer deduplication, rollback, periodic CP/patrol, FL-78 rule fixtures, PR-47 source samples, durations, spatial boundary, receipt-clock silence, Failed-stays, audit, Organisation isolation and outbox retry.");
+  console.log("Worker PostGIS integration passed: concurrent producer deduplication, rollback, periodic CP/patrol, FL-78 loaded pack rules, PR-47 source samples, durations, spatial boundary, receipt-clock silence, Failed-stays, audit, Organisation isolation and outbox retry.");
 } finally {
   if (app) await app.close();
   if (application) await application.destroy();

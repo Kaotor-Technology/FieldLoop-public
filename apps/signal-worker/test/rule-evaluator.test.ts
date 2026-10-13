@@ -14,6 +14,15 @@ describe("periodic measurement rules", () => {
     const status = { ...rule, condition: { ...rule.condition, unit: "boolean" } };
     expect(matchesRule(status, { ...signal, unit: "boolean", value: false }, [], 60)).toBe(true);
   });
+  it("matches categorical states by exact string equality and exact unit", () => {
+    const status = { ...rule, condition: { ...rule.condition, threshold: "lost" as const, unit: "state" } };
+    expect(matchesRule(status, { ...signal, unit: "state", value: "lost" }, [], 60)).toBe(true);
+    expect(matchesRule(status, { ...signal, unit: "state", value: "available" }, [], 60)).toBe(false);
+    const missingUnit = { ...signal };
+    delete missingUnit.unit;
+    expect(matchesRule(status, { ...missingUnit, value: "lost" }, [], 60)).toBe(false);
+    expect(matchesRule(status, { ...signal, unit: "state", value: 1 }, [], 60)).toBe(false);
+  });
   it("keeps threshold and unit/provenance boundaries exact", () => {
     const threshold = { ...rule, condition: { ...rule.condition, operator: "gt" as const, threshold: 100, windowSeconds: 86400 } };
     expect(matchesRule(threshold, { ...signal, value: 100 }, [], 60)).toBe(false);

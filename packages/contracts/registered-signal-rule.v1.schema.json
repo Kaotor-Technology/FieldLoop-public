@@ -15,7 +15,8 @@
       "properties": {
         "kind": {"const": "signal"}, "source": {"type": "string", "minLength": 1},
         "tag": {"type": "string", "minLength": 1}, "operator": {"enum": ["gt", "lt", "eq"]},
-        "threshold": {"type": "number"}, "unit": {"type": "string", "minLength": 1},
+        "threshold": {"oneOf": [{"type": "number"}, {"type": "string", "minLength": 1}, {"type": "boolean"}]},
+        "unit": {"type": "string", "minLength": 1},
         "ruleId": {"type": "string", "minLength": 1}, "packVersion": {"type": "string", "minLength": 1},
         "windowSeconds": {"type": "integer", "minimum": 1},
         "durationSeconds": {"type": "integer", "minimum": 1, "maximum": 604800},
@@ -28,7 +29,12 @@
             "reason": {"type": "string", "minLength": 1}
           }
         }
-      }
+      },
+      "allOf": [
+        {"if": {"properties": {"operator": {"enum": ["gt", "lt"]}}, "required": ["operator"]}, "then": {"properties": {"threshold": {"type": "number"}}}},
+        {"if": {"properties": {"threshold": {"type": "string"}}, "required": ["threshold"]}, "then": {"properties": {"operator": {"const": "eq"}}}},
+        {"if": {"properties": {"threshold": {"type": "boolean"}}, "required": ["threshold"]}, "then": {"properties": {"operator": {"const": "eq"}}}}
+      ]
     },
     "targetBarrierSelector": {
       "type": "object", "additionalProperties": false, "required": ["pack", "bowtieCode", "barrierCodes"],

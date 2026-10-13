@@ -11,10 +11,21 @@ export function maximumClassification(...values: WorkerEvent["classification"][]
   const levels = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"] as const;
   return levels[Math.max(...values.map((value) => levels.indexOf(value)))] ?? "HIGHLY_RESTRICTED";
 }
-export function matchesReading(rule: RegisteredSignalRule, signal: Signal): boolean {
+export function isRuleSignal(rule: RegisteredSignalRule, signal: Signal): boolean {
   const { condition } = rule;
   if (signal.source !== condition.source || signal.tag !== condition.tag || signal.unit !== condition.unit
       || signal.simulated !== rule.simulated) return false;
+  if (typeof condition.threshold === "string") return typeof signal.value === "string";
+  if (typeof condition.threshold === "boolean") return typeof signal.value === "boolean";
+  return (typeof signal.value === "number" && Number.isFinite(signal.value))
+    || (condition.unit === "boolean" && typeof signal.value === "boolean");
+}
+export function matchesReading(rule: RegisteredSignalRule, signal: Signal): boolean {
+  const { condition } = rule;
+  if (!isRuleSignal(rule, signal)) return false;
+  if (typeof condition.threshold === "string" || typeof condition.threshold === "boolean") {
+    return condition.operator === "eq" && signal.value === condition.threshold;
+  }
   const value = typeof signal.value === "boolean" && condition.unit === "boolean"
     ? Number(signal.value) : signal.value;
   if (typeof value !== "number" || !Number.isFinite(value)) return false;

@@ -11,6 +11,15 @@ describe("registered worker contracts", () => {
   it("accepts FL-78's persisted condition/effect shape without mutating it", () => {
     const before = structuredClone(rule); expect(parseRegisteredSignalRule(rule)).toEqual(before); expect(rule).toEqual(before);
   });
+  it("accepts exact categorical pack thresholds while rejecting ordered string comparisons", () => {
+    const categorical = { ...rule, pack: "flood-water", targetBarrierSelector: { ...rule.targetBarrierSelector, pack: "flood-water" },
+      condition: { ...rule.condition, source: "mock-pumps", tag: "pump.power", operator: "eq", threshold: "lost", unit: "state",
+        ruleId: "pump-power-lost", effect: { kind: "health_proposal", proposedHealth: "degraded", reason: "SIMULATION power loss" } } };
+    expect(parseRegisteredSignalRule(categorical).condition.threshold).toBe("lost");
+    expect(() => parseRegisteredSignalRule({ ...categorical, condition: { ...categorical.condition, operator: "gt" } })).toThrow();
+    const booleanRule = { ...categorical, condition: { ...categorical.condition, threshold: false, unit: "state" } };
+    expect(parseRegisteredSignalRule(booleanRule).condition.threshold).toBe(false);
+  });
   it.each([
     { ...rule, targetBarrierSelector: { ...rule.targetBarrierSelector, pack: "other" } },
     { ...rule, condition: { ...rule.condition, kind: "evidence_ageing" } },

@@ -15,7 +15,8 @@ the point must be covered by the registered Polygon, including its boundary.
 
 Each qualifying observation becomes Evidence; matching rules create **open Health
 Proposals**. A Signal never applies the proposed Health. Numeric thresholds do not
-coerce strings or missing values. Boolean status rules accept booleans as 0/1 only
+coerce strings or missing values. Categorical string thresholds use exact `eq`
+matching with the exact unit. Boolean status rules accept booleans as 0/1 only
 with the `boolean` unit. `windowSeconds` describes an aggregate already reported
 by the source, such as rain accumulated over 24 hours. An explicit
 `durationSeconds` requires successive observations with no missing expected
@@ -25,7 +26,7 @@ provenance and Scenario run. Calendar inspections cannot prove a continuous dura
 
 ### Upstream source contract alignment
 
-The source examples are pinned to [FL-72 PR #47 head `ca30d5a`](https://github.com/Kaotor-Technology/FieldLoop-v2/pull/47): rain publishes `mock-hydro` / `S-R1.rain.rate` in `mm/h`, and pump power publishes `mock-pumps` / `P-3.pump.power` with the string value `lost` and no unit. [FL-78 PR #44 head `68b31d9`](https://github.com/Kaotor-Technology/FieldLoop-v2/pull/44) currently registers `rain.accumulation.24h` in `mm` and `pump.power` as boolean. Those rules do not match the PR #47 source examples. The worker stores the Signals but does not infer a 24-hour accumulation or translate a string power status to a boolean, so these two samples do not create Evidence or Proposals until the source and pack contracts agree. CP and patrol use their periodic rules and three-calendar-month silence interval as configured above.
+The source examples are pinned to [FL-72 PR #47 head `ca30d5a`](https://github.com/Kaotor-Technology/FieldLoop-v2/pull/47): rain publishes `mock-hydro` / `S-R1.rain.rate` in `mm/h`, and pump power publishes `mock-pumps` / `P-3.pump.power` with the string value `lost` and no unit. [FL-78 PR #44 head `d36ffe0`](https://github.com/Kaotor-Technology/FieldLoop-v2/pull/44) registers `rain.accumulation.24h` in `mm` and `pump.power` with the string threshold `lost` and unit `state`. The categorical rule now loads and compares exact strings, but its tag and unit still do not match PR #47; the rain tag, unit and measurement window also differ. The worker stores source Signals without inventing a 24-hour accumulation, changing tags or supplying a unit, so these PR #47 samples do not create Evidence or Proposals until the source and pack contracts agree. CP and patrol use their periodic rules and three-calendar-month silence interval as configured above.
 
 ## Periodic measurements and silence
 
@@ -104,9 +105,9 @@ bash scripts/test-migrations.sh
 ```
 
 `test:signals` needs Docker and uses a disposable PostgreSQL 16 with PostGIS and
-pgvector, both synthetic seeds and a persisted-rule snapshot from FL-78 PR #44.
-It checks scoped worker grants, concurrent deduplication, rollback, periodic
-CP/patrol, the registered aggregate-rain and boolean-pump rule forms, duration
+pgvector, both synthetic seeds and the current validated pack rules loaded through
+the FL-78 API pack loader. It checks scoped worker grants, concurrent deduplication,
+rollback, periodic CP/patrol, the registered aggregate-rain and categorical-pump rules, duration
 boundaries, spatial coverage, quarterly Bangkok dates, silence/audit and outbox
 retry. It separately ingests the pinned PR #47 rain/pump source samples and verifies
 that unmatched data cannot create false Evidence or Proposals. It also prints local
