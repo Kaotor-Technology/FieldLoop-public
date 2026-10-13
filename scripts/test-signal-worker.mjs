@@ -350,6 +350,7 @@ try {
       (${orgId}, ${failedOwnerBarrier.id}::uuid, 'inspection', 'synthetic-ageing', ${new Date(ageNow.getTime() - 172_800_000)}, true, 'CONFIDENTIAL', 'worker-fixture'),
       (${orgId}, ${expiringOwnerBarrier.id}::uuid, 'inspection', 'synthetic-ageing', ${new Date(ageNow.getTime() - 23 * 3_600_000)}, true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
   const beforeAgeEvents = publishedEvents.length;
+  const beforeAgeAudit = await count("audit_event", sql`AND action = 'barrier.health_changed' AND entity = ${patrolOwnerBarrier.id}`);
   assert.deepEqual(await store.ageEvidence(ageNow), { changed: 0, notified: 1 }, "exact expiry stays current and one-hour notice is delivered once");
   await store.publishPending(runtime.publish);
   assert.deepEqual(await store.ageEvidence(ageNow), { changed: 0, notified: 0 }, "reruns do not duplicate Evidence notifications");
@@ -362,6 +363,7 @@ try {
   assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${patrolOwnerBarrier.id}::uuid`.execute(database)).rows[0].health, "unverified");
   assert.equal((await sql`SELECT actor FROM app.health_change WHERE org_id = ${orgId} AND barrier_id = ${patrolOwnerBarrier.id}::uuid
     ORDER BY created_at DESC LIMIT 1`.execute(database)).rows[0].actor, "ageing");
+  assert.equal(await count("audit_event", sql`AND action = 'barrier.health_changed' AND entity = ${patrolOwnerBarrier.id}`), beforeAgeAudit + 1);
   assert.equal((await sql`SELECT count(*)::int AS count FROM app.notification WHERE org_id = ${orgId}
     AND health_change_id IS NOT NULL AND recipient_ref = ${`sandbox:${ownerId}`}`.execute(database)).rows[0].count, 1);
   assert.deepEqual(publishedEvents.slice(beforeAgeEvents).filter(({ type }) => type === "barrier.health_changed").map(({ barrierId }) => barrierId), [patrolOwnerBarrier.id]);
@@ -401,6 +403,7 @@ try {
   await sql`INSERT INTO app.health_proposal (id, org_id, barrier_id, proposed_health, status, simulated, classification, created_by)
     VALUES (${acceptedProposalId}::uuid, ${orgId}, ${patrolOwnerBarrier.id}::uuid, 'degraded', 'open', true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
   const decision = { user: owner, proposalId: acceptedProposalId, decision: "accept", reason: "Inspection confirms degradation.", idempotencyKey: "health-decision-fixture-001" };
+  const acceptedAuditBefore = await count("audit_event", sql`AND action = 'health_proposal.accepted' AND entity = ${acceptedProposalId}`);
   const changesBeforeDecision = await count("health_change", sql`AND barrier_id = ${patrolOwnerBarrier.id}::uuid`);
   const firstDecision = await healthStore.decide(decision);
   assert.deepEqual(firstDecision, { healthProposalId: acceptedProposalId, status: "accepted", barrierId: patrolOwnerBarrier.id, health: "degraded" });
@@ -412,6 +415,7 @@ try {
     (error) => error.status === 403 && error.code === "forbidden");
   assert.equal(await count("health_change", sql`AND barrier_id = ${patrolOwnerBarrier.id}::uuid`), changesBeforeDecision + 1);
   assert.equal((await sql`SELECT status, decided_by, reason FROM app.health_proposal WHERE org_id = ${orgId} AND id = ${acceptedProposalId}::uuid`.execute(database)).rows[0].status, "accepted");
+  assert.equal(await count("audit_event", sql`AND action = 'health_proposal.accepted' AND entity = ${acceptedProposalId}`), acceptedAuditBefore + 1);
   assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${patrolOwnerBarrier.id}::uuid`.execute(database)).rows[0].health, "degraded");
 
   const rejectedProposalId = randomUUID();
@@ -419,6 +423,7 @@ try {
     VALUES (${rejectedProposalId}::uuid, ${orgId}, ${failedOwnerBarrier.id}::uuid, 'healthy', 'open', true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
   const rejectedDecision = await healthStore.decide({ ...decision, proposalId: rejectedProposalId, decision: "reject",
     reason: "Evidence does not support this change.", idempotencyKey: "health-decision-fixture-002" });
+  assert.equal(await count("audit_event", sql`AND action = 'health_proposal.rejected' AND entity = ${rejectedProposalId}`), 1);
   assert.equal(rejectedDecision.status, "rejected"); assert.equal(rejectedDecision.health, "failed");
   assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${failedOwnerBarrier.id}::uuid`.execute(database)).rows[0].health, "failed");
   const notificationPage = await healthStore.listNotifications(owner, undefined, 1);
