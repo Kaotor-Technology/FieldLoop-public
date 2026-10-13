@@ -19,8 +19,10 @@ from fieldloop_common.signal_publisher import SignalPublisher
 from fieldloop_simulator.main import app
 from fieldloop_simulator.mock_cmms import SimulatedCmms
 from fieldloop_simulator.mock_historian import SimulatedHistorian
+from fieldloop_simulator.mock_hydro import SimulatedHydro
 from fieldloop_simulator.mock_ili import SimulatedIliDrop
 from fieldloop_simulator.mock_patrol import SimulatedPatrol
+from fieldloop_simulator.mock_pumps import SimulatedPumps
 from fieldloop_simulator.mock_signals import SimulatedSignalEmitter
 
 RECTIFIER = "DL-01.rectifier.output"
@@ -53,6 +55,8 @@ def test_every_source_is_on_the_app_for_the_player() -> None:
     assert isinstance(app.state.cmms, SimulatedCmms)
     assert isinstance(app.state.patrol, SimulatedPatrol)
     assert isinstance(app.state.ili, SimulatedIliDrop)
+    assert isinstance(app.state.hydro, SimulatedHydro)
+    assert isinstance(app.state.pumps, SimulatedPumps)
 
 
 def test_a_failure_changes_the_reads_and_is_announced_as_one_signal(player: Player) -> None:
@@ -114,12 +118,16 @@ def test_a_signal_is_never_labelled_below_what_its_source_api_reports(player: Pl
             "mock-cmms": client.get("/mock/cmms/work-orders").json()["classification"],
             "mock-patrol": client.get("/mock/patrol/findings").json()["classification"],
             "mock-ili": client.get("/mock/ili/reports/SYN-ILI-2026-001").json()["classification"],
+            "mock-hydro": client.get("/mock/hydro/rain").json()["classification"],
+            "mock-pumps": client.get("/mock/pumps/P-3/status").json()["classification"],
         }
     observations = [
         app.state.historian.observe(RECTIFIER, at),
         app.state.cmms.observe("SYN-CMMS-001", at),
         app.state.patrol.observe("SYN-PATROL-001", at),
         app.state.ili.observe("SYN-ILI-2026-001", at),
+        app.state.hydro.observe("rain", at),
+        app.state.pumps.observe("P-3", at),
     ]
     for observation in observations:
         asyncio.run(emitter.emit(observation, run_id=RUN))

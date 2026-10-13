@@ -33,7 +33,7 @@ def documented_paths() -> set[str]:
 
 
 def test_the_contract_files_are_found() -> None:
-    assert {"historian", "cmms", "patrol", "ili"} <= set(SOURCES)
+    assert {"historian", "cmms", "patrol", "ili", "hydro", "pumps"} <= set(SOURCES)
 
 
 def test_the_documented_paths_are_the_served_paths() -> None:
