@@ -39,7 +39,11 @@ def evaluate_sample(
     *,
     elapsed_seconds: float,
 ) -> dict[str, Any]:
-    """Check returned IDs/revisions; a nonempty result alone does not prove relevance."""
+    """Check presence and first-result identity against separately reviewed expectations.
+
+    A primary match does not establish current lifecycle or human-approved relevance;
+    it only compares the first returned citation with the supplied ID/revision set.
+    """
     if not expected:
         raise ValueError("At least one expected citation is required")
     if not math.isfinite(elapsed_seconds) or elapsed_seconds < 0:
@@ -57,6 +61,10 @@ def evaluate_sample(
     return {
         "expected_citation_found": any(
             {"document_id": item.document_id, "revision": item.revision} in citations
+            for item in expected
+        ),
+        "expected_primary_citation_found": bool(citations) and any(
+            {"document_id": item.document_id, "revision": item.revision} == citations[0]
             for item in expected
         ),
         "within_two_seconds": elapsed_seconds < 2,

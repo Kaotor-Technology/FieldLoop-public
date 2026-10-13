@@ -26,6 +26,7 @@ def test_checks_expected_current_citation_and_never_exports_retrieved_bodies() -
     )
     assert report == {
         "expected_citation_found": True,
+        "expected_primary_citation_found": True,
         "within_two_seconds": True,
         "elapsed_seconds": 0.1,
         "citations": [{"document_id": expected.document_id, "revision": "B"}],
@@ -175,6 +176,25 @@ def test_outer_async_cancellation_propagates_without_a_measurement_report() -> N
             canceled_search, "protection", ["Company Standards/Procedures"], [expected],
             evidence_kind="local_fixture",
         ))
+
+
+@pytest.mark.parametrize(("revisions", "primary_matches"), [
+    (["B"], True),
+    (["A", "B"], False),
+    ([], False),
+])
+def test_primary_revision_match_does_not_use_a_later_current_citation(
+    revisions: list[str], primary_matches: bool,
+) -> None:
+    module = validation()
+    expected = module.ExpectedCitation("00000000-0000-0000-0000-000000000001", "B")
+    results = [
+        {"citation": {"document_id": expected.document_id, "revision": revision}}
+        for revision in revisions
+    ]
+    report = module.evaluate_sample([expected], results, elapsed_seconds=0.1)
+    assert report["expected_primary_citation_found"] is primary_matches
+    assert report["expected_citation_found"] is ("B" in revisions)
 
 
 # Characterization of the citation-match predicate; not new relevance calibration.
