@@ -245,8 +245,10 @@ infrastructure operator, in this order, and record the results in `docs/contexts
    plan is: create the `ili_drop` bucket and the `ili_report` object, create two
    `simulator_signal_publisher` grants (`signals` and `dead_letter`), and update
    `app["simulator-<env>"]` (three new variables, at most one instance). Nothing else may
-   mention the simulator. On 2026-10-13 a plan of this branch against the live project showed
-   exactly that and was not applied.
+   mention the simulator. Run it from the checkout that has `local.auto.tfvars`: the four maps
+   that own the jobs live only there, and a plan without them also deletes the seed jobs and
+   strips `DATABASE_URL` from the migration jobs (which happened on 2026-10-13 and failed the
+   release). Read the plan for any destroy before applying.
 2. **The report is in the bucket**, byte for byte what the API serves, and the bucket is private:
 
    ```sh
