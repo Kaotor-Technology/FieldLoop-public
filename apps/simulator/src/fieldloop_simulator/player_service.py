@@ -36,15 +36,15 @@ class SimulationService:
         player: ScenarioPlayer,
         store: Callable[[], PlayerStore],
         historian: SimulatedHistorian,
-        hydro: SimulatedHydro | None = None,
-        pumps: SimulatedPumps | None = None,
+        hydro: SimulatedHydro,
+        pumps: SimulatedPumps,
     ) -> None:
         self.player = player
         self.store = store
+        # The sources whose reads follow the run; the app passes the ones its routes read.
         self.historian = historian
-        # The Demo B sources. A service built without them, as a test may, keeps its own pair.
-        self.hydro = hydro or SimulatedHydro()
-        self.pumps = pumps or SimulatedPumps()
+        self.hydro = hydro
+        self.pumps = pumps
         self._projection_lock = threading.RLock()
 
     def current(self, run_id: uuid.UUID | None = None) -> dict[str, object] | None:
