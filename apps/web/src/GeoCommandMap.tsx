@@ -4,6 +4,8 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
 import { GeoJsonLayer, IconLayer, ScatterplotLayer } from "@deck.gl/layers";
+import { FillStyleExtension, PathStyleExtension } from "@deck.gl/extensions";
+import type { FillStyleExtensionProps, PathStyleExtensionProps } from "@deck.gl/extensions";
 import { GoogleMapsOverlay } from "@deck.gl/google-maps";
 import type { MapFeature, MapFeatureCollection, MapLayerName, MapViewport } from "@fieldloop/map";
 import { getMapConfig, getMapLayer } from "./map-api";
@@ -170,7 +172,7 @@ export function GeoCommandMap() {
     const consequences = collections.get("consequences");
     if (activeLayers.includes("assets") && assets) {
       const filtered = filterCollection(assets, domain);
-      layers.push(new GeoJsonLayer<MapFeature["properties"]>({
+      layers.push(new GeoJsonLayer<MapFeature["properties"], PathStyleExtensionProps<MapFeature>>({
         id: "asset-segment-layer",
         data: filtered as never,
         pickable: true,
@@ -178,11 +180,32 @@ export function GeoCommandMap() {
         filled: true,
         lineWidthMinPixels: lineWidth,
         pointRadiusMinPixels: assetPointRadius,
+        extensions: [new PathStyleExtension({ dash: true })],
+        getDashArray: (feature) => feature.properties.riskBand === "alarp" ? [1, 1] : [0, 0],
         getLineColor: (feature) => riskColor(feature.properties.riskBand, "--color-neutral-600", 220),
         getFillColor: (feature) => riskColor(feature.properties.riskBand, "--color-neutral-300", 100),
         getPointRadius: assetPointRadius,
         onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
       }));
+      const alarpAssets = filtered.features.filter((feature) => feature.properties.riskBand === "alarp");
+      if (alarpAssets.length > 0) {
+        const hatchTileSize = designTokenPixels("--spacing-space-12");
+        const hatchStrokeWidth = designTokenPixels("--spacing-border-hairline");
+        layers.push(new GeoJsonLayer<MapFeature["properties"], FillStyleExtensionProps<MapFeature>>({
+          id: "asset-risk-alarp-hatch-layer",
+          data: { type: "FeatureCollection", features: alarpAssets } as never,
+          pickable: false,
+          stroked: false,
+          filled: true,
+          getFillColor: tokenColor("--color-neutral-900", 220),
+          fillPatternAtlas: createAlarpHatchAtlas(hatchTileSize, hatchStrokeWidth),
+          getFillPattern: () => "diagonal-hatch",
+          fillPatternMapping: {
+            "diagonal-hatch": { x: 0, y: 0, width: hatchTileSize, height: hatchTileSize },
+          },
+          extensions: [new FillStyleExtension({ pattern: true })],
+        }));
+      }
     }
     if (activeLayers.includes("consequences") && consequences) {
       layers.push(new GeoJsonLayer<MapFeature["properties"]>({
@@ -481,6 +504,12 @@ function designTokenPixels(token: string): number {
   const value = Number.parseFloat(window.getComputedStyle(document.documentElement).getPropertyValue(token));
   if (!Number.isFinite(value)) throw new Error(`Missing design token ${token}`);
   return value;
+}
+
+function createAlarpHatchAtlas(tileSize: number, strokeWidth: number): string {
+  const halfTile = tileSize / 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${tileSize}" height="${tileSize}" viewBox="0 0 ${tileSize} ${tileSize}"><path d="M0 ${tileSize}L${tileSize} 0M-${halfTile} ${tileSize}L${halfTile} 0M${halfTile} ${tileSize}L${tileSize + halfTile} 0" fill="none" stroke="white" stroke-width="${strokeWidth}"/></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 function readViewportFromSearch(params: Record<string, unknown>): MapViewport {

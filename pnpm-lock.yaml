@@ -141,6 +141,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@deck.gl/extensions':
+        specifier: 9.3.6
+        version: 9.3.6(@deck.gl/core@9.3.11)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))
       '@deck.gl/google-maps':
         specifier: 9.3.6
         version: 9.3.6(@deck.gl/core@9.3.11)(@luma.gl/core@9.3.6)(@luma.gl/webgl@9.3.6(@luma.gl/core@9.3.6))
@@ -565,6 +568,13 @@ packages:
 
   '@deck.gl/core@9.3.11':
     resolution: {integrity: sha512-/rv2RvWWNpWzvjWCMNOTk9nuGzkiT6+JrmOqflCp7Df6vxxUE6uK6bdR7z8y9onMlCF7saxKIANYUf/Dw8sQYw==}
+
+  '@deck.gl/extensions@9.3.6':
+    resolution: {integrity: sha512-zWAyeyFlbryrjvlQYYUn+0g7u7LUtS4J6WDWMjrJOP89WCiYitWPz+aqL+0x6iNTZk5xz0YK5FxSarDRCWxZCQ==}
+    peerDependencies:
+      '@deck.gl/core': ~9.3.0
+      '@luma.gl/core': ~9.3.3
+      '@luma.gl/engine': ~9.3.3
 
   '@deck.gl/google-maps@9.3.6':
     resolution: {integrity: sha512-L5i1DVo+RF6IQ75UZ51GGz7WgSLVcHkCvMiXwi+cq9HWSjmpKef8hj6/7WjpsF3oddtBGJMhWalAMAF3sGMh/w==}
@@ -5136,6 +5146,15 @@ snapshots:
       '@types/offscreencanvas': 2019.7.3
       gl-matrix: 3.4.4
       mjolnir.js: 3.1.1
+
+  '@deck.gl/extensions@9.3.6(@deck.gl/core@9.3.11)(@luma.gl/core@9.3.6)(@luma.gl/engine@9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6)))':
+    dependencies:
+      '@deck.gl/core': 9.3.11
+      '@luma.gl/core': 9.3.6
+      '@luma.gl/engine': 9.3.6(@luma.gl/core@9.3.6)(@luma.gl/shadertools@9.3.6(@luma.gl/core@9.3.6))
+      '@luma.gl/shadertools': 9.3.6(@luma.gl/core@9.3.6)
+      '@luma.gl/webgl': 9.3.6(@luma.gl/core@9.3.6)
+      '@math.gl/core': 4.1.0
 
   '@deck.gl/google-maps@9.3.6(@deck.gl/core@9.3.11)(@luma.gl/core@9.3.6)(@luma.gl/webgl@9.3.6(@luma.gl/core@9.3.6))':
     dependencies:
