@@ -28,6 +28,15 @@ INSERT INTO action_request(id, org_id, action_type, action_level, payload, statu
 INSERT INTO approval(org_id, action_request_id, approver_sub, decision, payload_hash, auth_time, simulated, classification)
 SELECT org_id, id, 'synthetic-human', 'approved', payload_hash, now(), simulated, classification FROM action_request WHERE id='11111111-1111-4111-8111-111111111119';
 INSERT INTO notification(org_id, action_request_id, channel, recipient_ref, status, sandbox, simulated, classification) VALUES ('simulation-test', '11111111-1111-4111-8111-111111111119', 'email', 'sandbox:test', 'queued', true, true, 'INTERNAL');
+DO $$
+BEGIN
+    BEGIN
+        INSERT INTO notification(org_id, action_request_id, channel, recipient_ref, status, sandbox, simulated, classification)
+        VALUES ('simulation-test', '11111111-1111-4111-8111-111111111119', 'email', 'operator@example.invalid', 'queued', true, true, 'INTERNAL');
+        RAISE EXCEPTION 'simulated notification accepted a non-sandbox recipient';
+    EXCEPTION WHEN check_violation THEN NULL;
+    END;
+END $$;
 INSERT INTO audit_event(org_id, actor, action, entity, simulated, classification) VALUES ('simulation-test', 'synthetic-human', 'approval.created', 'test', true, 'INTERNAL');
 SELECT restore_simulation_baseline('simulation-test');
 DO $$

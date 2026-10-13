@@ -85,7 +85,15 @@ BEGIN
         EXECUTE format('GRANT SELECT ON app.%I TO fieldloop_app', 'current_' || table_name);
     END LOOP;
 END $$;
-ALTER TABLE notification ADD CONSTRAINT simulated_notification_sandbox CHECK (NOT simulated OR sandbox);
+ALTER TABLE notification ADD CONSTRAINT simulated_notification_sandbox_recipient CHECK (
+    NOT simulated OR (
+        sandbox
+        AND left(recipient_ref, 8) = 'sandbox:'
+        AND length(recipient_ref) BETWEEN 9 AND 71
+        AND substring(recipient_ref FROM 9) ~ '^[a-z0-9][a-z0-9._-]{0,62}$'
+        AND substring(recipient_ref FROM 9) !~ '[^a-z0-9._-]'
+    )
+);
 
 CREATE FUNCTION guard_simulation_barrier() RETURNS trigger AS $$
 DECLARE
@@ -241,7 +249,7 @@ DROP TRIGGER zz_guard_simulation_action_child ON approval;
 DROP FUNCTION guard_simulation_action_child();
 DROP TRIGGER guard_simulation_barrier ON barrier;
 DROP FUNCTION guard_simulation_barrier();
-ALTER TABLE notification DROP CONSTRAINT simulated_notification_sandbox;
+ALTER TABLE notification DROP CONSTRAINT simulated_notification_sandbox_recipient;
 DO $$
 DECLARE
     table_name text;
