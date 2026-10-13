@@ -25,3 +25,4 @@ ul{padding-inline-start:var(--space-space-6)}
 .skip{position:absolute;transform:translateY(-200%);background:var(--color-secondary)}
 .skip:focus{transform:none}
 @media(prefers-color-scheme:dark){body{background:var(--color-dark-canvas);color:var(--color-dark-on-surface)}article,section,details{background:var(--color-dark-surface);border-color:var(--color-dark-border)}a{color:var(--color-dark-primary)}a:hover{color:var(--color-dark-primary-hover)}:focus-visible{outline-color:var(--color-dark-focus)}}
+article h2{overflow-wrap:anywhere}
