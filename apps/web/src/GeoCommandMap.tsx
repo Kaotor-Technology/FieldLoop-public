@@ -280,7 +280,12 @@ export function GeoCommandMap() {
   const chooseFeature = (feature: MapFeature) => {
     setSelectedFeature(feature);
     const position = pointPosition(feature);
-    map.current?.panTo({ lat: position[1], lng: position[0] });
+    const center = { lat: position[1], lng: position[0] };
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      map.current?.moveCamera({ center });
+    } else {
+      map.current?.panTo(center);
+    }
   };
 
   return <main id="main-content" className="geo-command-map" tabIndex={-1}>
