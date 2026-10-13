@@ -13,7 +13,15 @@ class WorkOrder(BaseModel):
         extra="forbid",
     )
     id: Annotated[str, Field(pattern="^SYN-CMMS-[0-9]{3}$")]
-    org_id: Annotated[Literal["fieldloop-demo"], Field(alias="orgId")]
+    org_id: Annotated[
+        str,
+        Field(
+            alias="orgId",
+            max_length=128,
+            min_length=1,
+            pattern="^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+        ),
+    ]
     asset_code: Annotated[Literal["DL-01"], Field(alias="assetCode")]
     title: Annotated[str, Field(min_length=1)]
     kind: Literal["preventive", "corrective"]

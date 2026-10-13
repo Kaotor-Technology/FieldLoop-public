@@ -2,6 +2,7 @@ import os
 
 from fastapi import FastAPI
 
+from fieldloop_simulator.mock_cmms import SimulatedCmms
 from fieldloop_simulator.mock_cmms import router as mock_cmms_router
 from fieldloop_simulator.mock_historian import SimulatedHistorian
 from fieldloop_simulator.mock_historian import router as mock_historian_router
@@ -16,6 +17,7 @@ ORG_ID = org_id_from_environment(os.environ)
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 install_problem_handlers(app)
+app.state.cmms = SimulatedCmms(org_id=ORG_ID)
 app.state.historian = SimulatedHistorian(org_id=ORG_ID)
 app.state.patrol = SimulatedPatrol(org_id=ORG_ID)
 app.state.ili = SimulatedIliDrop(bucket=os.environ.get("FIELDLOOP_ILI_DROP_BUCKET") or None)

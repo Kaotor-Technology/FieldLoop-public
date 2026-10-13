@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from fieldloop_simulator.main import app
+from fieldloop_simulator.mock_cmms import SimulatedCmms
 
 
 def test_work_orders_are_deterministic_synthetic_reads() -> None:
@@ -55,6 +56,24 @@ def test_pm_due_only_includes_open_preventive_orders_at_or_before_as_of() -> Non
             "SYN-CMMS-001",
             "SYN-CMMS-002",
         ]
+        # The clock is reported in UTC whatever offset the caller wrote it in.
+        assert later.json()["asOf"] == "2026-10-11T00:00:00Z"
+
+
+def test_reads_report_the_configured_organisation() -> None:
+    original = app.state.cmms
+    app.state.cmms = SimulatedCmms(org_id="other-org")
+    try:
+        with TestClient(app) as client:
+            data = client.get("/mock/cmms/work-orders").json()
+    finally:
+        app.state.cmms = original
+    assert {item["orgId"] for item in data["items"]} == {"other-org"}
+
+
+def test_cmms_rejects_an_invalid_organisation_id() -> None:
+    with pytest.raises(ValueError, match="Organisation"):
+        SimulatedCmms(org_id="not valid")
 
 
 @pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE", "TRACE", "CONNECT"])

@@ -1,100 +1,107 @@
-"""Read-only synthetic CMMS data; no CMMS connector, publisher or write operation."""
+"""Deterministic, read-only synthetic CMMS for Demo A (SIM-2).
 
-import re
+Fixed work orders with no wall clock and no I/O: no CMMS connector, publisher or write
+operation. "PM due" is a question asked of the Scenario time ``asOf``, never of the wall clock.
+"""
+
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Final
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from fieldloop_common.generated_mock_cmms import MockCmmsPage, WorkOrder
-from pydantic import AwareDatetime, BeforeValidator
+
+from fieldloop_simulator.mock_http import Rfc3339, app_state
+from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
+
+CLASSIFICATION: Final = "INTERNAL"
+# The Scenario time a read uses when it names none, so a bare read is reproducible (SIM-5).
+DEFAULT_AS_OF = datetime(2026, 10, 10, tzinfo=UTC)
+
+
+def _work_order(identifier: str, title: str, kind: str, status: str, due_at: datetime) -> WorkOrder:
+    return WorkOrder.model_validate(
+        {
+            "id": identifier,
+            "orgId": DEMO_ORG_ID,  # replaced with the configured Organisation when served
+            "assetCode": "DL-01",
+            "title": title,
+            "kind": kind,
+            "status": status,
+            "dueAt": due_at,
+            "label": "SYNTHETIC",
+            "simulated": True,
+            "classification": CLASSIFICATION,
+        }
+    )
+
+
+# Authored values, not observations of a real asset.
+_WORK_ORDERS = (
+    _work_order(
+        "SYN-CMMS-001",
+        "Synthetic rectifier preventive check",
+        "preventive",
+        "open",
+        datetime(2026, 10, 9, tzinfo=UTC),
+    ),
+    _work_order(
+        "SYN-CMMS-002",
+        "Synthetic valve preventive check",
+        "preventive",
+        "open",
+        datetime(2026, 10, 10, tzinfo=UTC),
+    ),
+    _work_order(
+        "SYN-CMMS-003",
+        "Synthetic coating corrective work",
+        "corrective",
+        "open",
+        datetime(2026, 10, 11, tzinfo=UTC),
+    ),
+    _work_order(
+        "SYN-CMMS-004",
+        "Synthetic completed preventive check",
+        "preventive",
+        "completed",
+        datetime(2026, 10, 8, tzinfo=UTC),
+    ),
+)
+
+
+class SimulatedCmms:
+    def __init__(self, *, org_id: str = DEMO_ORG_ID) -> None:
+        self.org_id = require_org_id(org_id)
+
+    def page(self, *, pm_due: bool, as_of: datetime) -> MockCmmsPage:
+        """Every work order, or with ``pm_due`` the open preventive ones due by ``as_of``."""
+        orders = [
+            order
+            for order in _WORK_ORDERS
+            if not pm_due
+            or (order.kind == "preventive" and order.status == "open" and order.due_at <= as_of)
+        ]
+        items = [order.model_copy(update={"org_id": self.org_id}) for order in orders]
+        return MockCmmsPage.model_validate(
+            {
+                "items": items,
+                "total": len(items),
+                "asOf": as_of,
+                "label": "SYNTHETIC",
+                "simulated": True,
+                "classification": CLASSIFICATION,
+            }
+        )
+
 
 router = APIRouter(prefix="/mock/cmms", tags=["mock-cmms"])
 
-
-def require_rfc3339(value: object) -> object:
-    # FastAPI validates the trusted datetime default too; HTTP query input is a string.
-    if isinstance(value, datetime):
-        return value
-    # Pydantic also accepts numeric epoch strings; the wire contract does not.
-    if not isinstance(value, str) or not re.fullmatch(
-        r"\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[Zz]|[+-]\d{2}:\d{2})", value
-    ):
-        raise ValueError("asOf must be a timezone-aware RFC 3339 string.")
-    return value
-
-
-def fixture_orders() -> list[WorkOrder]:
-    # Every value below is an authored fixture, not an observation of a real asset.
-    templates = (
-        (
-            "SYN-CMMS-001",
-            "Synthetic rectifier preventive check",
-            "preventive",
-            "open",
-            "2026-10-09T00:00:00Z",
-        ),
-        (
-            "SYN-CMMS-002",
-            "Synthetic valve preventive check",
-            "preventive",
-            "open",
-            "2026-10-10T00:00:00Z",
-        ),
-        (
-            "SYN-CMMS-003",
-            "Synthetic coating corrective work",
-            "corrective",
-            "open",
-            "2026-10-11T00:00:00Z",
-        ),
-        (
-            "SYN-CMMS-004",
-            "Synthetic completed preventive check",
-            "preventive",
-            "completed",
-            "2026-10-08T00:00:00Z",
-        ),
-    )
-    return [
-        WorkOrder.model_validate(
-            {
-                "id": identifier,
-                "title": title,
-                "kind": kind,
-                "status": status,
-                "dueAt": due_at,
-                "orgId": "fieldloop-demo",
-                "assetCode": "DL-01",
-                "label": "SYNTHETIC",
-                "simulated": True,
-                "classification": "INTERNAL",
-            }
-        )
-        for identifier, title, kind, status, due_at in templates
-    ]
+get_cmms = app_state("cmms", SimulatedCmms)
 
 
 @router.get("/work-orders", response_model=MockCmmsPage)
-def work_orders(
+def list_work_orders(
+    cmms: Annotated[SimulatedCmms, Depends(get_cmms)],
     pm_due: Annotated[bool, Query(alias="pmDue")] = False,
-    as_of: Annotated[
-        AwareDatetime, BeforeValidator(require_rfc3339), Query(alias="asOf")
-    ] = datetime(2026, 10, 10, tzinfo=UTC),
+    as_of: Annotated[Rfc3339, Query(alias="asOf")] = DEFAULT_AS_OF,
 ) -> MockCmmsPage:
-    orders = fixture_orders()
-    if pm_due:
-        orders = [
-            order
-            for order in orders
-            if order.kind == "preventive" and order.status == "open" and order.due_at <= as_of
-        ]
-    return MockCmmsPage.model_validate(
-        {
-            "items": [order.model_dump(mode="json", by_alias=True) for order in orders],
-            "total": len(orders),
-            "asOf": as_of.isoformat(),
-            "label": "SYNTHETIC",
-            "simulated": True,
-            "classification": "INTERNAL",
-        }
-    )
+    return cmms.page(pm_due=pm_due, as_of=as_of)
