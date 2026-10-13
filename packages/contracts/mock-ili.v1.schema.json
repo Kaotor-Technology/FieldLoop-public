@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MockIliReport",
+  "description": "A synthetic in-line inspection report as a vendor would drop it for DL-01 (SIM-2). The same document is the dropped file and the response of GET /mock/ili/reports/{id}. It names no Organisation: the drop location identifies the Organisation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "reportId",
+    "assetCode",
+    "vendor",
+    "tool",
+    "runDate",
+    "issuedAt",
+    "inspectedFromChainageM",
+    "inspectedToChainageM",
+    "anomalyCount",
+    "anomalies",
+    "label",
+    "simulated",
+    "classification"
+  ],
+  "properties": {
+    "reportId": {
+      "type": "string",
+      "pattern": "^SYN-ILI-[0-9]{4}-[0-9]{3}$"
+    },
+    "assetCode": {
+      "type": "string",
+      "const": "DL-01"
+    },
+    "vendor": {
+      "type": "string",
+      "const": "Synthetic Inspection Services"
+    },
+    "tool": {
+      "type": "string",
+      "enum": [
+        "magnetic_flux_leakage"
+      ]
+    },
+    "runDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "issuedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "inspectedFromChainageM": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "inspectedToChainageM": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "anomalyCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "anomalies": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Anomaly"
+      }
+    },
+    "label": {
+      "type": "string",
+      "const": "SYNTHETIC"
+    },
+    "simulated": {
+      "type": "boolean",
+      "const": true
+    },
+    "classification": {
+      "type": "string",
+      "const": "HIGHLY_RESTRICTED"
+    }
+  },
+  "$defs": {
+    "Anomaly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "chainageM",
+        "clockPosition",
+        "feature",
+        "depthPercent",
+        "lengthMm",
+        "widthMm"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^A-[0-9]{3}$"
+        },
+        "chainageM": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "clockPosition": {
+          "type": "string",
+          "description": "Circumferential position as a clock face, hh:mm.",
+          "pattern": "^(0[0-9]|1[0-1]):[0-5][0-9]$"
+        },
+        "feature": {
+          "type": "string",
+          "enum": [
+            "external_metal_loss",
+            "internal_metal_loss"
+          ]
+        },
+        "depthPercent": {
+          "type": "number",
+          "description": "Metal loss as a percentage of nominal wall thickness.",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "lengthMm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "widthMm": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    }
+  }
+}

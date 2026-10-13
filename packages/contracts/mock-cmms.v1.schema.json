@@ -1,0 +1,141 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MockCmmsPage",
+  "description": "Read-only synthetic CMMS work orders for DL-01 with their PM due dates (SIM-2). Fixed fixtures, not records of a real asset.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "items",
+    "total",
+    "asOf",
+    "label",
+    "simulated",
+    "classification"
+  ],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/WorkOrder"
+      }
+    },
+    "total": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "asOf": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "label": {
+      "type": "string",
+      "const": "SYNTHETIC"
+    },
+    "simulated": {
+      "type": "boolean",
+      "const": true
+    },
+    "classification": {
+      "type": "string",
+      "const": "INTERNAL"
+    }
+  },
+  "$defs": {
+    "WorkOrder": {
+      "type": "object",
+      "description": "One maintenance job. completedAt is present exactly when status is completed.",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "orgId",
+        "assetCode",
+        "barrierId",
+        "title",
+        "kind",
+        "status",
+        "dueAt",
+        "label",
+        "simulated",
+        "classification"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^SYN-CMMS-[0-9]{3}$"
+        },
+        "orgId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+        },
+        "assetCode": {
+          "type": "string",
+          "const": "DL-01"
+        },
+        "barrierId": {
+          "description": "The Barrier of the DL-01 Bowtie that this job maintains.",
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "preventive",
+            "corrective"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "completed"
+          ]
+        },
+        "dueAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "label": {
+          "type": "string",
+          "const": "SYNTHETIC"
+        },
+        "simulated": {
+          "type": "boolean",
+          "const": true
+        },
+        "classification": {
+          "type": "string",
+          "const": "INTERNAL"
+        }
+      },
+      "if": {
+        "properties": {
+          "status": {
+            "const": "completed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "completedAt"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "completedAt"
+          ]
+        }
+      }
+    }
+  }
+}
