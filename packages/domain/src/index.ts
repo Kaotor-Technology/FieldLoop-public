@@ -1,1 +1,6 @@
-export { calculateRisk, RiskInputError } from "./risk/index.js";
+export {
+  calculateRisk,
+  calculateRiskChangeImpact,
+  RiskInputError,
+  validateRiskMatrix,
+} from "./risk/index.js";
