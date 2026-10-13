@@ -9,7 +9,7 @@ from typing import Protocol
 
 from fieldloop_common.generated_simulation import PlayerCommand, RunCreate
 
-from fieldloop_simulator.mock_historian import SimulatedHistorian
+from fieldloop_simulator.mock_historian import DEMO_SEED, SimulatedHistorian
 from fieldloop_simulator.player import (
     Command,
     PlayerSnapshot,
@@ -76,7 +76,7 @@ class SimulationService:
 
     def _hydrate(self, snapshot: PlayerSnapshot | None) -> None:
         # Rebuild from the committed index, including after a cold start or retry.
-        self.historian.reset(snapshot.run.seed if snapshot else 0)
+        self.historian.reset(snapshot.run.seed if snapshot else DEMO_SEED)
         if snapshot:
             for event in snapshot.scenario.events[: snapshot.run.next_event_index]:
                 if event.source == "mock-historian":

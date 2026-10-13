@@ -3,6 +3,7 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 from fieldloop_simulator.main import app
+from fieldloop_simulator.mock_historian import DEMO_SEED
 from fieldloop_simulator.player_service import SimulationService
 
 from apps.simulator.tests.test_player import fixture
@@ -41,6 +42,12 @@ def test_private_service_controls_and_reset_are_idempotent(client: TestClient) -
     assert client.post(path + ":reset", json={}, headers=reset_key).json() == reset.json()
     assert client.get(path).status_code == 409
     assert client.get("/v1/simulation/runs/current").json()["nextEventIndex"] == 0
+
+
+def test_no_active_run_restores_the_default_historian_seed(client: TestClient) -> None:
+    app.state.historian.reset(seed=0)
+    assert client.get("/v1/simulation/runs/current").json() is None
+    assert app.state.historian.seed == DEMO_SEED
 
 
 @pytest.mark.parametrize(
