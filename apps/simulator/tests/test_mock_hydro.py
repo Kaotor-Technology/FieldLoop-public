@@ -137,7 +137,15 @@ def test_an_override_must_name_a_kind_a_timezone_and_a_finite_value(
         hydro.add_override("rain", start=datetime(2026, 10, 12, 6, 0), value=1.0)
     with pytest.raises(ValueError, match="finite"):
         hydro.add_override("rain", start=STORM, value=float("nan"))
+    with pytest.raises(ValueError, match="below"):
+        hydro.add_override("rain", start=STORM, value=-0.1)
     assert hydro.value_at("rain", STORM) == 0.0
+
+
+def test_a_level_may_fall_below_its_datum_but_rain_starts_at_zero(hydro: SimulatedHydro) -> None:
+    hydro.add_override("rain", start=STORM, value=0)
+    hydro.add_override("tide", start=STORM, value=-0.2)
+    assert (hydro.value_at("rain", STORM), hydro.value_at("tide", STORM)) == (0.0, -0.2)
 
 
 def test_the_schema_refuses_a_unit_that_does_not_fit_the_kind() -> None:

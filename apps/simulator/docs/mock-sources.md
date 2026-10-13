@@ -377,7 +377,8 @@ Both sources share these points:
 
   `add_override(kind, start, value)` holds a kind at `value` from `start` on.
   The latest `start` wins; among equal starts the override added last does.
-  `reset()` forgets every override.
+  `reset()` forgets every override. A rain rate below zero is refused; a level
+  may be negative, because it is relative to a datum.
 - The Signal is `source: mock-hydro`, the tag above, the reading as `value`,
   its `unit`, `observedAt` at the Scenario time, and
   `payload: {assetCode, zoneCode, kind, label}`.

@@ -32,6 +32,7 @@ class SensorProfile:
     """Illustrative simulated behaviour of one sensor; these are not measurements or forecasts.
 
     ``swing`` is the half-range of a triangle wave of ``period`` around ``base``; zero is flat.
+    ``minimum`` is the lowest value the quantity can take, where it has one.
     """
 
     asset_code: str
@@ -41,12 +42,13 @@ class SensorProfile:
     base: float
     swing: float = 0.0
     period: timedelta = timedelta(hours=12)
+    minimum: float | None = None
 
 
 # Authored values. Each sensor is a Facility in ``data/synthetic/bangkok/facilities.geojson``; a
 # test keeps the codes and zones in step, because the simulator image does not carry ``data/``.
 SENSOR_PROFILES: Mapping[str, SensorProfile] = {
-    "rain": SensorProfile("S-R1", "Z3", "rain.rate", "mm/h", base=0.0),
+    "rain": SensorProfile("S-R1", "Z3", "rain.rate", "mm/h", base=0.0, minimum=0.0),
     "level": SensorProfile("S-L1", "Z3", "water.level", "m", base=0.6),
     "tide": SensorProfile("S-T1", "Z4", "tide.level", "m", base=0.9, swing=0.6),
 }
@@ -59,10 +61,11 @@ class SimulatedHydro:
 
     def add_override(self, kind: str, *, start: datetime, value: float) -> None:
         """Hold a kind at ``value`` from ``start`` on, until the next reset."""
-        if kind not in SENSOR_PROFILES:
-            raise KeyError(kind)
+        profile = SENSOR_PROFILES[kind]
         if not math.isfinite(value):
             raise ValueError("Override value must be finite")
+        if profile.minimum is not None and value < profile.minimum:
+            raise ValueError("Override value is below what the sensor can read")
         self._overrides.hold(kind, start=start, value=float(value))
 
     def reset(self) -> None:
