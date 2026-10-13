@@ -23,10 +23,19 @@ class WorkOrder(BaseModel):
         ),
     ]
     asset_code: Annotated[Literal["DL-01"], Field(alias="assetCode")]
+    barrier_id: Annotated[
+        str,
+        Field(
+            alias="barrierId",
+            description="The Barrier of the DL-01 Bowtie that this job maintains.",
+            pattern="^[a-z0-9]+(-[a-z0-9]+)*$",
+        ),
+    ]
     title: Annotated[str, Field(min_length=1)]
     kind: Literal["preventive", "corrective"]
     status: Literal["open", "completed"]
     due_at: Annotated[AwareDatetime, Field(alias="dueAt")]
+    completed_at: Annotated[AwareDatetime | None, Field(alias="completedAt")] = None
     label: Literal["SYNTHETIC"]
     simulated: Literal[True]
     classification: Literal["INTERNAL"]

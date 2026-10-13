@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "MockCmmsPage",
+  "description": "Read-only synthetic CMMS work orders for DL-01 with their PM due dates (SIM-2). Fixed fixtures, not records of a real asset.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -42,11 +43,13 @@
   "$defs": {
     "WorkOrder": {
       "type": "object",
+      "description": "One maintenance job. completedAt is present exactly when status is completed.",
       "additionalProperties": false,
       "required": [
         "id",
         "orgId",
         "assetCode",
+        "barrierId",
         "title",
         "kind",
         "status",
@@ -70,6 +73,11 @@
           "type": "string",
           "const": "DL-01"
         },
+        "barrierId": {
+          "description": "The Barrier of the DL-01 Bowtie that this job maintains.",
+          "type": "string",
+          "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+        },
         "title": {
           "type": "string",
           "minLength": 1
@@ -92,6 +100,10 @@
           "type": "string",
           "format": "date-time"
         },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
         "label": {
           "type": "string",
           "const": "SYNTHETIC"
@@ -103,6 +115,25 @@
         "classification": {
           "type": "string",
           "const": "INTERNAL"
+        }
+      },
+      "if": {
+        "properties": {
+          "status": {
+            "const": "completed"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "completedAt"
+        ]
+      },
+      "else": {
+        "not": {
+          "required": [
+            "completedAt"
+          ]
         }
       }
     }

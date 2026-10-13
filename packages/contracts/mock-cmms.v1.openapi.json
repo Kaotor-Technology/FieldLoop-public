@@ -30,7 +30,7 @@
     "/mock/cmms/work-orders": {
       "get": {
         "operationId": "listMockCmmsWorkOrders",
-        "description": "Return four deterministic synthetic work orders for DL-01, or open preventive work due at or before asOf when pmDue=true. Each carries the Organisation the simulator is configured for; no source write, database, publisher or remote IO. This bounded internal fixture list is not the paginated public platform list API.",
+        "description": "Return four deterministic synthetic work orders for DL-01, each naming the Barrier it maintains, or the open preventive ones due at or before asOf when pmDue=true. Each carries the Organisation the simulator is configured for; no source write, database, publisher or remote IO. This bounded internal fixture list is not the paginated public platform list API.",
         "tags": [
           "mock-cmms"
         ],
@@ -49,11 +49,11 @@
             "in": "query",
             "name": "asOf",
             "required": false,
-            "description": "Timezone-aware Scenario time, not wall time; the response reports it in UTC. Default is fixed for deterministic replay.",
+            "description": "Timezone-aware Scenario time, not wall time; the response reports it in UTC. The default is the start of the DL-01 simulation, fixed for deterministic replay.",
             "schema": {
               "type": "string",
               "format": "date-time",
-              "default": "2026-10-10T00:00:00Z"
+              "default": "2026-10-12T00:00:00Z"
             }
           }
         ],

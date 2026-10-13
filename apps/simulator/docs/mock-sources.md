@@ -131,24 +131,39 @@ publishers on Pub/Sub emulator" job.
 
 `GET /mock/cmms/work-orders?pmDue=<boolean>&asOf=<RFC 3339>`
 
-Four authored work orders for DL-01. Both parameters are optional, and the list
-is small and bounded, so it is not paginated.
+Four authored work orders for DL-01, in ID order. Both parameters are optional,
+and the list is small and bounded, so it is not paginated.
 
-| Work order | Kind | Status | Due (UTC) |
-| --- | --- | --- | --- |
-| `SYN-CMMS-001` | `preventive` | `open` | 2026-10-09 00:00 |
-| `SYN-CMMS-002` | `preventive` | `open` | 2026-10-10 00:00 |
-| `SYN-CMMS-003` | `corrective` | `open` | 2026-10-11 00:00 |
-| `SYN-CMMS-004` | `preventive` | `completed` | 2026-10-08 00:00 |
+| Work order | Barrier (`barrierId`) | Kind | Status | Due (UTC) | Completed (UTC) |
+| --- | --- | --- | --- | --- | --- |
+| `SYN-CMMS-001` | `cathodic-protection` | `preventive` | `open` | 2026-10-13 00:00 | |
+| `SYN-CMMS-002` | `remote-automatic-valve-closure` | `preventive` | `open` | 2026-10-10 00:00 | |
+| `SYN-CMMS-003` | `coating` | `corrective` | `open` | 2026-10-20 00:00 | |
+| `SYN-CMMS-004` | `depth-of-cover-and-markers` | `preventive` | `completed` | 2026-09-30 00:00 | 2026-09-15 00:00 |
 
 - **PM due.** `pmDue=true` returns only the open preventive work orders with
   `dueAt` at or before `asOf`. Corrective and completed work is left out.
   Without it, all four are returned.
 - **`asOf` is Scenario time, not the wall clock.** It is timezone-aware RFC 3339
   with the same rules as the historian's `from` and `to`; anything else is
-  `400`. When omitted it is `2026-10-10T00:00:00Z`, so a bare read is
-  reproducible (SIM-5), and at that time `pmDue=true` returns `SYN-CMMS-001`
-  and `SYN-CMMS-002`. The response reports `asOf` in UTC.
+  `400`. When omitted it is `2026-10-12T00:00:00Z`, the `simulationStartsAt` of
+  the DL-01 Bowtie, so a bare read is reproducible (SIM-5). The response reports
+  `asOf` in UTC.
+- **PM due changes during a run.** At the start of the simulation `pmDue=true`
+  returns `SYN-CMMS-002`, which is already overdue. From `2026-10-13T00:00:00Z`
+  it also returns `SYN-CMMS-001`: the cathodic protection survey falls due when
+  that Barrier's newest Evidence (2025-10-13) is one 12-month evidence interval
+  old, which is the moment of PRD Demo A step 5.
+- **Barrier reference.** `barrierId` is the ID of a Barrier in
+  `data/synthetic/dl-01/bowtie-a.json`. A real CMMS knows equipment and
+  maintenance plans, not Barriers; the mock carries the mapping so a consumer
+  need not parse titles. A work order has no Chainage: the synthetic data has
+  no location for a rectifier, and none is invented here. The simulator image
+  does not contain `data/`, so the values are literals and a test keeps the
+  Barrier IDs, the default `asOf` and the survey's due date in step with the
+  Bowtie file.
+- **Completion.** `completedAt` is present exactly when `status` is
+  `completed`, and is absent, not null, otherwise. The schema enforces both.
 - **Organisation.** Each work order carries the Organisation in
   `FIELDLOOP_ORG_ID`, as the historian and the patrol app do.
 - **Classification** is `INTERNAL`, lower than the historian (`CONFIDENTIAL`)

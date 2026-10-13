@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -7,17 +8,24 @@ from fieldloop_simulator.main import app
 from fieldloop_simulator.mock_cmms import SimulatedCmms
 from jsonschema import Draft202012Validator, FormatChecker, ValidationError
 
+ROOT = Path(__file__).resolve().parents[3]
+URL = "/mock/cmms/work-orders"
+
+
+def parse(timestamp: str) -> datetime:
+    return datetime.fromisoformat(timestamp)
+
 
 def test_work_orders_are_deterministic_synthetic_reads() -> None:
     with TestClient(app) as client:
-        first = client.get("/mock/cmms/work-orders")
+        first = client.get(URL)
         assert first.status_code == 200
-        assert first.json() == client.get("/mock/cmms/work-orders").json()
+        assert first.json() == client.get(URL).json()
         data = first.json()
         assert data["label"] == "SYNTHETIC"
         assert data["simulated"] is True
         assert data["classification"] == "INTERNAL"
-        assert data["asOf"] == "2026-10-10T00:00:00Z"
+        assert data["asOf"] == "2026-10-12T00:00:00Z"
         assert data["total"] == len(data["items"]) == 4
         for item in data["items"]:
             assert item["simulated"] is True
@@ -28,38 +36,64 @@ def test_work_orders_are_deterministic_synthetic_reads() -> None:
             assert item["id"].startswith("SYN-CMMS-")
 
 
+def test_only_a_completed_work_order_has_a_completion_time() -> None:
+    with TestClient(app) as client:
+        items = client.get(URL).json()["items"]
+    assert {item["id"]: item.get("completedAt") for item in items} == {
+        "SYN-CMMS-001": None,
+        "SYN-CMMS-002": None,
+        "SYN-CMMS-003": None,
+        "SYN-CMMS-004": "2026-09-15T00:00:00Z",
+    }
+    # An open work order has no member at all; the contract does not allow a null.
+    assert all("completedAt" in item for item in items if item["status"] == "completed")
+    assert not any("completedAt" in item for item in items if item["status"] == "open")
+
+
+def pm_due(client: TestClient, as_of: str | None = None) -> list[str]:
+    params = {"pmDue": "true"} | ({} if as_of is None else {"asOf": as_of})
+    response = client.get(URL, params=params)
+    assert response.status_code == 200
+    assert response.json()["total"] == len(response.json()["items"])
+    return [item["id"] for item in response.json()["items"]]
+
+
 def test_pm_due_only_includes_open_preventive_orders_at_or_before_as_of() -> None:
     with TestClient(app) as client:
-        response = client.get("/mock/cmms/work-orders", params={"pmDue": "true"})
-        assert response.status_code == 200
-        assert [item["id"] for item in response.json()["items"]] == [
-            "SYN-CMMS-001",
-            "SYN-CMMS-002",
-        ]
-        earlier = client.get(
-            "/mock/cmms/work-orders",
-            params={
-                "pmDue": "true",
-                "asOf": "2026-10-08T23:59:59Z",
-            },
-        )
-        assert earlier.status_code == 200
-        assert earlier.json()["items"] == []
-        assert earlier.json()["total"] == 0
-        later = client.get(
-            "/mock/cmms/work-orders",
-            params={
-                "pmDue": "true",
-                "asOf": "2026-10-11T07:00:00+07:00",
-            },
-        )
-        assert later.status_code == 200
-        assert [item["id"] for item in later.json()["items"]] == [
-            "SYN-CMMS-001",
-            "SYN-CMMS-002",
-        ]
-        # The clock is reported in UTC whatever offset the caller wrote it in.
-        assert later.json()["asOf"] == "2026-10-11T00:00:00Z"
+        # Nothing is due before the first due date; the completed survey never is.
+        assert pm_due(client, "2026-10-09T23:59:59Z") == []
+        assert pm_due(client, "2026-10-10T00:00:00Z") == ["SYN-CMMS-002"]
+        # The corrective repair is past its due date here and is still left out.
+        assert pm_due(client, "2026-10-21T00:00:00Z") == ["SYN-CMMS-001", "SYN-CMMS-002"]
+
+
+def test_the_cathodic_protection_survey_falls_due_during_the_simulation() -> None:
+    with TestClient(app) as client:
+        # A bare read is the start of the simulation.
+        assert pm_due(client) == pm_due(client, "2026-10-12T00:00:00Z") == ["SYN-CMMS-002"]
+        assert pm_due(client, "2026-10-12T23:59:59Z") == ["SYN-CMMS-002"]
+        assert pm_due(client, "2026-10-13T00:00:00Z") == ["SYN-CMMS-001", "SYN-CMMS-002"]
+        # The same instant written with an offset; the clock is reported in UTC.
+        assert pm_due(client, "2026-10-13T07:00:00+07:00") == ["SYN-CMMS-001", "SYN-CMMS-002"]
+        offset = client.get(URL, params={"asOf": "2026-10-13T07:00:00+07:00"})
+        assert offset.json()["asOf"] == "2026-10-13T00:00:00Z"
+
+
+def test_the_fixtures_agree_with_the_dl_01_bowtie() -> None:
+    # The simulator image does not carry data/, so the module holds literals; this keeps them true.
+    bowtie = json.loads((ROOT / "data/synthetic/dl-01/bowtie-a.json").read_text())
+    barriers = {barrier["id"]: barrier for barrier in bowtie["barriers"]}
+    with TestClient(app) as client:
+        data = client.get(URL).json()
+    assert {item["barrierId"] for item in data["items"]} <= set(barriers)
+    assert parse(data["asOf"]) == parse(bowtie["metadata"]["simulationStartsAt"])
+    # The survey is due when the Barrier's newest Evidence is one 12-month interval old.
+    cathodic_protection = barriers["cathodic-protection"]
+    assert cathodic_protection["evidenceInterval"] == "12 months"
+    newest = max(parse(evidence["observedAt"]) for evidence in cathodic_protection["evidence"])
+    survey = next(item for item in data["items"] if item["id"] == "SYN-CMMS-001")
+    assert survey["barrierId"] == "cathodic-protection"
+    assert parse(survey["dueAt"]) == newest.replace(year=newest.year + 1)
 
 
 def test_reads_report_the_configured_organisation() -> None:
@@ -67,7 +101,7 @@ def test_reads_report_the_configured_organisation() -> None:
     app.state.cmms = SimulatedCmms(org_id="other-org")
     try:
         with TestClient(app) as client:
-            data = client.get("/mock/cmms/work-orders").json()
+            data = client.get(URL).json()
     finally:
         app.state.cmms = original
     assert {item["orgId"] for item in data["items"]} == {"other-org"}
@@ -81,13 +115,13 @@ def test_cmms_rejects_an_invalid_organisation_id() -> None:
 @pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE", "TRACE", "CONNECT"])
 def test_mock_cmms_rejects_writes_without_mutating_fixtures(method: str) -> None:
     with TestClient(app) as client:
-        before = client.get("/mock/cmms/work-orders").json()
-        rejected = client.request(method, "/mock/cmms/work-orders", json={"status": "completed"})
+        before = client.get(URL).json()
+        rejected = client.request(method, URL, json={"status": "completed"})
         assert rejected.status_code == 405
         assert rejected.headers["allow"] == "GET"
         assert rejected.headers["content-type"].startswith("application/problem+json")
         assert rejected.json()["code"] == "method_not_allowed"
-        assert client.get("/mock/cmms/work-orders").json() == before
+        assert client.get(URL).json() == before
 
 
 @pytest.mark.parametrize(
@@ -102,7 +136,7 @@ def test_mock_cmms_rejects_writes_without_mutating_fixtures(method: str) -> None
 )
 def test_invalid_queries_fail_as_problem_json(params: dict[str, str]) -> None:
     with TestClient(app) as client:
-        result = client.get("/mock/cmms/work-orders", params=params)
+        result = client.get(URL, params=params)
         assert result.status_code == 400
         assert result.headers["content-type"].startswith("application/problem+json")
         assert result.json()["code"] == "validation_failed"
@@ -110,15 +144,13 @@ def test_invalid_queries_fail_as_problem_json(params: dict[str, str]) -> None:
 
 
 def test_responses_match_the_canonical_wire_schema() -> None:
-    schema_path = (
-        Path(__file__).resolve().parents[3] / "packages/contracts/mock-cmms.v1.schema.json"
-    )
     validator = Draft202012Validator(
-        json.loads(schema_path.read_text()), format_checker=FormatChecker()
+        json.loads((ROOT / "packages/contracts/mock-cmms.v1.schema.json").read_text()),
+        format_checker=FormatChecker(),
     )
     with TestClient(app) as client:
         for params in ({}, {"pmDue": "true"}, {"pmDue": "true", "asOf": "2020-01-01T00:00:00Z"}):
-            data = client.get("/mock/cmms/work-orders", params=params).json()
+            data = client.get(URL, params=params).json()
             validator.validate(data)
             for item in data["items"]:
                 item["simulated"] = False
@@ -127,11 +159,28 @@ def test_responses_match_the_canonical_wire_schema() -> None:
                 item["simulated"] = True
 
 
+def test_the_schema_ties_the_completion_time_to_the_status() -> None:
+    validator = Draft202012Validator(
+        json.loads((ROOT / "packages/contracts/mock-cmms.v1.schema.json").read_text()),
+        format_checker=FormatChecker(),
+    )
+    with TestClient(app) as client:
+        data = client.get(URL).json()
+    by_id = {item["id"]: item for item in data["items"]}
+    del by_id["SYN-CMMS-004"]["completedAt"]
+    with pytest.raises(ValidationError):
+        validator.validate(data)
+    by_id["SYN-CMMS-004"]["completedAt"] = "2026-09-15T00:00:00Z"
+    validator.validate(data)
+    by_id["SYN-CMMS-001"]["completedAt"] = "2026-09-15T00:00:00Z"
+    with pytest.raises(ValidationError):
+        validator.validate(data)
+
+
 def test_the_contract_documents_both_query_parameters() -> None:
     # Paths, the schema reference and the 405 are checked for every source in test_mock_contracts.
-    root = Path(__file__).resolve().parents[3]
-    contract = json.loads((root / "packages/contracts/mock-cmms.v1.openapi.json").read_text())
-    operation = contract["paths"]["/mock/cmms/work-orders"]["get"]
+    contract = json.loads((ROOT / "packages/contracts/mock-cmms.v1.openapi.json").read_text())
+    operation = contract["paths"][URL]["get"]
     assert {parameter["name"] for parameter in operation["parameters"]} == {"pmDue", "asOf"}
 
 
@@ -146,12 +195,12 @@ def test_the_contract_documents_both_query_parameters() -> None:
 def test_rfc3339_lowercase_separators_match_the_uppercase_snapshot(timestamp: str) -> None:
     with TestClient(app) as client:
         expected = client.get(
-            "/mock/cmms/work-orders",
+            URL,
             params={
                 "pmDue": "true",
                 "asOf": "2026-10-10T00:00:00Z",
             },
         )
-        actual = client.get("/mock/cmms/work-orders", params={"pmDue": "true", "asOf": timestamp})
+        actual = client.get(URL, params={"pmDue": "true", "asOf": timestamp})
         assert actual.status_code == 200
         assert actual.json() == expected.json()
