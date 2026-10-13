@@ -8,6 +8,7 @@ import { Kysely, PostgresDialect, sql } from "kysely";
 import pg from "pg";
 import { domainPackRecordId, loadDemoDomainPacks } from "../apps/api/dist/domain-packs.js";
 import { PostgresWorkerStore } from "../apps/signal-worker/dist/postgres-store.js";
+import { PostgresHealthStore } from "../apps/api/dist/health/postgres-store.js";
 import { buildApp } from "../apps/signal-worker/dist/app.js";
 import { loadSeed as loadDlSeed } from "../db/seed/dl-01/seed.mjs";
 import { loadSeed as loadFloodSeed } from "../db/seed/bangkok/seed.mjs";
@@ -18,7 +19,7 @@ import { buildDataset as floodDataset } from "../data/synthetic/bangkok/generate
 const container = `fieldloop-worker-fixture-${process.pid}`;
 const docker = (...args) => execFileSync("docker", args, { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
 const orgId = "worker-fixture", otherOrg = "other-worker-fixture";
-let database, application, app;
+let database, application, apiDatabase, app;
 const loadedPacks = await loadDemoDomainPacks();
 const pr47Signals = JSON.parse(readFileSync("apps/signal-worker/test/fixtures/pr47-signals.json", "utf8"));
 const rules = loadedPacks.flatMap(({ content }) => content.signalRules
@@ -57,6 +58,7 @@ try {
   const connectionString = `postgres://postgres:fixture@127.0.0.1:${port}/fieldloop_dev`;
   database = new Kysely({ dialect: new PostgresDialect({ pool: new pg.Pool({ connectionString }) }) });
   application = new Kysely({ dialect: new PostgresDialect({ pool: new pg.Pool({ connectionString, options: "-c role=fl-v2-signal-worker-dev@example-project.iam", max: 5 }) }) });
+  apiDatabase = new Kysely({ dialect: new PostgresDialect({ pool: new pg.Pool({ connectionString, options: "-c role=fieldloop_app_dev", max: 5 }) }) });
   for (const org of [orgId, otherOrg]) {
     await loadDlSeed(database, dlDataset(), org); await loadFloodSeed(database, floodDataset(), org);
     for (const rule of rules) {
@@ -325,6 +327,79 @@ try {
   assert.deepEqual(healthChangedSince(eventsBeforeControl), []);
   assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${floodBarrierId}::uuid`.execute(database)).rows[0].health, "healthy");
 
+  // Evidence ageing uses a strict expiry boundary, leaves Failed untouched and notifies
+  // Barrier Owners in-app before expiry and when Health changes.
+  const ownerId = randomUUID(), ageNow = new Date("2026-11-01T00:00:00.000Z");
+  await sql`INSERT INTO app.app_user (id, org_id, keycloak_sub, display_name, roles_snapshot, created_by)
+    VALUES (${ownerId}::uuid, ${orgId}, 'synthetic-ageing-owner', 'Synthetic Barrier Owner', '["fieldloop.operator"]'::jsonb, 'worker-fixture')`.execute(database);
+  const patrolOwnerBarrier = (await sql`SELECT id FROM app.barrier WHERE org_id = ${orgId} AND code = 'right-of-way-patrol'`.execute(database)).rows[0];
+  const failedOwnerBarrier = (await sql`SELECT id FROM app.barrier WHERE org_id = ${orgId} AND code = 'cathodic-protection'`.execute(database)).rows[0];
+  const expiringOwnerBarrier = (await sql`SELECT id FROM app.barrier WHERE org_id = ${orgId} AND code = 'tidal-gates'`.execute(database)).rows[0];
+  assert.ok(patrolOwnerBarrier && failedOwnerBarrier && expiringOwnerBarrier);
+  await sql`UPDATE app.barrier SET evidence_interval = NULL WHERE org_id = ${orgId}
+    AND id NOT IN (${patrolOwnerBarrier.id}::uuid, ${failedOwnerBarrier.id}::uuid, ${expiringOwnerBarrier.id}::uuid)`.execute(database);
+  await sql`UPDATE app.barrier SET owner_id = ${ownerId}::uuid, evidence_interval = INTERVAL '1 day', health = 'healthy'
+    WHERE id = ${patrolOwnerBarrier.id}::uuid`.execute(database);
+  await sql`UPDATE app.barrier SET owner_id = ${ownerId}::uuid, evidence_interval = INTERVAL '1 day', health = 'failed'
+    WHERE id = ${failedOwnerBarrier.id}::uuid`.execute(database);
+  await sql`UPDATE app.barrier SET owner_id = ${ownerId}::uuid, evidence_interval = INTERVAL '1 day', health = 'degraded'
+    WHERE id = ${expiringOwnerBarrier.id}::uuid`.execute(database);
+  await sql`INSERT INTO app.evidence (org_id, barrier_id, kind, source, observed_at, simulated, classification, created_by)
+    VALUES (${orgId}, ${patrolOwnerBarrier.id}::uuid, 'inspection', 'synthetic-ageing', ${new Date(ageNow.getTime() - 86_400_000)}, true, 'CONFIDENTIAL', 'worker-fixture'),
+      (${orgId}, ${failedOwnerBarrier.id}::uuid, 'inspection', 'synthetic-ageing', ${new Date(ageNow.getTime() - 172_800_000)}, true, 'CONFIDENTIAL', 'worker-fixture'),
+      (${orgId}, ${expiringOwnerBarrier.id}::uuid, 'inspection', 'synthetic-ageing', ${new Date(ageNow.getTime() - 23 * 3_600_000)}, true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
+  const beforeAgeEvents = publishedEvents.length;
+  assert.deepEqual(await store.ageEvidence(ageNow), { changed: 0, notified: 1 }, "exact expiry stays current and one-hour notice is delivered once");
+  await store.publishPending(runtime.publish);
+  assert.deepEqual(await store.ageEvidence(ageNow), { changed: 0, notified: 0 }, "reruns do not duplicate Evidence notifications");
+  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${patrolOwnerBarrier.id}::uuid`.execute(database)).rows[0].health, "healthy");
+  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${failedOwnerBarrier.id}::uuid`.execute(database)).rows[0].health, "failed");
+  assert.equal((await sql`SELECT count(*)::int AS count FROM app.notification WHERE org_id = ${orgId}
+    AND evidence_id IS NOT NULL AND recipient_ref = ${`sandbox:${ownerId}`}`.execute(database)).rows[0].count, 1);
+  assert.deepEqual(await store.ageEvidence(new Date(ageNow.getTime() + 1)), { changed: 1, notified: 1 }, "strictly expired Evidence ages Healthy to Unverified and sends one owner notice");
+  await store.publishPending(runtime.publish);
+  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${patrolOwnerBarrier.id}::uuid`.execute(database)).rows[0].health, "unverified");
+  assert.equal((await sql`SELECT actor FROM app.health_change WHERE org_id = ${orgId} AND barrier_id = ${patrolOwnerBarrier.id}::uuid
+    ORDER BY created_at DESC LIMIT 1`.execute(database)).rows[0].actor, "ageing");
+  assert.equal((await sql`SELECT count(*)::int AS count FROM app.notification WHERE org_id = ${orgId}
+    AND health_change_id IS NOT NULL AND recipient_ref = ${`sandbox:${ownerId}`}`.execute(database)).rows[0].count, 1);
+  assert.deepEqual(publishedEvents.slice(beforeAgeEvents).filter(({ type }) => type === "barrier.health_changed").map(({ barrierId }) => barrierId), [patrolOwnerBarrier.id]);
+  assert.equal(publishedEvents.slice(beforeAgeEvents).filter(({ type }) => type === "notification.delivered").length, 2);
+
+  // FL-177 service decisions are owner-only, reasoned, audited, idempotent and event-backed.
+  const healthStore = new PostgresHealthStore(apiDatabase);
+  const owner = { sub: "synthetic-ageing-owner", roles: ["fieldloop.operator"], persona: "Integrity Engineer", orgId,
+    clearance: "HIGHLY_RESTRICTED", csrfToken: "fixture-csrf", authTime: new Date("2026-10-13T00:00:00Z") };
+  const acceptedProposalId = randomUUID();
+  await sql`INSERT INTO app.health_proposal (id, org_id, barrier_id, proposed_health, status, simulated, classification, created_by)
+    VALUES (${acceptedProposalId}::uuid, ${orgId}, ${patrolOwnerBarrier.id}::uuid, 'degraded', 'open', true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
+  const decision = { user: owner, proposalId: acceptedProposalId, decision: "accept", reason: "Inspection confirms degradation.", idempotencyKey: "health-decision-fixture-001" };
+  const changesBeforeDecision = await count("health_change", sql`AND barrier_id = ${patrolOwnerBarrier.id}::uuid`);
+  const firstDecision = await healthStore.decide(decision);
+  assert.deepEqual(firstDecision, { healthProposalId: acceptedProposalId, status: "accepted", barrierId: patrolOwnerBarrier.id, health: "degraded" });
+  assert.deepEqual(await healthStore.decide(decision), firstDecision, "a retry with the same key and body returns the first decision");
+  await assert.rejects(healthStore.decide({ ...decision, reason: "Different command body." }), (error) => error.status === 409 && error.code === "idempotency_key_reused");
+  await assert.rejects(healthStore.decide({ ...decision, user: { ...owner, sub: "another-synthetic-user" }, idempotencyKey: "health-decision-other-001" }),
+    (error) => error.status === 403 && error.code === "forbidden");
+  assert.equal(await count("health_change", sql`AND barrier_id = ${patrolOwnerBarrier.id}::uuid`), changesBeforeDecision + 1);
+  assert.equal((await sql`SELECT status, decided_by, reason FROM app.health_proposal WHERE org_id = ${orgId} AND id = ${acceptedProposalId}::uuid`.execute(database)).rows[0].status, "accepted");
+  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${patrolOwnerBarrier.id}::uuid`.execute(database)).rows[0].health, "degraded");
+
+  const rejectedProposalId = randomUUID();
+  await sql`INSERT INTO app.health_proposal (id, org_id, barrier_id, proposed_health, status, simulated, classification, created_by)
+    VALUES (${rejectedProposalId}::uuid, ${orgId}, ${failedOwnerBarrier.id}::uuid, 'healthy', 'open', true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
+  const rejectedDecision = await healthStore.decide({ ...decision, proposalId: rejectedProposalId, decision: "reject",
+    reason: "Evidence does not support this change.", idempotencyKey: "health-decision-fixture-002" });
+  assert.equal(rejectedDecision.status, "rejected"); assert.equal(rejectedDecision.health, "failed");
+  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${failedOwnerBarrier.id}::uuid`.execute(database)).rows[0].health, "failed");
+  const notificationPage = await healthStore.listNotifications(owner, undefined, 1);
+  assert.equal(notificationPage.items.length, 1); assert.ok(notificationPage.nextCursor, "notification pages expose a continuation cursor");
+  const nextNotifications = await healthStore.listNotifications(owner, notificationPage.nextCursor, 10);
+  assert.ok(!notificationPage.items.some(({ id }) => nextNotifications.items.some((next) => next.id === id)));
+  const healthEvents = await healthStore.listEvents(owner, null, 100);
+  assert.ok(healthEvents.some(({ event }) => event.type === "barrier.health_changed" && event.barrierId === patrolOwnerBarrier.id));
+  assert.ok(healthEvents.some(({ event }) => event.type === "notification.delivered"));
+
   // Source checking and Evidence insertion use the same dependency lock order.
   const race = await Promise.allSettled([
     store.ingest(reading({ source: "mock-patrol", tag: "DL-01.encroachment.detected", value: 0, unit: "boolean", observedAt: "2026-10-13T06:00:00Z" })),
@@ -342,9 +417,10 @@ try {
     WHERE org_id = ${orgId} AND stream_key = (SELECT stream_key FROM app.signal_receipt WHERE org_id = ${orgId} LIMIT 1)
       AND observed_at >= '2026-10-13T00:00:00Z'::timestamptz ORDER BY observed_at`.execute(database);
   console.log(plan.rows.map((row) => row["QUERY PLAN"]).join("\n"));
-  console.log("Worker PostGIS integration passed: concurrent producer deduplication, rollback, periodic CP/patrol, FL-78 loaded pack rules, PR-47 source samples, durations, spatial boundary, receipt-clock silence, Failed-stays, audit, Organisation isolation, outbox retry and FL-27 HTTP acceptance.");
+  console.log("Worker PostGIS integration passed: concurrent producer deduplication, rollback, periodic CP/patrol, FL-78 loaded pack rules, PR-47 source samples, durations, spatial boundary, receipt-clock silence, Evidence ageing boundary and Failed-stays, owner notifications, audit, Organisation isolation, outbox retry and FL-27 HTTP acceptance.");
 } finally {
   if (app) await app.close();
+  if (apiDatabase) await apiDatabase.destroy();
   if (application) await application.destroy();
   if (database) await database.destroy();
   try { docker("rm", "-f", container); } catch { /* Container may not have started. */ }
