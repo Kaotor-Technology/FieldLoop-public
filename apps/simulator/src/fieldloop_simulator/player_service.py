@@ -96,6 +96,10 @@ class SimulationService:
         self.pumps.reset()
         if snapshot:
             for event in snapshot.scenario.events[: snapshot.run.next_event_index]:
+                # Only an event that a read shows is worth its value: a derived rainfall
+                # re-reads every rain event before it, and a run may hold hundreds.
+                if event.source != "mock-historian" and not storm_events.holds_state(event):
+                    continue
                 reading = observation(snapshot, event)
                 storm_events.apply(
                     event, reading.value, reading.observed_at, self.hydro, self.pumps

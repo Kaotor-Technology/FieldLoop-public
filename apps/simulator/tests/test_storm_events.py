@@ -95,6 +95,18 @@ def test_other_sources_are_not_judged_by_the_demo_b_rules() -> None:
     assert storm_events.payload(event, 1) == {}
 
 
+def test_only_an_event_that_a_read_shows_holds_state() -> None:
+    events = load_scenario(FIXTURE).events
+    assert [storm_events.holds_state(event) for event in events] == [
+        True,  # a rain rate
+        True,  # a pump's power
+        False,  # a derived rainfall: no read serves it
+        False,
+        True,
+        True,
+    ]
+
+
 def test_rainfall_is_what_the_rain_rates_add_up_to_over_24_hours() -> None:
     rates = [(START, 60.0), (START + timedelta(hours=3), 10.0)]
     assert storm_events.rainfall(rates, START + timedelta(hours=2)) == 120
