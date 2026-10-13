@@ -118,8 +118,7 @@ def stated(event: Event) -> Stated | None:
 def rainfall(rates: Iterable[tuple[datetime, float]], at: datetime) -> float:
     """Rainfall in mm over the 24 hours that end at ``at``, given when each rain rate began."""
     hydro = SimulatedHydro()
-    for start, rate in rates:
-        hydro.add_override("rain", start=start, value=rate)
+    hydro.restore((("rain", start, rate) for start, rate in rates), clock=at)
     return hydro.rain_accumulation(at)
 
 

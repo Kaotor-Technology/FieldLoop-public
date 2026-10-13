@@ -301,6 +301,15 @@ def test_rainfall_accumulates_over_the_last_24_hours_of_scenario_time(
     assert hydro.rain_accumulation(STORM + timedelta(hours=3)) == 0.0
 
 
+def test_the_rainfall_takes_the_last_rate_added_among_equal_starts(hydro: SimulatedHydro) -> None:
+    hydro.add_override("rain", start=STORM, value=60)
+    hydro.add_override("rain", start=STORM, value=30)
+    hydro.add_override("rain", start=STORM - timedelta(hours=30), value=5)
+    # 30 mm/h for the hour since the storm, and 5 mm/h for the 23 hours of the window before it.
+    assert hydro.value_at("rain", STORM) == 30.0
+    assert hydro.rain_accumulation(STORM + timedelta(hours=1)) == 30 + 23 * 5
+
+
 def test_a_storm_crosses_the_flood_pack_rainfall_rule_as_a_validated_signal(
     hydro: SimulatedHydro, emitter: SimulatedSignalEmitter, transport: InMemoryTransport
 ) -> None:

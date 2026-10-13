@@ -2,14 +2,14 @@
 
 Every reading is a pure function of kind and Scenario time, plus any Scenario override. There
 is no wall clock, no randomness, no I/O and no live public API (PRD Q49). The HTTP side is
-read-only; a Scenario changes a reading in process through ``add_override``.
+read-only; a Scenario changes a reading in process: ``add_override`` holds one, and the
+Scenario player's service ``restore``s every override and the clock of a run at once.
 """
 
 import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from itertools import pairwise
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -78,6 +78,17 @@ def rainfall_payload() -> dict[str, object]:
     return payload
 
 
+def _checked(kind: str, value: float) -> float:
+    """The value as an override holds it. ``KeyError`` or ``ValueError`` if the kind cannot."""
+    profile = SENSOR_PROFILES[kind]
+    # bool is an int in Python, and True is not a reading.
+    if isinstance(value, bool) or not math.isfinite(value):
+        raise ValueError("Override value must be a finite number")
+    if profile.minimum is not None and value < profile.minimum:
+        raise ValueError("Override value is below what the sensor can read")
+    return float(value)
+
+
 def _value(held: HeldValues[float], kind: str, at: datetime) -> float:
     """The reading of a kind at a time, given what a run holds."""
     profile = SENSOR_PROFILES[kind]
@@ -106,13 +117,7 @@ class SimulatedHydro:
 
     def add_override(self, kind: str, *, start: datetime, value: float) -> None:
         """Hold a kind at ``value`` from ``start`` on, until the next reset."""
-        profile = SENSOR_PROFILES[kind]
-        # bool is an int in Python, and True is not a reading.
-        if isinstance(value, bool) or not math.isfinite(value):
-            raise ValueError("Override value must be a finite number")
-        if profile.minimum is not None and value < profile.minimum:
-            raise ValueError("Override value is below what the sensor can read")
-        self._run.held.hold(kind, start=start, value=float(value))
+        self._run.held.hold(kind, start=start, value=_checked(kind, value))
 
     def reset(self) -> None:
         """Forget every override and the run's clock: the baseline of the next run (SIM-5)."""
@@ -124,10 +129,10 @@ class SimulatedHydro:
         Each override is ``(kind, start, value)`` and is held to the rules of ``add_override``.
         If one is refused, nothing changes.
         """
-        fresh = SimulatedHydro(org_id=self.org_id)
-        for kind, start, value in overrides:
-            fresh.add_override(kind, start=start, value=value)
-        self._run = RunState(fresh._run.held, clock)
+        held = HeldValues.of(
+            (kind, start, _checked(kind, value)) for kind, start, value in overrides
+        )
+        self._run = RunState(held, clock)
 
     def value_at(self, kind: str, at: datetime) -> float:
         return _value(self._run.held, kind, at)
@@ -157,12 +162,13 @@ class SimulatedHydro:
             raise ValueError("Reading times need a timezone")
         held = self._run.held  # read once, so the sum is of one run
         window_start = at - ACCUMULATION_WINDOW
-        inside = [start for start in held.starts("rain") if window_start < start < at]
-        edges = [window_start, *inside, at]
         hours = timedelta(hours=1)
-        total = sum(
-            _value(held, "rain", begin) * ((end - begin) / hours) for begin, end in pairwise(edges)
-        )
+        rate, since, total = _value(held, "rain", window_start), window_start, 0.0
+        for start, value in held.steps("rain"):
+            if window_start < start < at:
+                total += rate * ((start - since) / hours)
+                rate, since = value, start
+        total += rate * ((at - since) / hours)
         # Rounded only to shed float noise, far below what a rule threshold can tell apart.
         return round(total, 6)
 

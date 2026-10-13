@@ -91,6 +91,14 @@ def _known(asset_code: str) -> PumpOrGate:
     return PUMPS_AND_GATES[asset_code]
 
 
+def _checked(asset_code: str, status: PowerStatus) -> PowerStatus:
+    """The status as a power change holds it. ``KeyError`` or ``ValueError`` if it cannot."""
+    _known(asset_code)
+    if status not in get_args(PowerStatus):
+        raise ValueError("Power status must be available or lost")
+    return status
+
+
 def _power(held: HeldValues[PowerStatus], asset_code: str, at: datetime) -> PowerStatus:
     """The power of a pump or gate at a time, given what a run holds."""
     _known(asset_code)
@@ -115,10 +123,7 @@ class SimulatedPumps:
 
     def set_power(self, asset_code: str, *, start: datetime, status: PowerStatus) -> None:
         """Hold a Facility's power at ``status`` from ``start`` on, until the next reset."""
-        _known(asset_code)
-        if status not in get_args(PowerStatus):
-            raise ValueError("Power status must be available or lost")
-        self._run.held.hold(asset_code, start=start, value=status)
+        self._run.held.hold(asset_code, start=start, value=_checked(asset_code, status))
 
     def reset(self) -> None:
         """Forget every power change and the run's clock: the baseline of the next run (SIM-5)."""
@@ -132,10 +137,11 @@ class SimulatedPumps:
         Each change is ``(asset code, start, status)`` and is held to the rules of
         ``set_power``. If one is refused, nothing changes.
         """
-        fresh = SimulatedPumps(org_id=self.org_id)
-        for asset_code, start, status in changes:
-            fresh.set_power(asset_code, start=start, status=status)
-        self._run = RunState(fresh._run.held, clock)
+        held = HeldValues.of(
+            (asset_code, start, _checked(asset_code, status))
+            for asset_code, start, status in changes
+        )
+        self._run = RunState(held, clock)
 
     def power_at(self, asset_code: str, at: datetime) -> PowerStatus:
         return _power(self._run.held, asset_code, at)

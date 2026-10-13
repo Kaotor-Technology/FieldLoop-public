@@ -1,5 +1,6 @@
 """What a Scenario holds a source at, in process, until the next reset (SIM-5)."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -16,9 +17,23 @@ class HeldValues[T]:
         # Copy on write: readers on other threads never see a half-updated list.
         self._held[key] = [*self._held.get(key, []), (start, value)]
 
-    def starts(self, key: str) -> list[datetime]:
-        """The times at which a held value of ``key`` begins, in order."""
-        return sorted({start for start, _ in self._held.get(key, [])})
+    @classmethod
+    def of(cls, items: Iterable[tuple[str, datetime, T]]) -> "HeldValues[T]":
+        """Hold every ``(key, start, value)`` in the order given, for a run built in one go."""
+        held = cls()
+        for key, start, value in items:
+            if start.tzinfo is None:
+                raise ValueError("Override times need a timezone")
+            # Nothing reads these lists until the caller publishes ``held``.
+            held._held.setdefault(key, []).append((start, value))
+        return held
+
+    def steps(self, key: str) -> list[tuple[datetime, T]]:
+        """Each time the held value of ``key`` changes and what it becomes, in order."""
+        latest: dict[datetime, T] = {}
+        for start, value in self._held.get(key, []):
+            latest[start] = value  # among equal starts, the one added last
+        return sorted(latest.items(), key=lambda step: step[0])
 
     def at(self, key: str, at: datetime) -> T | None:
         """The value held at ``at``, or ``None`` when the source is at its baseline."""
