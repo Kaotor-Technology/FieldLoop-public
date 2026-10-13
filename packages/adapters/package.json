@@ -26,7 +26,8 @@
     "@google-cloud/secret-manager": "7.1.1",
     "@google-cloud/storage": "8.4.0",
     "google-auth-library": "11.2.0",
-    "pg": "8.23.1"
+    "pg": "8.23.1",
+    "yaml": "2.9.1"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",

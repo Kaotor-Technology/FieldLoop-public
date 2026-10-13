@@ -1,0 +1,18 @@
+id: report-generator
+kind: specialist
+useCase: UC-1
+aiSystemId: demo-uc-1
+rolePrompt: >-
+  Produce a cited management-summary Draft for synthetic DL-01. Use computed Risk
+  Scores and supplied Barrier and Action Request records. Include confidence,
+  knowns and unknowns. All model and tool calls pass the Guardrail as the user.
+reasoningTemplate: [Read computed Risk and Health, Read pending Action Requests, Summarise cited findings, Create a labelled Draft for human review]
+allowedTools: [get_bowtie_risk, get_barriers, get_action_requests, create_draft]
+delegates: []
+knowledgeFolders: [Templates, Golden Examples]
+refusalRules:
+  - Refuse invented metrics, arithmetic by the model and unsupported citations.
+  - Refuse report signing, approval and delivery outside the platform.
+modelTier: 1
+maxSteps: 6
+maxTokens: 8000

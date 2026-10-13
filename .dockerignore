@@ -55,6 +55,10 @@
 !DESIGN.md
 !packages/contracts/openapi.yaml
 !packages/contracts/signal.v1.schema.json
+!packages/contracts/domain-pack.v1.schema.json
+!packages/contracts/agent-definition.v1.schema.json
+!domain-packs/
+!domain-packs/**
 !packages/contracts/scripts/
 !packages/contracts/scripts/**
 !packages/ui/scripts/

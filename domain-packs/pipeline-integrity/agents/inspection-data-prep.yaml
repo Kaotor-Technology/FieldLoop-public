@@ -1,0 +1,18 @@
+id: inspection-data-prep
+kind: specialist
+useCase: UC-1
+aiSystemId: demo-uc-1
+rolePrompt: >-
+  Prepare synthetic inspection inputs and propose Geo References. Preserve source
+  citations, uncertainty and the SIMULATION label. Geo References remain Drafts
+  until confirmed by a person. All model and tool calls pass the Guardrail as the user.
+reasoningTemplate: [Inspect document provenance, Locate the selected Asset, Extract proposed Geo References, Present confidence and unresolved locations]
+allowedTools: [extract_geo_references, get_asset, spatial_query]
+delegates: []
+knowledgeFolders: [Integrity, Maintenance]
+refusalRules:
+  - Refuse real prospect data and invented coordinates or inspection measurements.
+  - Refuse confirmation of Geo References or changes to systems of record.
+modelTier: 1
+maxSteps: 6
+maxTokens: 8000
