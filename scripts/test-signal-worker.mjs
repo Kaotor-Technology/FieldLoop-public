@@ -292,6 +292,7 @@ try {
   await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code IN (${silentCodeList})`.execute(database);
   await sql`UPDATE app.barrier SET health = 'failed' WHERE org_id = ${orgId} AND code = 'cathodic-protection'`.execute(database);
   // Back-date the patrol, CP and flood-rain sources by 270 days; silence is induced in SQL, not by waiting.
+  // pumping-stations and water-gates were already made Unverified by the earlier deadline checks, so they emit no event.
   const aged = await sql`UPDATE app.signal_dependency SET last_received_at = ${new Date(Date.now() - 270 * 86_400_000)}
     WHERE org_id = ${orgId} AND (rule_id IN (${patrolRule.id}::uuid, ${cpRule.id}::uuid) OR barrier_id = ${floodBarrierId}::uuid)
     RETURNING id`.execute(database);
@@ -302,7 +303,7 @@ try {
   const sourceCheck = await runSourceCheck(serviceHeaders);
   assert.equal(sourceCheck.statusCode, 200);
   const healthChangedEvents = healthChangedSince(eventsBeforeCheck);
-  assert.deepEqual(healthChangedEvents.map(({ barrierId }) => barrierId).sort(), silentBarrierIds, "the Barriers whose aged source went silent change");
+  assert.deepEqual(healthChangedEvents.map(({ barrierId }) => barrierId).sort(), silentBarrierIds, "Healthy Barriers with an aged source become Unverified; Failed and already-Unverified Barriers do not change");
   assert.equal(sourceCheck.json().changed, healthChangedEvents.length);
   assert.deepEqual((await sql`SELECT code, health FROM app.barrier WHERE org_id = ${orgId}
     AND code IN (${silentCodeList}, 'cathodic-protection') ORDER BY code`.execute(database)).rows, [
