@@ -302,7 +302,7 @@ try {
   const sourceCheck = await runSourceCheck(serviceHeaders);
   assert.equal(sourceCheck.statusCode, 200);
   const healthChangedEvents = healthChangedSince(eventsBeforeCheck);
-  assert.deepEqual(healthChangedEvents.map(({ barrierId }) => barrierId).sort(), silentBarrierIds, "only Barriers with a silent source change");
+  assert.deepEqual(healthChangedEvents.map(({ barrierId }) => barrierId).sort(), silentBarrierIds, "the Barriers whose aged source went silent change");
   assert.equal(sourceCheck.json().changed, healthChangedEvents.length);
   assert.deepEqual((await sql`SELECT code, health FROM app.barrier WHERE org_id = ${orgId}
     AND code IN (${silentCodeList}, 'cathodic-protection') ORDER BY code`.execute(database)).rows, [
