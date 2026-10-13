@@ -3,8 +3,18 @@
   "info": {
     "title": "FieldLoop internal mock CMMS",
     "version": "1.0.0",
-    "description": "Synthetic read-only simulator endpoint from architecture section 4.2. Not a web-api/BFF endpoint. Run behind Cloud Run invoker IAM in dev/demo; local fixtures need no credentials. No real CMMS connector or publication."
+    "description": "Synthetic read-only simulator endpoint from architecture section 4.2. Not a web-api/BFF endpoint. Run behind Cloud Run invoker IAM in dev/demo; local fixtures need no credentials. No real CMMS connector or publication.",
+    "contact": {
+      "name": "FieldLoop engineering",
+      "url": "https://github.com/Kaotor-Technology/FieldLoop-v2"
+    }
   },
+  "servers": [
+    {
+      "url": "http://localhost:8082",
+      "description": "Local simulator as the repository README starts it. Deployed environments call the private simulator-{env} Cloud Run service with a Google OIDC ID token."
+    }
+  ],
   "tags": [
     {
       "name": "mock-cmms",
@@ -20,7 +30,7 @@
     "/mock/cmms/work-orders": {
       "get": {
         "operationId": "listMockCmmsWorkOrders",
-        "description": "Return four deterministic synthetic work orders, or open preventive work due at or before asOf when pmDue=true. Data is fixed for fieldloop-demo/DL-01; no source write, database, publisher or remote IO. This bounded internal fixture list is not the paginated public platform list API.",
+        "description": "Return four deterministic synthetic work orders for DL-01, or open preventive work due at or before asOf when pmDue=true. Each carries the Organisation the simulator is configured for; no source write, database, publisher or remote IO. This bounded internal fixture list is not the paginated public platform list API.",
         "tags": [
           "mock-cmms"
         ],
@@ -39,7 +49,7 @@
             "in": "query",
             "name": "asOf",
             "required": false,
-            "description": "Timezone-aware simulation clock, not wall time. Default is fixed for deterministic replay.",
+            "description": "Timezone-aware Scenario time, not wall time; the response reports it in UTC. Default is fixed for deterministic replay.",
             "schema": {
               "type": "string",
               "format": "date-time",
@@ -69,7 +79,7 @@
             }
           },
           "405": {
-            "description": "Only GET is allowed; code validation_failed. No state mutation.",
+            "description": "Only GET is allowed; code method_not_allowed. No state mutation.",
             "headers": {
               "Allow": {
                 "schema": {
