@@ -38,6 +38,50 @@ describe("shared audit writer", () => {
     expect(f.release).toHaveBeenCalledOnce();
   });
 
+  it.each(["connect", "lock query"])("keeps invocation metadata when the caller changes it during %s", async (stage) => {
+    const f = fixture();
+    const callerInput = { ...input };
+    let resume!: () => void;
+    let signalPending!: () => void;
+    const pending = new Promise<void>((resolve) => { resume = resolve; });
+    const entered = new Promise<void>((resolve) => { signalPending = resolve; });
+    if (stage === "connect") {
+      f.connect.mockImplementation(async () => {
+        signalPending();
+        await pending;
+        return { query: f.query, release: f.release };
+      });
+    } else {
+      f.query.mockImplementation(async (sql, values) => {
+        f.calls.push({ sql, values });
+        if (sql.includes("pg_advisory_xact_lock")) {
+          signalPending();
+          await pending;
+        }
+        return { rows: sql.includes("INSERT INTO") ? [{ id: "event-1", prev_hash: "b".repeat(64), hash: "c".repeat(64) }] : [] };
+      });
+    }
+    const append = writer()(f.pool, callerInput);
+    await entered;
+    const changed = {
+      orgId: "org-changed", actor: "synthetic-user-changed", action: "synthetic.changed",
+      entity: "barrier:synthetic-2", beforeHash: "d".repeat(64), afterHash: "e".repeat(64),
+      simulated: false, classification: "PUBLIC",
+    };
+    expect(Object.isFrozen(callerInput)).toBe(false);
+    Object.assign(callerInput, changed);
+    resume();
+    await expect(append).resolves.toEqual({ id: "event-1", prevHash: "b".repeat(64), hash: "c".repeat(64) });
+    expect(f.calls[2]?.values).toEqual(["fieldloop:audit:org-test"]);
+    expect(f.calls[3]?.values).toEqual([
+      "org-test", "synthetic-user", "barrier.health_changed", "barrier:synthetic-1",
+      null, "a".repeat(64), true, "INTERNAL",
+    ]);
+    expect(callerInput).toEqual(changed);
+    expect(f.calls[4]?.sql).toBe("COMMIT");
+    expect(f.release).toHaveBeenCalledOnce();
+  });
+
   it.each([
     { orgId: " " }, { actor: "" }, { action: "" }, { entity: "" },
     { beforeHash: "raw synthetic text" }, { afterHash: "b".repeat(63) },

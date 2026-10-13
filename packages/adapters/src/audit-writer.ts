@@ -19,10 +19,21 @@ export interface AuditEventReceipt {
 
 /** Append metadata only; callers supply digests, never raw prompts or classified payloads. */
 export async function appendAuditEvent(pool: Pool, input: AuditEventInput): Promise<AuditEventReceipt> {
-  if ([input.orgId, input.actor, input.action, input.entity].some((value) => typeof value !== "string" || !value.trim())
-    || [input.beforeHash, input.afterHash].some((value) => value !== null && (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)))
-    || typeof input.simulated !== "boolean"
-    || !["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"].includes(input.classification)) {
+  // Own the scalar metadata before validation and any asynchronous work.
+  const snapshot: AuditEventInput = {
+    orgId: input.orgId,
+    actor: input.actor,
+    action: input.action,
+    entity: input.entity,
+    beforeHash: input.beforeHash,
+    afterHash: input.afterHash,
+    simulated: input.simulated,
+    classification: input.classification,
+  };
+  if ([snapshot.orgId, snapshot.actor, snapshot.action, snapshot.entity].some((value) => typeof value !== "string" || !value.trim())
+    || [snapshot.beforeHash, snapshot.afterHash].some((value) => value !== null && (typeof value !== "string" || !/^[a-f0-9]{64}$/.test(value)))
+    || typeof snapshot.simulated !== "boolean"
+    || !["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"].includes(snapshot.classification)) {
     throw new Error("Invalid audit metadata");
   }
   const client = await pool.connect();
@@ -33,7 +44,7 @@ export async function appendAuditEvent(pool: Pool, input: AuditEventInput): Prom
     await client.query("SET LOCAL TIME ZONE 'UTC'");
     // Every service uses the same transaction lock. The next statement gets a fresh snapshot
     // after a concurrent writer commits, including when the pool default is REPEATABLE READ.
-    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`fieldloop:audit:${input.orgId}`]);
+    await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [`fieldloop:audit:${snapshot.orgId}`]);
     const result = await client.query<{ id: string; prev_hash: string | null; hash: string }>(`
       INSERT INTO app.audit_event (org_id, actor, action, entity, before_hash, after_hash,
         prev_hash, simulated, classification, created_at, created_by)
@@ -46,7 +57,7 @@ export async function appendAuditEvent(pool: Pool, input: AuditEventInput): Prom
         ORDER BY event.created_at DESC, event.id DESC LIMIT 1
       ) AS predecessor ON true
       RETURNING id, prev_hash, app.payload_sha256(to_jsonb(audit_event)) AS hash
-    `, [input.orgId, input.actor, input.action, input.entity, input.beforeHash, input.afterHash, input.simulated, input.classification]);
+    `, [snapshot.orgId, snapshot.actor, snapshot.action, snapshot.entity, snapshot.beforeHash, snapshot.afterHash, snapshot.simulated, snapshot.classification]);
     const event = result.rows[0];
     if (!event) throw new Error("Audit append returned no event");
     await client.query("COMMIT");
