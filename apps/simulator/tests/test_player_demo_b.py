@@ -242,7 +242,8 @@ def test_a_run_and_its_sources_state_one_signal_with_one_id(run: Run) -> None:
         # One reading has one id, whoever publishes it.
         assert signal["id"] == run.emitter.build(observation, run.run_id)["id"], event_id
         # The run adds what only it knows: the Scenario target and the sandbox mark.
-        envelope = {"target": signal["payload"]["target"], "sandbox": True}
+        (event,) = [item for item in run.scenario.events if item.id == event_id]
+        envelope = {"target": {"kind": "asset", "id": event.target.id}, "sandbox": True}
         assert signal["payload"] == {**(observation.payload or {}), **envelope}, event_id
 
 
@@ -267,6 +268,41 @@ def test_a_cold_start_rebuilds_the_reads_from_the_committed_run(run: Run) -> Non
     assert restarted.transport.messages == []  # rebuilding the reads publishes nothing
 
 
+def stale_event(**members: object) -> Event:
+    """An event as a run pinned before the validation rules could hold it."""
+    return Event.model_validate(
+        {"atSeconds": 0, "target": {"kind": "asset", "id": "S-R1"}, **members}
+    )
+
+
+def test_a_pinned_rainfall_with_an_authored_total_is_published_as_authored() -> None:
+    scenario = load_scenario(FIXTURE)
+    authored = stale_event(
+        id="old-total", source="mock-hydro", tag="rain.accumulation.24h", value=999, unit="mm"
+    )
+    run = Run(scenario.model_copy(update={"events": [scenario.events[0], authored]}))
+    run.create()
+    run.play_to_the_end()
+
+    # Replaying a pinned run must not change a value it already published.
+    assert run.signals()["old-total"]["value"] == 999
+
+
+def test_a_rainfall_does_not_count_a_rain_event_its_source_would_refuse() -> None:
+    scenario = load_scenario(FIXTURE)
+    wrong_unit = stale_event(
+        id="old-rain", source="mock-hydro", tag="rain.rate", value=500, unit="m"
+    )
+    total = scenario.events[2].model_copy(update={"at_seconds": 3600})
+    run = Run(scenario.model_copy(update={"events": [wrong_unit, scenario.events[0], total]}))
+    run.create()
+    run.play_to_the_end()
+
+    # The read leaves the refused event out, and the sum agrees with the read.
+    assert run.hydro.value_at("rain", START) == 60.0
+    assert run.signals()["rainfall-after-1h"]["value"] == 60
+
+
 def test_a_run_pinned_with_an_event_the_source_cannot_hold_still_serves_its_reads() -> None:
     # A pinned run keeps the Scenario it was created with, however the rules change later.
     scenario = load_scenario(FIXTURE)
@@ -287,9 +323,10 @@ def test_a_run_pinned_with_an_event_the_source_cannot_hold_still_serves_its_read
                 "id": "old-pump",
                 "atSeconds": 0,
                 "source": "mock-pumps",
-                "target": {"kind": "asset", "id": "P-9"},
-                "tag": "pump.power",
+                "target": {"kind": "asset", "id": "P-3"},
+                "tag": "gate.power",
                 "value": "lost",
+                "unit": "state",
             }
         ),
     ]

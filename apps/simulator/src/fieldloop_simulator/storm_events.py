@@ -29,8 +29,20 @@ def _is_rainfall(event: Event) -> bool:
 
 
 def is_derived_rainfall(event: Event) -> bool:
-    """Whether the event is the 24 hour rainfall, which the source sums and no author writes."""
-    return _is_rainfall(event)
+    """Whether the event is the 24 hour rainfall with no value of its own, which is summed.
+
+    A run pinned before that rule may hold one with an authored number; it stays as authored.
+    """
+    return _is_rainfall(event) and event.value is None
+
+
+def is_rain_rate(event: Event) -> bool:
+    """Whether the event is a valid rain rate, which the 24 hour rainfall sums."""
+    return (
+        event.source == mock_hydro.SOURCE_ID
+        and _KIND_OF_TAG.get(event.tag) == "rain"
+        and check(event) is None
+    )
 
 
 def holds_state(event: Event) -> bool:
