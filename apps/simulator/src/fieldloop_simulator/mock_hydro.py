@@ -107,9 +107,11 @@ class SimulatedHydro:
     def rain_accumulation(self, at: datetime) -> float:
         """Rainfall in mm over the 24 hours that end at ``at``.
 
-        The rain rate is flat between the starts of its overrides, so the sum is exact: each
-        stretch of the window adds its rate times its length.
+        The rain rate is flat between the starts of its overrides (its baseline has no wave), so
+        each stretch of the window adds its rate times its length; nothing is sampled.
         """
+        if at.tzinfo is None:
+            raise ValueError("Reading times need a timezone")
         window_start = at - ACCUMULATION_WINDOW
         inside = [start for start in self._overrides.starts("rain") if window_start < start < at]
         edges = [window_start, *inside, at]
@@ -117,7 +119,8 @@ class SimulatedHydro:
         total = sum(
             self.value_at("rain", begin) * ((end - begin) / hours) for begin, end in pairwise(edges)
         )
-        return round(total, 3)
+        # Rounded only to shed float noise, far below what a rule threshold can tell apart.
+        return round(total, 6)
 
     def observe_rain_accumulation(self, at: datetime) -> Observation:
         """The 24 hour rainfall a Scenario publishes as a Signal.

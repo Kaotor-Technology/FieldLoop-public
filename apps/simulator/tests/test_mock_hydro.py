@@ -320,6 +320,21 @@ def test_the_accumulation_is_its_own_signal_and_a_replay_keeps_its_id(
     assert first["id"] != emitter.build(hydro.observe("rain", at), RUN)["id"]
 
 
-def test_an_accumulation_needs_a_timezone(hydro: SimulatedHydro) -> None:
+def test_an_accumulation_needs_a_timezone_with_or_without_a_storm(hydro: SimulatedHydro) -> None:
+    naive = datetime(2026, 10, 12, 8, 0)  # noqa: DTZ001
     with pytest.raises(ValueError, match="timezone"):
-        hydro.rain_accumulation(datetime(2026, 10, 12, 6, 0))  # noqa: DTZ001
+        hydro.rain_accumulation(naive)
+    hydro.add_override("rain", start=STORM, value=60)
+    with pytest.raises(ValueError, match="timezone"):
+        hydro.rain_accumulation(naive)
+
+
+def test_an_accumulation_just_above_a_threshold_is_not_rounded_down_to_it(
+    hydro: SimulatedHydro,
+) -> None:
+    hydro.add_override("rain", start=STORM, value=100.0004)
+    assert hydro.rain_accumulation(STORM + timedelta(hours=1)) > 100
+
+
+def test_rain_has_a_flat_baseline_which_the_accumulation_relies_on() -> None:
+    assert SENSOR_PROFILES["rain"].swing == 0
