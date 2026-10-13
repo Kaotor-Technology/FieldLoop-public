@@ -25,7 +25,8 @@
     "@google-cloud/pubsub": "6.2.0",
     "@google-cloud/secret-manager": "7.1.1",
     "@google-cloud/storage": "8.4.0",
-    "pg": "8.23.1"
+    "pg": "8.23.1",
+    "google-auth-library": "10.5.0"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",

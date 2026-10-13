@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WorkerEvent",
+  "type": "object", "additionalProperties": false,
+  "required": ["id", "type", "orgId", "barrierId", "entityId", "simulated", "classification"],
+  "properties": {
+    "id": {"type": "string", "format": "uuid"},
+    "type": {"enum": ["health_proposal.created", "barrier.health_changed", "evidence.created"]},
+    "orgId": {"type": "string", "minLength": 1},
+    "barrierId": {"type": "string", "format": "uuid"},
+    "entityId": {"type": "string", "format": "uuid"},
+    "simulated": {"type": "boolean"},
+    "classification": {"enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"]}
+  }
+}
