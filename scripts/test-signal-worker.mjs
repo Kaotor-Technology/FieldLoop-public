@@ -213,7 +213,9 @@ try {
   assert.equal((await sql`SELECT health FROM app.barrier WHERE org_id = ${orgId} AND code = 'cathodic-protection'`.execute(database)).rows[0].health, "failed");
 
   // Calendar months follow Bangkok local dates rather than assuming 90 days or UTC day-of-month.
-  await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code IN ('right-of-way-patrol', 'excavation-permit-one-call')`.execute(database);
+  const patrolBarrierCodes = ["right-of-way-patrol", "excavation-permit-one-call"];
+  const patrolCodeList = sql.join(patrolBarrierCodes.map((code) => sql`${code}`));
+  await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code IN (${patrolCodeList})`.execute(database);
   await sql`UPDATE app.signal_dependency SET last_received_at = NULL, created_at = '2026-02-28T20:30:00Z'::timestamptz
     WHERE org_id = ${orgId} AND rule_id = ${patrolRule.id}::uuid`.execute(database);
   assert.equal(await store.detectSilence(new Date("2026-05-28T20:30:00Z")), 0);
@@ -222,66 +224,81 @@ try {
 
   // Repeat authenticated production boundary against the real transactional store, including queue retry.
   let failPublish = true;
+  const publishedEvents = [];
   const runtime = { store, identity: { verify: async () => {} }, audience: "https://worker.example.test", pushEmail: "push@example.test", schedulerEmail: "scheduler@example.test",
     subscription: "projects/fixture/subscriptions/signals-local", orgId, environment: "local", simulatedOnly: true, close: async () => {},
-    publish: async () => { if (failPublish) throw new Error("queue retry fixture"); } };
+    publish: async (event) => { if (failPublish) throw new Error("queue retry fixture"); publishedEvents.push(event); } };
   app = buildApp(runtime);
+  const pushBody = (signal, messageId) => ({ subscription: runtime.subscription, message: { messageId, data: Buffer.from(JSON.stringify(signal)).toString("base64"), attributes: {
+    environment: "local", orgId, schemaVersion: signal.schemaVersion, signalId: signal.id, simulated: "true", classification: signal.classification,
+  } } });
+  const postSignal = (payload, headers = { authorization: "Bearer fixture" }) => app.inject({ method: "POST", url: "/internal/pubsub/signals", headers, payload });
   const wire = reading({ observedAt: "2026-10-13T05:00:00Z" });
-  const body = { subscription: runtime.subscription, message: { messageId: "first-push", data: Buffer.from(JSON.stringify(wire)).toString("base64"), attributes: {
-    environment: "local", orgId, schemaVersion: wire.schemaVersion, signalId: wire.id, simulated: "true", classification: wire.classification,
-  } } };
-  const inject = () => app.inject({ method: "POST", url: "/internal/pubsub/signals", headers: { authorization: "Bearer fixture" }, payload: body });
+  const body = pushBody(wire, "first-push");
+  const inject = () => postSignal(body);
   assert.equal((await inject()).statusCode, 503);
   const proposalsBeforeRetry = await count("health_proposal"); failPublish = false; body.message.messageId = "new-pubsub-message-same-producer-id";
   assert.equal((await inject()).statusCode, 204); assert.equal(await count("health_proposal"), proposalsBeforeRetry);
 
-  // FL-27 / D08 acceptance through the HTTP boundary with the real transactional store.
-  const delivered27 = [];
-  runtime.publish = async (event) => { delivered27.push(event); };
-  const push27 = (signal, messageId) => ({ subscription: runtime.subscription, message: { messageId, data: Buffer.from(JSON.stringify(signal)).toString("base64"), attributes: {
-    environment: "local", orgId, schemaVersion: signal.schemaVersion, signalId: signal.id, simulated: "true", classification: signal.classification,
-  } } });
-  const post27 = (payload, headers = { authorization: "Bearer fixture" }) => app.inject({ method: "POST", url: "/internal/pubsub/signals", headers, payload });
+  // FL-27 / D08 (LS-1..LS-4) acceptance through the HTTP boundary with the real transactional store.
+  // The CP Barrier starts Healthy so an auto-applied proposal (the pack effect is Failed) would be visible.
+  await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code = 'cathodic-protection'`.execute(database);
   const periodicCpReading = reading({ observedAt: "2026-10-13T05:30:00Z" });
   const healthBeforePush = await snapshot();
-  const signalsBeforePush = await count("signal");
-  const unauthenticated = await post27(push27(periodicCpReading, "no-token"), {});
-  assert.equal(unauthenticated.statusCode, 401, "push without an OIDC token is rejected");
-  assert.match(String(unauthenticated.headers["content-type"]), /application\/problem\+json/);
+  const signalsBeforePush = await count("signal"), receiptsBeforePush = await count("signal_receipt");
+  const unauthenticatedResponse = await postSignal(pushBody(periodicCpReading, "no-token"), {});
+  assert.equal(unauthenticatedResponse.statusCode, 401, "push without an OIDC token is rejected");
+  assert.match(String(unauthenticatedResponse.headers["content-type"]), /application\/problem\+json/);
   assert.equal(await count("signal"), signalsBeforePush, "an unauthenticated push stores nothing");
-  assert.equal((await post27(push27(periodicCpReading, "first-delivery"))).statusCode, 204);
+  assert.equal(await count("signal_receipt"), receiptsBeforePush);
+  assert.equal((await postSignal(pushBody(periodicCpReading, "first-delivery"))).statusCode, 204);
+  assert.equal(await count("signal"), signalsBeforePush + 1, "the authenticated push stores the Signal");
+  assert.equal(await count("signal_receipt"), receiptsBeforePush + 1);
   const proposalRows = (await sql`SELECT id, status, proposed_health AS "proposedHealth", barrier_id AS "barrierId"
     FROM app.health_proposal WHERE org_id = ${orgId} AND signal_receipt_id = ${periodicCpReading.id}::uuid`.execute(database)).rows;
   assert.equal(proposalRows.length, 1, "a qualifying push creates one Health Proposal");
   const [pushProposal] = proposalRows;
   assert.equal(pushProposal.status, "open");
+  assert.equal(pushProposal.proposedHealth, cpRule.condition.effect.proposedHealth, "the proposal uses the registered pack effect");
+  assert.equal(pushProposal.proposedHealth, "failed");
   assert.equal(pushProposal.barrierId, cpBarrierBefore.id, "the proposal targets the CP Barrier");
   assert.equal(await count("evidence", sql`AND signal_receipt_id = ${periodicCpReading.id}::uuid`), 1, "the push stores Evidence");
-  const createdFor = () => delivered27.filter(({ type, entityId }) => type === "health_proposal.created" && entityId === pushProposal.id);
-  assert.equal(createdFor().length, 1, "health_proposal.created is published once");
-  assert.equal(createdFor()[0].barrierId, pushProposal.barrierId);
-  assert.equal(createdFor()[0].simulated, true);
-  assert.equal((await post27(push27(periodicCpReading, "second-delivery"))).statusCode, 204);
+  const createdEvents = () => publishedEvents.filter(({ type, entityId }) => type === "health_proposal.created" && entityId === pushProposal.id);
+  assert.equal(createdEvents().length, 1, "health_proposal.created is published once");
+  assert.equal(createdEvents()[0].barrierId, pushProposal.barrierId);
+  assert.equal(createdEvents()[0].simulated, true);
+  for (const messageId of ["first-delivery", "redelivery-with-new-message-id"]) {
+    assert.equal((await postSignal(pushBody(periodicCpReading, messageId))).statusCode, 204);
+  }
   assert.equal(await count("health_proposal", sql`AND signal_receipt_id = ${periodicCpReading.id}::uuid`), 1, "redelivery stays idempotent");
-  assert.equal(createdFor().length, 1, "redelivery publishes no second event");
+  assert.equal(await count("evidence", sql`AND signal_receipt_id = ${periodicCpReading.id}::uuid`), 1);
+  assert.equal(await count("signal"), signalsBeforePush + 1);
+  assert.equal(createdEvents().length, 1, "redelivery publishes no second event");
   assert.deepEqual(await snapshot(), healthBeforePush, "an unaccepted Health Proposal leaves Barrier Health unchanged");
+  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${cpBarrierBefore.id}::uuid`.execute(database)).rows[0].health, "healthy");
 
-  // A silent source marks its dependent Barriers Unverified through the Scheduler route; Failed stays Failed.
-  const silentJob = (headers) => app.inject({ method: "POST", url: "/internal/jobs/silent-sources", headers });
-  assert.equal((await silentJob({})).statusCode, 401, "the source check requires a service token");
-  await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code IN ('right-of-way-patrol', 'excavation-permit-one-call')`.execute(database);
+  // A silent source marks its dependent Barriers Unverified through the Scheduler route; Failed stays Failed
+  // even when its own source is also silent.
+  const runSourceCheck = (headers) => app.inject({ method: "POST", url: "/internal/jobs/silent-sources", headers });
+  assert.equal((await runSourceCheck({})).statusCode, 401, "the source check requires a service token");
+  const patrolBarrierIds = (await sql`SELECT id FROM app.barrier WHERE org_id = ${orgId} AND code IN (${patrolCodeList})`.execute(database)).rows.map(({ id }) => id).sort();
+  assert.equal(patrolBarrierIds.length, patrolBarrierCodes.length);
+  await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code IN (${patrolCodeList})`.execute(database);
+  await sql`UPDATE app.barrier SET health = 'failed' WHERE org_id = ${orgId} AND code = 'cathodic-protection'`.execute(database);
   await sql`UPDATE app.signal_dependency SET last_received_at = now() - interval '9 months'
-    WHERE org_id = ${orgId} AND rule_id = ${patrolRule.id}::uuid`.execute(database);
-  const silentResponse = await silentJob({ authorization: "Bearer fixture" });
-  assert.equal(silentResponse.statusCode, 200);
-  assert.equal(silentResponse.json().changed, 2);
+    WHERE org_id = ${orgId} AND rule_id IN (${patrolRule.id}::uuid, ${cpRule.id}::uuid)`.execute(database);
+  const eventsBeforeCheck = publishedEvents.length;
+  const sourceCheck = await runSourceCheck({ authorization: "Bearer fixture" });
+  assert.equal(sourceCheck.statusCode, 200);
+  const healthChangedEvents = publishedEvents.slice(eventsBeforeCheck).filter(({ type }) => type === "barrier.health_changed");
+  assert.deepEqual(healthChangedEvents.map(({ barrierId }) => barrierId).sort(), patrolBarrierIds, "only the patrol Barriers change");
+  assert.equal(sourceCheck.json().changed, healthChangedEvents.length);
   assert.deepEqual((await sql`SELECT code, health FROM app.barrier WHERE org_id = ${orgId}
-    AND code IN ('right-of-way-patrol', 'excavation-permit-one-call', 'cathodic-protection') ORDER BY code`.execute(database)).rows, [
+    AND code IN (${patrolCodeList}, 'cathodic-protection') ORDER BY code`.execute(database)).rows, [
     { code: "cathodic-protection", health: "failed" },
     { code: "excavation-permit-one-call", health: "unverified" },
     { code: "right-of-way-patrol", health: "unverified" },
   ]);
-  assert.ok(delivered27.some(({ type }) => type === "barrier.health_changed"), "silence publishes barrier.health_changed");
 
   // Source checking and Evidence insertion use the same dependency lock order.
   const race = await Promise.allSettled([
@@ -300,7 +317,7 @@ try {
     WHERE org_id = ${orgId} AND stream_key = (SELECT stream_key FROM app.signal_receipt WHERE org_id = ${orgId} LIMIT 1)
       AND observed_at >= '2026-10-13T00:00:00Z'::timestamptz ORDER BY observed_at`.execute(database);
   console.log(plan.rows.map((row) => row["QUERY PLAN"]).join("\n"));
-  console.log("Worker PostGIS integration passed: concurrent producer deduplication, rollback, periodic CP/patrol, FL-78 loaded pack rules, PR-47 source samples, durations, spatial boundary, receipt-clock silence, Failed-stays, audit, Organisation isolation, outbox retry and FL-27 HTTP acceptance (401, one open proposal, event, idempotent redelivery, unchanged Health, silent-source job).");
+  console.log("Worker PostGIS integration passed: concurrent producer deduplication, rollback, periodic CP/patrol, FL-78 loaded pack rules, PR-47 source samples, durations, spatial boundary, receipt-clock silence, Failed-stays, audit, Organisation isolation, outbox retry and FL-27 HTTP acceptance.");
 } finally {
   if (app) await app.close();
   if (application) await application.destroy();
