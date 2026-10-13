@@ -60,7 +60,7 @@ def validate_scenario(document: object) -> Scenario:
         raise ScenarioError(pointer, f"violates {error.validator}")
     scenario = Scenario.model_validate(document, strict=True)
     event_ids: set[str] = set()
-    readings: set[tuple[tuple[str, str, str], float]] = set()
+    readings: set[tuple[tuple[str, str, str], timedelta]] = set()
     previous = -1.0
     for index, event in enumerate(scenario.events):
         prefix = f"/events/{index}"
@@ -90,11 +90,13 @@ def validate_scenario(document: object) -> Scenario:
         if refused := storm_events.check(event):
             raise ScenarioError(prefix + refused[0], refused[1])
         if reading := storm_events.reading_of(event):
-            if (reading, event.at_seconds) in readings:
+            # A Signal's time has microseconds, so two events closer than that are one instant.
+            instant = timedelta(seconds=event.at_seconds)
+            if (reading, instant) in readings:
                 raise ScenarioError(
                     prefix + "/atSeconds", "a second event for this tag and Asset at the same time"
                 )
-            readings.add((reading, event.at_seconds))
+            readings.add((reading, instant))
     bookmark_ids: set[str] = set()
     for index, bookmark in enumerate(scenario.bookmarks):
         if bookmark.id in bookmark_ids or bookmark.at_seconds > scenario.duration_seconds:

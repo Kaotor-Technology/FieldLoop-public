@@ -89,6 +89,12 @@ def test_a_reading_is_stated_once_at_any_one_time() -> None:
     with pytest.raises(ScenarioError, match="second event") as failure:
         validate_scenario(twice)
     assert failure.value.pointer == "/events/1/atSeconds"
+    # Closer than a Signal's time can tell apart is the same time.
+    twice["events"][1]["atSeconds"] = 0.0000001
+    with pytest.raises(ScenarioError, match="second event"):
+        validate_scenario(twice)
+    twice["events"][1]["atSeconds"] = 0.000001
+    validate_scenario(twice)
 
 
 def test_two_assets_or_two_times_are_two_readings() -> None:
@@ -100,6 +106,9 @@ def test_two_assets_or_two_times_are_two_readings() -> None:
     same_pump_later = good["events"][PUMP] | {"id": "power-returns", "value": "available"}
     good["events"].insert(PUMP + 1, another_pump)
     good["events"].append(same_pump_later | {"atSeconds": 14400})
+    # One Asset, two tags, one time: the rain rate and the rainfall it has added up to.
+    rainfall_now = good["events"][RAINFALL + 1] | {"id": "rainfall-at-start", "atSeconds": 0}
+    good["events"].insert(RAIN + 1, rainfall_now)
     validate_scenario(good)
 
 
