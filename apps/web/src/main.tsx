@@ -4,6 +4,7 @@ import { App } from "./App";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createRootRoute, createRoute, createRouter, Navigate, RouterProvider } from "@tanstack/react-router";
 import { MapEntry } from "./MapEntry";
+import { usePreferences } from "./preferences";
 import "./i18n";
 import "@fontsource/ibm-plex-sans-thai/400.css";
 import "@fontsource/ibm-plex-sans-thai/600.css";
@@ -29,4 +30,5 @@ declare module "@tanstack/react-router" {
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing application root");
+document.documentElement.dataset["theme"] = usePreferences.getState().nightShift ? "dark" : "light";
 createRoot(root).render(<StrictMode><QueryClientProvider client={queryClient}><RouterProvider router={router} /></QueryClientProvider></StrictMode>);
