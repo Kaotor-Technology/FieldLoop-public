@@ -7,7 +7,7 @@ read-only; a Scenario changes a reading in process through ``add_override``.
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -19,11 +19,10 @@ from fieldloop_simulator.mock_http import Rfc3339, app_state, known_query_only, 
 from fieldloop_simulator.mock_signals import Classification, Observation
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
 from fieldloop_simulator.scenario_overrides import HeldNumbers
+from fieldloop_simulator.timestamps import triangle_wave
 
 SOURCE_ID = "mock-hydro"
 CLASSIFICATION: Classification = "CONFIDENTIAL"
-
-_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 
 @dataclass(frozen=True)
@@ -74,10 +73,7 @@ class SimulatedHydro:
         held = self._overrides.at(kind, at)
         if held is not None:
             return held
-        # A triangle wave keeps this to correctly rounded IEEE operations, so it is identical
-        # across platforms (a sine would depend on the C library).
-        phase = ((at - _EPOCH) % profile.period) / profile.period
-        return round(profile.base + profile.swing * (4 * abs(phase - 0.5) - 1), 3)
+        return round(profile.base + profile.swing * triangle_wave(at, profile.period), 3)
 
     def observe(self, kind: str, at: datetime) -> Observation:
         """The reading a Scenario publishes as a Signal; the tag names the sensor."""
