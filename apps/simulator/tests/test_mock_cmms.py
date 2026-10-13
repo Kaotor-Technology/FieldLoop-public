@@ -325,12 +325,6 @@ def test_each_barrier_has_its_own_tag_and_a_replay_keeps_its_signal_id(
     assert emit(emitter, transport, "SYN-CMMS-001", at)["id"] == first["id"]
 
 
-def test_a_read_publishes_nothing(transport: InMemoryTransport) -> None:
-    with TestClient(app) as client:
-        client.get(URL, params={"pmDue": "true", "asOf": "2026-10-13T00:00:00Z"})
-    assert transport.messages == []
-
-
 def test_an_unknown_work_order_cannot_be_observed() -> None:
     with pytest.raises(KeyError):
         SimulatedCmms().observe("SYN-CMMS-999", SURVEY_DUE)

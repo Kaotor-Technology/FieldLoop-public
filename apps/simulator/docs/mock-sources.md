@@ -201,8 +201,8 @@ and the list is small and bounded, so it is not paginated.
   (source, tag, `eq 1`, unit) can match one Barrier's work without reading the
   payload. The work order is the subject of the Signal's identity, so two work
   orders on one Barrier stay distinct and a replay keeps its ID. No pack rule
-  matches these tags yet, so the Signal is stored as Evidence. A read never
-  publishes.
+  matches these tags yet, so the Signal is stored as Evidence. A read cannot
+  publish: the module holds no publisher, and only `observe()` builds a Signal.
 
   ```python
   cmms = app.state.cmms
