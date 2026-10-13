@@ -15,6 +15,7 @@ from fieldloop_simulator import mock_hydro, mock_pumps
 from fieldloop_simulator.mock_hydro import SENSOR_PROFILES, SimulatedHydro
 from fieldloop_simulator.mock_pumps import PUMPS_AND_GATES, PowerStatus, SimulatedPumps
 
+_SOURCES = (mock_hydro.SOURCE_ID, mock_pumps.SOURCE_ID)
 _KIND_OF_TAG = {profile.quantity: kind for kind, profile in SENSOR_PROFILES.items()}
 _RAIN_SENSOR = SENSOR_PROFILES["rain"].asset_code
 
@@ -73,6 +74,15 @@ def _check_pumps(event: Event) -> tuple[str, str] | None:
     if event.unit != mock_pumps.POWER_UNIT:
         return "/unit", "unit differs from the source API"
     return None
+
+
+def subject(event: Event) -> str | None:
+    """What a valid event's Signal is about: the Asset, as the source's own ``observe()`` has it.
+
+    The Asset takes part in the Signal ``id``, so one reading has one ``id`` whether the player
+    or the source publishes it. ``None`` for other sources and for an event that is not valid.
+    """
+    return event.target.id if event.source in _SOURCES and check(event) is None else None
 
 
 def payload(event: Event, value: object) -> dict[str, object]:

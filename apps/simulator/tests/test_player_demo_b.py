@@ -61,7 +61,7 @@ class Run:
         publisher = SignalPublisher(
             self.transport, environment="local", org_id="test-org", simulation_only=True
         )
-        emitter = SimulatedSignalEmitter(publisher, org_id="test-org")
+        self.emitter = emitter = SimulatedSignalEmitter(publisher, org_id="test-org")
         self.store = store or MemoryStore()
         self.hydro = SimulatedHydro(org_id="test-org")
         self.pumps = SimulatedPumps(org_id="test-org")
@@ -221,7 +221,7 @@ def test_reads_of_the_sources_follow_the_run(run: Run) -> None:
     assert run.signals()["rainfall-after-2h"]["value"] == 120
 
 
-def test_a_run_and_its_sources_state_one_signal_and_differ_only_in_the_envelope(run: Run) -> None:
+def test_a_run_and_its_sources_state_one_signal_with_one_id(run: Run) -> None:
     run.play_to_the_end()
     signals = run.signals()
     stated = {
@@ -239,6 +239,8 @@ def test_a_run_and_its_sources_state_one_signal_and_differ_only_in_the_envelope(
             observation.unit,
         ), event_id
         assert signal["classification"] == observation.classification, event_id
+        # One reading has one id, whoever publishes it.
+        assert signal["id"] == run.emitter.build(observation, run.run_id)["id"], event_id
         # The run adds what only it knows: the Scenario target and the sandbox mark.
         envelope = {"target": signal["payload"]["target"], "sandbox": True}
         assert signal["payload"] == {**(observation.payload or {}), **envelope}, event_id

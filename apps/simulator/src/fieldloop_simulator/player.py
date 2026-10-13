@@ -275,5 +275,6 @@ def observation(snapshot: PlayerSnapshot, event: Event) -> Observation:
         unit=event.unit,
         observed_at=at + timedelta(seconds=event.at_seconds),
         payload=payload,
-        subject=event.id,
+        # A Demo B Signal is identified by its Asset, as the source identifies it; others by event.
+        subject=storm_events.subject(event) or event.id,
     )
