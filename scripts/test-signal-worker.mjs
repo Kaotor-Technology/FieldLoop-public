@@ -379,6 +379,8 @@ try {
   assert.deepEqual(firstDecision, { healthProposalId: acceptedProposalId, status: "accepted", barrierId: patrolOwnerBarrier.id, health: "degraded" });
   assert.deepEqual(await healthStore.decide(decision), firstDecision, "a retry with the same key and body returns the first decision");
   await assert.rejects(healthStore.decide({ ...decision, reason: "Different command body." }), (error) => error.status === 409 && error.code === "idempotency_key_reused");
+  await assert.rejects(healthStore.decide({ ...decision, idempotencyKey: "health-decision-fixture-003" }),
+    (error) => error.status === 409 && error.code === "conflict");
   await assert.rejects(healthStore.decide({ ...decision, user: { ...owner, sub: "another-synthetic-user" }, idempotencyKey: "health-decision-other-001" }),
     (error) => error.status === 403 && error.code === "forbidden");
   assert.equal(await count("health_change", sql`AND barrier_id = ${patrolOwnerBarrier.id}::uuid`), changesBeforeDecision + 1);
@@ -396,6 +398,21 @@ try {
   assert.equal(notificationPage.items.length, 1); assert.ok(notificationPage.nextCursor, "notification pages expose a continuation cursor");
   const nextNotifications = await healthStore.listNotifications(owner, notificationPage.nextCursor, 10);
   assert.ok(!notificationPage.items.some(({ id }) => nextNotifications.items.some((next) => next.id === id)));
+  const expiringEvidenceId = (await sql`SELECT id FROM app.evidence WHERE org_id = ${orgId}
+    AND barrier_id = ${expiringOwnerBarrier.id}::uuid ORDER BY observed_at DESC, id DESC LIMIT 1`.execute(database)).rows[0].id;
+  const expiringNotice = (await healthStore.listNotifications(owner, undefined, 100)).items.find(
+    ({ subjectType, subjectId }) => subjectType === "evidence" && subjectId === expiringEvidenceId,
+  );
+  assert.ok(expiringNotice, "the current Evidence expiry notice is visible to its owner");
+  await sql`INSERT INTO app.evidence (org_id, barrier_id, kind, source, observed_at, simulated, classification, created_by)
+    VALUES (${orgId}, ${expiringOwnerBarrier.id}::uuid, 'inspection', 'synthetic-ageing-refresh',
+      ${new Date(ageNow.getTime() + 2)}, true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
+  assert.ok(!(await healthStore.listNotifications(owner, undefined, 100)).items.some(({ id }) => id === expiringNotice.id),
+    "a newer current Evidence hides the old expiry notice");
+  const outsider = { ...owner, sub: "synthetic-notification-outsider", roles: ["fieldloop.viewer"] };
+  assert.equal((await healthStore.listNotifications(outsider, undefined, 100)).items.length, 0);
+  assert.ok(!(await healthStore.listEvents(outsider, null, 100)).some(({ event }) => event.type === "notification.delivered"),
+    "notification events are scoped to their recipient");
   const healthEvents = await healthStore.listEvents(owner, null, 100);
   assert.ok(healthEvents.some(({ event }) => event.type === "barrier.health_changed" && event.barrierId === patrolOwnerBarrier.id));
   assert.ok(healthEvents.some(({ event }) => event.type === "notification.delivered"));
@@ -417,7 +434,7 @@ try {
     WHERE org_id = ${orgId} AND stream_key = (SELECT stream_key FROM app.signal_receipt WHERE org_id = ${orgId} LIMIT 1)
       AND observed_at >= '2026-10-13T00:00:00Z'::timestamptz ORDER BY observed_at`.execute(database);
   console.log(plan.rows.map((row) => row["QUERY PLAN"]).join("\n"));
-  console.log("Worker PostGIS integration passed: concurrent producer deduplication, rollback, periodic CP/patrol, FL-78 loaded pack rules, PR-47 source samples, durations, spatial boundary, receipt-clock silence, Evidence ageing boundary and Failed-stays, owner notifications, audit, Organisation isolation, outbox retry and FL-27 HTTP acceptance.");
+  console.log("Worker/PostGIS integration passed: concurrent producer deduplication, rollback, periodic CP/patrol, FL-78 loaded pack rules, PR-47 source samples, durations, spatial boundary, receipt-clock silence, Evidence ageing boundary and Failed-stays, scoped owner notifications, Health Proposal decisions and idempotency, audit, Organisation isolation, outbox retry and FL-27 HTTP acceptance.");
 } finally {
   if (app) await app.close();
   if (apiDatabase) await apiDatabase.destroy();
