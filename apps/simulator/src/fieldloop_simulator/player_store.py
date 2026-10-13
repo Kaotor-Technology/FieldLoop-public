@@ -47,6 +47,35 @@ class PostgresPlayerStore:
             finally:
                 cursor.close()
 
+    def asset_codes(self) -> set[str]:
+        """Read Asset codes scoped to this service's Organisation for catalog validation."""
+        with self._lock:
+            self._connection = self._connection or self.connect()
+            connection = self._connection
+            cursor = connection.cursor()
+            try:
+                cursor.execute(
+                    "SELECT DISTINCT attributes->>'asset_code' FROM app.asset "
+                    "WHERE org_id = %s AND attributes ? 'asset_code' "
+                    "AND attributes->>'asset_code' IS NOT NULL ORDER BY 1",
+                    (self.org_id,),
+                )
+                codes: set[str] = set()
+                while row := cursor.fetchone():
+                    if isinstance(row[0], str):
+                        codes.add(row[0])
+                connection.commit()
+                return codes
+            except BaseException:
+                try:
+                    connection.rollback()
+                except Exception:
+                    connection.close()
+                    self._connection = None
+                raise
+            finally:
+                cursor.close()
+
     def close(self) -> None:
         with self._lock:
             if self._connection:

@@ -145,7 +145,7 @@ class ScenarioPlayer:
                 if (run.next_event_index < run.event_count)
                 else run.duration_seconds
             )
-            await self._advance(snapshot, target)
+            await self._advance(snapshot, target, max_events=1)
         elif command == "speed":
             if body.speed is None:
                 raise PlayerError(400, "invalid_speed")
@@ -179,10 +179,13 @@ class ScenarioPlayer:
             await self._advance(snapshot, snapshot.run.elapsed_seconds + delta * snapshot.run.speed)
         snapshot.anchor = now
 
-    async def _advance(self, snapshot: PlayerSnapshot, target: float) -> None:
+    async def _advance(
+        self, snapshot: PlayerSnapshot, target: float, *, max_events: int | None = None
+    ) -> None:
         run = snapshot.run
         target = min(target, run.duration_seconds)
         emitter: SimulatedSignalEmitter | None = None
+        emitted = 0
         while run.next_event_index < run.event_count:
             event = snapshot.scenario.events[run.next_event_index]
             if event.at_seconds > target:
@@ -195,6 +198,9 @@ class ScenarioPlayer:
                 raise PlayerError(503, "signal_quarantined")
             # A failed transaction re-emits the same IDs; consumers deduplicate (at-least-once).
             run.next_event_index += 1
+            emitted += 1
+            if max_events is not None and emitted >= max_events:
+                break
         run.elapsed_seconds = target
         at = datetime.fromisoformat(snapshot.scenario.starts_at.replace("Z", "+00:00"))
         run.clock = utc_text(at + timedelta(seconds=target))
