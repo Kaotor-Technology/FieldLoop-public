@@ -1,22 +1,11 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
+import type { MapFeature, MapFeatureCollection, MapGeometry, MapLayerName } from "@fieldloop/map";
 import type { AuthDatabase } from "../auth/postgres-store.js";
 
-export type MapLayerName = "assets" | "barriers" | "consequences";
 export type MapBoundingBox = readonly [west: number, south: number, east: number, north: number];
-
-export interface MapFeature {
-  type: "Feature";
-  id: string;
-  geometry: Record<string, unknown>;
-  properties: Record<string, unknown>;
-}
-
-export interface MapFeatureCollection {
-  type: "FeatureCollection";
-  features: MapFeature[];
-}
+export type { MapFeature, MapFeatureCollection, MapLayerName } from "@fieldloop/map";
 
 export interface MapLayerStore {
   getLayer(input: {
@@ -66,16 +55,16 @@ export class PostgresMapLayerStore implements MapLayerStore {
       features: result.rows.map((row) => ({
         type: "Feature",
         id: row.id,
-        geometry: typeof row.geometry === "string" ? JSON.parse(row.geometry) as Record<string, unknown> : row.geometry,
+        geometry: parseMapGeometry(row.geometry),
         properties: {
           name: row.name,
           code: row.code,
-          featureKind: row.feature_kind,
+          featureKind: parseFeatureKind(row.feature_kind),
           classification: row.classification,
           simulated: row.simulated,
           label: row.label,
-          health: row.health,
-          riskBand: row.risk_band,
+          health: parseHealth(row.health),
+          riskBand: parseRiskBand(row.risk_band),
           chainageFrom: row.chainage_from === null ? null : Number(row.chainage_from),
           chainageTo: row.chainage_to === null ? null : Number(row.chainage_to),
           evidenceObservedAt: row.evidence_observed_at,
@@ -202,6 +191,58 @@ function classificationsThrough(clearance: string): string[] {
   return CLASSIFICATION_ORDER.slice(0, index + 1);
 }
 
+function parseMapGeometry(value: FeatureRow["geometry"]): MapGeometry {
+  const geometry: unknown = typeof value === "string" ? JSON.parse(value) : value;
+  if (!geometry || typeof geometry !== "object" || !("type" in geometry) || !("coordinates" in geometry)) {
+    throw new Error("PostGIS returned an invalid GeoJSON geometry");
+  }
+  const coordinates = geometry.coordinates;
+  if (geometry.type === "Point" && isPosition(coordinates)) return { type: "Point", coordinates };
+  if (geometry.type === "LineString" && isLineString(coordinates)) return { type: "LineString", coordinates };
+  if (geometry.type === "Polygon" && isPolygon(coordinates)) return { type: "Polygon", coordinates };
+  if (geometry.type === "MultiPolygon" && isMultiPolygon(coordinates)) return { type: "MultiPolygon", coordinates };
+  throw new Error("PostGIS returned an unsupported GeoJSON geometry");
+}
+
+function parseFeatureKind(value: string): NonNullable<MapFeature["properties"]["featureKind"]> {
+  if (["area", "facility", "linear", "segment", "barrier", "consequence"].includes(value)) {
+    return value as NonNullable<MapFeature["properties"]["featureKind"]>;
+  }
+  throw new Error("PostGIS returned an unsupported map feature kind");
+}
+
+function parseHealth(value: string | null): NonNullable<MapFeature["properties"]["health"]> | null {
+  if (value === null) return null;
+  if (["healthy", "degraded", "failed", "unverified"].includes(value.toLowerCase())) {
+    return value.toLowerCase() as NonNullable<MapFeature["properties"]["health"]>;
+  }
+  return null;
+}
+
+function parseRiskBand(value: string | null): NonNullable<MapFeature["properties"]["riskBand"]> | null {
+  if (value === null) return null;
+  if (["intolerable", "alarp", "acceptable"].includes(value.toLowerCase())) {
+    return value.toLowerCase() as NonNullable<MapFeature["properties"]["riskBand"]>;
+  }
+  return null;
+}
+
+function isPosition(value: unknown): value is number[] {
+  return Array.isArray(value) && value.length === 2 && value.every((coordinate) => typeof coordinate === "number" && Number.isFinite(coordinate));
+}
+
+function isLineString(value: unknown): value is number[][] {
+  return Array.isArray(value) && value.length >= 2 && value.every(isPosition);
+}
+
+function isPolygon(value: unknown): value is number[][][] {
+  return Array.isArray(value) && value.length > 0 && value.every((ring) => Array.isArray(ring) && ring.length >= 4 && ring.every(isPosition));
+}
+
+function isMultiPolygon(value: unknown): value is number[][][][] {
+  return Array.isArray(value) && value.length > 0 && value.every(isPolygon);
+}
+
 function featureLimitForZoom(zoom: number): number {
   if (zoom < 5) return 1_000;
   if (zoom < 9) return 10_000;
@@ -257,7 +298,7 @@ FROM visible_segment`;
 
 // Barrier locations come only from a confirmed GeoReference attached to evidence. The database
 // seed has no exact Chainage for several pipeline Barriers; those are deliberately not placed.
-const BARRIER_LAYER_SQL = `
+export const BARRIER_LAYER_SQL = `
 WITH latest_location AS (
   SELECT DISTINCT ON (b.id)
          b.id, b.name, b.type, b.health, b.classification, b.simulated,
@@ -278,8 +319,11 @@ WITH latest_location AS (
     AND (a.classification = ANY($6::text[]) OR
       ($8::boolean AND a.simulated IS TRUE AND a.created_by IN ('seed:dl-01', 'seed:bangkok')))
     AND gr.status = 'confirmed' AND gr.geom IS NOT NULL
-    AND gr.geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)
   ORDER BY b.id, e.observed_at DESC, gr.created_at DESC
+), visible_location AS (
+  SELECT * FROM latest_location
+  WHERE geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)
+  ORDER BY observed_at DESC, id
   LIMIT $7
 )
 SELECT id::text, ST_AsGeoJSON(CASE WHEN GeometryType(geom) = 'POINT' THEN geom ELSE ST_PointOnSurface(geom) END)::jsonb AS geometry,
@@ -287,7 +331,7 @@ SELECT id::text, ST_AsGeoJSON(CASE WHEN GeometryType(geom) = 'POINT' THEN geom E
        'barrier' AS feature_kind, classification, simulated, label, health,
        NULL::text AS risk_band, NULL::numeric AS chainage_from, NULL::numeric AS chainage_to,
        observed_at::text AS evidence_observed_at, domain_pack
-FROM latest_location`;
+FROM visible_location`;
 
 const CONSEQUENCE_LAYER_SQL = `
 SELECT c.id::text || ':' || a.id::text AS id, ST_AsGeoJSON(a.geom)::jsonb AS geometry,
