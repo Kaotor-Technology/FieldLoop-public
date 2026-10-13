@@ -41,7 +41,14 @@
       "value": "lost",
       "observedAt": "2026-10-12T00:00:00Z",
       "simulated": true,
-      "classification": "CONFIDENTIAL"
+      "classification": "CONFIDENTIAL",
+      "payload": {
+        "assetCode": "P-3",
+        "facilityType": "pump",
+        "zoneCode": "Z3",
+        "operatingState": "stopped",
+        "label": "SIMULATION"
+      }
     }
   },
   {
