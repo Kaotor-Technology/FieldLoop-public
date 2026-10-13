@@ -7,3 +7,4 @@ export { GoogleCloudSecretReader } from "./secret-manager.js";
 export { GooglePubSubTransport } from "./google-pubsub.js";
 export { SignalPublisher, MAX_SIGNAL_BYTES, type MessageTransport, type SignalPublisherConfig, type SignalPublishResult } from "./signal-publisher.js";
 export { createCloudRunFetch, type ServiceFetch } from "./cloud-run-fetch.js";
+export { appendAuditEvent, type AuditEventInput, type AuditEventReceipt } from "./audit-writer.js";
