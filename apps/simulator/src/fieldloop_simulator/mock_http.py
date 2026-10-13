@@ -117,17 +117,17 @@ def install_problem_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def invalid_request(request: Request, error: RequestValidationError) -> Response:
-        if not request.url.path.startswith(MOCK_PREFIX):
+        if not request.url.path.startswith((MOCK_PREFIX, "/v1/simulation/", "/v1/scenarios")):
             return await request_validation_exception_handler(request, error)
-        return problem(400, "Invalid mock source request", "validation_failed")
+        return problem(400, "Invalid service request", "validation_failed")
 
     @app.exception_handler(StarletteHTTPException)
     async def failed_request(request: Request, error: StarletteHTTPException) -> Response:
-        if not request.url.path.startswith(MOCK_PREFIX):
+        if not request.url.path.startswith((MOCK_PREFIX, "/v1/simulation/", "/v1/scenarios")):
             return await http_exception_handler(request, error)
         if error.status_code == 404:
             return problem(404, "Unknown mock source path", "not_found")
         if error.status_code == 405:
             allow = {"Allow": error.headers["Allow"]} if error.headers else None
-            return problem(405, "Only GET is allowed", "method_not_allowed", headers=allow)
+            return problem(405, "Method not allowed", "method_not_allowed", headers=allow)
         return await http_exception_handler(request, error)
