@@ -31,13 +31,14 @@ describe("periodic measurement rules", () => {
     expect(matchesRule(rule, { ...signal, simulated: false }, [], 60)).toBe(false);
   });
   it("requires strictly more than duration with no missing measurements", () => {
-    const timed = { ...rule, condition: { ...rule.condition, durationSeconds: 120 } };
-    const at = (seconds: number, value = 0) => ({ ...signal, value, observedAt: new Date(Date.parse(signal.observedAt) + seconds * 1000).toISOString() });
-    expect(matchesRule(timed, at(120), [at(0), at(60), at(120)], 60)).toBe(false);
-    expect(matchesRule(timed, at(121), [at(0), at(60), at(120), at(121)], 60)).toBe(true);
-    expect(matchesRule(timed, at(180), [at(0), at(180)], 60)).toBe(false);
-    expect(matchesRule(timed, at(180), [at(0), at(60, 1), at(120), at(180)], 60)).toBe(false);
-    expect(matchesRule(timed, at(180), [at(0), at(60), at(120), at(180)].map((item) => ({ ...item, simulationRunId: "other" })), 60)).toBe(false);
+    const continuousRule = { ...rule, condition: { ...rule.condition, source: "mock-continuous", tag: "telemetry.continuous", expectedIntervalSeconds: 60, durationSeconds: 120 } };
+    const continuousSignal = { ...signal, source: "mock-continuous", tag: "telemetry.continuous" };
+    const at = (seconds: number, value = 0) => ({ ...continuousSignal, value, observedAt: new Date(Date.parse(signal.observedAt) + seconds * 1000).toISOString() });
+    expect(matchesRule(continuousRule, at(120), [at(0), at(60), at(120)], 60)).toBe(false);
+    expect(matchesRule(continuousRule, at(121), [at(0), at(60), at(120), at(121)], 60)).toBe(true);
+    expect(matchesRule(continuousRule, at(180), [at(0), at(180)], 60)).toBe(false);
+    expect(matchesRule(continuousRule, at(180), [at(0), at(60, 1), at(120), at(180)], 60)).toBe(false);
+    expect(matchesRule(continuousRule, at(180), [at(0), at(60), at(120), at(180)].map((item) => ({ ...item, simulationRunId: "other" })), 60)).toBe(false);
   });
   it("separates runs, assets and simulation provenance and never downgrades classification", () => {
     expect(streamKey(signal)).not.toEqual(streamKey({ ...signal, simulationRunId: "new-run" }));

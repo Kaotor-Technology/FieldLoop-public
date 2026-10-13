@@ -30,10 +30,13 @@ const rules = loadedPacks.flatMap(({ content }) => content.signalRules
 const cpRule = rules.find(({ condition }) => condition.ruleId === "cp-rectifier-output-lost");
 const patrolRule = rules.find(({ condition }) => condition.ruleId === "encroachment-detected");
 assert.ok(cpRule && patrolRule, "loaded FL-78 packs must include the CP and patrol Signal rules");
+const continuousRule = { ...cpRule, id: randomUUID(), condition: { ...cpRule.condition,
+  source: "mock-continuous", tag: "DL-01.rectifier.output.continuous", ruleId: "fixture-continuous-cp-zero",
+  durationSeconds: 120, expectedIntervalSeconds: 60 } };
 // Persist the actual FL-78 pack-loader output, not a hand-copied rule snapshot.
 // Current PR #47 head 2a99d855ba2e9e3d7485b9ebc71f1b4cd966e606 emits a rain rate plus a
 // separate 24-hour aggregate, and a pump Signal matching the pack's exact tag and unit.
-const intervals = { "mock-historian": { months: 3 }, "mock-patrol": { months: 3 }, "mock-hydro": 60, "mock-pumps": 60 };
+const intervals = { "mock-historian": { months: 3 }, "mock-patrol": { months: 3 }, "mock-hydro": 60, "mock-pumps": 60, "mock-continuous": 60 };
 const base = { schemaVersion: "signal.v1", orgId, source: "mock-historian", tag: "DL-01.rectifier.output", value: 0, unit: "A",
   observedAt: "2026-10-13T00:00:00Z", simulated: true, classification: "CONFIDENTIAL" };
 const reading = (changes = {}) => ({ ...base, id: randomUUID(), ...changes });
@@ -61,10 +64,15 @@ try {
         VALUES (${org === orgId ? rule.id : randomUUID()}::uuid, ${org}, ${rule.pack}, ${JSON.stringify(rule.condition)}::jsonb, ${JSON.stringify(rule.selector)}::jsonb,
           true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
     }
+    if (org === orgId) {
+      await sql`INSERT INTO app.signal_rule (id, org_id, pack, condition, target_barrier_selector, simulated, classification, created_by)
+        VALUES (${continuousRule.id}::uuid, ${org}, ${continuousRule.pack}, ${JSON.stringify(continuousRule.condition)}::jsonb,
+          ${JSON.stringify(continuousRule.selector)}::jsonb, true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
+    }
   }
   const store = new PostgresWorkerStore(application, orgId, intervals);
   await store.initialize(); await store.initialize();
-  assert.equal(await count("signal_dependency"), 7);
+  assert.equal(await count("signal_dependency"), 8);
   const healthBefore = await snapshot();
   const otherHealthBefore = (await sql`SELECT id, health FROM app.barrier WHERE org_id = ${otherOrg} ORDER BY id`.execute(database)).rows;
   await assert.rejects(sql`SELECT access_token FROM app.user_session LIMIT 1`.execute(application), /permission denied/);
@@ -129,15 +137,24 @@ try {
   assert.equal(await count("evidence", sql`AND signal_receipt_id IS NOT NULL`), evidenceBeforeSourceSamples + 4);
   const proposalsAfterSourceSamples = await count("health_proposal");
 
-  // Strict duration requires enough successive observations; sparse inspections never establish continuity.
+  // CP's configured quarterly interval cannot be overridden by a rule-level seconds interval.
   await sql`UPDATE app.signal_rule SET condition = condition || '{"durationSeconds":120,"expectedIntervalSeconds":60}'::jsonb WHERE id = ${cpRule.id}::uuid`.execute(database);
+  const periodicOverride = reading({ observedAt: "2026-10-13T00:04:00Z" });
+  const signalCountBeforeOverride = await count("signal");
+  await assert.rejects(store.ingest(periodicOverride), /cannot override the configured calendar measurement interval/);
+  assert.equal(await count("signal"), signalCountBeforeOverride);
+  assert.equal(await count("signal_receipt", sql`AND id = ${periodicOverride.id}::uuid`), 0);
+  await sql`UPDATE app.signal_rule SET condition = condition - 'durationSeconds' - 'expectedIntervalSeconds' WHERE id = ${cpRule.id}::uuid`.execute(database);
+
+  // Strict duration runs on a separately configured continuous source; sparse samples fail.
   const run = randomUUID();
-  for (const seconds of [0, 60, 120, 121]) await store.ingest(reading({ simulationRunId: run, observedAt: new Date(Date.parse(base.observedAt) + (600 + seconds) * 1000).toISOString() }));
+  const continuousReading = (simulationRunId, seconds) => reading({ source: "mock-continuous", tag: "DL-01.rectifier.output.continuous",
+    simulationRunId, observedAt: new Date(Date.parse(base.observedAt) + (600 + seconds) * 1000).toISOString() });
+  for (const seconds of [0, 60, 120, 121]) await store.ingest(continuousReading(run, seconds));
   assert.equal(await count("health_proposal"), proposalsAfterSourceSamples + 1);
   const sparseRun = randomUUID();
-  for (const seconds of [0, 180]) await store.ingest(reading({ simulationRunId: sparseRun, observedAt: new Date(Date.parse(base.observedAt) + (1000 + seconds) * 1000).toISOString() }));
+  for (const seconds of [0, 180]) await store.ingest(continuousReading(sparseRun, 1000 + seconds));
   assert.equal(await count("health_proposal"), proposalsAfterSourceSamples + 1);
-  await sql`UPDATE app.signal_rule SET condition = condition - 'durationSeconds' - 'expectedIntervalSeconds' WHERE id = ${cpRule.id}::uuid`.execute(database);
 
   // Spatial rule: boundary covered, outside/missing/invalid location do not match.
   await sql`UPDATE app.signal_rule SET spatial_geom = ST_MakeEnvelope(100, 13, 101, 14, 4326) WHERE id = ${cpRule.id}::uuid`.execute(database);

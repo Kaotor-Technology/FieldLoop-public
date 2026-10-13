@@ -39,9 +39,11 @@ FIELDLOOP_SOURCE_INTERVALS='{"mock-historian":{"months":3},"mock-patrol":{"month
 ```
 
 Hydro/pump seconds here are authored **simulation settings**, not measured
-operator standards. A registered rule can override its source with either
-`expectedIntervalSeconds` or `expectedIntervalMonths`. Restart the worker after
-changing registered rules or interval configuration. Month arithmetic uses
+operator standards. A registered rule can override a source interval with either
+`expectedIntervalSeconds` or `expectedIntervalMonths`, except when that source
+is configured with a calendar interval: configured months are authoritative and
+the rule cannot add a continuous duration. Restart the worker after changing
+registered rules or interval configuration. Month arithmetic uses
 `FIELDLOOP_MEASUREMENT_TIME_ZONE` (default `Asia/Bangkok`), including month-end
 clamping. It does not substitute 90 days for three months.
 

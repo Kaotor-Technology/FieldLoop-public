@@ -18,10 +18,22 @@ export class PostgresWorkerStore implements WorkerStore {
     private readonly expectedIntervals: Readonly<Record<string, SourceInterval>>, private readonly calendarTimeZone = "Asia/Bangkok") {}
 
   private interval(rule: RegisteredSignalRule): { seconds: number | null; months: number | null } {
-    const interval = rule.condition.expectedIntervalMonths ? { months: rule.condition.expectedIntervalMonths }
-      : rule.condition.expectedIntervalSeconds ?? this.expectedIntervals[rule.condition.source];
+    const configured = this.expectedIntervals[rule.condition.source];
+    if (configured && typeof configured === "object") {
+      if (!Number.isInteger(configured.months) || configured.months < 1 || configured.months > 12) {
+        throw new Error(`Invalid configured calendar measurement interval for ${rule.condition.source}`);
+      }
+      if (rule.condition.expectedIntervalSeconds !== undefined
+          || (rule.condition.expectedIntervalMonths !== undefined && rule.condition.expectedIntervalMonths !== configured.months)) {
+        throw new Error("A Signal rule cannot override the configured calendar measurement interval");
+      }
+      if (rule.condition.durationSeconds !== undefined) throw new Error("Periodic calendar measurements cannot prove a continuous duration");
+      return { seconds: null, months: configured.months };
+    }
+    const interval = rule.condition.expectedIntervalMonths !== undefined ? { months: rule.condition.expectedIntervalMonths }
+      : rule.condition.expectedIntervalSeconds ?? configured;
     if (interval && typeof interval === "object" && Number.isInteger(interval.months) && interval.months >= 1 && interval.months <= 12) {
-      if (rule.condition.durationSeconds) throw new Error("Periodic calendar measurements cannot prove a continuous duration");
+      if (rule.condition.durationSeconds !== undefined) throw new Error("Periodic calendar measurements cannot prove a continuous duration");
       return { seconds: null, months: interval.months };
     }
     if (typeof interval !== "number" || !Number.isInteger(interval) || interval < 1 || interval > 31_536_000) {
