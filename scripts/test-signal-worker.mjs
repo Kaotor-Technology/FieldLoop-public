@@ -232,8 +232,8 @@ try {
   const pushBody = (signal, messageId) => ({ subscription: runtime.subscription, message: { messageId, data: Buffer.from(JSON.stringify(signal)).toString("base64"), attributes: {
     environment: "local", orgId, schemaVersion: signal.schemaVersion, signalId: signal.id, simulated: "true", classification: signal.classification,
   } } });
-  const fixtureAuthorization = { authorization: "Bearer fixture" };
-  const postSignal = (payload, headers = fixtureAuthorization) => app.inject({ method: "POST", url: "/internal/pubsub/signals", headers, payload });
+  const serviceHeaders = { authorization: "Bearer fixture" };
+  const postSignal = (payload, headers = serviceHeaders) => app.inject({ method: "POST", url: "/internal/pubsub/signals", headers, payload });
   const wire = reading({ observedAt: "2026-10-13T05:00:00Z" });
   const body = pushBody(wire, "first-push");
   const inject = () => postSignal(body);
@@ -282,30 +282,44 @@ try {
   // even when its own source is also silent.
   const runSourceCheck = (headers) => app.inject({ method: "POST", url: "/internal/jobs/silent-sources", headers });
   assert.equal((await runSourceCheck({})).statusCode, 401, "the source check requires a service token");
-  const patrolBarrierIds = (await sql`SELECT id FROM app.barrier WHERE org_id = ${orgId} AND code IN (${patrolCodeList})`.execute(database)).rows.map(({ id }) => id).sort();
-  assert.equal(patrolBarrierIds.length, patrolBarrierCodes.length);
-  await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code IN (${patrolCodeList})`.execute(database);
+  const barrierIdsFor = async (codes) => (await sql`SELECT id FROM app.barrier WHERE org_id = ${orgId}
+    AND code IN (${sql.join(codes.map((code) => sql`${code}`))})`.execute(database)).rows.map(({ id }) => id).sort();
+  const staleBarrierCode = "tidal-gates";
+  const silentBarrierCodes = [...patrolBarrierCodes, staleBarrierCode];
+  const silentBarrierIds = await barrierIdsFor(silentBarrierCodes);
+  const [staleBarrierId] = await barrierIdsFor([staleBarrierCode]);
+  assert.equal(silentBarrierIds.length, silentBarrierCodes.length);
+  const silentCodeList = sql.join(silentBarrierCodes.map((code) => sql`${code}`));
+  await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code IN (${silentCodeList})`.execute(database);
   await sql`UPDATE app.barrier SET health = 'failed' WHERE org_id = ${orgId} AND code = 'cathodic-protection'`.execute(database);
-  // Control: a Healthy Barrier whose source reported just now must not change.
-  const freshBarrierCode = "tidal-gates";
-  await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code = ${freshBarrierCode}`.execute(database);
-  await sql`UPDATE app.signal_dependency SET last_received_at = now() WHERE org_id = ${orgId}
-    AND barrier_id = (SELECT id FROM app.barrier WHERE org_id = ${orgId} AND code = ${freshBarrierCode})`.execute(database);
-  await sql`UPDATE app.signal_dependency SET last_received_at = now() - interval '9 months'
-    WHERE org_id = ${orgId} AND rule_id IN (${patrolRule.id}::uuid, ${cpRule.id}::uuid)`.execute(database);
+  // Age the patrol, CP and flood-rain sources. Earlier sections left their last_received_at in the future.
+  await sql`UPDATE app.signal_dependency SET last_received_at = ${new Date(Date.now() - 270 * 86_400_000)}
+    WHERE org_id = ${orgId} AND (rule_id IN (${patrolRule.id}::uuid, ${cpRule.id}::uuid) OR barrier_id = ${staleBarrierId}::uuid)`.execute(database);
   const eventsBeforeCheck = publishedEvents.length;
-  const sourceCheck = await runSourceCheck(fixtureAuthorization);
+  const sourceCheck = await runSourceCheck(serviceHeaders);
   assert.equal(sourceCheck.statusCode, 200);
   const healthChangedEvents = publishedEvents.slice(eventsBeforeCheck).filter(({ type }) => type === "barrier.health_changed");
-  assert.deepEqual(healthChangedEvents.map(({ barrierId }) => barrierId).sort(), patrolBarrierIds, "only the patrol Barriers change");
+  assert.deepEqual(healthChangedEvents.map(({ barrierId }) => barrierId).sort(), silentBarrierIds, "only Barriers with a silent source change");
   assert.equal(sourceCheck.json().changed, healthChangedEvents.length);
   assert.deepEqual((await sql`SELECT code, health FROM app.barrier WHERE org_id = ${orgId}
-    AND code IN (${patrolCodeList}, 'cathodic-protection', ${freshBarrierCode}) ORDER BY code`.execute(database)).rows, [
+    AND code IN (${silentCodeList}, 'cathodic-protection') ORDER BY code`.execute(database)).rows, [
     { code: "cathodic-protection", health: "failed" },
     { code: "excavation-permit-one-call", health: "unverified" },
     { code: "right-of-way-patrol", health: "unverified" },
-    { code: "tidal-gates", health: "healthy" },
+    { code: "tidal-gates", health: "unverified" },
   ]);
+
+  // Control: the same Barrier, Healthy again with a source that reported just now, must not change.
+  await sql`UPDATE app.barrier SET health = 'healthy' WHERE id = ${staleBarrierId}::uuid`.execute(database);
+  const refreshed = await sql`UPDATE app.signal_dependency SET last_received_at = ${new Date()}
+    WHERE org_id = ${orgId} AND barrier_id = ${staleBarrierId}::uuid RETURNING id`.execute(database);
+  assert.equal(refreshed.rows.length, 1, "the control Barrier has exactly one source dependency");
+  const eventsBeforeControl = publishedEvents.length;
+  const controlCheck = await runSourceCheck(serviceHeaders);
+  assert.equal(controlCheck.statusCode, 200);
+  assert.equal(controlCheck.json().changed, 0, "a fresh source changes nothing");
+  assert.deepEqual(publishedEvents.slice(eventsBeforeControl).filter(({ type }) => type === "barrier.health_changed"), []);
+  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${staleBarrierId}::uuid`.execute(database)).rows[0].health, "healthy");
 
   // Source checking and Evidence insertion use the same dependency lock order.
   const race = await Promise.allSettled([
