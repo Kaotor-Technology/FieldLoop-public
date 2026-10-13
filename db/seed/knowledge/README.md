@@ -59,7 +59,10 @@ for KL-9 reference-only citations and label them "not verified against source te
 Postgres pool, an `Embeddings` port and a `KnowledgeScope`. Build the scope from
 verified user identity and access, never from model arguments. Requested folders
 must be a subset of those permissions. Organisation, folder, classification,
-current revision and optional PostGIS bbox filters apply before ranking.
+current revision and optional PostGIS bbox filters apply before ranking. Access
+must cover both document and chunk classifications; returned `classification`
+is the higher current label in PRD §9.1 order (PUBLIC, INTERNAL, CONFIDENTIAL,
+HIGHLY_RESTRICTED), including when a document is reclassified after indexing.
 
 Call `await search.search_knowledge(query, folders, bbox=None)` after the agent
 runtime's `tool-calls:check`. The primitive is not registered as an agent tool

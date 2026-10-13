@@ -375,6 +375,56 @@ def test_a_human_licence_change_revokes_retrieval_and_prevents_reindexing(
     asyncio.run(exercise())
 
 
+@pytest.mark.parametrize(
+    ("document_class", "chunk_class", "effective_class"),
+    [
+        ("PUBLIC", "PUBLIC", "PUBLIC"),
+        ("INTERNAL", "PUBLIC", "INTERNAL"),
+        ("PUBLIC", "INTERNAL", "INTERNAL"),
+        ("CONFIDENTIAL", "INTERNAL", "CONFIDENTIAL"),
+        ("INTERNAL", "CONFIDENTIAL", "CONFIDENTIAL"),
+        ("HIGHLY_RESTRICTED", "CONFIDENTIAL", "HIGHLY_RESTRICTED"),
+        ("CONFIDENTIAL", "HIGHLY_RESTRICTED", "HIGHLY_RESTRICTED"),
+        ("HIGHLY_RESTRICTED", "HIGHLY_RESTRICTED", "HIGHLY_RESTRICTED"),
+    ],
+)
+def test_reclassification_returns_highest_current_class_and_enforces_both_scopes(
+    document_class: str, chunk_class: str, effective_class: str,
+) -> None:
+    async def exercise() -> None:
+        item = replace(source(), classification=chunk_class)
+        org = f"class-{item.id}"
+        embeddings = FakeEmbeddings()
+        async with await AsyncConnection.connect(
+            DSN, row_factory=dict_row, autocommit=True
+        ) as connection, AsyncConnectionPool(DSN, kwargs={"row_factory": dict_row}) as pool:
+            await index_document(connection, org, item, embeddings)
+            await connection.execute(
+                "UPDATE app.controlled_document SET classification=%s WHERE id=%s",
+                (document_class, item.id),
+            )
+            scope = KnowledgeScope(
+                org, (item.folder,), ("PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED")
+            )
+            search = KnowledgeSearch(pool, embeddings, scope)
+            for query in ("cathodic protection", "no-lexical-match"):
+                results = await search.search_knowledge(query, [item.folder])
+                assert len(results) == 1
+                assert results[0]["classification"] == effective_class
+                assert results[0]["citation"]["document_id"] == str(item.id)
+                # Missing either current label must still deny access before ranking.
+                for denied_class in {document_class, chunk_class}:
+                    restricted = KnowledgeSearch(
+                        pool, embeddings,
+                        replace(scope, classifications=tuple(
+                            c for c in scope.classifications if c != denied_class
+                        )),
+                    )
+                    assert await restricted.search_knowledge(query, [item.folder]) == []
+
+    asyncio.run(exercise())
+
+
 def test_unbound_chunks_fail_closed_until_verified_reindex() -> None:
     async def exercise() -> None:
         item = source()

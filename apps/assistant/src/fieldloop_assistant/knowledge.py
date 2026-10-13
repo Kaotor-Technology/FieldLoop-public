@@ -12,7 +12,9 @@ from psycopg.rows import DictRow
 from psycopg_pool import AsyncConnectionPool
 
 BBox = tuple[float, float, float, float]
-CLASSES = frozenset({"PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"})
+# PRD §9.1 / GR-3: result routing follows the highest current data class.
+CLASSIFICATION_RANK = {"PUBLIC": 0, "INTERNAL": 1, "CONFIDENTIAL": 2, "HIGHLY_RESTRICTED": 3}
+CLASSES = frozenset(CLASSIFICATION_RANK)
 
 
 @dataclass(frozen=True)
@@ -71,6 +73,7 @@ def search_sql(spatial: bool) -> str:
             SELECT id, sum(score) AS score FROM scored GROUP BY id
         )
         SELECT c.id AS chunk_id, c.content, c.page, c.clause, c.simulated, c.classification,
+               d.classification AS document_classification,
                d.id AS document_id, d.title, d.revision, d.folder, d.blob_uri, f.score
         FROM fused f JOIN app.document_chunk c ON c.id = f.id
         JOIN app.controlled_document d ON d.id = c.document_id AND d.org_id = c.org_id
@@ -129,7 +132,10 @@ class KnowledgeSearch:
                 "content": row["content"],
                 "revision": row["revision"],
                 "simulated": row["simulated"],
-                "classification": row["classification"],
+                "classification": max(
+                    row["classification"], row["document_classification"],
+                    key=CLASSIFICATION_RANK.__getitem__,
+                ),
                 "score": float(row["score"]),
                 "citation": {
                     "document_id": str(row["document_id"]),
