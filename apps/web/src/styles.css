@@ -67,7 +67,7 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 .mono, code, .feature-overview dd.mono { font-family: var(--type-mono-md-font-family), monospace; font-size: var(--type-mono-md-font-size); font-variant-numeric: tabular-nums; }
 .skip-link { position: absolute; z-index: 10; top: var(--spacing-space-2); left: var(--spacing-space-2); padding: var(--spacing-space-3); color: var(--ink); background: var(--surface); transform: translateY(-200%); }
 .skip-link:focus { transform: none; }
-.app-shell { min-height: 100dvh; }
+.app-shell { min-height: 100dvh; color: var(--ink); }
 .top-bar { position: relative; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-space-4); min-height: var(--spacing-top-bar-height); padding: var(--spacing-space-2) var(--spacing-page-margin-desktop); color: var(--color-on-secondary); background: var(--color-secondary); }
 .wordmark { flex: 0 0 auto; color: var(--color-on-secondary); text-decoration: none; font-size: var(--type-headline-lg-font-size); font-weight: var(--type-headline-lg-font-weight); }
 .wordmark span { color: var(--color-brand-mint); }
@@ -77,7 +77,8 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 .account-switcher { position: relative; }
 .account-switcher > summary { list-style: none; }
 .account-switcher > summary::-webkit-details-marker { display: none; }
-.account-switcher[open] .account-menu { position: absolute; z-index: 8; top: calc(100% + var(--spacing-space-2)); right: 0; width: min(var(--spacing-list-pane-width), calc(100vw - var(--spacing-space-8))); padding: var(--spacing-space-4); color: var(--ink); background: var(--surface-raised); border: var(--spacing-border-hairline) solid var(--outline); border-radius: var(--rounded-lg); box-shadow: var(--elevation-level-3); }
+.account-menu { padding: var(--spacing-space-4); color: var(--ink); background: var(--surface-raised); border: var(--spacing-border-hairline) solid var(--outline); border-radius: var(--rounded-lg); box-shadow: var(--elevation-level-3); }
+.account-switcher[open] .account-menu { position: absolute; z-index: 8; top: calc(100% + var(--spacing-space-2)); right: 0; width: min(var(--spacing-list-pane-width), calc(100vw - var(--spacing-space-8))); }
 .account-switcher .role-list { padding: 0; list-style: none; }
 .account-switcher .role-list li { padding: var(--spacing-space-2) 0; border-bottom: var(--spacing-border-hairline) solid var(--outline); }
 .account-switcher .role-list span { display: block; color: var(--muted); }
