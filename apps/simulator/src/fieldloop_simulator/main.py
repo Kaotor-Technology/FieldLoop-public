@@ -30,7 +30,7 @@ from fieldloop_simulator.player import PlayerError, ScenarioPlayer
 from fieldloop_simulator.player_http import router as player_router
 from fieldloop_simulator.player_service import SimulationService
 from fieldloop_simulator.player_store import PostgresPlayerStore
-from fieldloop_simulator.scenario import load_catalog
+from fieldloop_simulator.scenario import ScenarioError, load_catalog, validate_asset_targets
 
 ORG_ID = org_id_from_environment(os.environ)
 
@@ -61,10 +61,25 @@ def emitter() -> SimulatedSignalEmitter:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    if any(
+        event.target.kind == "asset"
+        for scenario in catalog.values()
+        for event in scenario.events
+    ):
+        await asyncio.to_thread(validate_catalog_asset_targets)
     yield
     if _store:
         await asyncio.to_thread(_store.close)
     _close_connector()
+
+
+def validate_catalog_asset_targets() -> None:
+    asset_codes = store().asset_codes()
+    for scenario in catalog.values():
+        try:
+            validate_asset_targets(scenario, asset_codes)
+        except ScenarioError as error:
+            raise RuntimeError(f"Scenario {scenario.id} is invalid at {error}") from error
 
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
