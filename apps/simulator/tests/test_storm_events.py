@@ -83,6 +83,26 @@ def test_a_level_may_be_negative_and_a_gate_has_its_own_tag() -> None:
     validate_scenario(good)
 
 
+def test_a_reading_is_stated_once_at_any_one_time() -> None:
+    twice = document()
+    twice["events"].insert(1, twice["events"][RAIN] | {"id": "rain-again", "value": 30})
+    with pytest.raises(ScenarioError, match="second event") as failure:
+        validate_scenario(twice)
+    assert failure.value.pointer == "/events/1/atSeconds"
+
+
+def test_two_assets_or_two_times_are_two_readings() -> None:
+    good = document()
+    another_pump = good["events"][PUMP] | {
+        "id": "another-pump",
+        "target": {"kind": "asset", "id": "P-1"},
+    }
+    same_pump_later = good["events"][PUMP] | {"id": "power-returns", "value": "available"}
+    good["events"].insert(PUMP + 1, another_pump)
+    good["events"].append(same_pump_later | {"atSeconds": 14400})
+    validate_scenario(good)
+
+
 def test_other_sources_are_not_judged_by_the_demo_b_rules() -> None:
     event = Event.model_validate(
         {

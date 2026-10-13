@@ -39,6 +39,17 @@ def is_derived_rainfall(event: Event) -> bool:
     return _is_rainfall(event) and event.value is None
 
 
+def reading_of(event: Event) -> tuple[str, str, str] | None:
+    """Which reading a Demo B event states: its source, tag and Asset. ``None`` otherwise.
+
+    A Scenario may state a reading once at any one time: two values for one instant would
+    publish one Signal that the source's read contradicts, since the read can hold only one.
+    """
+    if event.source not in _SOURCES:
+        return None
+    return event.source, event.tag, event.target.id
+
+
 def check(event: Event) -> tuple[str, str] | None:
     """Where and why an event is not one its source publishes, or ``None``.
 
