@@ -40,21 +40,21 @@ player sums the `rain.rate` events before it over 24 hours, so place one where t
 should report the total. It is what the Flood pack
 rule `rainfall-needs-fresh-evidence` matches (above 100 mm); at 60 mm/h that is 1 hour
 40 minutes after the rain starts. `pump.power` with `lost` is what `pump-power-lost` matches.
-PRD §8.1 has the storm trigger its rule before the pump fails, so a storyline with P-3 losing
-power at T+20m needs a higher rate, an earlier start of the rain, or the rainfall rule to fire
-second. Without a `rain.accumulation.24h` event a run never publishes the total.
+The authored storm uses 72 mm/h for two hours. The second derived accumulation is 144 mm at
+T+2h, above the flood rule's 100 mm condition. P-3 loses power at T+2h+1s, after that Signal.
+Without a `rain.accumulation.24h` event a run never publishes the total.
 
 ```yaml
 - {id: rain-starts, atSeconds: 0, source: mock-hydro, target: {kind: asset, id: S-R1},
-   tag: rain.rate, value: 60, unit: mm/h}
-- {id: pump-loses-power, atSeconds: 1200, source: mock-pumps, target: {kind: asset, id: P-3},
-   tag: pump.power, value: lost, unit: state}
+   tag: rain.rate, value: 72, unit: mm/h}
 - {id: rainfall-after-2h, atSeconds: 7200, source: mock-hydro, target: {kind: asset, id: S-R1},
    tag: rain.accumulation.24h, value: null, unit: mm}
+- {id: pump-loses-power, atSeconds: 7201, source: mock-pumps, target: {kind: asset, id: P-3},
+   tag: pump.power, value: lost, unit: state}
 ```
 
-Controls use the server clock. Forward bookmark jumps emit intervening events; to return to
-an earlier bookmark, reset and jump forward. Reset preserves seed and speed, creates a new
+Controls use the server clock. Forward bookmark jumps emit intervening events. An earlier bookmark restores the baseline,
+opens a new run and replays up to that point; pause before jumping. Reset preserves seed and speed, creates a new
 run ID, restores the baseline atomically and retires the previous run. Values and observation
 times replay identically; new IDs keep consumer deduplication from suppressing a fresh run.
 
@@ -73,3 +73,59 @@ Playback advances while requests/SSE polling are active, which holds request-sco
 CPU without a permanent warm instance. When clients reconnect after a gap, the server catches
 up from its persisted anchor. A publication timeout rolls back state; a retry uses identical
 Signal IDs, so consumers must deduplicate deliveries.
+
+## Authored demo Scenarios (FL-75)
+
+All values below are simulated. Both start at `2026-10-12T00:00:00Z`, matching the seed fixtures.
+Use seed **75** for the rehearsal; seed is required by `POST /v1/simulation/runs`, not a field
+in a Scenario file. Selecting another seed changes only the optional canal-level noise.
+
+| Scenario | Key bookmarks and observations | Duration / classification |
+| --- | --- | --- |
+| `cp-rectifier-failure` | `rectifier-failure` (T+10m, output 0 A); `encroachment` (T+30m, two existing synthetic patrol GPS findings); `cp-evidence-overdue` (T+24h+1s); `outage-over-24h` (T+24h+10m+1s); `complete` | 48 h / HIGHLY_RESTRICTED |
+| `bangkok-storm` | `start` (72 mm/h rain in Z3); `heavy-rainfall` (T+2h, 144 mm accumulated and rain stops); `pump-power-lost` (P-3 loses power at T+2h+1s); `forecast-24h`; `complete` (+72h) | 72 h / CONFIDENTIAL |
+
+### Baseline and source references
+
+- Load the DL-01 and Bangkok seeds before running against a deployed database. The CP Barrier's
+  newest performance Evidence is `cp-survey-2025` at `2025-10-13T00:00:00Z` with a 12-month
+  interval. Its matching CMMS work order `SYN-CMMS-001` is due at `2026-10-13T00:00:00Z`.
+  The overdue observation is one second after that boundary; no fresh survey is fabricated.
+- The two encroachment events announce `SYN-PATROL-001` and `SYN-PATROL-004`, already in the
+  read-only patrol source. `foundAt` remains the earlier source timestamp; `observedAt` is
+  when the Scenario announces the finding. Platform ingestion owns snapping GPS to Chainage.
+- Bowtie D's `dual-power-generators` Barrier on P-3 is already **Degraded**. Its latest test is
+  `dual-power-generators-check-2` from `2026-09-01`, with a one-month interval (due `2026-10-01`).
+  The Scenario uses the already seeded condition as storyline context; its P-3 Signal contains
+  only the power reading owned by `mock-pumps`, not a fabricated CMMS observation.
+- The storm's 72 mm/h over two hours gives 144 mm in the trailing 24-hour window. It falls to
+  zero at T+26h. The authored accumulation events use `value: null`; the player derives values
+  from prior rain-rate events, so the T+2h Signal reports 144 mm and passes the flood pack's
+  `>100 mm` condition before P-3 loses power. Actual proposals are downstream work.
+
+### Test before merge or deployment
+
+From the repository root, with the locked dependencies installed:
+
+```bash
+uv run --locked --all-packages pytest apps/simulator/tests/test_demo_scenarios.py -q
+bash scripts/test-simulation.sh
+```
+
+The first command loads the real YAML files through the validator and validating Signal
+publisher. It checks the Evidence/source references, rainfall below and above the 100 mm
+threshold at T+2h, P-3 power loss at T+2h+1s, rainfall integration, seed/noise, 1x versus 60x,
+Step versus Play, Reset and all SIMULATION/sandbox flags.
+The second uses disposable PostgreSQL to check cold starts and durable reset/replay of both
+files. These run in the existing Python and database CI jobs; neither needs cloud credentials.
+
+For a presenter check once the local stack or a deployment is configured: sign in as an
+Operator/Manager with sufficient clearance, select a Scenario, enter seed 75, and create a
+run. Step or pause and jump to the bookmarks above, inspect emitted Signals, then Reset and
+repeat with the same seed. The run IDs must change while observation values/times stay equal.
+The Docker image copies and validates this catalog at startup.
+
+Scope of this verification: Scenario loading, Signal emission, player persistence and hydration
+of historian, hydro and pump HTTP read models from the committed event index, including cold
+start and reset. Health/Risk projections, map overlays and sandbox notification delivery require
+their downstream integrations and a separate end-to-end check.
