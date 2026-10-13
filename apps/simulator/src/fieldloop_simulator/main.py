@@ -94,7 +94,9 @@ player = ScenarioPlayer(
     ORG_ID,
     emitter,
 )
-app.state.simulation = SimulationService(player, store, app.state.historian)
+app.state.simulation = SimulationService(
+    player, store, app.state.historian, app.state.hydro, app.state.pumps
+)
 app.include_router(player_router)
 app.include_router(mock_cmms_router)
 app.include_router(mock_historian_router)

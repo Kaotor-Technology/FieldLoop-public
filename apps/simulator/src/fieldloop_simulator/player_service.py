@@ -10,7 +10,10 @@ from typing import Protocol
 
 from fieldloop_common.generated_simulation import PlayerCommand, RunCreate
 
+from fieldloop_simulator import storm_events
 from fieldloop_simulator.mock_historian import DEMO_SEED, SimulatedHistorian
+from fieldloop_simulator.mock_hydro import SimulatedHydro
+from fieldloop_simulator.mock_pumps import SimulatedPumps
 from fieldloop_simulator.player import (
     Command,
     PlayerSnapshot,
@@ -30,10 +33,15 @@ class SimulationService:
         player: ScenarioPlayer,
         store: Callable[[], PlayerStore],
         historian: SimulatedHistorian,
+        hydro: SimulatedHydro | None = None,
+        pumps: SimulatedPumps | None = None,
     ) -> None:
         self.player = player
         self.store = store
         self.historian = historian
+        # The Demo B sources. A service built without them, as a test may, keeps its own pair.
+        self.hydro = hydro or SimulatedHydro()
+        self.pumps = pumps or SimulatedPumps()
         self._projection_lock = threading.RLock()
 
     def current(self, run_id: uuid.UUID | None = None) -> dict[str, object] | None:
@@ -84,10 +92,15 @@ class SimulationService:
     def _hydrate(self, snapshot: PlayerSnapshot | None) -> None:
         # Rebuild from the committed index, including after a cold start or retry.
         self.historian.reset(snapshot.run.seed if snapshot else DEMO_SEED)
+        self.hydro.reset()
+        self.pumps.reset()
         if snapshot:
             for event in snapshot.scenario.events[: snapshot.run.next_event_index]:
+                reading = observation(snapshot, event)
+                storm_events.apply(
+                    event, reading.value, reading.observed_at, self.hydro, self.pumps
+                )
                 if event.source == "mock-historian":
-                    reading = observation(snapshot, event)
                     if isinstance(reading.value, (float, int)) and not isinstance(
                         reading.value, bool
                     ):
