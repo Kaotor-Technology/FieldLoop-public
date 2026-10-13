@@ -24,6 +24,8 @@ SOURCE_ID = "mock-pumps"
 CLASSIFICATION: Classification = "CONFIDENTIAL"
 
 PowerStatus = Literal["available", "lost"]
+# running or stopped for a pump; open or closed for a gate.
+OperatingState = Literal["running", "stopped", "open", "closed"]
 
 
 @dataclass(frozen=True)
@@ -32,7 +34,7 @@ class Facility:
 
     facility_type: Literal["pump", "gate"]
     zone_code: str
-    operating_state: str
+    operating_state: OperatingState
 
 
 # Authored values, not the state of a real Facility. Each is a Facility in
@@ -48,6 +50,8 @@ FACILITIES: Mapping[str, Facility] = {
 
 
 class SimulatedPumps:
+    """The ``mock-pumps`` source: the pumps and the gates of the drainage zones."""
+
     def __init__(self, *, org_id: str = DEMO_ORG_ID) -> None:
         self.org_id = require_org_id(org_id)
         self._power: HeldValues[PowerStatus] = HeldValues()
@@ -69,7 +73,7 @@ class SimulatedPumps:
             raise KeyError(asset_code)
         return self._power.at(asset_code, at) or "available"
 
-    def operating_state_at(self, asset_code: str, at: datetime) -> str:
+    def operating_state_at(self, asset_code: str, at: datetime) -> OperatingState:
         """A pump without power is stopped; a gate stays where it was."""
         facility = FACILITIES[asset_code]
         if facility.facility_type == "pump" and self.power_at(asset_code, at) == "lost":
