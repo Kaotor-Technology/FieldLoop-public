@@ -9,6 +9,7 @@ COPY apps/web ./apps/web
 COPY apps/api ./apps/api
 COPY apps/guardrail ./apps/guardrail
 COPY apps/signal-worker ./apps/signal-worker
+COPY domain-packs ./domain-packs
 RUN pnpm install --frozen-lockfile
 RUN pnpm exec turbo run build --filter=@fieldloop/api... --filter=@fieldloop/web...
 RUN pnpm --filter=@fieldloop/api deploy --prod /output
@@ -18,6 +19,7 @@ ENV NODE_ENV=production PORT=8080
 WORKDIR /app/apps/api
 COPY --from=build --chown=node:node /output ./
 COPY --from=build --chown=node:node /workspace/apps/web/dist /app/apps/web/dist
+COPY --from=build --chown=node:node /workspace/domain-packs /app/domain-packs
 USER node
 EXPOSE 8080
 CMD ["node", "dist/server.js"]
