@@ -117,7 +117,7 @@ export class PostgresHealthStore implements HealthServicePort {
       FROM app.notification n
       LEFT JOIN app.health_change hc ON hc.org_id = n.org_id AND hc.id = n.health_change_id
       LEFT JOIN app.evidence e ON e.org_id = n.org_id AND e.id = n.evidence_id
-      WHERE n.org_id = ${user.orgId} AND n.simulation_retired_at IS NULL
+      WHERE n.org_id = ${user.orgId} AND n.channel = 'in_app' AND n.simulation_retired_at IS NULL
         AND n.recipient_ref IN (${userId}, ${`sandbox:${userId}`})
         AND array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], n.classification) <= ${classificationRank(user.clearance)}
         AND (n.evidence_id IS NULL OR EXISTS (

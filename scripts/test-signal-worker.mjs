@@ -431,6 +431,15 @@ try {
     ({ subjectType, subjectId }) => subjectType === "evidence" && subjectId === expiringEvidenceId,
   );
   assert.ok(expiringNotice, "the current Evidence expiry notice is visible to its owner");
+  const ageingHealthChangeId = (await sql`SELECT id FROM app.health_change WHERE org_id = ${orgId}
+    AND barrier_id = ${patrolOwnerBarrier.id}::uuid AND actor = 'ageing' ORDER BY created_at DESC LIMIT 1`.execute(database)).rows[0].id;
+  const externalNotificationId = randomUUID();
+  await sql`INSERT INTO app.notification (id, org_id, health_change_id, channel, recipient_ref, status, receipt,
+    sandbox, simulated, classification, created_by)
+    VALUES (${externalNotificationId}::uuid, ${orgId}, ${ageingHealthChangeId}::uuid, 'email', ${`sandbox:${ownerId}`},
+      'delivered', '{}', true, true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);
+  assert.ok(!(await healthStore.listNotifications(owner, undefined, 100)).items.some(({ id }) => id === externalNotificationId),
+    "the in-app feed excludes email delivery receipts");
   await sql`INSERT INTO app.evidence (org_id, barrier_id, kind, source, observed_at, simulated, classification, created_by)
     VALUES (${orgId}, ${expiringOwnerBarrier.id}::uuid, 'inspection', 'synthetic-ageing-refresh',
       ${new Date(ageNow.getTime() + 2)}, true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);

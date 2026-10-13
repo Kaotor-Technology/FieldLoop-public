@@ -581,7 +581,8 @@ paths:
           maxLength: 512
       responses:
         '200':
-          description: Event stream for barrier.health_changed, health_proposal.created, notification.delivered,
+          description: Event stream for barrier.health_changed, health_proposal.created, evidence.created,
+            notification.delivered,
             simulation.state and simulation.reset.
           content:
             text/event-stream:
