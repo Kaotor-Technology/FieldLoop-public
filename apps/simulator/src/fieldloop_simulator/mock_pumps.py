@@ -8,7 +8,7 @@ through ``set_power``; operating a real pump or gate is an L1 Command Package (A
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Annotated, Literal, get_args
+from typing import Annotated, Literal, cast, get_args
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
@@ -58,6 +58,30 @@ PUMPS_AND_GATES: Mapping[str, PumpOrGate] = {
 }
 
 
+POWER_UNIT = "state"
+
+
+def power_tag(asset_code: str) -> str:
+    """The Signal tag of a pump's or gate's power status: ``pump.power`` or ``gate.power``."""
+    return f"{_known(asset_code).facility_type}.power"
+
+
+def signal_payload(asset_code: str, status: PowerStatus) -> dict[str, object]:
+    """What a Signal of this source says about its pump or gate, whoever publishes the Signal.
+
+    A pump without power is stopped; a gate stays where it was.
+    """
+    facility = _known(asset_code)
+    stopped = facility.facility_type == "pump" and status == "lost"
+    return {
+        "assetCode": asset_code,
+        "facilityType": facility.facility_type,
+        "zone": facility.zone_code,
+        "operatingState": "stopped" if stopped else facility.operating_state,
+        "label": LABEL,
+    }
+
+
 def _known(asset_code: str) -> PumpOrGate:
     """The pump or gate of that code. ``KeyError`` for any other code."""
     return PUMPS_AND_GATES[asset_code]
@@ -86,11 +110,8 @@ class SimulatedPumps:
         return self._power.at(asset_code, at) or "available"
 
     def operating_state_at(self, asset_code: str, at: datetime) -> OperatingState:
-        """A pump without power is stopped; a gate stays where it was."""
-        facility = _known(asset_code)
-        if facility.facility_type == "pump" and self.power_at(asset_code, at) == "lost":
-            return "stopped"
-        return facility.operating_state
+        state = signal_payload(asset_code, self.power_at(asset_code, at))["operatingState"]
+        return cast(OperatingState, state)
 
     def observe(self, asset_code: str, at: datetime) -> Observation:
         """The power status a Scenario publishes as a Signal; the payload names the Facility.
@@ -98,23 +119,17 @@ class SimulatedPumps:
         A pump's Signal is what the flood pack rule ``pump-power-lost`` matches exactly:
         ``mock-pumps``, ``pump.power``, ``eq lost``, unit ``state``.
         """
-        facility = _known(asset_code)
+        status = self.power_at(asset_code, at)
         return Observation(
             source=SOURCE_ID,
             classification=CLASSIFICATION,
-            tag=f"{facility.facility_type}.power",
-            value=self.power_at(asset_code, at),
+            tag=power_tag(asset_code),
+            value=status,
             observed_at=at,
-            unit="state",
+            unit=POWER_UNIT,
             # Two pumps share a tag, so the Facility takes part in the Signal's identity.
             subject=asset_code,
-            payload={
-                "assetCode": asset_code,
-                "facilityType": facility.facility_type,
-                "zone": facility.zone_code,
-                "operatingState": self.operating_state_at(asset_code, at),
-                "label": LABEL,
-            },
+            payload=signal_payload(asset_code, status),
         )
 
     def status(self, asset_code: str, as_of: datetime) -> MockPumpsStatus:

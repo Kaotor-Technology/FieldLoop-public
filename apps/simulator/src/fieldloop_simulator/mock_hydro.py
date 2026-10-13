@@ -27,6 +27,7 @@ CLASSIFICATION: Classification = "CONFIDENTIAL"
 # The units the response schema allows: mm/h for rain, m for a level.
 Unit = Literal["mm/h", "m"]
 ACCUMULATION_TAG = "rain.accumulation.24h"
+ACCUMULATION_UNIT = "mm"
 ACCUMULATION_WINDOW = timedelta(hours=24)
 
 _EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
@@ -57,6 +58,20 @@ SENSOR_PROFILES: Mapping[str, SensorProfile] = {
     "level": SensorProfile("S-L1", "Z3", "water.level", "m", base=0.6),
     "tide": SensorProfile("S-T1", "Z4", "tide.level", "m", base=0.9, swing=0.6),
 }
+
+
+def signal_payload(kind: str, *, accumulation: bool = False) -> dict[str, object]:
+    """What a Signal of this source says about its sensor, whoever publishes the Signal."""
+    profile = SENSOR_PROFILES[kind]
+    payload: dict[str, object] = {
+        "assetCode": profile.asset_code,
+        "zone": profile.zone_code,
+        "kind": kind,
+    }
+    if accumulation:
+        payload["windowSeconds"] = int(ACCUMULATION_WINDOW.total_seconds())
+    payload["label"] = LABEL
+    return payload
 
 
 class SimulatedHydro:
@@ -100,12 +115,7 @@ class SimulatedHydro:
             observed_at=at,
             unit=profile.unit,
             subject=profile.asset_code,
-            payload={
-                "assetCode": profile.asset_code,
-                "zone": profile.zone_code,
-                "kind": kind,
-                "label": LABEL,
-            },
+            payload=signal_payload(kind),
         )
 
     def rain_accumulation(self, at: datetime) -> float:
@@ -139,15 +149,9 @@ class SimulatedHydro:
             tag=ACCUMULATION_TAG,
             value=self.rain_accumulation(at),
             observed_at=at,
-            unit="mm",
+            unit=ACCUMULATION_UNIT,
             subject=profile.asset_code,
-            payload={
-                "assetCode": profile.asset_code,
-                "zone": profile.zone_code,
-                "kind": "rain",
-                "windowSeconds": int(ACCUMULATION_WINDOW.total_seconds()),
-                "label": LABEL,
-            },
+            payload=signal_payload("rain", accumulation=True),
         )
 
     def read(self, kind: str, as_of: datetime) -> MockHydroReading:
