@@ -481,7 +481,7 @@
           "minLength": 1
         },
         "domain": {
-          "const": "gen-ai"
+          "const": "gen_ai"
         },
         "status": {
           "const": "draft"

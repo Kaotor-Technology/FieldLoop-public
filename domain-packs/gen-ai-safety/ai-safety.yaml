@@ -128,7 +128,7 @@ bowtie:
   id: uc-1-bowtie-c
   hazard: An LLM with access to Highly Restricted documents
   topEvent: Restricted content or unsafe advice leaves the AI System
-  domain: gen-ai
+  domain: gen_ai
   status: draft
   independenceGroup:
     id: shared-guardrail-runtime

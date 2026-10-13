@@ -43,6 +43,12 @@ describe("Gen AI Safety pack (FL-85)", () => {
     expect(safety.bowtie.barriers.flatMap(({ degradationFactors }) => degradationFactors).map(({ controls }) => controls[0]?.description))
       .toEqual(["Monthly red-team evaluation", "Labelling SLA", "Revision guard"]);
     expect(safety.bowtie.crossDomainLinks[0]).toMatchObject({ targetBowtieCode: "bowtie-b", targetThreatCode: "phishing-pivot", resolution: "template-only" });
+    expect(safety.policies.map(({ id, barrierId }) => [id, barrierId])).toEqual([
+      ["injection-detector", "injection-detector"],
+      ["restricted-data-routing", "classification-routing"],
+      ["output-dlp", "output-dlp"],
+      ["system-of-record-tool-block", "tool-call-policy"],
+    ]);
     for (const policy of safety.policies) expect(safety.bowtie.barriers.find(({ id }) => id === policy.barrierId)?.type).toBe("technical");
     expect(await loadDomainPacks(root, tools)).toEqual(packs);
   });

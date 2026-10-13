@@ -62,6 +62,7 @@
 !packages/contracts/signal-worker.v1.openapi.json
 !packages/contracts/domain-pack.v1.schema.json
 !packages/contracts/agent-definition.v1.schema.json
+!packages/contracts/gen-ai-safety.v1.schema.json
 !domain-packs/
 !domain-packs/**
 !packages/contracts/scripts/
