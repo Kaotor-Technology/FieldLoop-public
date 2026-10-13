@@ -52,8 +52,9 @@ def _work_order(
 
 # Authored values, not records of a real asset. Each names a Barrier of the DL-01 Bowtie in
 # ``data/synthetic/dl-01/bowtie-a.json``; a test keeps them in step, because the simulator image
-# does not carry ``data/``. SYN-CMMS-001 falls due when the 12-month evidence interval of the
-# cathodic protection Barrier ends, one day into the simulation (PRD Demo A step 5).
+# does not carry ``data/``. A preventive work order falls due when its Barrier's newest Evidence
+# is one 12-month evidence interval old. Only the cathodic protection survey does so during the
+# simulation, one day in (PRD Demo A step 5); the corrective repair is due after it.
 _WORK_ORDERS = (
     _work_order(
         "SYN-CMMS-001",
@@ -67,21 +68,21 @@ _WORK_ORDERS = (
         "remote-automatic-valve-closure",
         "Synthetic valve actuator preventive service",
         "preventive",
-        datetime(2026, 10, 10, tzinfo=UTC),
+        datetime(2027, 9, 15, tzinfo=UTC),
     ),
     _work_order(
         "SYN-CMMS-003",
         "coating",
         "Synthetic coating repair",
         "corrective",
-        datetime(2026, 10, 20, tzinfo=UTC),
+        datetime(2026, 12, 15, tzinfo=UTC),
     ),
     _work_order(
         "SYN-CMMS-004",
         "depth-of-cover-and-markers",
         "Synthetic depth of cover survey",
         "preventive",
-        datetime(2026, 9, 30, tzinfo=UTC),
+        datetime(2026, 9, 15, tzinfo=UTC),
         completed_at=datetime(2026, 9, 15, tzinfo=UTC),
     ),
 )

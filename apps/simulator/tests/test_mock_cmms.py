@@ -65,22 +65,29 @@ def pm_due(client: TestClient, as_of: str | None = None) -> list[str]:
 def test_pm_due_only_includes_open_preventive_orders_at_or_before_as_of() -> None:
     with TestClient(app) as client:
         # Nothing is due before the first due date; the completed survey never is.
-        assert pm_due(client, "2026-10-09T23:59:59Z") == []
-        assert pm_due(client, "2026-10-10T00:00:00Z") == ["SYN-CMMS-002"]
-        # The corrective repair is past its due date here and is still left out.
-        assert pm_due(client, "2026-10-21T00:00:00Z") == ["SYN-CMMS-001", "SYN-CMMS-002"]
+        assert pm_due(client, "2026-09-15T00:00:00Z") == []
+        assert pm_due(client, "2026-10-12T23:59:59Z") == []
+        assert pm_due(client, "2026-10-13T00:00:00Z") == ["SYN-CMMS-001"]
+        assert pm_due(client, "2027-09-14T23:59:59Z") == ["SYN-CMMS-001"]
+        # The corrective repair is long past its due date here and is still left out.
+        assert pm_due(client, "2027-09-15T00:00:00Z") == ["SYN-CMMS-001", "SYN-CMMS-002"]
 
 
-def test_the_cathodic_protection_survey_falls_due_during_the_simulation() -> None:
+def test_only_the_cathodic_protection_survey_falls_due_during_the_simulation() -> None:
     with TestClient(app) as client:
-        # A bare read is the start of the simulation.
-        assert pm_due(client) == pm_due(client, "2026-10-12T00:00:00Z") == ["SYN-CMMS-002"]
-        assert pm_due(client, "2026-10-12T23:59:59Z") == ["SYN-CMMS-002"]
-        assert pm_due(client, "2026-10-13T00:00:00Z") == ["SYN-CMMS-001", "SYN-CMMS-002"]
+        # A bare read is the start of the simulation, when no preventive work is due.
+        assert pm_due(client) == pm_due(client, "2026-10-12T00:00:00Z") == []
+        # Through the demo on 18 October and beyond, the survey is the only change.
+        assert pm_due(client, "2026-10-13T00:00:00Z") == ["SYN-CMMS-001"]
+        assert pm_due(client, "2026-10-31T00:00:00Z") == ["SYN-CMMS-001"]
         # The same instant written with an offset; the clock is reported in UTC.
-        assert pm_due(client, "2026-10-13T07:00:00+07:00") == ["SYN-CMMS-001", "SYN-CMMS-002"]
+        assert pm_due(client, "2026-10-13T07:00:00+07:00") == ["SYN-CMMS-001"]
         offset = client.get(URL, params={"asOf": "2026-10-13T07:00:00+07:00"})
         assert offset.json()["asOf"] == "2026-10-13T00:00:00Z"
+
+
+def a_year_after(timestamp: datetime) -> datetime:
+    return timestamp.replace(year=timestamp.year + 1)
 
 
 def test_the_fixtures_agree_with_the_dl_01_bowtie() -> None:
@@ -89,15 +96,26 @@ def test_the_fixtures_agree_with_the_dl_01_bowtie() -> None:
     barriers = {barrier["id"]: barrier for barrier in bowtie["barriers"]}
     with TestClient(app) as client:
         data = client.get(URL).json()
-    assert {item["barrierId"] for item in data["items"]} <= set(barriers)
     assert parse(data["asOf"]) == parse(bowtie["metadata"]["simulationStartsAt"])
-    # The survey is due when the Barrier's newest Evidence is one 12-month interval old.
-    cathodic_protection = barriers["cathodic-protection"]
-    assert cathodic_protection["evidenceInterval"] == "12 months"
-    newest = max(parse(evidence["observedAt"]) for evidence in cathodic_protection["evidence"])
-    survey = next(item for item in data["items"] if item["id"] == "SYN-CMMS-001")
-    assert survey["barrierId"] == "cathodic-protection"
-    assert parse(survey["dueAt"]) == newest.replace(year=newest.year + 1)
+    assert [(item["id"], item["barrierId"]) for item in data["items"]][0] == (
+        "SYN-CMMS-001",
+        "cathodic-protection",
+    )
+    preventive = [item for item in data["items"] if item["kind"] == "preventive"]
+    assert len(preventive) == 3
+    for item in data["items"]:
+        assert item["barrierId"] in barriers
+    for item in preventive:
+        barrier = barriers[item["barrierId"]]
+        assert barrier["evidenceInterval"] == "12 months"
+        checks = sorted(parse(evidence["observedAt"]) for evidence in barrier["evidence"])
+        if item["status"] == "open":
+            # Due when the Barrier's newest Evidence is one evidence interval old.
+            assert parse(item["dueAt"]) == a_year_after(checks[-1])
+        else:
+            # The completed work is the newest Evidence; it was due a year after the one before.
+            assert parse(item["completedAt"]) == checks[-1]
+            assert parse(item["dueAt"]) == a_year_after(checks[-2])
 
 
 def test_reads_report_the_configured_organisation() -> None:
@@ -265,7 +283,7 @@ def test_the_overdue_flag_follows_the_due_date_and_the_status(
     before = emit(emitter, transport, "SYN-CMMS-001", datetime(2026, 10, 12, 23, 59, tzinfo=UTC))
     assert before["value"] == 0
     # A corrective work order is announced the same way; its kind is in the payload.
-    corrective = emit(emitter, transport, "SYN-CMMS-003", datetime(2026, 10, 20, tzinfo=UTC))
+    corrective = emit(emitter, transport, "SYN-CMMS-003", datetime(2026, 12, 15, tzinfo=UTC))
     assert corrective["value"] == 1
     assert isinstance(corrective["payload"], dict)
     assert corrective["payload"]["kind"] == "corrective"
@@ -279,7 +297,7 @@ def test_the_overdue_flag_follows_the_due_date_and_the_status(
 def test_two_work_orders_at_one_instant_are_two_signals_and_a_replay_is_one(
     emitter: SimulatedSignalEmitter, transport: InMemoryTransport
 ) -> None:
-    at = datetime(2026, 10, 14, tzinfo=UTC)
+    at = datetime(2027, 9, 15, tzinfo=UTC)
     first = emit(emitter, transport, "SYN-CMMS-001", at)
     second = emit(emitter, transport, "SYN-CMMS-002", at)
     assert (first["tag"], first["value"]) == (second["tag"], second["value"])
