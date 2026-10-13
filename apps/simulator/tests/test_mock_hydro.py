@@ -1,7 +1,7 @@
 import asyncio
 import json
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -27,13 +27,6 @@ EXPECTED = {
     "level": ("S-L1", "Z3", "m", 0.6),
     "tide": ("S-T1", "Z4", "m", 1.5),
 }
-
-
-def signal_example(name: str) -> dict[str, Any]:
-    """An example Signal of the signal.v1 contract, which a Signal rule may be written from."""
-    cases = json.loads((ROOT / "packages/contracts/test/fixtures/signal-cases.json").read_text())
-    (signal,) = [case["signal"] for case in cases if case["name"] == name]
-    return dict(signal)
 
 
 @pytest.fixture
@@ -188,7 +181,10 @@ def test_a_write_changes_no_reading() -> None:
 
 
 def test_the_storm_is_announced_as_a_validated_simulated_signal(
-    hydro: SimulatedHydro, emitter: SimulatedSignalEmitter, transport: InMemoryTransport
+    hydro: SimulatedHydro,
+    emitter: SimulatedSignalEmitter,
+    transport: InMemoryTransport,
+    signal_example: Callable[[str], dict[str, Any]],
 ) -> None:
     hydro.add_override("rain", start=STORM, value=60)
     outcome = asyncio.run(emitter.emit(hydro.observe("rain", STORM), run_id=RUN))
