@@ -8,21 +8,32 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./tokens.css": "./dist/tokens.css"
+    "./tokens.css": "./dist/tokens.css",
+    "./styles.css": "./dist/styles.css",
+    "./theme.css": "./dist/theme.css"
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "node scripts/export-tokens.mjs && tsc -p tsconfig.build.json",
+    "build": "node scripts/export-tokens.mjs && node scripts/build-styles.mjs && tailwindcss -i src/generated/styles.css -o dist/styles.css --minify && tsc -p tsconfig.build.json",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",
+    "@tailwindcss/cli": "4.3.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "react-dom": "19.3.0",
+    "tailwindcss": "4.3.3",
     "typescript": "5.9.3",
     "vitest": "3.2.7",
     "yaml": "2.9.1"
+  },
+  "dependencies": {
+    "radix-ui": "1.8.0",
+    "react": "19.3.0"
   }
 }

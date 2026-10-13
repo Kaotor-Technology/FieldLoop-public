@@ -354,6 +354,7 @@ components:
         - reauthentication_required
         - forbidden
         - not_found
+        - method_not_allowed
         - conflict
         - idempotency_key_reused
         - payload_hash_mismatch

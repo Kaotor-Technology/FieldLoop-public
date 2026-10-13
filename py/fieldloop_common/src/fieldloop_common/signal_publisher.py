@@ -9,6 +9,8 @@ from typing import Literal, Protocol
 from fieldloop_common.signal import is_signal
 
 MAX_SIGNAL_BYTES = 256 * 1024
+# The Organisation ID the publisher accepts. Producers validate with the same rule up front.
+ORG_ID_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}")
 
 
 class MessageTransport(Protocol):
@@ -54,7 +56,7 @@ class SignalPublisher:
     ) -> None:
         if (
             environment not in ("dev", "demo", "local")
-            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", org_id) is None
+            or ORG_ID_PATTERN.fullmatch(org_id) is None
             or not isinstance(simulation_only, bool)
             or re.fullmatch(r"[A-Za-z][A-Za-z0-9._~+%-]{2,254}", signal_topic) is None
             or re.fullmatch(r"[A-Za-z][A-Za-z0-9._~+%-]{2,254}", dead_letter_topic) is None

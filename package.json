@@ -15,7 +15,7 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "lint": "turbo run lint && eslint scripts db/seed data/synthetic/bangkok",
+    "lint": "turbo run lint && eslint scripts db/seed data/synthetic/bangkok data/synthetic/corpus/generate.mjs",
     "typecheck": "turbo run typecheck && tsc --noEmit -p tsconfig.json",
     "test": "turbo run test && vitest run --config vitest.config.ts",
     "lint:design": "design.md lint DESIGN.md",
@@ -26,6 +26,7 @@
     "db:migrate": "dbmate --migrations-table public.schema_migrations up",
     "test:migrations": "bash scripts/test-migrations.sh",
     "test:seed": "bash scripts/test-seed.sh",
+    "test:seed:legal": "node scripts/test-legal-seed.mjs",
     "test:seed:bangkok": "bash scripts/test-bangkok-seed.sh"
   },
   "devDependencies": {
