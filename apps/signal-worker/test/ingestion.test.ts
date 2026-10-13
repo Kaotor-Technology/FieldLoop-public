@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { WorkerError } from "../src/model.js";
-import { pr47PumpSignal, pr47RainSignal, push, runtime, signal } from "./fixtures.js";
+import { pr47PumpSignal, pr47RainAccumulationSignal, pr47RainRateSignal, push, runtime, signal } from "./fixtures.js";
 
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { for (const app of apps.splice(0)) await app.close(); });
@@ -17,7 +17,11 @@ describe("OIDC Signal push boundary", () => {
     expect(config.store.ingest).toHaveBeenCalledWith(signal);
     expect(config.store.publishPending).toHaveBeenCalledWith(config.publish);
   });
-  it.each([["PR #47 rain", pr47RainSignal], ["PR #47 pump", pr47PumpSignal]] as const)(
+  it.each([
+    ["PR #47 rain rate", pr47RainRateSignal],
+    ["PR #47 rain accumulation", pr47RainAccumulationSignal],
+    ["PR #47 pump", pr47PumpSignal],
+  ] as const)(
     "accepts the published %s Signal shape",
     async (_name, sample) => {
       const { app, config } = fixture();

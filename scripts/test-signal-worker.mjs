@@ -30,8 +30,8 @@ const cpRule = rules.find(({ condition }) => condition.ruleId === "cp-rectifier-
 const patrolRule = rules.find(({ condition }) => condition.ruleId === "encroachment-detected");
 assert.ok(cpRule && patrolRule, "loaded FL-78 packs must include the CP and patrol Signal rules");
 // Persist the actual FL-78 pack-loader output, not a hand-copied rule snapshot.
-// PR #47 head ca30d5ab574da9e29dc51eb8a2dda21efbcbdf87 emits different rain and pump shapes;
-// the source-contract samples below do not infer conversions between those contracts.
+// Current PR #47 head 4edbd3b88f94764c59462c0ddbf6de4a80f1c3a4 emits a rain rate plus a
+// separate 24-hour aggregate, and a pump Signal matching the pack's exact tag and unit.
 const intervals = { "mock-historian": { months: 3 }, "mock-patrol": { months: 3 }, "mock-hydro": 60, "mock-pumps": 60 };
 const base = { schemaVersion: "signal.v1", orgId, source: "mock-historian", tag: "DL-01.rectifier.output", value: 0, unit: "A",
   observedAt: "2026-10-13T00:00:00Z", simulated: true, classification: "CONFIDENTIAL" };
@@ -103,29 +103,43 @@ try {
   assert.equal(await count("health_proposal"), 7);
   assert.deepEqual(await snapshot(), healthBefore);
 
-  // Exact source fields from PR #47's Observation + SimulatedSignalEmitter, not its edited shared
-  // signal-cases.json. Current FL-78 rules above do not match these; persist them without fabricating
-  // Evidence or Proposals until the source and pack contracts are aligned.
-  const rainSourceSample = reading({ source: "mock-hydro", tag: "S-R1.rain.rate", value: 60, unit: "mm/h",
-    observedAt: "2026-10-13T00:02:00Z", payload: { assetCode: "S-R1", zoneCode: "Z3", kind: "rain", label: "SIMULATION" } });
-  const pumpSourceSample = reading({ source: "mock-pumps", tag: "P-3.pump.power", value: "lost", unit: undefined,
-    observedAt: "2026-10-13T00:03:00Z", payload: { assetCode: "P-3", facilityType: "pump", zoneCode: "Z3", operatingState: "stopped", label: "SIMULATION" } });
+  // Independent source fields from PR #47's Observation + SimulatedSignalEmitter, not signal-cases.json.
+  // The rate does not imply a 24-hour total; the source separately publishes that aggregate.
+  const sourceRun = randomUUID();
+  const rainRateSourceSample = reading({ source: "mock-hydro", tag: "rain.rate", value: 60, unit: "mm/h",
+    simulationRunId: sourceRun, observedAt: "2026-10-13T00:02:00Z",
+    payload: { assetCode: "S-R1", zone: "Z3", kind: "rain", label: "SIMULATION" } });
+  const rainAccumulationSourceSample = reading({ source: "mock-hydro", tag: "rain.accumulation.24h", value: 101, unit: "mm",
+    simulationRunId: sourceRun, observedAt: "2026-10-13T00:02:01Z",
+    payload: { assetCode: "S-R1", zone: "Z3", kind: "rain", windowSeconds: 86400, label: "SIMULATION" } });
+  const pumpSourceSample = reading({ source: "mock-pumps", tag: "pump.power", value: "lost", unit: "state",
+    simulationRunId: sourceRun, observedAt: "2026-10-13T00:03:00Z",
+    payload: { assetCode: "P-3", facilityType: "pump", zone: "Z3", operatingState: "stopped", label: "SIMULATION" } });
   const proposalsBeforeSourceSamples = await count("health_proposal");
   const evidenceBeforeSourceSamples = await count("evidence", sql`AND signal_receipt_id IS NOT NULL`);
-  await store.ingest(rainSourceSample);
+  await store.ingest(rainRateSourceSample);
+  await store.ingest(rainAccumulationSourceSample);
   await store.ingest(pumpSourceSample);
-  assert.equal(await count("signal_receipt", sql`AND id IN (${rainSourceSample.id}::uuid, ${pumpSourceSample.id}::uuid)`), 2);
-  assert.equal(await count("health_proposal"), proposalsBeforeSourceSamples);
-  assert.equal(await count("evidence", sql`AND signal_receipt_id IS NOT NULL`), evidenceBeforeSourceSamples);
+  const sourceSignalIds = [rainRateSourceSample.id, rainAccumulationSourceSample.id, pumpSourceSample.id];
+  const sourceSignalIdList = sql.join(sourceSignalIds.map((id) => sql`${id}::uuid`));
+  assert.equal(await count("signal_receipt", sql`AND id IN (${sourceSignalIdList})`), 3);
+  assert.equal(await count("health_proposal", sql`AND signal_receipt_id IN (${sourceSignalIdList})`), 4,
+    "the 24-hour aggregate and pump source Signals create proposals through the loaded pack rules");
+  assert.equal(await count("evidence", sql`AND signal_receipt_id IN (${sourceSignalIdList})`), 4);
+  assert.equal(await count("health_proposal", sql`AND signal_receipt_id = ${rainRateSourceSample.id}::uuid`), 0,
+    "a rain rate alone is not a 24-hour aggregate");
+  assert.equal(await count("health_proposal"), proposalsBeforeSourceSamples + 4);
+  assert.equal(await count("evidence", sql`AND signal_receipt_id IS NOT NULL`), evidenceBeforeSourceSamples + 4);
+  const proposalsAfterSourceSamples = await count("health_proposal");
 
   // Strict duration requires enough successive observations; sparse inspections never establish continuity.
   await sql`UPDATE app.signal_rule SET condition = condition || '{"durationSeconds":120,"expectedIntervalSeconds":60}'::jsonb WHERE id = ${cpRule.id}::uuid`.execute(database);
   const run = randomUUID();
   for (const seconds of [0, 60, 120, 121]) await store.ingest(reading({ simulationRunId: run, observedAt: new Date(Date.parse(base.observedAt) + (600 + seconds) * 1000).toISOString() }));
-  assert.equal(await count("health_proposal"), 8);
+  assert.equal(await count("health_proposal"), proposalsAfterSourceSamples + 1);
   const sparseRun = randomUUID();
   for (const seconds of [0, 180]) await store.ingest(reading({ simulationRunId: sparseRun, observedAt: new Date(Date.parse(base.observedAt) + (1000 + seconds) * 1000).toISOString() }));
-  assert.equal(await count("health_proposal"), 8);
+  assert.equal(await count("health_proposal"), proposalsAfterSourceSamples + 1);
   await sql`UPDATE app.signal_rule SET condition = condition - 'durationSeconds' - 'expectedIntervalSeconds' WHERE id = ${cpRule.id}::uuid`.execute(database);
 
   // Spatial rule: boundary covered, outside/missing/invalid location do not match.
@@ -133,13 +147,13 @@ try {
   for (const payload of [{}, { location: { type: "Point", coordinates: [102, 13.5] } }, { location: { type: "Point", coordinates: [999, 13.5] } }]) {
     await store.ingest(reading({ observedAt: "2026-10-13T01:00:00Z", payload }));
   }
-  assert.equal(await count("health_proposal"), 8);
+  assert.equal(await count("health_proposal"), proposalsAfterSourceSamples + 1);
   await store.ingest(reading({ observedAt: "2026-10-13T01:00:01Z", payload: { location: { type: "Point", coordinates: [100, 13.5] } } }));
-  assert.equal(await count("health_proposal"), 9);
+  assert.equal(await count("health_proposal"), proposalsAfterSourceSamples + 2);
   await sql`UPDATE app.signal_rule SET spatial_geom = NULL WHERE id = ${cpRule.id}::uuid`.execute(database);
 
   await store.ingest(reading({ simulationRunId: randomUUID(), observedAt: base.observedAt }));
-  assert.equal(await count("health_proposal"), 10, "a new Scenario run must not inherit the previous run's observation watermark");
+  assert.equal(await count("health_proposal"), proposalsAfterSourceSamples + 3, "a new Scenario run must not inherit the previous run's observation watermark");
 
   // Transaction rollback after a later failure must remove receipt, Signal and Evidence as well.
   await sql`ALTER TABLE app.health_proposal ADD CONSTRAINT fixture_proposal_failure CHECK (reason <> 'rollback fixture') NOT VALID`.execute(database);
