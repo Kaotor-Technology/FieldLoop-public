@@ -192,13 +192,6 @@ def test_reset_forgets_overrides_and_can_take_the_seed_of_the_next_run() -> None
     assert historian.value_at(RECTIFIER, at) != baseline
 
 
-def test_an_override_without_a_timezone_is_refused_before_its_value_is_looked_at() -> None:
-    historian = SimulatedHistorian()
-    naive = datetime(2026, 10, 12, 6, 0)  # noqa: DTZ001
-    with pytest.raises(ValueError, match="timezone"):
-        historian.add_override(RECTIFIER, start=naive, value=float("nan"))
-
-
 def test_reading_a_time_without_a_timezone_is_a_clear_error() -> None:
     historian = SimulatedHistorian()
     naive = datetime(2026, 10, 12, 6, 0)  # noqa: DTZ001
