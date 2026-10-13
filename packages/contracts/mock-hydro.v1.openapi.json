@@ -30,7 +30,7 @@
     "/mock/hydro/{kind}": {
       "get": {
         "operationId": "readMockHydroReading",
-        "description": "Return the simulated reading of one kind at asOf: rain rate at sensor S-R1, canal level at S-L1 or tide level at S-T1. The value is a pure function of kind and asOf, plus any Scenario override; the clock is the caller's asOf, never wall time.",
+        "description": "Return the simulated reading of one kind at asOf: rain rate at sensor S-R1, canal level at S-L1 or tide level at S-T1. The value is a pure function of kind and asOf, plus any Scenario override; the clock is the caller's asOf or the committed run's, never wall time.",
         "tags": [
           "mock-hydro"
         ],
@@ -48,11 +48,10 @@
             "in": "query",
             "name": "asOf",
             "required": false,
-            "description": "Timezone-aware Scenario time, not wall time; the response reports it in UTC as observedAt. The default is the start of the Bangkok storm simulation, fixed for deterministic replay.",
+            "description": "Timezone-aware Scenario time, not wall time; the response reports it in UTC as observedAt. When omitted it is the clock of the Scenario player's committed run, or the start of the Bangkok storm simulation (2026-10-12T00:00:00Z) when there is no run.",
             "schema": {
               "type": "string",
-              "format": "date-time",
-              "default": "2026-10-12T00:00:00Z"
+              "format": "date-time"
             }
           }
         ],

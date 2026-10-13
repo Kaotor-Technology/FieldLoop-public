@@ -12,6 +12,8 @@ from fieldloop_common.memory_transport import InMemoryTransport
 from fieldloop_common.signal_publisher import SignalPublisher
 from fieldloop_common.sql_connection import sql_connection_factory
 from fieldloop_simulator.mock_historian import SimulatedHistorian
+from fieldloop_simulator.mock_hydro import SimulatedHydro
+from fieldloop_simulator.mock_pumps import SimulatedPumps
 from fieldloop_simulator.mock_signals import SimulatedSignalEmitter
 from fieldloop_simulator.player import ScenarioPlayer
 from fieldloop_simulator.player_service import SimulationService
@@ -31,7 +33,14 @@ scenario = load_scenario(root / "apps/simulator/tests/fixtures/player.json")
 def make_service() -> tuple[SimulationService, PostgresPlayerStore]:
     store = PostgresPlayerStore(connect, org)
     player = ScenarioPlayer({scenario.id: scenario}, org, lambda: emitter)
-    return SimulationService(player, lambda: store, SimulatedHistorian(org_id=org)), store
+    service = SimulationService(
+        player,
+        lambda: store,
+        SimulatedHistorian(org_id=org),
+        SimulatedHydro(org_id=org),
+        SimulatedPumps(org_id=org),
+    )
+    return service, store
 
 
 service, store = make_service()
@@ -65,11 +74,24 @@ try:
     )
     assert result["elapsedSeconds"] == 60 and len(transport.messages) == 3
     first = [json.loads(data)["value"] for _, data, _ in transport.messages]
+    # The Demo B source read follows the durable run: the rain that the run published, as of
+    # the run's clock, also in a process that has only just started.
+    rain = service.hydro.read("rain")
+    assert rain.value == first[2] and rain.observed_at.isoformat() == "2026-10-13T00:01:00+00:00"
+    cold, cold_store = make_service()
+    try:
+        assert cold.hydro.read("rain").value == 0.0
+        cold.hydrate_sources()
+        assert cold.hydro.read("rain") == rain
+    finally:
+        cold_store.close()
     reset = service.execute("/reset", "reset-player-fixture", PlayerCommand(), run_id, "reset")
     assert (
         service.execute("/reset", "reset-player-fixture", PlayerCommand(), run_id, "reset") == reset
     )
     assert reset["id"] != created["id"] and reset["nextEventIndex"] == 0
+    # Reset drops what the run held: no rain even at the time the old run had it.
+    assert service.hydro.read("rain", rain.observed_at).value == 0.0
     result = service.execute(
         "/bookmark",
         "replay-player-fixture",

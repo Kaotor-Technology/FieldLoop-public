@@ -338,9 +338,14 @@ Both sources share these points:
 
 - **`asOf` is Scenario time, not the wall clock.** It is optional,
   timezone-aware RFC 3339 with the same rules as the CMMS `asOf`; anything else
-  is `400`. When omitted it is `2026-10-12T00:00:00Z`, the `simulationStartsAt`
-  of `data/synthetic/bangkok/bowtie-d.json`. The response reports it in UTC as
-  `observedAt`.
+  is `400`. When omitted it is the clock of the Scenario player's committed
+  run, so a bare read shows what the run has applied; with no run it is
+  `2026-10-12T00:00:00Z`, the `simulationStartsAt` of
+  `data/synthetic/bangkok/bowtie-d.json`. The response reports it in UTC as
+  `observedAt`. The committed clock moves only when the player handles a
+  command or a read of the run: while a run plays, a bare read of a source
+  stays at the clock of the last of those, because a read of a mock source
+  never advances a run or publishes.
 - **Facilities come from the Bangkok data.** Sensor, pump and gate codes and
   their zones are the Facilities of `data/synthetic/bangkok/facilities.geojson`.
   The simulator image does not contain `data/`, so they are literals and a test
@@ -355,16 +360,42 @@ Both sources share these points:
   tag carries no Facility code: the payload's `assetCode` names the Facility.
   In a Signal that a source's `observe()` builds, the Facility also takes part
   in the Signal `id`, so two pumps at one instant stay distinct.
-- **The Scenario player does not use these two sources yet (FL-309).** The
-  player on `main` (FL-74) builds each Demo B Signal from its Scenario event,
-  with the event as the Signal's identity and `target` and `sandbox` in the
-  payload, and it rehydrates only the historian. So a read of `/mock/hydro/…` or
-  `/mock/pumps/…` stays at its baseline during a run, and `add_override`,
-  `set_power`, `observe()`, `observe_rain_accumulation()` and both `reset()`
-  calls below have no caller outside tests. The snippets below show the calls
-  as FL-309 will make them. Until then the player's Signals and these sources
-  agree on source, tag, unit and the payload's `assetCode`, `zone`, `kind` and
-  `label`, and differ in identity.
+- **In a run, the Scenario player drives both sources (FL-309).** A Scenario
+  event names the source, its tag, its unit and the target Asset. The player
+  publishes the Signal, and the service replays every applied event into the
+  source, so a read of `/mock/hydro/…` or `/mock/pumps/…` follows the run and
+  returns to its baseline on reset. Each source is replaced whole, so a
+  concurrent read never sees part of a run. It does so on every command and every
+  read of the run, and, when a database is configured, before every `/mock/`
+  read, which is what rebuilds the reads after a cold start.
+  - **One payload.** The player takes a Demo B Signal's payload from the
+    source (`signal_payload` in each module) and adds its own envelope:
+    `target` and `sandbox: true`. An author writes no Asset code, zone or
+    operating state; anything else an author puts in `payload` is kept.
+  - **One identity.** In a run only the player publishes. `observe()` on a
+    source builds the same Signal for a caller in process, such as a test or
+    an operator's script. Both identify the Signal by its Asset, so one
+    reading has one `id` whoever publishes it and a consumer deduplicates it.
+    A test holds the two to one `id`, source, tag, value, unit, classification
+    and payload. The `id` carries no Scenario event, and a Scenario states a
+    reading of one tag and Asset only once at any one time.
+  - **No `assetId`.** A Signal names its Asset in the payload (`assetCode`),
+    not in `assetId`, because the source does not know the platform's UUIDs. A
+    rule therefore cannot tell P-1 from P-3 by the envelope; `pump-power-lost`
+    proposes for the Barriers its selector names, whichever pump lost power.
+  - **Validated at load.** The Scenario validator refuses an event that the
+    source could not publish, at the member that is wrong: an unknown tag, a
+    unit or target Asset that is not the source's, a rain rate that its noise
+    could take below zero, a power status other than `available` or `lost`,
+    a hydrology value beyond a million with its noise, or a second event for
+    one tag and Asset at the same time, since a read can hold only one value
+    for an instant (`storm_events.py`).
+  - **A run pinned earlier keeps its events.** A run stores the Scenario it was
+    created with. If such a run holds an event that these rules now refuse in
+    itself, the player still publishes it exactly as before, an authored
+    rainfall total included, and the source's reads and rainfall sums leave it
+    out. If it holds two events for one reading at one time, both are
+    published and the read holds the later.
 - **Scenario state is per process**, as the historian's overrides are, and is
   dropped by `reset()` and by scale-to-zero.
 - **No Barrier reference.** A Signal names its Facility, not a Barrier of
@@ -386,7 +417,9 @@ Both sources share these points:
   The schema ties `unit` to `kind` and refuses a rain rate below zero.
 - The body is `kind`, `assetCode` (the sensor), `zoneCode`, `value`, `unit`, `observedAt`,
   `orgId`, `label`, `simulated` and `classification`.
-- In process, a caller holds a reading and builds its Signal:
+- A Scenario event sets a reading: `tag: rain.rate`, `value: 60`,
+  `unit: mm/h`, `target: {kind: asset, id: S-R1}`. A caller in process does
+  the same by hand:
 
   ```python
   hydro = app.state.hydro
@@ -409,11 +442,18 @@ Both sources share these points:
   between overrides, so nothing is sampled. It is what the flood pack rule
   `rainfall-needs-fresh-evidence` matches (`mock-hydro`,
   `rain.accumulation.24h`, above 100 mm), and a test holds the two together.
-  A storm held at 60 mm/h crosses the rule after 1 hour 40 minutes. The HTTP
+  A storm held at 60 mm/h crosses the rule after 1 hour 40 minutes, which is
+  later than a pump that loses power at T+20m, while PRD §8.1 has the storm
+  trigger its rule first; the Scenario author settles the order with the
+  rate, the times or an earlier wet spell. The HTTP
   API does not serve the sum; it is a Signal only. The rule also carries
   `windowSeconds: 86400`: the value is already the 24 hour sum, so the worker
-  that evaluates the rule (FL-76) must not sum it over that window again. No
-  Scenario publishes this Signal yet (FL-309).
+  that evaluates the rule (FL-76) must not sum it over that window again.
+  In a Scenario the event has `tag: rain.accumulation.24h`, `unit: mm`,
+  `target: {kind: asset, id: S-R1}` and `value: null`: the player sums the rain
+  rates that the run published before the event, seeded noise included, so no
+  author states a total. The Signal exists only at the times a Scenario has
+  such an event.
 
   ```python
   await emitter.emit(hydro.observe_rain_accumulation(scenario_time), run_id=run_id)
@@ -436,8 +476,9 @@ Both sources share these points:
   `orgId`, `label`, `simulated` and `classification`. `operatingState` is
   `running` or `stopped` for a pump and `open` or `closed` for a gate; the
   schema enforces the pairing.
-- **Power lost.** A caller in process changes power, and that is the only
-  thing it changes. A pump without power is `stopped`; a gate stays where it was.
+- **Power lost.** A Scenario event changes power: `tag: pump.power`,
+  `value: lost`, `unit: state`, `target: {kind: asset, id: P-3}`. That is the
+  only thing it changes. A pump without power is `stopped`; a gate stays where it was.
 
   ```python
   pumps = app.state.pumps
@@ -548,9 +589,9 @@ infrastructure operator, in this order, and record the results in `docs/contexts
   sources test their own Scenario state, and the classification case covers all six sources.
 - **State is per process.** Overrides, pump and gate power changes and the run's seed live in the instance, so Terraform caps
   the service at one instance.
-- **Reset every source.** `historian.reset()`, `hydro.reset()` and `pumps.reset()` are separate calls. The
-  player (FL-74) resets and rehydrates the historian on every command and read; it does not call the other two
-  yet (FL-309).
+- **Rebuilt from the committed run.** On every command and read the service resets the historian and replays the
+  run's applied events into it, and replaces what `hydro` and `pumps` hold, with the run's clock, in one step
+  each (`restore`), so a read of a Demo B source during a rebuild sees the run as it was or as it is.
 - **An idle instance forgets.** The service has `min_instance_count = 0` and request-based CPU
   (`cpu_idle = true`; `cpu-throttling: true` on the live service). Scale-to-zero drops the
   overrides and the seed, and CPU is throttled between requests, so a player that advances

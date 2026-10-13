@@ -13,12 +13,15 @@ from apps.simulator.tests.test_player import fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     player, store, _, _ = fixture()
     monkeypatch.setenv("FIELDLOOP_ENV", "local")
-    monkeypatch.setattr(
-        app.state, "simulation", SimulationService(player, lambda: store, app.state.historian)
+    service = SimulationService(
+        player, lambda: store, app.state.historian, app.state.hydro, app.state.pumps
     )
+    monkeypatch.setattr(app.state, "simulation", service)
     with TestClient(app, client=("127.0.0.1", 53000)) as connection:
         yield connection
     app.state.historian.reset()
+    app.state.hydro.reset()
+    app.state.pumps.reset()
 
 
 def test_private_service_controls_and_reset_are_idempotent(client: TestClient) -> None:

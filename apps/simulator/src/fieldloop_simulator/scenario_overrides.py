@@ -1,6 +1,13 @@
 """What a Scenario holds a source at, in process, until the next reset (SIM-5)."""
 
+from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime
+
+
+def _require_timezone(start: datetime) -> None:
+    if start.tzinfo is None:
+        raise ValueError("Override times need a timezone")
 
 
 class HeldValues[T]:
@@ -10,17 +17,26 @@ class HeldValues[T]:
         self._held: dict[str, list[tuple[datetime, T]]] = {}
 
     def hold(self, key: str, *, start: datetime, value: T) -> None:
-        if start.tzinfo is None:
-            raise ValueError("Override times need a timezone")
+        _require_timezone(start)
         # Copy on write: readers on other threads never see a half-updated list.
         self._held[key] = [*self._held.get(key, []), (start, value)]
 
-    def reset(self) -> None:
-        self._held = {}
+    @classmethod
+    def of(cls, items: Iterable[tuple[str, datetime, T]]) -> "HeldValues[T]":
+        """Hold every ``(key, start, value)`` in the order given, for a run built in one go."""
+        held = cls()
+        for key, start, value in items:
+            _require_timezone(start)
+            # Nothing reads these lists until the caller publishes ``held``.
+            held._held.setdefault(key, []).append((start, value))
+        return held
 
-    def starts(self, key: str) -> list[datetime]:
-        """The times at which a held value of ``key`` begins, in order."""
-        return sorted({start for start, _ in self._held.get(key, [])})
+    def steps(self, key: str) -> list[tuple[datetime, T]]:
+        """Each time the held value of ``key`` changes and what it becomes, in order."""
+        latest: dict[datetime, T] = {}
+        for start, value in self._held.get(key, []):
+            latest[start] = value  # among equal starts, the one added last
+        return sorted(latest.items(), key=lambda step: step[0])
 
     def at(self, key: str, at: datetime) -> T | None:
         """The value held at ``at``, or ``None`` when the source is at its baseline."""
@@ -30,3 +46,15 @@ class HeldValues[T]:
         if not held:
             return None
         return max(reversed(held), key=lambda item: item[0])[1]
+
+
+@dataclass(frozen=True)
+class RunState[T]:
+    """What a run holds a source at, with the run's clock.
+
+    A source keeps one and replaces it whole, so a request that reads while a run is being
+    replayed sees the run as it was or as it is, never a part of either.
+    """
+
+    held: HeldValues[T]
+    clock: datetime
