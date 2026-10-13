@@ -24,6 +24,11 @@ simulator under `/mock/` (architecture §4.2).
   unknown path) and `method_not_allowed` (405). Request values are never echoed.
   The handlers are installed on the app (`install_problem_handlers`), so any
   route added under `/mock/` gets them; paths elsewhere keep FastAPI's defaults.
+- **Strict queries.** A query parameter the route does not declare, a
+  parameter given twice, a boolean that is not exactly `true` or `false`, and a
+  timestamp with more than six fractional digits are each `400`. A misspelt
+  filter is therefore refused and never answered with unfiltered data
+  (`known_query_only`, `QueryBoolean` and `Rfc3339` in `mock_http.py`).
 - **A contract each.** `mock-<source>.v1.openapi.json` and
   `mock-<source>.v1.schema.json` in `packages/contracts` describe a source. The
   response models are generated from the schema, `pnpm lint:api` lints the
@@ -141,7 +146,7 @@ and the list is small and bounded, so it is not paginated.
 | `SYN-CMMS-003` | `coating` | `corrective` | `open` | 2026-10-20 00:00 | |
 | `SYN-CMMS-004` | `depth-of-cover-and-markers` | `preventive` | `completed` | 2026-09-30 00:00 | 2026-09-15 00:00 |
 
-- **PM due.** `pmDue=true` returns only the open preventive work orders with
+- **PM due.** `pmDue` is `true` or `false`. `pmDue=true` returns only the open preventive work orders with
   `dueAt` at or before `asOf`. Corrective and completed work is left out.
   Without it, all four are returned.
 - **`asOf` is Scenario time, not the wall clock.** It is timezone-aware RFC 3339

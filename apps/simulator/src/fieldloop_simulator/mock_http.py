@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from pydantic import AfterValidator, AwareDatetime, BeforeValidator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -18,8 +19,9 @@ PROBLEM_JSON = "application/problem+json"
 MOCK_PREFIX = "/mock/"
 
 # RFC 3339 allows lowercase t and z. [0-9] is explicit because \d also matches other scripts.
+# A datetime holds microseconds, so a finer fraction is refused rather than silently truncated.
 _RFC3339 = re.compile(
-    r"[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?"
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?"
     r"(?:[Zz]|[+-][0-9]{2}:[0-9]{2})"
 )
 
@@ -36,6 +38,36 @@ def require_rfc3339(value: object) -> object:
 
 # Normalised to UTC at the boundary, so handlers never convert (and never overflow).
 Rfc3339 = Annotated[AwareDatetime, BeforeValidator(require_rfc3339), AfterValidator(to_utc)]
+
+
+def require_boolean(value: object) -> object:
+    # FastAPI validates trusted bool defaults too; HTTP query input is always a string.
+    if isinstance(value, bool):
+        return value
+    # Pydantic also accepts 1, yes, on, t and any letter case; the wire contract does not.
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    raise ValueError("Expected true or false.")
+
+
+QueryBoolean = Annotated[bool, BeforeValidator(require_boolean)]
+
+
+def known_query_only(request: Request) -> None:
+    """Refuse a query parameter the route does not declare, and one that is given twice.
+
+    FastAPI ignores the first and keeps the last value of the second, so a misspelt filter
+    would answer 200 with unfiltered data. A router installs this as a dependency.
+    """
+    route = request.scope.get("route")
+    if not isinstance(route, APIRoute):
+        return
+    declared = {parameter.alias for parameter in route.dependant.query_params}
+    given = [name for name, _ in request.query_params.multi_items()]
+    if len(given) != len(set(given)) or not set(given) <= declared:
+        raise RequestValidationError([])
 
 
 def problem(

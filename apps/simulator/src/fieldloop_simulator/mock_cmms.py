@@ -10,7 +10,7 @@ from typing import Annotated, Final
 from fastapi import APIRouter, Depends, Query
 from fieldloop_common.generated_mock_cmms import MockCmmsPage, WorkOrder
 
-from fieldloop_simulator.mock_http import Rfc3339, app_state
+from fieldloop_simulator.mock_http import QueryBoolean, Rfc3339, app_state, known_query_only
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
 
 CLASSIFICATION: Final = "INTERNAL"
@@ -108,7 +108,9 @@ class SimulatedCmms:
         )
 
 
-router = APIRouter(prefix="/mock/cmms", tags=["mock-cmms"])
+router = APIRouter(
+    prefix="/mock/cmms", tags=["mock-cmms"], dependencies=[Depends(known_query_only)]
+)
 
 get_cmms = app_state("cmms", SimulatedCmms)
 
@@ -117,7 +119,7 @@ get_cmms = app_state("cmms", SimulatedCmms)
 @router.get("/work-orders", response_model=MockCmmsPage, response_model_exclude_none=True)
 def list_work_orders(
     cmms: Annotated[SimulatedCmms, Depends(get_cmms)],
-    pm_due: Annotated[bool, Query(alias="pmDue")] = False,
+    pm_due: Annotated[QueryBoolean, Query(alias="pmDue")] = False,
     as_of: Annotated[Rfc3339, Query(alias="asOf")] = DEFAULT_AS_OF,
 ) -> MockCmmsPage:
     return cmms.page(pm_due=pm_due, as_of=as_of)

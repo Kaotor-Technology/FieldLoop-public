@@ -14,7 +14,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Response
 from fieldloop_common.generated_mock_ili import MockIliReport
 
-from fieldloop_simulator.mock_http import app_state, problem
+from fieldloop_simulator.mock_http import app_state, known_query_only, problem
 from fieldloop_simulator.mock_signals import Observation
 
 SOURCE_ID = "mock-ili"
@@ -76,7 +76,7 @@ class SimulatedIliDrop:
         )
 
 
-router = APIRouter(prefix="/mock/ili", tags=["mock-ili"])
+router = APIRouter(prefix="/mock/ili", tags=["mock-ili"], dependencies=[Depends(known_query_only)])
 
 
 get_drop = app_state("ili", SimulatedIliDrop)

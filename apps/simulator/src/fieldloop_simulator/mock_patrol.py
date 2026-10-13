@@ -12,7 +12,7 @@ from typing import Annotated, Final
 from fastapi import APIRouter, Depends
 from fieldloop_common.generated_mock_patrol import MockPatrolPage, PatrolFinding
 
-from fieldloop_simulator.mock_http import app_state
+from fieldloop_simulator.mock_http import app_state, known_query_only
 from fieldloop_simulator.mock_signals import Observation, utc_text
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
 
@@ -155,7 +155,9 @@ class SimulatedPatrol:
         )
 
 
-router = APIRouter(prefix="/mock/patrol", tags=["mock-patrol"])
+router = APIRouter(
+    prefix="/mock/patrol", tags=["mock-patrol"], dependencies=[Depends(known_query_only)]
+)
 
 get_patrol = app_state("patrol", SimulatedPatrol)
 

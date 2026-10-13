@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from fieldloop_common.generated_mock_historian import MockHistorianSeries
 
-from fieldloop_simulator.mock_http import Rfc3339, app_state, problem
+from fieldloop_simulator.mock_http import Rfc3339, app_state, known_query_only, problem
 from fieldloop_simulator.mock_signals import Classification, Observation
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
 
@@ -165,7 +165,9 @@ class SimulatedHistorian:
         )
 
 
-router = APIRouter(prefix="/mock/historian", tags=["mock-historian"])
+router = APIRouter(
+    prefix="/mock/historian", tags=["mock-historian"], dependencies=[Depends(known_query_only)]
+)
 
 
 get_historian = app_state("historian", SimulatedHistorian)
