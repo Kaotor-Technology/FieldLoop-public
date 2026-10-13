@@ -2,7 +2,9 @@
 
 `pipeline-integrity` and `flood-water` are independently versioned, authored
 simulation content. Their thresholds are illustrative; they are not engineering
-limits, forecasts or official warning criteria. Gen AI Safety belongs to FL-85.
+limits, forecasts or official warning criteria. The FL-85
+[`gen-ai-safety` pack](gen-ai-safety/README.md) adds the UC-1 AI System, four
+Guardrail Policies and Bowtie C.
 
 Each `pack.yaml` carries Threat Categories, Knowledge Library folders, declarative
 Signal rules, Agent YAML file references and warning templates. Contracts live in
@@ -11,7 +13,7 @@ Signal rules, Agent YAML file references and warning templates. Contracts live i
 generates their types. `golden.json` fixes each demo catalog's expected rules and
 proposed outcomes. Golden tests also check selectors against the existing seeds.
 
-`web-api` loads both required packs before opening a listener. Set
+`web-api` loads all three required packs before opening a listener. Set
 `FIELDLOOP_DOMAIN_PACKS_DIR` to override the bundled directory. Malformed YAML,
 schema errors, unknown tool names, invalid handoffs, duplicate IDs, unknown folders
 and warning-placeholder mismatches stop startup with a source filename. Files may
@@ -22,7 +24,8 @@ The assistant runtime still has to implement tools and enforce the Guardrail,
 user permissions and runtime limits (FL-87/FL-88).
 
 With `FIELDLOOP_DEFAULT_ORG_ID` and either `DATABASE_URL` or the existing Cloud SQL
-connection settings, startup registers Threat Categories and Signal rules in one
+connection settings, startup registers Threat Categories, Signal rules and the Gen AI Safety graph,
+AI System and policies in one
 transaction through the existing database pool. IDs are deterministic per
 Organisation/pack/entity/code, so restarting updates records without duplicates.
 Registration works even when BFF credentials are not yet configured. Without
@@ -45,7 +48,8 @@ Warning templates have identical declared placeholders in English and Thai,
 including `district`, a SIMULATION label, L2 and `approvalRequired: true`. Rendering
 and sandbox delivery belong to the Action Request workflow; this loader sends no
 notifications. Agent AI System codes `demo-uc-1` and `demo-uc-4` are configuration
-identifiers to bind to the later AI System register, not database UUIDs.
+identifiers, not database UUIDs. FL-85 now binds `demo-uc-1` to its persisted AI
+System through deterministic Organisation-scoped IDs; UC-4 registration remains downstream.
 
 Version 1 supports idempotent reloads and updates of retained rule codes. Removing
 or renaming a published rule needs an explicit retirement policy before an upgrade;
