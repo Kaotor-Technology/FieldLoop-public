@@ -31,10 +31,13 @@ validator refuses anything else at the member that is wrong
 
 Write no `payload` for these events: the source states the Asset code, zone and operating
 state, and the player adds `target` and `sandbox`. A read of the source follows the applied
-events. `rain.accumulation.24h` is derived: the player sums the `rain.rate` events before it
+events, as of the run's clock when the caller names no `asOf`, whatever `startsAt` is. `rain.accumulation.24h` is derived: the player sums the `rain.rate` events before it
 over 24 hours, so place one where the run should report the total. It is what the Flood pack
 rule `rainfall-needs-fresh-evidence` matches (above 100 mm); at 60 mm/h that is 1 hour
 40 minutes after the rain starts. `pump.power` with `lost` is what `pump-power-lost` matches.
+PRD §8.1 has the storm trigger its rule before the pump fails, so a storyline with P-3 losing
+power at T+20m needs a higher rate, an earlier start of the rain, or the rainfall rule to fire
+second. Without a `rain.accumulation.24h` event a run never publishes the total.
 
 ```yaml
 - {id: rain-starts, atSeconds: 0, source: mock-hydro, target: {kind: asset, id: S-R1},

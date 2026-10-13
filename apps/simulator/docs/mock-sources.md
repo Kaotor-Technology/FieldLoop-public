@@ -338,8 +338,10 @@ Both sources share these points:
 
 - **`asOf` is Scenario time, not the wall clock.** It is optional,
   timezone-aware RFC 3339 with the same rules as the CMMS `asOf`; anything else
-  is `400`. When omitted it is `2026-10-12T00:00:00Z`, the `simulationStartsAt`
-  of `data/synthetic/bangkok/bowtie-d.json`. The response reports it in UTC as
+  is `400`. When omitted it is the clock of the Scenario player's committed
+  run, so a bare read shows what the run has applied; with no run it is
+  `2026-10-12T00:00:00Z`, the `simulationStartsAt` of
+  `data/synthetic/bangkok/bowtie-d.json`. The response reports it in UTC as
   `observedAt`.
 - **Facilities come from the Bangkok data.** Sensor, pump and gate codes and
   their zones are the Facilities of `data/synthetic/bangkok/facilities.geojson`.
@@ -359,17 +361,24 @@ Both sources share these points:
   event names the source, its tag, its unit and the target Asset. The player
   publishes the Signal, and the service replays every applied event into the
   source, so a read of `/mock/hydro/…` or `/mock/pumps/…` follows the run and
-  returns to its baseline on reset. It does so on every command, on every
-  read of the run, and before a `/mock/` read after a cold start.
+  returns to its baseline on reset. It does so on every command and every
+  read of the run, and, when a database is configured, before every `/mock/`
+  read, which is what rebuilds the reads after a cold start.
   - **One payload.** The player takes a Demo B Signal's payload from the
     source (`signal_payload` in each module) and adds its own envelope:
     `target` and `sandbox: true`. An author writes no Asset code, zone or
     operating state; anything else an author puts in `payload` is kept.
-  - **One publisher.** In a run only the player publishes, and the Scenario
-    event is the Signal's identity. `observe()` on a source builds the same
-    Signal for a caller in process, such as a test or an operator's script,
-    with the Facility as its identity. A test holds the two to one source,
-    tag, value, unit, classification and payload.
+  - **One identity.** In a run only the player publishes. `observe()` on a
+    source builds the same Signal for a caller in process, such as a test or
+    an operator's script. Both identify the Signal by its Asset, so one
+    reading has one `id` whoever publishes it and a consumer deduplicates it.
+    A test holds the two to one `id`, source, tag, value, unit, classification
+    and payload. The `id` carries no Scenario event: two events that state the
+    same reading of one Asset at one instant are one Signal.
+  - **No `assetId`.** A Signal names its Asset in the payload (`assetCode`),
+    not in `assetId`, because the source does not know the platform's UUIDs. A
+    rule therefore cannot tell P-1 from P-3 by the envelope; `pump-power-lost`
+    proposes for the Barriers its selector names, whichever pump lost power.
   - **Validated at load.** The Scenario validator refuses an event that the
     source could not publish, at the member that is wrong: an unknown tag, a
     unit or target Asset that is not the source's, a rain rate that its noise
@@ -377,7 +386,8 @@ Both sources share these points:
     (`storm_events.py`).
   - **A run pinned earlier keeps its events.** A run stores the Scenario it was
     created with. If such a run holds an event that these rules now refuse, the
-    player still publishes it and the source's reads leave it out.
+    player still publishes it exactly as before, an authored rainfall total
+    included, and the source's reads and rainfall sums leave it out.
 - **Scenario state is per process**, as the historian's overrides are, and is
   dropped by `reset()` and by scale-to-zero.
 - **No Barrier reference.** A Signal names its Facility, not a Barrier of
@@ -424,7 +434,10 @@ Both sources share these points:
   between overrides, so nothing is sampled. It is what the flood pack rule
   `rainfall-needs-fresh-evidence` matches (`mock-hydro`,
   `rain.accumulation.24h`, above 100 mm), and a test holds the two together.
-  A storm held at 60 mm/h crosses the rule after 1 hour 40 minutes. The HTTP
+  A storm held at 60 mm/h crosses the rule after 1 hour 40 minutes, which is
+  later than a pump that loses power at T+20m, while PRD §8.1 has the storm
+  trigger its rule first; the Scenario author settles the order with the
+  rate, the times or an earlier wet spell. The HTTP
   API does not serve the sum; it is a Signal only. The rule also carries
   `windowSeconds: 86400`: the value is already the 24 hour sum, so the worker
   that evaluates the rule (FL-76) must not sum it over that window again.
