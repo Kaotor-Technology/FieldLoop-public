@@ -8,8 +8,9 @@ export const signal: Signal = {
   source: "mock-historian", tag: "DL-01.rectifier.output", value: 0, unit: "A",
   observedAt: "2026-10-13T00:00:00Z", simulated: true, classification: "CONFIDENTIAL",
 };
-// Source-contract samples pinned to PR #47 snapshot c141dde794885e8e3c2ce0fbd553d200e37b651a.
-// This shared fixture stays independent of signal-cases.json.
+// Contract-validated synthetic samples checked against merged PR #47 source snapshot
+// 4a35cea00bc0a4571d85bdc5525a8cf110f6ec46. This fixture stays independent of
+// signal-cases.json and is not regenerated from the simulator's runtime values.
 const sourceSamples: unknown = JSON.parse(readFileSync(new URL("./fixtures/pr47-signals.json", import.meta.url), "utf8"));
 function sourceSignal(name: string): Signal {
   const candidate = typeof sourceSamples === "object" && sourceSamples !== null
