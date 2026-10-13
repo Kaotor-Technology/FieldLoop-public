@@ -32,8 +32,11 @@ def documented_paths() -> set[str]:
     return paths
 
 
-def test_the_contract_files_are_found() -> None:
-    assert {"historian", "cmms", "patrol", "ili"} <= set(SOURCES)
+def test_the_contract_files_are_those_of_the_sources_the_app_serves() -> None:
+    # Derived from the routes, so adding a source needs no edit here.
+    served = {path.split("/")[2] for path in served_paths()}
+    assert served
+    assert set(SOURCES) == served
 
 
 def test_the_documented_paths_are_the_served_paths() -> None:

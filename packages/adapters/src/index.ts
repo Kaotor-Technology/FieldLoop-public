@@ -7,3 +7,4 @@ export { GoogleCloudSecretReader } from "./secret-manager.js";
 export { GooglePubSubTransport, createGooglePubSubTransport } from "./google-pubsub.js";
 export { GoogleServiceIdentityVerifier, type ServiceIdentityVerifier } from "./google-service-identity.js";
 export { SignalPublisher, MAX_SIGNAL_BYTES, type MessageTransport, type SignalPublisherConfig, type SignalPublishResult } from "./signal-publisher.js";
+export { createCloudRunFetch, type ServiceFetch } from "./cloud-run-fetch.js";

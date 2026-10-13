@@ -1,9 +1,12 @@
-import { useEffect } from "react";
+import { SimulationBanner } from "./SimulationBanner";
+import { lazy, Suspense, useEffect } from "react";
 import { Outlet } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { SessionGate } from "./SessionGate";
 import { AccountSwitcher } from "./AccountSwitcher";
 import { usePreferences } from "./preferences";
+
+const SimulationControls = lazy(() => import("./SimulationControls").then(({ SimulationControls }) => ({ default: SimulationControls })));
 
 export function App() {
   const { t, i18n } = useTranslation();
@@ -23,7 +26,7 @@ export function App() {
         <button onClick={toggleNightShift} aria-pressed={nightShift}>{t("nightShift")}</button>
       </div>
     </header>
-    <div className="workspace-banner">{t("workspace")}</div>
+    <SimulationBanner />
     <div className="console-layout">
       <Outlet />
       <aside className="identity-panel" aria-label={t("identity")}>
@@ -37,5 +40,6 @@ export function App() {
         <AccountSwitcher user={user} />
       </aside>
     </div>
+    <Suspense fallback={<p className="simulation-controls" role="status">{t("simulationLoading")}</p>}><SimulationControls user={user} /></Suspense>
   </>}</SessionGate>;
 }

@@ -1,3 +1,4 @@
+import { simulationClientFromEnvironment } from "./simulation/client.js";
 import { buildApp } from "./app.js";
 import { createProductionAuthRuntime } from "./auth/runtime.js";
 import { registerSpa } from "./spa.js";
@@ -8,6 +9,7 @@ import { loadDemoDomainPacks } from "./domain-packs.js";
 // Validate every required file before opening any connections or listening.
 const domainPacks = await loadDemoDomainPacks();
 const authRuntime = await createProductionAuthRuntime();
+const simulator = simulationClientFromEnvironment();
 try {
   if (authRuntime.registerPacks) await authRuntime.registerPacks(domainPacks);
 } catch (error) {
@@ -17,6 +19,7 @@ try {
 const app = buildApp({
   auth: authRuntime.auth,
   domainPacks,
+  ...(simulator ? { simulator } : {}),
   ...(process.env["FIELDLOOP_BASE_URL"] ? { baseUrl: process.env["FIELDLOOP_BASE_URL"] } : {}),
 });
 app.addHook("onClose", authRuntime.close);

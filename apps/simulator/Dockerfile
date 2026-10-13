@@ -12,9 +12,11 @@ RUN uv sync --locked --no-dev --no-editable --package fieldloop-simulator
 
 FROM python:3.12-slim-bookworm AS runtime
 WORKDIR /app
+ENV FIELDLOOP_SCENARIO_DIR=/app/scenarios
 ENV PATH="/app/.venv/bin:$PATH" PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=8080
 RUN groupadd --gid 10001 fieldloop && useradd --uid 10001 --gid fieldloop --no-create-home fieldloop
 COPY --from=build --chown=fieldloop:fieldloop /app/.venv /app/.venv
+COPY --chown=fieldloop:fieldloop data/scenarios /app/scenarios
 USER fieldloop
 EXPOSE 8080
 CMD ["sh", "-c", "exec uvicorn fieldloop_simulator.main:app --host 0.0.0.0 --port \"${PORT:-8080}\""]
