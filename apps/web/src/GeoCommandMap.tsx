@@ -16,6 +16,8 @@ const DEFAULT_VIEW: MapViewport = { latitude: 13.775, longitude: 100.58, zoom: 1
 const PIPELINE_VIEW: MapViewport = { latitude: 18.79258, longitude: 99.54886, zoom: 8, heading: 0, tilt: 45 };
 const FLOOD_VIEW: MapViewport = { latitude: 13.775, longitude: 100.58, zoom: 13, heading: 0, tilt: 45 };
 const SYMBOLS: Record<string, string> = { degraded: "▲", failed: "✖", unverified: "⬚" };
+const RISK_BANDS = ["intolerable", "alarp", "acceptable"] as const;
+const BARRIER_HEALTH_STATES = ["healthy", "degraded", "failed", "unverified"] as const;
 const BARRIER_ICON_ATLAS = `data:image/svg+xml;charset=utf-8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="32" viewBox="0 0 96 32"><defs><mask id="hatch"><rect x="68" y="3" width="24" height="26" fill="white"/><path d="m67 11 9-9m-4 19L89 4m-8 25 13-13" stroke="black" stroke-width="4"/></mask></defs><path d="M16 2 30 29H2z" fill="white"/><path d="m39 7 18 18m0-18L39 25" stroke="white" stroke-width="4"/><rect x="68" y="3" width="24" height="26" fill="white" mask="url(#hatch)"/><path d="M68 3h24v26H68z" fill="none" stroke="white" stroke-width="2"/></svg>')}`;
 const BARRIER_ICON_MAPPING = {
   degraded: { x: 0, y: 0, width: 32, height: 32, mask: true },
@@ -159,6 +161,7 @@ export function GeoCommandMap() {
     return layer !== undefined && activeLayers.includes(layer) && result.isError;
   });
   const featureCounts = useMemo(() => countVisibleBarrierAlerts(visibleFeatures), [visibleFeatures]);
+  const contextSummary = useMemo(() => summarizeVisibleFeatures(visibleFeatures), [visibleFeatures]);
 
   useEffect(() => {
     if (!overlay.current) return;
@@ -405,6 +408,7 @@ export function GeoCommandMap() {
         <span className="context-tab-active">{t("overview")}</span>
       </div>
       <div className="context-body" tabIndex={0}>
+        <MapOverviewSummary summary={contextSummary} />
         {selectedFeature ? <FeatureOverview feature={selectedFeature} /> : <p className="context-hint">{t("selectMapFeature")}</p>}
         <section className="feature-list-section" aria-labelledby="visible-features-title">
           <div className="section-heading"><h3 id="visible-features-title">{t("visibleFeatures")}</h3><span className="mono">{features.length}</span></div>
@@ -431,6 +435,39 @@ export function GeoCommandMap() {
   </main>;
 }
 
+type VisibleFeatureSummary = ReturnType<typeof summarizeVisibleFeatures>;
+
+function MapOverviewSummary({ summary }: { summary: VisibleFeatureSummary }) {
+  const { t } = useTranslation();
+  return <div className="context-overview-summary">
+    <section className="context-summary-section" aria-labelledby="risk-summary-title">
+      <h3 id="risk-summary-title">{t("riskSummary")}</h3>
+      <p className="context-summary-scope">{t("visibleRiskSummary")}</p>
+      <ul className="context-summary-list">
+        {RISK_BANDS.map((band) => <li key={band} className={`risk-summary-row risk-${band}`}>
+          <span className="context-risk-mark" aria-hidden="true" />
+          <span>{t(band)}</span>
+          <strong className="mono">{summary.riskBands[band]}</strong>
+        </li>)}
+      </ul>
+    </section>
+    <section className="context-summary-section" aria-labelledby="barrier-summary-title">
+      <h3 id="barrier-summary-title">{t("barriersByHealth")}</h3>
+      <p className="context-summary-scope">{t("visibleBarrierSummary")}</p>
+      <ul className="context-summary-list">
+        {BARRIER_HEALTH_STATES.map((health) => <li key={health} className="barrier-summary-row">
+          <HealthBadge health={health} />
+          <strong className="mono">{summary.barrierHealth[health]}</strong>
+        </li>)}
+      </ul>
+    </section>
+    <section className="context-summary-section" aria-labelledby="action-summary-title">
+      <h3 id="action-summary-title">{t("openActionRequests")}</h3>
+      <p className="empty-note">{t("actionRequestsUnavailable")}</p>
+    </section>
+  </div>;
+}
+
 function FeatureOverview({ feature }: { feature: MapFeature }) {
   const { t, i18n } = useTranslation();
   const health = feature.properties.health;
@@ -443,6 +480,19 @@ function FeatureOverview({ feature }: { feature: MapFeature }) {
     {feature.properties.riskBand && <div><dt>{t("riskBand")}</dt><dd>{feature.properties.riskBand}</dd></div>}
     {feature.properties.evidenceObservedAt && <div><dt>{t("latestEvidence")}</dt><dd><time className="mono" dateTime={feature.properties.evidenceObservedAt}>{new Date(feature.properties.evidenceObservedAt).toLocaleDateString(i18n.language === "th" ? "th-TH" : "en-GB", { timeZone: "Asia/Bangkok" })}</time></dd></div>}
   </dl>;
+}
+
+function summarizeVisibleFeatures(features: readonly MapFeature[]) {
+  const summary = {
+    riskBands: { intolerable: 0, alarp: 0, acceptable: 0 },
+    barrierHealth: { healthy: 0, degraded: 0, failed: 0, unverified: 0 },
+  };
+  for (const feature of features) {
+    const { riskBand, featureKind, health } = feature.properties;
+    if (riskBand === "intolerable" || riskBand === "alarp" || riskBand === "acceptable") summary.riskBands[riskBand]++;
+    if (featureKind === "barrier" && (health === "healthy" || health === "degraded" || health === "failed" || health === "unverified")) summary.barrierHealth[health]++;
+  }
+  return summary;
 }
 
 function HealthBadge({ health }: { health: string }) {
