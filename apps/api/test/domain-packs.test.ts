@@ -1,4 +1,4 @@
-import { readFile, mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { readFile, readdir, mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -60,5 +60,17 @@ describe("web-api Domain Pack startup", () => {
         for (const code of rule.targetBarrierSelector.barrierCodes) expect(seed.barriers.map(({ id }) => id)).toContain(code);
       }
     }
+  });
+
+  it("keeps Pipeline attributes out of core migration columns", async () => {
+    const migrations = new URL("../../../db/migrations/", import.meta.url);
+    const names = await readdir(migrations);
+    const sources = await Promise.all(names.filter((name) => name.endsWith(".sql"))
+      .map((name) => readFile(new URL(name, migrations), "utf8")));
+    const columns = sources.flatMap((source) =>
+      [...source.matchAll(/^ {4}([a-z][a-z0-9_]*)\s+\S+/gm)].map(([, name]) => name));
+    const pipelinePackFields = new Set(["right_of_way", "location_class", "hca"]);
+
+    expect(columns.some((column) => pipelinePackFields.has(column ?? ""))).toBe(false);
   });
 });
