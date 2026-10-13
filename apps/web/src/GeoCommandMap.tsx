@@ -1,0 +1,425 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueries, useQuery } from "@tanstack/react-query";
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
+import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
+import { GeoJsonLayer, TextLayer } from "@deck.gl/layers";
+import { GoogleMapsOverlay } from "@deck.gl/google-maps";
+import type { MapFeature, MapFeatureCollection, MapLayerName, MapViewport } from "@fieldloop/map";
+import { getMapConfig, getMapLayer } from "./map-api";
+
+const LAYERS: MapLayerName[] = ["assets", "barriers", "consequences"];
+const DEFAULT_VIEW: MapViewport = { latitude: 13.775, longitude: 100.58, zoom: 13, heading: 0, tilt: 0 };
+const PIPELINE_VIEW: MapViewport = { latitude: 18.79258, longitude: 99.54886, zoom: 8, heading: 0, tilt: 0 };
+const FLOOD_VIEW: MapViewport = { latitude: 13.775, longitude: 100.58, zoom: 13, heading: 0, tilt: 0 };
+const SYMBOLS: Record<string, string> = { degraded: "▲", failed: "✖", unverified: "⬚" };
+const RISK_TOKEN: Record<string, string> = {
+  intolerable: "--color-risk-intolerable",
+  alarp: "--color-risk-alarp",
+  acceptable: "--color-risk-acceptable",
+};
+let configuredMapsApiKey: string | undefined;
+
+interface ViewportBounds {
+  bbox: readonly [number, number, number, number];
+  zoom: number;
+}
+
+export function GeoCommandMap() {
+  const { t } = useTranslation();
+  const search = useSearch({ from: "/map" });
+  const navigate = useNavigate({ from: "/map" });
+  const mapElement = useRef<HTMLDivElement>(null);
+  const map = useRef<google.maps.Map | null>(null);
+  const overlay = useRef<GoogleMapsOverlay | null>(null);
+  const [viewport, setViewport] = useState<MapViewport>(() => readViewportFromSearch(search));
+  const initialViewport = useRef(viewport);
+  const [bounds, setBounds] = useState<ViewportBounds | null>(null);
+  const [activeLayers, setActiveLayers] = useState<MapLayerName[]>(LAYERS);
+  const [domain, setDomain] = useState<"all" | "pipeline-integrity" | "flood-water">("all");
+  const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
+  const [query, setQuery] = useState("");
+  const [mapLoadFailed, setMapLoadFailed] = useState(false);
+  const [mapRetry, setMapRetry] = useState(0);
+  const mapConfig = useQuery({ queryKey: ["map-config"], queryFn: ({ signal }) => getMapConfig(signal), retry: 1 });
+  const visibleLayers = useQueries({
+    queries: LAYERS.map((layer) => ({
+      queryKey: ["map-layer", layer, bounds?.bbox, bounds?.zoom],
+      queryFn: ({ signal }: { signal: AbortSignal }) => getMapLayer({
+        layer,
+        bbox: bounds?.bbox ?? [0, 0, 0, 0],
+        zoom: bounds?.zoom ?? 0,
+        signal,
+      }),
+      enabled: Boolean(bounds) && activeLayers.includes(layer),
+      staleTime: 30_000,
+      retry: 1,
+    })),
+  });
+
+  useEffect(() => {
+    const apiKey = mapConfig.data?.mapsApiKey;
+    if (!apiKey || !mapElement.current || map.current) return;
+    let mounted = true;
+    let idleListener: google.maps.MapsEventListener | undefined;
+    if (!configuredMapsApiKey) {
+      setOptions({ key: apiKey, v: "weekly" });
+      configuredMapsApiKey = apiKey;
+    }
+    void importLibrary("maps").then((library) => {
+      if (!mounted || !mapElement.current) return;
+      const mapInstance = new library.Map(mapElement.current, {
+        center: { lat: initialViewport.current.latitude, lng: initialViewport.current.longitude },
+        zoom: initialViewport.current.zoom,
+        heading: initialViewport.current.heading,
+        tilt: initialViewport.current.tilt,
+        clickableIcons: false,
+        fullscreenControl: false,
+        mapTypeControl: false,
+        streetViewControl: false,
+        zoomControl: false,
+        gestureHandling: "greedy",
+      });
+      map.current = mapInstance;
+      overlay.current = new GoogleMapsOverlay({ layers: [] });
+      overlay.current.setMap(mapInstance);
+      const refreshViewport = () => {
+        const mapBounds = mapInstance.getBounds();
+        const center = mapInstance.getCenter();
+        const zoom = mapInstance.getZoom();
+        if (!mapBounds || !center || zoom === undefined) return;
+        const southWest = mapBounds.getSouthWest();
+        const northEast = mapBounds.getNorthEast();
+        const nextViewport: MapViewport = {
+          latitude: round(center.lat(), 5),
+          longitude: round(center.lng(), 5),
+          zoom: Math.round(zoom),
+          heading: Math.round(mapInstance.getHeading() ?? 0),
+          tilt: Math.round(mapInstance.getTilt() ?? 0),
+        };
+        setViewport(nextViewport);
+        setBounds({
+          bbox: [southWest.lng(), southWest.lat(), northEast.lng(), northEast.lat()],
+          zoom: Math.round(zoom),
+        });
+        void navigate({
+          search: (previous) => ({
+            ...previous,
+            lat: nextViewport.latitude.toFixed(5),
+            lng: nextViewport.longitude.toFixed(5),
+            zoom: String(nextViewport.zoom),
+            heading: String(nextViewport.heading),
+            tilt: String(nextViewport.tilt),
+          }),
+          replace: true,
+        });
+      };
+      idleListener = mapInstance.addListener("idle", refreshViewport);
+      refreshViewport();
+    }).catch(() => {
+      if (mounted) setMapLoadFailed(true);
+    });
+    return () => {
+      mounted = false;
+      idleListener?.remove();
+      overlay.current?.setMap(null);
+      overlay.current?.finalize();
+      overlay.current = null;
+      map.current = null;
+    };
+  }, [mapConfig.data?.mapsApiKey, mapRetry]);
+
+  const collections = useMemo(() => {
+    const byLayer = new Map<MapLayerName, MapFeatureCollection>();
+    LAYERS.forEach((layer, index) => {
+      const data = visibleLayers[index]?.data;
+      if (data) byLayer.set(layer, data);
+    });
+    return byLayer;
+  }, [visibleLayers]);
+  const features = useMemo(() => [...collections.values()].flatMap((collection) => collection.features)
+    .filter((feature) => domain === "all" || feature.properties.domainPack === domain)
+    .filter((feature) => query.trim().length === 0 || `${feature.properties.name ?? ""} ${feature.properties.code ?? ""}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())),
+  [collections, domain, query]);
+  const isSimulated = features.some((feature) => feature.properties.simulated === true);
+  const layerError = visibleLayers.some((result, index) => {
+    const layer = LAYERS[index];
+    return layer !== undefined && activeLayers.includes(layer) && result.isError;
+  });
+  const featureCounts = useMemo(() => ({
+    degraded: features.filter((feature) => feature.properties.health === "degraded").length,
+    failed: features.filter((feature) => feature.properties.health === "failed").length,
+    unverified: features.filter((feature) => feature.properties.health === "unverified").length,
+  }), [features]);
+
+  useEffect(() => {
+    if (!overlay.current) return;
+    const layers = [];
+    const assets = collections.get("assets");
+    const barriers = collections.get("barriers");
+    const consequences = collections.get("consequences");
+    if (activeLayers.includes("assets") && assets) {
+      const filtered = filterCollection(assets, domain);
+      layers.push(new GeoJsonLayer<MapFeature["properties"]>({
+        id: "asset-segment-layer",
+        data: filtered as never,
+        pickable: true,
+        stroked: true,
+        filled: true,
+        lineWidthMinPixels: 2,
+        pointRadiusMinPixels: 5,
+        getLineColor: (feature) => riskColor(feature.properties.riskBand, "--color-primary", 220),
+        getFillColor: (feature) => riskColor(feature.properties.riskBand, "--color-primary", 100),
+        getPointRadius: 6,
+        onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
+      }));
+    }
+    if (activeLayers.includes("consequences") && consequences) {
+      layers.push(new GeoJsonLayer<MapFeature["properties"]>({
+        id: "consequence-layer",
+        data: filterCollection(consequences, domain) as never,
+        pickable: true,
+        stroked: true,
+        filled: true,
+        lineWidthMinPixels: 2,
+        getLineColor: tokenColor("--color-warning", 210),
+        getFillColor: tokenColor("--color-warning", 42),
+        onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
+      }));
+    }
+    if (activeLayers.includes("barriers") && barriers) {
+      const mappedBarriers = filterCollection(barriers, domain).features
+        .filter((feature) => feature.properties.health !== "healthy");
+      const barrierCollection: MapFeatureCollection = { type: "FeatureCollection", features: mappedBarriers };
+      layers.push(new GeoJsonLayer<MapFeature["properties"]>({
+        id: "barrier-marker-hit-area",
+        data: barrierCollection as never,
+        pickable: true,
+        pointType: "circle",
+        pointRadiusMinPixels: 22,
+        getPointRadius: 16,
+        getFillColor: (feature) => healthColor(feature.properties.health),
+        getLineColor: [255, 255, 255, 255],
+        lineWidthMinPixels: 2,
+        onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
+      }));
+      layers.push(new TextLayer<MapFeature>({
+        id: "barrier-health-symbols",
+        data: mappedBarriers,
+        pickable: true,
+        getPosition: (feature) => pointPosition(feature),
+        getText: (feature) => SYMBOLS[String(feature.properties.health)] ?? "",
+        getSize: 18,
+        sizeUnits: "pixels",
+        getColor: tokenColor("--color-neutral-900", 255),
+        getTextAnchor: "middle",
+        getAlignmentBaseline: "center",
+        onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
+      }));
+    }
+    overlay.current.setProps({ layers });
+  }, [activeLayers, collections, domain]);
+
+  const moveToStory = (story: "pipeline-integrity" | "flood-water") => {
+    const target = story === "pipeline-integrity" ? PIPELINE_VIEW : FLOOD_VIEW;
+    setDomain(story);
+    map.current?.moveCamera({ center: { lat: target.latitude, lng: target.longitude }, zoom: target.zoom, heading: target.heading, tilt: target.tilt });
+  };
+
+  const changeZoom = (difference: number) => {
+    const mapInstance = map.current;
+    if (mapInstance) mapInstance.setZoom((mapInstance.getZoom() ?? viewport.zoom) + difference);
+  };
+
+  const chooseFeature = (feature: MapFeature) => {
+    setSelectedFeature(feature);
+    const position = pointPosition(feature);
+    map.current?.panTo({ lat: position[1], lng: position[0] });
+  };
+
+  return <main id="main-content" className="geo-command-map" tabIndex={-1}>
+    <nav className="nav-rail" aria-label={t("primaryNavigation")}>
+      <a className="nav-rail-item nav-rail-item-active" href="/map" aria-current="page" aria-label={t("map")} title={t("map")}>
+        <span aria-hidden="true">⌖</span><span>{t("map")}</span>
+      </a>
+      <button className="nav-rail-item" type="button" aria-label={t("layers")} title={t("layers")} onClick={() => document.getElementById("map-layer-controls")?.focus()}>
+        <span aria-hidden="true">▤</span><span>{t("layers")}</span>
+      </button>
+    </nav>
+
+    <section className="map-stage" aria-label={t("map") }>
+      <div className="map-toolbar">
+        <div className="map-heading">
+          <div><p className="eyebrow">FIELDLOOP · {t("mapHome")}</p><h1>{t("map")}</h1></div>
+          <label className="map-search-label" htmlFor="map-search">{t("searchMap")}</label>
+          <input id="map-search" className="map-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("searchPlaceholder")} />
+        </div>
+        <div className="map-filter-row" aria-label={t("demoStoryline")}>
+          <button type="button" className="filter-chip" aria-pressed={domain === "all"} onClick={() => setDomain("all")}>{t("allDomains")}</button>
+          <button type="button" className="filter-chip" aria-pressed={domain === "pipeline-integrity"} onClick={() => moveToStory("pipeline-integrity")}>{t("pipelineStory")}</button>
+          <button type="button" className="filter-chip" aria-pressed={domain === "flood-water"} onClick={() => moveToStory("flood-water")}>{t("floodStory")}</button>
+          <details className="layer-control" id="map-layer-controls">
+            <summary>{t("layers")}</summary>
+            <fieldset>
+              <legend>{t("visibleMapLayers")}</legend>
+              {LAYERS.map((layer) => <label key={layer} className="layer-option">
+                <input type="checkbox" checked={activeLayers.includes(layer)} onChange={() => setActiveLayers((current) => current.includes(layer) ? current.filter((item) => item !== layer) : [...current, layer])} />
+                <span>{t(layer)}</span>
+              </label>)}
+            </fieldset>
+          </details>
+        </div>
+      </div>
+
+      {isSimulated && <div className="simulation-banner" role="status">{t("simulationLabel")}</div>}
+      <div className="map-canvas-wrap">
+        <div ref={mapElement} className="map-canvas" aria-label={t("interactiveMap")} />
+        {(!mapConfig.data || mapLoadFailed) && <div className="map-status" role={mapConfig.isError || mapLoadFailed ? "alert" : "status"}>
+          <p>{mapLoadFailed ? t("mapLoadError") : mapConfig.isError ? t("mapConfigError") : t("mapLoading")}</p>
+          {mapConfig.isError && <button type="button" onClick={() => { void mapConfig.refetch(); }}>{t("retry")}</button>}
+          {mapLoadFailed && <button type="button" onClick={() => { setMapLoadFailed(false); setMapRetry((current) => current + 1); }}>{t("retry")}</button>}
+        </div>}
+        {mapConfig.data && layerError && <p className="map-inline-alert" role="alert">{t("mapLayerError")}</p>}
+        <div className="map-controls" aria-label={t("mapControls")}>
+          <button type="button" aria-label={t("zoomIn")} onClick={() => changeZoom(1)}>+</button>
+          <button type="button" aria-label={t("zoomOut")} onClick={() => changeZoom(-1)}>−</button>
+        </div>
+        <div className="map-legend" aria-label={t("riskLegend")}>
+          <span><i className="legend-risk legend-intolerable" />{t("intolerable")}</span>
+          <span><i className="legend-risk legend-alarp" />{t("alarp")}</span>
+          <span><i className="legend-risk legend-acceptable" />{t("acceptable")}</span>
+          <span><i className="legend-risk legend-unverified" />{t("riskNotRecorded")}</span>
+        </div>
+      </div>
+      <footer className="timeline-bar">
+        <div className="timeline-state"><span className="live-dot" aria-hidden="true" />{t("liveMapView")}</div>
+        <div className="timeline-track" aria-label={t("currentViewport")}>
+          <span>{t("viewportCenter")}</span><code>{viewport.latitude.toFixed(5)}, {viewport.longitude.toFixed(5)}</code>
+        </div>
+        <div className="timeline-alerts" aria-live="polite">
+          {t("visibleAlerts", { count: featureCounts.degraded + featureCounts.failed + featureCounts.unverified })}
+        </div>
+      </footer>
+    </section>
+
+    <aside className="context-panel" aria-label={t("contextPanel")}>
+      <header className="context-header">
+        <div><p className="eyebrow">{t("mapSelection")}</p><h2>{selectedFeature?.properties.name ?? t("overview")}</h2></div>
+        {selectedFeature?.properties.code && <code className="context-code">{selectedFeature.properties.code}</code>}
+      </header>
+      <div className="context-tabs">
+        <span className="context-tab-active">{t("overview")}</span>
+      </div>
+      <div className="context-body">
+        {selectedFeature ? <FeatureOverview feature={selectedFeature} /> : <p className="context-hint">{t("selectMapFeature")}</p>}
+        <section className="feature-list-section" aria-labelledby="visible-features-title">
+          <div className="section-heading"><h3 id="visible-features-title">{t("visibleFeatures")}</h3><span className="mono">{features.length}</span></div>
+          {features.length === 0 ? <p className="empty-note">{bounds ? t("noFeaturesInView") : t("mapLoading")}</p> : <ul className="feature-list">
+            {features.slice(0, 150).map((feature) => <li key={`${feature.properties.featureKind}-${feature.id}`}>
+              <button type="button" className="feature-list-item" onClick={() => chooseFeature(feature)}>
+                <FeatureSymbol feature={feature} />
+                <span className="feature-list-copy"><strong>{feature.properties.name ?? t("unnamedFeature")}</strong><span>{feature.properties.featureKind} · {feature.properties.health ?? feature.properties.riskBand ?? feature.properties.classification}</span></span>
+                {feature.properties.simulated && <span className="sim-tag">SIM</span>}
+              </button>
+            </li>)}
+          </ul>}
+          {features.length > 150 && <p className="empty-note">{t("featureListLimit", { count: 150 })}</p>}
+        </section>
+      </div>
+      <footer className="context-footer">
+        <span>{t("visibleDataScope")}</span>
+        <code>{features[0]?.properties.classification ?? t("noFeatures")}</code>
+      </footer>
+    </aside>
+  </main>;
+}
+
+function FeatureOverview({ feature }: { feature: MapFeature }) {
+  const { t, i18n } = useTranslation();
+  const health = feature.properties.health;
+  return <dl className="feature-overview">
+    <div><dt>{t("featureType")}</dt><dd>{feature.properties.featureKind ?? t("asset")}</dd></div>
+    {feature.properties.chainageFrom !== null && feature.properties.chainageFrom !== undefined && <div><dt>{t("chainage")}</dt><dd className="mono">{formatChainage(feature.properties.chainageFrom)}–{formatChainage(feature.properties.chainageTo ?? feature.properties.chainageFrom)} m</dd></div>}
+    <div><dt>{t("classification")}</dt><dd>{feature.properties.classification ?? t("unknown")}</dd></div>
+    {typeof feature.properties.simulated === "boolean" && <div><dt>{t("provenance")}</dt><dd>{feature.properties.simulated ? t("simulationLabel") : feature.properties.label ?? t("publicBaseMap")}</dd></div>}
+    {health && <div><dt>{t("barrierHealth")}</dt><dd><HealthBadge health={health} /></dd></div>}
+    {feature.properties.riskBand && <div><dt>{t("riskBand")}</dt><dd>{feature.properties.riskBand}</dd></div>}
+    {feature.properties.evidenceObservedAt && <div><dt>{t("latestEvidence")}</dt><dd><time className="mono" dateTime={feature.properties.evidenceObservedAt}>{new Date(feature.properties.evidenceObservedAt).toLocaleDateString(i18n.language === "th" ? "th-TH" : "en-GB", { timeZone: "Asia/Bangkok" })}</time></dd></div>}
+  </dl>;
+}
+
+function HealthBadge({ health }: { health: string }) {
+  const { t } = useTranslation();
+  return <span className={`health-badge health-${health}`}><span aria-hidden="true">{SYMBOLS[health] ?? "●"}</span>{t(health)}</span>;
+}
+
+function FeatureSymbol({ feature }: { feature: MapFeature }) {
+  const health = feature.properties.health;
+  return <span className={`feature-symbol ${health ? `health-${health}` : ""}`} aria-hidden="true">
+    {health ? SYMBOLS[health] ?? "●" : feature.properties.featureKind === "segment" ? "━" : feature.properties.featureKind === "consequence" ? "⬡" : "●"}
+  </span>;
+}
+
+function filterCollection(collection: MapFeatureCollection, domain: "all" | "pipeline-integrity" | "flood-water"): MapFeatureCollection {
+  return domain === "all" ? collection : { type: "FeatureCollection", features: collection.features.filter((feature) => feature.properties.domainPack === domain) };
+}
+
+function selectMapFeature(value: unknown, setSelectedFeature: (feature: MapFeature) => void): boolean {
+  if (!value || typeof value !== "object") return false;
+  const feature = value as Partial<MapFeature>;
+  if (feature.type !== "Feature" || typeof feature.id !== "string" || !feature.geometry || !feature.properties) return false;
+  setSelectedFeature(feature as MapFeature);
+  return true;
+}
+
+function pointPosition(feature: MapFeature): [number, number] {
+  const geometry = feature.geometry;
+  if (geometry.type === "Point") return geometry.coordinates;
+  if (geometry.type === "LineString") return geometry.coordinates[0] ?? [0, 0];
+  if (geometry.type === "Polygon") return geometry.coordinates[0]?.[0] ?? [0, 0];
+  return geometry.coordinates[0]?.[0]?.[0] ?? [0, 0];
+}
+
+function healthColor(health: unknown): [number, number, number, number] {
+  if (health === "degraded") return tokenColor("--color-health-degraded", 240);
+  if (health === "failed") return tokenColor("--color-health-failed", 240);
+  return tokenColor("--color-health-unverified", 240);
+}
+
+function riskColor(riskBand: unknown, fallbackToken: string, alpha: number): [number, number, number, number] {
+  const token = typeof riskBand === "string" ? RISK_TOKEN[riskBand.toLowerCase()] : undefined;
+  return tokenColor(token ?? fallbackToken, alpha);
+}
+
+function tokenColor(token: string, alpha: number): [number, number, number, number] {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(token).trim();
+  const match = /^#([\da-f]{6})$/i.exec(value);
+  if (!match?.[1]) return [0, 0, 0, alpha];
+  const color = Number.parseInt(match[1], 16);
+  return [(color >> 16) & 255, (color >> 8) & 255, color & 255, alpha];
+}
+
+function readViewportFromSearch(params: Record<string, unknown>): MapViewport {
+  const latitude = Number(params["lat"]);
+  const longitude = Number(params["lng"]);
+  const zoom = Number(params["zoom"]);
+  const heading = Number(params["heading"]);
+  const tilt = Number(params["tilt"]);
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 || !Number.isFinite(longitude) || longitude < -180 || longitude > 180) return DEFAULT_VIEW;
+  return {
+    latitude,
+    longitude,
+    zoom: Number.isInteger(zoom) && zoom >= 0 && zoom <= 22 ? zoom : DEFAULT_VIEW.zoom,
+    heading: Number.isFinite(heading) ? heading : DEFAULT_VIEW.heading,
+    tilt: tilt === 0 ? 0 : DEFAULT_VIEW.tilt,
+  };
+}
+
+function formatChainage(value: number): string {
+  return new Intl.NumberFormat("en-GB", { maximumFractionDigits: 0 }).format(value);
+}
+
+function round(value: number, decimals: number): number {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}

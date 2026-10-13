@@ -14,7 +14,12 @@ import "./styles.css";
 const queryClient = new QueryClient();
 const rootRoute = createRootRoute({ component: App });
 const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: () => <Navigate to="/map" replace /> });
-const mapRoute = createRoute({ getParentRoute: () => rootRoute, path: "/map", component: MapEntry });
+const mapRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/map",
+  validateSearch: (search: Record<string, unknown>) => search,
+  component: MapEntry,
+});
 const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, mapRoute]) });
 
 declare module "@tanstack/react-router" {
