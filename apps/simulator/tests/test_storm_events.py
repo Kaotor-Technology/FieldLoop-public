@@ -100,3 +100,15 @@ def test_rainfall_is_what_the_rain_rates_add_up_to_over_24_hours() -> None:
     assert storm_events.rainfall(rates, START + timedelta(hours=2)) == 120
     assert storm_events.rainfall(rates, START + timedelta(hours=4)) == 190
     assert storm_events.rainfall([], START) == 0
+
+
+def test_the_authoring_guide_shows_events_the_validator_accepts() -> None:
+    import re
+
+    import yaml
+
+    guide = (Path(__file__).resolve().parents[3] / "data/scenarios/README.md").read_text()
+    (example,) = re.findall(r"```yaml\n(.*?)```", guide, re.DOTALL)
+    events = yaml.safe_load(example)
+    assert {event["source"] for event in events} == {"mock-hydro", "mock-pumps"}
+    validate_scenario({**document(), "events": events, "bookmarks": []})

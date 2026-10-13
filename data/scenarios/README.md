@@ -16,18 +16,34 @@ historian's override from the event time onwards. Other sources publish their de
 observation through `signal.v1`; source-specific read models can hydrate from the pinned
 Scenario and committed event index. Those integrations belong to their source issues.
 
-Use the publisher's source ID in each event. The current Demo B sources in
-[PR #47](https://github.com/Kaotor-Technology/FieldLoop-v2/pull/47) at
-[`ebaf194`](https://github.com/Kaotor-Technology/FieldLoop-v2/tree/ebaf194f0d52c5437c45d471424ab17001bb1cb6)
-use `mock-hydro` tags `rain.rate`, `water.level` and `tide.level`, and `mock-pumps` tags
-`pump.power` and `gate.power`. Hydro Signals carry `assetCode`, `zone`, `kind` and `label`;
-pump/gate Signals carry `assetCode`, `facilityType`, `zone`, `operatingState` and `label`.
-Keep the Facility in `target` and payload even when multiple Facilities share a tag. The PR
-body says `signal-cases.json` is unchanged from `main`; these source tags and payload shapes
-are taken from the source observations in PR #47, not inferred from a test editing those cases.
-The PR also records that `rainfall-needs-fresh-evidence` expects `rain.accumulation.24h` while
-the source publishes `rain.rate` only; the 24-hour aggregation remains unresolved (FL-24, FL-76).
-Get FL-73/FL-24 owner sign-off on the rule mapping and aggregation before authoring Signal rules.
+Demo B events use the installed `mock-hydro` and `mock-pumps` tags, units and Assets, and the
+validator refuses anything else at the member that is wrong
+([mock sources](../../apps/simulator/docs/mock-sources.md#demo-b-sources-fl-72)):
+
+| Source | `tag` | `value` | `unit` | `target` (kind `asset`) |
+| --- | --- | --- | --- | --- |
+| `mock-hydro` | `rain.rate` | number, not below 0 after noise | `mm/h` | `S-R1` |
+| `mock-hydro` | `water.level` | number | `m` | `S-L1` |
+| `mock-hydro` | `tide.level` | number | `m` | `S-T1` |
+| `mock-hydro` | `rain.accumulation.24h` | `null` | `mm` | `S-R1` |
+| `mock-pumps` | `pump.power` | `available` or `lost` | `state` | `P-1`, `P-2` or `P-3` |
+| `mock-pumps` | `gate.power` | `available` or `lost` | `state` | `G-1` or `G-2` |
+
+Write no `payload` for these events: the source states the Asset code, zone and operating
+state, and the player adds `target` and `sandbox`. A read of the source follows the applied
+events. `rain.accumulation.24h` is derived: the player sums the `rain.rate` events before it
+over 24 hours, so place one where the run should report the total. It is what the Flood pack
+rule `rainfall-needs-fresh-evidence` matches (above 100 mm); at 60 mm/h that is 1 hour
+40 minutes after the rain starts. `pump.power` with `lost` is what `pump-power-lost` matches.
+
+```yaml
+- {id: rain-starts, atSeconds: 0, source: mock-hydro, target: {kind: asset, id: S-R1},
+   tag: rain.rate, value: 60, unit: mm/h}
+- {id: pump-loses-power, atSeconds: 1200, source: mock-pumps, target: {kind: asset, id: P-3},
+   tag: pump.power, value: lost, unit: state}
+- {id: rainfall-after-2h, atSeconds: 7200, source: mock-hydro, target: {kind: asset, id: S-R1},
+   tag: rain.accumulation.24h, value: null, unit: mm}
+```
 
 Controls use the server clock. Forward bookmark jumps emit intervening events; to return to
 an earlier bookmark, reset and jump forward. Reset preserves seed and speed, creates a new
