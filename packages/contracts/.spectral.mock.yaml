@@ -1,0 +1,140 @@
+# Conventions for the simulator's mock-source contracts (`mock-*.openapi.json`).
+# They are read-only and called by other services, so the cookie-session rules of
+# `.spectral.yaml` give way to the service-identity rules below (architecture §4.2).
+# Every other rule of the base ruleset still applies.
+# Every rule is an error: `pnpm lint:api` fails on any finding.
+extends:
+  - ./.spectral.yaml
+
+aliases:
+  PathItem:
+    - "$.paths[*]"
+  Operation:
+    - "$.paths[*][get,put,post,patch,delete,head,options,trace]"
+
+rules:
+  # Replaced by the fieldloop-mock-* rules below.
+  fieldloop-path-prefix: off
+  fieldloop-global-session-security: off
+  fieldloop-session-cookie-scheme: off
+  # A mock source takes no cookie, so there is no session to forge.
+  fieldloop-csrf-on-unsafe-methods: off
+  # shared-problem finds the canonical openapi.yaml next to the ruleset file, and a rule
+  # inherited through `extends` has no such file, so it could never pass here.
+  fieldloop-error-problem-schema: off
+
+  fieldloop-mock-error-problem-ref:
+    description: An error response is a $ref into the sibling openapi.yaml, or has a problem+json body that is a $ref to its Problem schema.
+    message: "An error response must $ref openapi.yaml#/components/responses/*, or its application/problem+json schema must $ref openapi.yaml#/components/schemas/Problem."
+    severity: error
+    # The reference as written: the sibling file is the only canonical one.
+    resolved: false
+    given: "$.paths[*][*].responses[?(@property.match(/^[45]/))]"
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          oneOf:
+            - type: object
+              required: [$ref]
+              properties:
+                $ref: { type: string, pattern: "^openapi\\.yaml#/components/responses/[A-Za-z0-9]+$" }
+            - type: object
+              required: [content]
+              properties:
+                content:
+                  type: object
+                  required: [application/problem+json]
+                  properties:
+                    application/problem+json:
+                      type: object
+                      required: [schema]
+                      properties:
+                        schema:
+                          type: object
+                          required: [$ref]
+                          properties:
+                            $ref: { const: "openapi.yaml#/components/schemas/Problem" }
+
+  fieldloop-mock-path-prefix:
+    description: A mock source is served under /mock/ (architecture §4.2).
+    message: "{{property}} must start with /mock/."
+    severity: error
+    given: $.paths
+    then:
+      field: "@key"
+      function: pattern
+      functionOptions:
+        match: "^/mock/"
+
+  fieldloop-mock-get-only:
+    description: A mock source is read-only (SIM-2), so a path defines GET and no other method.
+    message: "A mock source path must define `get` and no other method."
+    severity: error
+    given: "#PathItem"
+    then:
+      - field: get
+        function: truthy
+      - field: put
+        function: falsy
+      - field: post
+        function: falsy
+      - field: patch
+        function: falsy
+      - field: delete
+        function: falsy
+      - field: head
+        function: falsy
+      - field: options
+        function: falsy
+      - field: trace
+        function: falsy
+
+  fieldloop-mock-service-identity-security:
+    description: Other services call a mock source with a Google OIDC ID token that Cloud Run invoker IAM verifies, so the service identity is the default security requirement.
+    message: "Top-level `security` must be exactly [{ serviceIdentity: [] }]."
+    severity: error
+    given: $
+    then:
+      field: security
+      function: schema
+      functionOptions:
+        schema:
+          type: array
+          minItems: 1
+          maxItems: 1
+          items:
+            type: object
+            required: [serviceIdentity]
+            additionalProperties: false
+            properties:
+              serviceIdentity: {}
+
+  fieldloop-mock-no-operation-security:
+    description: An operation inherits the service identity; none of them is public or uses another scheme.
+    message: "A mock source operation must not declare its own `security`."
+    severity: error
+    given: "#Operation"
+    then:
+      field: security
+      function: falsy
+
+  fieldloop-mock-service-identity-scheme:
+    description: serviceIdentity is an HTTP bearer scheme, and it is the only scheme, so a mock source cannot take the cookie session.
+    message: "components.securitySchemes must be exactly one http bearer scheme named serviceIdentity."
+    severity: error
+    given: $.components.securitySchemes
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          required: [serviceIdentity]
+          additionalProperties: false
+          properties:
+            serviceIdentity:
+              type: object
+              required: [type, scheme]
+              properties:
+                type: { const: http }
+                scheme: { const: bearer }
