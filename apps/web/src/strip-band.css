@@ -1,0 +1,27 @@
+.strip-band {
+  --strip-ink: var(--color-neutral-900); --strip-surface: var(--color-neutral-0);
+  --strip-hover: var(--color-neutral-100); --strip-border: var(--color-neutral-400);
+  --strip-simulation: var(--color-simulation); --strip-simulation-bg: var(--color-simulation-subtle);
+}
+:root[data-theme="dark"] .strip-band {
+  --strip-ink: var(--color-dark-on-surface); --strip-surface: var(--color-dark-surface);
+  --strip-hover: var(--color-dark-surface-raised); --strip-border: var(--color-dark-outline);
+  --strip-simulation: var(--color-dark-simulation); --strip-simulation-bg: var(--color-dark-simulation-subtle);
+}
+.strip-band { color: var(--strip-ink); background: var(--strip-surface); padding: var(--spacing-space-4); font-family: var(--type-body-md-font-family); line-height: 1.5; letter-spacing: normal; }
+.strip-band h2, .strip-band h3, .strip-band p { margin: 0; }
+.strip-band h3 { font-size: var(--type-body-sm-font-size); margin-block-start: var(--spacing-space-3); }
+.strip-band header, .strip-axis { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--spacing-space-2); }
+.strip-band header h2 { font-size: var(--type-body-md-font-size); }
+.strip-mono { font-family: var(--type-mono-md-font-family); }
+.strip-simulation { color: var(--strip-simulation); background: var(--strip-simulation-bg); padding-inline: var(--spacing-space-2); }
+.strip-axis { margin-block: var(--spacing-space-3); }
+.strip-segments { position: relative; height: var(--spacing-space-4); margin-block: var(--spacing-space-2); }
+.strip-segments > span { position: absolute; inset-block: 0; box-sizing: border-box; background: var(--strip-hover); border: solid var(--spacing-border-hairline) var(--strip-border); }
+.strip-segment-list { display: flex; flex-wrap: wrap; list-style: none; padding: 0; margin: 0; gap: var(--spacing-space-2); }
+.strip-segment-list li { background: var(--strip-hover); padding: var(--spacing-space-2); display: flex; flex-direction: column; overflow-wrap: anywhere; max-width: 100%; box-sizing: border-box; }
+.strip-barriers, .strip-facilities { display: flex; flex-wrap: wrap; gap: var(--spacing-space-3); padding-inline-start: var(--spacing-space-4); }
+.strip-barriers li, .strip-facilities li { overflow-wrap: anywhere; }
+
+.strip-barriers { list-style: none; padding: 0; }
+.strip-barriers li { display: flex; flex-wrap: wrap; gap: var(--spacing-space-2); background: var(--strip-hover); padding: var(--spacing-space-2); }
