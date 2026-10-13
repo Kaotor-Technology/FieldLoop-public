@@ -198,7 +198,7 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 }
 
 .workspace-banner { min-height: var(--spacing-space-8); padding: var(--spacing-space-1) var(--spacing-page-margin-desktop); color: var(--banner-ink); background: var(--banner); }
-.simulation-controls { padding: var(--spacing-space-4) var(--spacing-page-margin-desktop); border-top: var(--spacing-border-hairline) solid var(--outline); background: var(--surface); }
+.simulation-controls { position: relative; z-index: 6; padding: var(--spacing-space-4) var(--spacing-page-margin-desktop); border-top: var(--spacing-border-hairline) solid var(--outline); background: var(--surface); }
 .simulation-status, .simulation-actions, .simulation-setup { display: flex; flex-wrap: wrap; align-items: end; gap: var(--spacing-space-3); }
 .simulation-status { align-items: center; overflow-wrap: anywhere; }
 .simulation-controls progress { display: block; width: 100%; margin: var(--spacing-space-3) 0; accent-color: var(--banner-ink); }
