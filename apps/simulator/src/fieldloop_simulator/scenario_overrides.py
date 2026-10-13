@@ -5,6 +5,11 @@ from dataclasses import dataclass
 from datetime import datetime
 
 
+def _require_timezone(start: datetime) -> None:
+    if start.tzinfo is None:
+        raise ValueError("Override times need a timezone")
+
+
 class HeldValues[T]:
     """Values held from a start time on. The latest start wins; among equal starts, the last."""
 
@@ -12,8 +17,7 @@ class HeldValues[T]:
         self._held: dict[str, list[tuple[datetime, T]]] = {}
 
     def hold(self, key: str, *, start: datetime, value: T) -> None:
-        if start.tzinfo is None:
-            raise ValueError("Override times need a timezone")
+        _require_timezone(start)
         # Copy on write: readers on other threads never see a half-updated list.
         self._held[key] = [*self._held.get(key, []), (start, value)]
 
@@ -22,8 +26,7 @@ class HeldValues[T]:
         """Hold every ``(key, start, value)`` in the order given, for a run built in one go."""
         held = cls()
         for key, start, value in items:
-            if start.tzinfo is None:
-                raise ValueError("Override times need a timezone")
+            _require_timezone(start)
             # Nothing reads these lists until the caller publishes ``held``.
             held._held.setdefault(key, []).append((start, value))
         return held
