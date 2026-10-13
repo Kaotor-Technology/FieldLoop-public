@@ -5,6 +5,7 @@ import os
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fieldloop_common.generated_scenario import Scenario
@@ -147,9 +148,16 @@ try:
         )
         first_run = [json.loads(data) for _, data, _ in transport.messages[begin:]]
         assert len(first_run) == len(authored.events)
+        if authored.id == "bangkok-storm":
+            starts_at = datetime.fromisoformat(authored.starts_at.replace("Z", "+00:00"))
+            assert service.hydro.rain_accumulation(starts_at + timedelta(hours=2)) == 144
+            assert service.pumps.power_at("P-3", starts_at + timedelta(seconds=7201)) == "lost"
         store.close()
         service, store = make_service(authored)
         assert service.current()["state"] == "finished"
+        if authored.id == "bangkok-storm":
+            assert service.hydro.rain_accumulation(starts_at + timedelta(hours=2)) == 144
+            assert service.pumps.power_at("P-3", starts_at + timedelta(seconds=7201)) == "lost"
         reset = service.execute(
             "/reset",
             f"reset-{authored.id}",
@@ -157,6 +165,9 @@ try:
             uuid.UUID(str(created["id"])),
             "reset",
         )
+        if authored.id == "bangkok-storm":
+            assert service.hydro.rain_accumulation(starts_at + timedelta(hours=2)) == 0
+            assert service.pumps.power_at("P-3", starts_at + timedelta(seconds=7201)) == "available"
         replay_begin = len(transport.messages)
         service.execute(
             "/bookmark",

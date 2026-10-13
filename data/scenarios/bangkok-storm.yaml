@@ -1,5 +1,5 @@
 # SIMULATION: illustrative storm over the seeded Bangkok zone Z3.
-# Generator backup is already Degraded in Bowtie D; payload is reference context only.
+# Bowtie D already has a Degraded generator Barrier with overdue Evidence in the seed.
 # 72 mm/h for two hours integrates to 144 mm; canal noise never changes this rate.
 schemaVersion: scenario.v1
 id: bangkok-storm
@@ -19,11 +19,6 @@ events:
   tag: rain.rate
   value: 72.0
   unit: mm/h
-  payload:
-    assetCode: S-R1
-    zone: Z3
-    kind: rain
-    label: SIMULATION
 - id: pump-p3-baseline
   atSeconds: 0
   source: mock-pumps
@@ -33,18 +28,6 @@ events:
   tag: pump.power
   value: available
   unit: state
-  payload:
-    assetCode: P-3
-    facilityType: pump
-    zone: Z3
-    operatingState: running
-    label: SIMULATION
-    generatorTest:
-      barrierId: dual-power-generators
-      evidenceId: dual-power-generators-check-2
-      lastTestAt: '2026-09-01T00:00:00Z'
-      dueAt: '2026-10-01T00:00:00Z'
-      overdue: true
 - id: canal-baseline
   atSeconds: 0
   source: mock-hydro
@@ -54,11 +37,6 @@ events:
   tag: water.level
   value: 0.6
   unit: m
-  payload:
-    assetCode: S-L1
-    zone: Z3
-    kind: level
-    label: SIMULATION
 - id: canal-rising
   atSeconds: 600
   source: mock-hydro
@@ -68,33 +46,7 @@ events:
   tag: water.level
   value: 1.2
   unit: m
-  payload:
-    assetCode: S-L1
-    zone: Z3
-    kind: level
-    label: SIMULATION
   noiseAmplitude: 0.02
-- id: pump-p3-power-lost
-  atSeconds: 1200
-  source: mock-pumps
-  target:
-    kind: asset
-    id: P-3
-  tag: pump.power
-  value: lost
-  unit: state
-  payload:
-    assetCode: P-3
-    facilityType: pump
-    zone: Z3
-    operatingState: stopped
-    label: SIMULATION
-    generatorTest:
-      barrierId: dual-power-generators
-      evidenceId: dual-power-generators-check-2
-      lastTestAt: '2026-09-01T00:00:00Z'
-      dueAt: '2026-10-01T00:00:00Z'
-      overdue: true
 - id: rain-accumulation-3600
   atSeconds: 3600
   source: mock-hydro
@@ -102,14 +54,8 @@ events:
     kind: asset
     id: S-R1
   tag: rain.accumulation.24h
-  value: 72.0
+  value: null
   unit: mm
-  payload:
-    assetCode: S-R1
-    zone: Z3
-    kind: rain
-    windowSeconds: 86400
-    label: SIMULATION
 - id: rain-accumulation-7200
   atSeconds: 7200
   source: mock-hydro
@@ -117,14 +63,8 @@ events:
     kind: asset
     id: S-R1
   tag: rain.accumulation.24h
-  value: 144.0
+  value: null
   unit: mm
-  payload:
-    assetCode: S-R1
-    zone: Z3
-    kind: rain
-    windowSeconds: 86400
-    label: SIMULATION
 - id: rain-cell-leaves-z3
   atSeconds: 7200
   source: mock-hydro
@@ -134,11 +74,6 @@ events:
   tag: rain.rate
   value: 0.0
   unit: mm/h
-  payload:
-    assetCode: S-R1
-    zone: Z3
-    kind: rain
-    label: SIMULATION
 - id: canal-peak
   atSeconds: 7200
   source: mock-hydro
@@ -148,12 +83,17 @@ events:
   tag: water.level
   value: 1.4
   unit: m
-  payload:
-    assetCode: S-L1
-    zone: Z3
-    kind: level
-    label: SIMULATION
   noiseAmplitude: 0.02
+- id: pump-p3-power-lost
+  # The seeded generator test is already overdue; this event only reports P-3 power loss.
+  atSeconds: 7201
+  source: mock-pumps
+  target:
+    kind: asset
+    id: P-3
+  tag: pump.power
+  value: lost
+  unit: state
 - id: canal-receding
   atSeconds: 10800
   source: mock-hydro
@@ -163,11 +103,6 @@ events:
   tag: water.level
   value: 0.6
   unit: m
-  payload:
-    assetCode: S-L1
-    zone: Z3
-    kind: level
-    label: SIMULATION
 - id: rain-accumulation-86400
   atSeconds: 86400
   source: mock-hydro
@@ -175,14 +110,8 @@ events:
     kind: asset
     id: S-R1
   tag: rain.accumulation.24h
-  value: 144.0
+  value: null
   unit: mm
-  payload:
-    assetCode: S-R1
-    zone: Z3
-    kind: rain
-    windowSeconds: 86400
-    label: SIMULATION
 - id: rain-accumulation-93600
   atSeconds: 93600
   source: mock-hydro
@@ -190,14 +119,8 @@ events:
     kind: asset
     id: S-R1
   tag: rain.accumulation.24h
-  value: 0.0
+  value: null
   unit: mm
-  payload:
-    assetCode: S-R1
-    zone: Z3
-    kind: rain
-    windowSeconds: 86400
-    label: SIMULATION
 - id: pump-p3-still-without-power
   atSeconds: 259200
   source: mock-pumps
@@ -207,28 +130,16 @@ events:
   tag: pump.power
   value: lost
   unit: state
-  payload:
-    assetCode: P-3
-    facilityType: pump
-    zone: Z3
-    operatingState: stopped
-    label: SIMULATION
-    generatorTest:
-      barrierId: dual-power-generators
-      evidenceId: dual-power-generators-check-2
-      lastTestAt: '2026-09-01T00:00:00Z'
-      dueAt: '2026-10-01T00:00:00Z'
-      overdue: true
 bookmarks:
 - id: start
   name: Rain cell enters Z3; generator test already overdue
   atSeconds: 0
-- id: pump-power-lost
-  name: P-3 power lost at T+20 minutes
-  atSeconds: 1200
 - id: heavy-rainfall
   name: 144 mm accumulated; rain cell leaves Z3
   atSeconds: 7200
+- id: pump-power-lost
+  name: P-3 power lost just after heavy rainfall
+  atSeconds: 7201
 - id: forecast-24h
   name: Forecast +24 hours
   atSeconds: 86400

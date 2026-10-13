@@ -183,20 +183,33 @@ def test_demo_b_storm_pump_boundary_and_overdue_generator_match_seed_and_sources
     assert rain["value"] > 60 and rain["unit"] == "mm/h"
     assert rain["payload"]["target"] == {"kind": "asset", "id": "S-R1"}
     assert rain["payload"]["zone"] == "Z3"
-    now[0] += timedelta(seconds=1199)
+    now[0] += timedelta(seconds=7199)
     asyncio.run(player.read(tx))
+    assert not any(s["tag"] == "pump.power" and s["value"] == "lost" for s in signals(transport))
+    assert max(
+        s["value"] for s in signals(transport) if s["tag"] == "rain.accumulation.24h"
+    ) <= 100
+    now[0] += timedelta(seconds=1)
+    asyncio.run(player.read(tx))
+    accumulated_before_outage = [
+        s for s in signals(transport) if s["tag"] == "rain.accumulation.24h"
+    ]
+    assert accumulated_before_outage[-1]["value"] == 144
+    assert accumulated_before_outage[-1]["observedAt"] == (
+        start + timedelta(hours=2)
+    ).isoformat().replace("+00:00", "Z")
     assert not any(s["tag"] == "pump.power" and s["value"] == "lost" for s in signals(transport))
     now[0] += timedelta(seconds=1)
     asyncio.run(player.read(tx))
     lost = [s for s in signals(transport) if s["tag"] == "pump.power" and s["value"] == "lost"]
     assert len(lost) == 1
     signal = lost[0]
-    assert signal["observedAt"] == (start + timedelta(minutes=20)).isoformat().replace(
+    assert signal["observedAt"] == (start + timedelta(seconds=7201)).isoformat().replace(
         "+00:00", "Z"
     )
     pumps = SimulatedPumps(org_id="scenario-test")
-    pumps.set_power("P-3", start=start + timedelta(minutes=20), status="lost")
-    expected = pumps.observe("P-3", start + timedelta(minutes=20))
+    pumps.set_power("P-3", start=start + timedelta(seconds=7201), status="lost")
+    expected = pumps.observe("P-3", start + timedelta(seconds=7201))
     assert (signal["source"], signal["tag"], signal["unit"], signal["value"]) == (
         expected.source,
         expected.tag,
@@ -206,14 +219,7 @@ def test_demo_b_storm_pump_boundary_and_overdue_generator_match_seed_and_sources
     for key, value in expected.payload.items():
         assert signal["payload"][key] == value
     assert signal["payload"]["target"] == {"kind": "asset", "id": "P-3"}
-    backup = signal["payload"]["generatorTest"]
-    assert backup == {
-        "barrierId": generator["id"],
-        "evidenceId": latest["id"],
-        "lastTestAt": latest["observedAt"].replace(".000Z", "Z"),
-        "dueAt": due_at.isoformat().replace("+00:00", "Z"),
-        "overdue": True,
-    }
+    assert "generatorTest" not in signal["payload"]
 
     command(player, tx, "pause")
     command(player, tx, "bookmark", bookmarkId="complete")
@@ -244,5 +250,5 @@ def test_demo_b_noise_is_seeded_without_moving_the_rain_threshold_or_outage() ->
         assert next(s for s in run if s["tag"] == "rain.rate")["value"] > 60
         assert (
             next(s for s in run if s["tag"] == "pump.power" and s["value"] == "lost")["observedAt"]
-            == "2026-10-12T00:20:00Z"
+            == "2026-10-12T02:00:01Z"
         )
