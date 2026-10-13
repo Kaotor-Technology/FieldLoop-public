@@ -221,6 +221,29 @@ def test_reads_of_the_sources_follow_the_run(run: Run) -> None:
     assert run.signals()["rainfall-after-2h"]["value"] == 120
 
 
+def test_a_run_and_its_sources_state_one_signal_and_differ_only_in_the_envelope(run: Run) -> None:
+    run.play_to_the_end()
+    signals = run.signals()
+    stated = {
+        "rain-starts": run.hydro.observe("rain", START),
+        "pump-loses-power": run.pumps.observe("P-3", POWER_LOST),
+        "rainfall-after-2h": run.hydro.observe_rain_accumulation(START + timedelta(hours=2)),
+        "canal-rises": run.hydro.observe("level", START + timedelta(hours=3)),
+    }
+    for event_id, observation in stated.items():
+        signal = signals[event_id]
+        assert (signal["source"], signal["tag"], signal["value"], signal["unit"]) == (
+            observation.source,
+            observation.tag,
+            observation.value,
+            observation.unit,
+        ), event_id
+        assert signal["classification"] == observation.classification, event_id
+        # The run adds what only it knows: the Scenario target and the sandbox mark.
+        envelope = {"target": signal["payload"]["target"], "sandbox": True}
+        assert signal["payload"] == {**(observation.payload or {}), **envelope}, event_id
+
+
 def test_a_reset_returns_the_reads_to_their_baseline(run: Run) -> None:
     run.play_to_the_end()
     run.command("reset")
