@@ -61,6 +61,10 @@ describe("map layer API", () => {
     expect(ASSET_LAYER_SQL).not.toContain("attributes->>'risk_band'");
   });
 
+  it("caps the combined Asset and Segment feature response at the viewport limit", () => {
+    expect(ASSET_LAYER_SQL.trimEnd()).toMatch(/ORDER BY feature_kind, name, id\s+LIMIT \$7$/);
+  });
+
   it("scopes demo Risk Matrix calculations to complete, simulated seed data in the current Organisation", () => {
     expect(RISK_INPUT_SQL).toContain("ba.org_id = $2");
     expect(RISK_INPUT_SQL).toContain("classification = ANY($3::text[])");

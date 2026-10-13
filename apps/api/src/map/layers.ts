@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
-import { calculateRiskScore, type RiskBarrier, type RiskConsequence, type RiskPath, type RiskThreat, type RiskZone } from "@fieldloop/domain";
+import { calculateRisk, DEMO_RISK_MATRIX, RiskInputError } from "@fieldloop/domain";
+import type { RiskInput, RiskSeverity, RiskZone } from "@fieldloop/contracts";
 import type { MapFeature, MapFeatureCollection, MapGeometry, MapLayerName } from "@fieldloop/map";
 import type { AuthDatabase } from "../auth/postgres-store.js";
 
@@ -69,7 +70,7 @@ export class PostgresMapLayerStore implements MapLayerStore {
           simulated: row.simulated,
           label: row.label,
           health: parseHealth(row.health),
-          riskBand: parseRiskBand(row.asset_id ? riskByAsset.get(row.asset_id) ?? null : row.risk_band),
+          riskBand: row.asset_id ? mapRiskZone(riskByAsset.get(row.asset_id) ?? null) : parseRiskBand(row.risk_band),
           chainageFrom: row.chainage_from === null ? null : Number(row.chainage_from),
           chainageTo: row.chainage_to === null ? null : Number(row.chainage_to),
           evidenceObservedAt: row.evidence_observed_at,
@@ -88,53 +89,45 @@ export class PostgresMapLayerStore implements MapLayerStore {
     const rows = await bindPostgisQuery<RiskInputRow>(RISK_INPUT_SQL, [
       assetIds, input.orgId, classificationsThrough(input.clearance), input.allowSeededDemoGeometry,
     ]).execute(this.db);
-    const byBowtie = new Map<string, {
-      assetIds: Set<string>;
-      threats: RiskThreat[];
-      consequences: RiskConsequence[];
-      barriers: Map<string, RiskBarrier>;
-      paths: RiskPath[];
-      pathIds: Set<string>;
-      incomplete: boolean;
-    }>();
+    const byBowtie = new Map<string, RiskGroup>();
     for (const row of rows.rows) {
-      const group = byBowtie.get(row.bowtie_id) ?? {
-        assetIds: new Set<string>(), threats: [], consequences: [], barriers: new Map<string, RiskBarrier>(),
-        paths: [], pathIds: new Set<string>(), incomplete: false,
-      };
+      const group = byBowtie.get(row.bowtie_id) ?? createRiskGroup(row.bowtie_id);
       group.assetIds.add(row.asset_id);
-      if (row.entity_type === "threat" && row.frequency_per_year !== null) {
-        if (!group.threats.some((threat) => threat.id === row.entity_id)) {
-          group.threats.push({ id: row.entity_id, frequencyPerYear: Number(row.frequency_per_year) });
+      if (row.entity_type === "threat") {
+        const frequencyPerYear = row.frequency_per_year === null ? Number.NaN : Number(row.frequency_per_year);
+        if (!Number.isFinite(frequencyPerYear) || frequencyPerYear < 0) group.incomplete = true;
+        else group.threats.set(row.entity_id, { id: row.entity_id, frequencyPerYear });
+      } else if (row.entity_type === "consequence") {
+        const conditionalProbability = row.conditional_probability === null ? Number.NaN : Number(row.conditional_probability);
+        const severity = parseRiskSeverity(row.severity);
+        if (!Number.isFinite(conditionalProbability) || conditionalProbability < 0 || conditionalProbability > 1 || !severity) {
+          group.incomplete = true;
+        } else {
+          group.consequences.set(row.entity_id, { id: row.entity_id, conditionalProbability, severity });
         }
-      } else if (row.entity_type === "consequence" && row.conditional_probability !== null) {
-        if (!group.consequences.some((consequence) => consequence.id === row.entity_id)) {
-          const bands = severityBands(row.severity);
-          if (!bands) group.incomplete = true;
-          else group.consequences.push({
-            id: row.entity_id,
-            conditionalProbability: Number(row.conditional_probability),
-            severityBands: bands,
-          });
-        }
-      } else if (row.entity_type === "path" && row.target_id && row.target_type && row.barrier_id && row.barrier_side) {
+      } else if (row.target_id && row.target_type && row.barrier_id && row.barrier_side && row.barrier_type && row.pfd_band !== null) {
+        const side: RiskInput["paths"][number]["side"] = row.target_type === "threat" ? "preventive" : "mitigative";
         const health = parseHealth(row.health);
-        if (row.pfd_band === null || health === null) group.incomplete = true;
-        group.barriers.set(row.barrier_id, {
-          id: row.barrier_id,
-          side: row.barrier_side,
-          pfd: row.pfd_band === null ? null : Number(row.pfd_band),
-          health,
-          independenceGroupId: row.independence_group_id,
-        });
-        if (!group.pathIds.has(row.entity_id)) {
-          group.paths.push({
-            targetType: row.target_type,
-            targetId: row.target_id,
-            barrierId: row.barrier_id,
-            position: row.position ?? 1,
-          });
-          group.pathIds.add(row.entity_id);
+        const pfdBand = Number(row.pfd_band);
+        if (row.barrier_side !== side || !["technical", "organisational", "human"].includes(row.barrier_type) ||
+            health === null || !Number.isFinite(pfdBand) || pfdBand <= 0 || pfdBand > 1) {
+          group.incomplete = true;
+        } else {
+          const barrier = {
+            id: row.barrier_id,
+            type: row.barrier_type as RiskInput["barriers"][number]["type"],
+            side,
+            pfdBand,
+            health,
+            certified: false,
+            evidenceExpired: false,
+            ...(row.independence_group_id ? { independenceGroupId: row.independence_group_id } : {}),
+          };
+          group.barriers.set(row.barrier_id, barrier);
+          const pathId = `${side}:${row.target_id}`;
+          const path = group.paths.get(pathId) ?? { id: pathId, side, targetId: row.target_id, barrierIds: new Set<string>() };
+          path.barrierIds.add(row.barrier_id);
+          group.paths.set(pathId, path);
         }
       } else {
         group.incomplete = true;
@@ -144,12 +137,15 @@ export class PostgresMapLayerStore implements MapLayerStore {
     const result = new Map<string, RiskZone>();
     const incompleteAssets = new Set<string>();
     for (const group of byBowtie.values()) {
-      const zone = group.incomplete ? null : calculateRiskScore({
-          threats: group.threats,
-          consequences: group.consequences,
-          barriers: [...group.barriers.values()],
-          paths: group.paths,
-        }).worstZone;
+      let zone: RiskZone | null = null;
+      if (!group.incomplete) {
+        try {
+          zone = calculateRisk(toRiskInput(group)).cell.zone;
+        } catch (error) {
+          if (!(error instanceof RiskInputError)) throw error;
+          group.incomplete = true;
+        }
+      }
       if (!zone) {
         for (const assetId of group.assetIds) incompleteAssets.add(assetId);
         continue;
@@ -162,6 +158,36 @@ export class PostgresMapLayerStore implements MapLayerStore {
     for (const assetId of incompleteAssets) result.delete(assetId);
     return result;
   }
+}
+
+type RiskGroup = {
+  bowtieId: string;
+  assetIds: Set<string>;
+  threats: Map<string, RiskInput["threats"][number]>;
+  consequences: Map<string, RiskInput["consequences"][number]>;
+  barriers: Map<string, RiskInput["barriers"][number]>;
+  paths: Map<string, { id: string; side: "preventive" | "mitigative"; targetId: string; barrierIds: Set<string> }>;
+  incomplete: boolean;
+};
+
+function createRiskGroup(bowtieId: string): RiskGroup {
+  return { bowtieId, assetIds: new Set(), threats: new Map(), consequences: new Map(), barriers: new Map(), paths: new Map(), incomplete: false };
+}
+
+function toRiskInput(group: RiskGroup): RiskInput {
+  const barriers = [...group.barriers.values()];
+  return {
+    bowtieId: group.bowtieId,
+    matrix: DEMO_RISK_MATRIX,
+    threats: [...group.threats.values()],
+    consequences: [...group.consequences.values()],
+    barriers,
+    independenceGroups: [...new Set(barriers.flatMap(({ independenceGroupId }) => independenceGroupId ? [independenceGroupId] : []))]
+      .map((id) => ({ id })),
+    paths: [...group.paths.values()].map(({ id, side, targetId, barrierIds }) => ({
+      id, side, targetId, barrierIds: [...barrierIds].sort(),
+    })),
+  };
 }
 
 function bindPostgisQuery<Row>(queryText: string, values: readonly unknown[]) {
@@ -209,25 +235,42 @@ interface RiskInputRow {
   severity: unknown;
   barrier_id: string | null;
   barrier_side: "preventive" | "mitigative" | null;
+  barrier_type: string | null;
   pfd_band: number | string | null;
   health: string | null;
   independence_group_id: string | null;
   position: number | null;
 }
 
-function severityBands(value: unknown): number[] | null {
+function parseRiskSeverity(value: unknown): RiskSeverity | null {
   let severity = value;
   if (typeof severity === "string") {
     try { severity = JSON.parse(severity); } catch { return null; }
   }
   if (!severity || typeof severity !== "object" || Array.isArray(severity)) return null;
-  const bands = Object.values(severity);
-  return bands.length > 0 && bands.every((band) => typeof band === "number" && Number.isInteger(band) && band >= 1 && band <= 5)
-    ? bands as number[] : null;
+  const normalized: Record<string, number> = {};
+  const accepted = new Set<keyof RiskSeverity>([
+    "people", "environment", "financial", "serviceContinuity", "reputation", "legalRegulatory",
+  ]);
+  for (const [key, band] of Object.entries(severity)) {
+    const dimension = key === "service_continuity" ? "serviceContinuity"
+      : key === "legal_regulatory" ? "legalRegulatory" : key;
+    if (!accepted.has(dimension as keyof RiskSeverity) || typeof band !== "number" || !Number.isInteger(band) || band < 1 || band > 5) {
+      return null;
+    }
+    if (Object.hasOwn(normalized, dimension)) return null;
+    normalized[dimension] = band;
+  }
+  return Object.keys(normalized).length > 0 ? normalized as RiskSeverity : null;
 }
 
 function riskZoneSeverity(zone: RiskZone): number {
-  return zone === "intolerable" ? 2 : zone === "alarp" ? 1 : 0;
+  return zone === "red" ? 2 : zone === "amber" ? 1 : 0;
+}
+
+function mapRiskZone(zone: RiskZone | null): NonNullable<MapFeature["properties"]["riskBand"]> | null {
+  if (zone === null) return null;
+  return zone === "red" ? "intolerable" : zone === "amber" ? "alarp" : "acceptable";
 }
 
 export const RISK_INPUT_SQL = `
@@ -264,21 +307,21 @@ WITH selected_bowtie AS (
   SELECT sb.asset_id, sb.bowtie_id, 'threat'::text AS entity_type, t.id::text AS entity_id,
          NULL::text AS target_type, NULL::text AS target_id, t.frequency_per_year,
          NULL::numeric AS conditional_probability, NULL::jsonb AS severity,
-         NULL::text AS barrier_id, NULL::text AS barrier_side, NULL::numeric AS pfd_band,
+         NULL::text AS barrier_id, NULL::text AS barrier_side, NULL::text AS barrier_type, NULL::numeric AS pfd_band,
          NULL::text AS health, NULL::text AS independence_group_id, NULL::integer AS position
   FROM selected_bowtie sb JOIN app.threat t ON t.bowtie_id = sb.bowtie_id AND t.org_id = $2
   WHERE (t.classification = ANY($3::text[]) OR ($4::boolean AND t.simulated IS TRUE AND t.created_by IN ('seed:dl-01', 'seed:bangkok')))
   UNION ALL
   SELECT sb.asset_id, sb.bowtie_id, 'consequence'::text, c.id::text,
          NULL::text, NULL::text, NULL::numeric, c.p_conditional, c.severity,
-         NULL::text, NULL::text, NULL::numeric, NULL::text, NULL::text, NULL::integer
+         NULL::text, NULL::text, NULL::text, NULL::numeric, NULL::text, NULL::text, NULL::integer
   FROM selected_bowtie sb JOIN app.consequence c ON c.bowtie_id = sb.bowtie_id AND c.org_id = $2
   WHERE (c.classification = ANY($3::text[]) OR ($4::boolean AND c.simulated IS TRUE AND c.created_by IN ('seed:dl-01', 'seed:bangkok')))
   UNION ALL
   SELECT sb.asset_id, sb.bowtie_id, 'path'::text, bp.id::text,
          CASE WHEN bp.threat_id IS NOT NULL THEN 'threat' ELSE 'consequence' END,
          COALESCE(bp.threat_id, bp.consequence_id)::text, NULL::numeric, NULL::numeric, NULL::jsonb,
-         b.id::text, b.side, b.pfd_band, b.health, b.independence_group_id::text, bp.position
+         b.id::text, b.side, b.type, b.pfd_band, b.health, b.independence_group_id::text, bp.position
   FROM selected_bowtie sb
   JOIN app.barrier_path bp ON bp.org_id = $2 AND (bp.threat_id IS NOT NULL OR bp.consequence_id IS NOT NULL)
   JOIN app.barrier b ON b.id = bp.barrier_id AND b.org_id = bp.org_id
@@ -297,7 +340,7 @@ WITH selected_bowtie AS (
       (ig.classification = ANY($3::text[]) OR ($4::boolean AND ig.simulated IS TRUE AND ig.created_by IN ('seed:dl-01', 'seed:bangkok')))))
 )
 SELECT asset_id::text, bowtie_id::text, entity_type, entity_id, target_type, target_id,
-       frequency_per_year, conditional_probability, severity, barrier_id, barrier_side,
+       frequency_per_year, conditional_probability, severity, barrier_id, barrier_side, barrier_type,
        pfd_band, health, independence_group_id, position
 FROM risk_input`;
 
@@ -464,8 +507,7 @@ WITH visible_asset AS (
 ), visible_segment AS (
   SELECT s.id, s.asset_id, s.chainage_from, s.chainage_to, s.simulated, s.classification,
          ST_AsGeoJSON(s.geom)::jsonb AS geometry,
-         COALESCE(a.attributes->>'name', a.attributes->>'asset_code', a.id::text) || ' · ' ||
-           COALESCE(s.chainage_from::text, '?') || '–' || COALESCE(s.chainage_to::text, '?') || ' m' AS name,
+         COALESCE(a.attributes->>'name', a.attributes->>'asset_code', a.id::text) AS name,
          a.attributes->>'asset_code' AS code,
          a.attributes->>'label' AS label,
          NULL::text AS risk_band,
@@ -481,6 +523,7 @@ WITH visible_asset AS (
   ORDER BY s.chainage_from NULLS LAST
   LIMIT $7
 )
+SELECT * FROM (
 SELECT id::text, asset_id::text, geometry, name, code, type AS feature_kind, classification, simulated, label,
        NULL::text AS health, risk_band, NULL::numeric AS chainage_from, NULL::numeric AS chainage_to,
        NULL::text AS evidence_observed_at, domain_pack
@@ -488,7 +531,10 @@ FROM visible_asset
 UNION ALL
 SELECT id::text, asset_id::text, geometry, name, code, 'segment' AS feature_kind, classification, simulated, label,
        NULL::text AS health, risk_band, chainage_from, chainage_to, NULL::text AS evidence_observed_at, domain_pack
-FROM visible_segment`;
+FROM visible_segment
+) AS visible_features
+ORDER BY feature_kind, name, id
+LIMIT $7`;
 
 // Barrier locations come only from a confirmed GeoReference attached to evidence. The database
 // seed has no exact Chainage for several pipeline Barriers; those are deliberately not placed.
