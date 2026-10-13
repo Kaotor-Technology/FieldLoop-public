@@ -10,6 +10,8 @@ import yaml  # type: ignore[import-untyped]
 from fieldloop_common.generated_scenario import Scenario
 from jsonschema import Draft202012Validator, FormatChecker
 
+from fieldloop_simulator.mock_historian import TAG_PROFILES
+
 MAX_SCENARIO_BYTES = 1024 * 1024
 SCHEMA = json.loads(files("fieldloop_common").joinpath("scenario.v1.schema.json").read_text())
 VALIDATOR = Draft202012Validator(SCHEMA, format_checker=FormatChecker())
@@ -39,6 +41,14 @@ def validate_scenario(document: object) -> Scenario:
         if event.id in event_ids:
             raise ScenarioError(prefix + "/id", "duplicate event ID")
         event_ids.add(event.id)
+        if event.source == "mock-historian":
+            profile = TAG_PROFILES.get(event.tag)
+            if profile is None:
+                raise ScenarioError(prefix + "/tag", "unknown installed historian tag")
+            if isinstance(event.value, bool) or not isinstance(event.value, (float, int)):
+                raise ScenarioError(prefix + "/value", "historian readings must be numeric")
+            if event.unit != profile.unit:
+                raise ScenarioError(prefix + "/unit", "unit differs from the source API")
         if event.at_seconds < previous or event.at_seconds > scenario.duration_seconds:
             raise ScenarioError(
                 prefix + "/atSeconds", "timeline is unordered or beyond its duration"
@@ -108,6 +118,8 @@ class _ScenarioLoader(yaml.SafeLoader):  # type: ignore[misc]
 
 def load_catalog(directory: Path) -> dict[str, Scenario]:
     catalog: dict[str, Scenario] = {}
+    if not directory.is_dir():
+        return catalog
     for path in sorted(directory.iterdir()):
         if path.suffix not in (".json", ".yaml", ".yml"):
             continue

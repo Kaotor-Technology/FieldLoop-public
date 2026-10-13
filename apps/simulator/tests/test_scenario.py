@@ -42,7 +42,7 @@ def test_semantic_errors_locate_the_event() -> None:
         with pytest.raises(ScenarioError) as failure:
             validate_scenario(bad)
         assert failure.value.pointer == f"/events/1/{field}"
-    document["events"][0]["value"] = True
+    document["events"][2]["value"] = True
     with pytest.raises(ScenarioError, match="noise requires"):
         validate_scenario(document)
 

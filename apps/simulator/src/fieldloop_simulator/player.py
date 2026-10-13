@@ -189,8 +189,28 @@ class ScenarioPlayer:
 def classification(
     scenario: Scenario,
 ) -> Literal["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"]:
-    # Installed mock source APIs report INTERNAL. A Scenario cannot downgrade them.
-    return "INTERNAL" if scenario.classification == "PUBLIC" else scenario.classification
+    # Reuse the classifications of installed sources; reserve the highest class for
+    # sources whose APIs are not installed yet. A Scenario cannot downgrade a source.
+    classes = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"]
+    minimums = {
+        "mock-historian": "CONFIDENTIAL",
+        "mock-patrol": "HIGHLY_RESTRICTED",
+        "mock-ili": "HIGHLY_RESTRICTED",
+    }
+    highest = max(
+        [
+            classes.index(scenario.classification),
+            *[
+                classes.index(minimums.get(event.source, "HIGHLY_RESTRICTED"))
+                for event in scenario.events
+            ],
+        ]
+    )
+    from typing import cast
+
+    from fieldloop_simulator.mock_signals import Classification
+
+    return cast(Classification, classes[highest])
 
 
 def observation(snapshot: PlayerSnapshot, event: Event) -> Observation:
