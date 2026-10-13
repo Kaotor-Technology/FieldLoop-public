@@ -4,6 +4,11 @@ import { countVisibleBarrierAlerts, searchVisibleFeatures, selectVisibleFeatures
 
 const simulatedAsset = feature({ id: "synthetic-asset", name: "DL-01", simulated: true, health: null });
 const failedBarrier = feature({ id: "failed-barrier", name: "Valve barrier", simulated: true, health: "failed" });
+const segment: MapFeature = {
+  ...simulatedAsset,
+  id: "pipeline-segment",
+  properties: { ...simulatedAsset.properties, featureKind: "segment", chainageFrom: 1200, chainageTo: 1400 },
+};
 
 describe("map visible feature state", () => {
   it("keeps simulated provenance tied to rendered geometry when search has no matches", () => {
@@ -25,6 +30,10 @@ describe("map visible feature state", () => {
     expect(rendered.map((item) => item.id)).toEqual(["synthetic-asset"]);
     expect(countVisibleBarrierAlerts(rendered)).toEqual({ degraded: 0, failed: 0, unverified: 0 });
     expect(searchVisibleFeatures(rendered, "valve")).toEqual([]);
+  });
+
+  it("finds a Segment by its Chainage range", () => {
+    expect(searchVisibleFeatures([segment], "1400")).toEqual([segment]);
   });
 });
 

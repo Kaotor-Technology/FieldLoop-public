@@ -14,7 +14,7 @@ export function selectVisibleFeatures(
 export function searchVisibleFeatures(features: readonly MapFeature[], query: string): MapFeature[] {
   const normalizedQuery = query.trim().toLocaleLowerCase();
   if (!normalizedQuery) return [...features];
-  return features.filter((feature) => `${feature.properties.name ?? ""} ${feature.properties.code ?? ""}`
+  return features.filter((feature) => `${feature.properties.name ?? ""} ${feature.properties.code ?? ""} ${feature.properties.chainageFrom ?? ""} ${feature.properties.chainageTo ?? ""}`
     .toLocaleLowerCase().includes(normalizedQuery));
 }
 

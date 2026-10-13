@@ -152,7 +152,6 @@ export function GeoCommandMap() {
   [activeLayers, domain, visibleLayers]);
   const features = useMemo(() => searchVisibleFeatures(visibleFeatures, query),
   [visibleFeatures, query]);
-  const isSimulated = visibleFeatures.some((feature) => feature.properties.simulated === true);
   const layerError = visibleLayers.some((result, index) => {
     const layer = LAYERS[index];
     return layer !== undefined && activeLayers.includes(layer) && result.isError;
@@ -314,7 +313,6 @@ export function GeoCommandMap() {
         </div>
       </div>
 
-      {isSimulated && <div className="simulation-banner" role="status">{t("simulationLabel")}</div>}
       <div className="map-canvas-wrap">
         <div ref={mapElement} className="map-canvas" role="region" aria-label={t("interactiveMap")} />
         {(!mapConfig.data || mapLoadFailed) && <div className="map-status" role={mapConfig.isError || mapLoadFailed ? "alert" : "status"}>
@@ -361,7 +359,10 @@ export function GeoCommandMap() {
             {features.slice(0, 150).map((feature) => <li key={`${feature.properties.featureKind}-${feature.id}`}>
               <button type="button" className="feature-list-item" onClick={() => chooseFeature(feature)}>
                 <FeatureSymbol feature={feature} />
-                <span className="feature-list-copy"><strong>{feature.properties.name ?? t("unnamedFeature")}</strong><span>{feature.properties.featureKind} · {feature.properties.health ?? feature.properties.riskBand ?? feature.properties.classification}</span></span>
+                <span className="feature-list-copy"><strong>{feature.properties.name ?? t("unnamedFeature")}</strong><span>{feature.properties.featureKind} · {feature.properties.health ?? feature.properties.riskBand ?? feature.properties.classification}</span>
+                  {feature.properties.featureKind === "segment" && (feature.properties.chainageFrom !== null || feature.properties.chainageTo !== null) &&
+                    <span className="feature-list-chainage mono">{t("chainage")}: {feature.properties.chainageFrom ?? "?"}–{feature.properties.chainageTo ?? "?"} m</span>}
+                </span>
                 {feature.properties.simulated && <span className="sim-tag">SIM</span>}
               </button>
             </li>)}
