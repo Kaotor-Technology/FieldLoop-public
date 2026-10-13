@@ -67,8 +67,11 @@ describe("web-api Domain Pack startup", () => {
     const names = await readdir(migrations);
     const sources = await Promise.all(names.filter((name) => name.endsWith(".sql"))
       .map((name) => readFile(new URL(name, migrations), "utf8")));
-    const columns = sources.flatMap((source) =>
-      [...source.matchAll(/^ {4}([a-z][a-z0-9_]*)\s+\S+/gm)].map(([, name]) => name));
+    const columns = sources.flatMap((source) => [
+      ...[...source.matchAll(/^ {4}([a-z][a-z0-9_]*)\s+\S+/gm)].map(([, name]) => name),
+      ...[...source.matchAll(/\bADD\s+COLUMN(?:\s+IF\s+NOT\s+EXISTS)?\s+([a-z][a-z0-9_]*)\b/gi)]
+        .map(([, name]) => name),
+    ]);
     const pipelinePackFields = new Set(["right_of_way", "location_class", "hca"]);
 
     expect(columns.some((column) => pipelinePackFields.has(column ?? ""))).toBe(false);
