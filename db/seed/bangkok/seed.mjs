@@ -93,7 +93,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtie = readBowtieSe
       classification: assetClassification(feature),
     });
   }
-  add("bowtie", bowtie.id, { hazard: bowtie.hazard, top_event: bowtie.topEvent,
+  add("bowtie", bowtie.id, { code: bowtie.id, hazard: bowtie.hazard, top_event: bowtie.topEvent,
     domain: bowtie.domain, status: bowtie.status, version: bowtie.version });
   const bowtieId = id("bowtie", bowtie.id);
   for (const code of bowtie.assetCodes) {
@@ -109,7 +109,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtie = readBowtieSe
   });
   for (const group of bowtie.independenceGroups) add("independence_group", group.id, { bowtie_id: bowtieId, cause: group.cause });
   for (const barrier of bowtie.barriers) add("barrier", barrier.id, {
-    name: barrier.name, type: barrier.type, side: barrier.side, pfd_band: barrier.pfdBand, health: barrier.health,
+    code: barrier.id, name: barrier.name, type: barrier.type, side: barrier.side, pfd_band: barrier.pfdBand, health: barrier.health,
     evidence_interval: barrier.evidenceInterval, performance_standard: barrier.performanceStandard, triad: jsonb(barrier.triad),
     independence_group_id: barrier.independenceGroupId ? id("independence_group", barrier.independenceGroupId) : null,
   });
