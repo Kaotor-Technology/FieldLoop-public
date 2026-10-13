@@ -6,7 +6,7 @@
   "additionalProperties": false,
   "required": [
     "kind",
-    "sensorCode",
+    "assetCode",
     "zoneCode",
     "value",
     "unit",
@@ -25,7 +25,7 @@
         "tide"
       ]
     },
-    "sensorCode": {
+    "assetCode": {
       "description": "The synthetic sensor Facility that reports the reading.",
       "type": "string",
       "pattern": "^S-[A-Z][0-9]+$"

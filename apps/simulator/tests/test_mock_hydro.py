@@ -47,7 +47,7 @@ def test_a_reading_is_a_deterministic_labelled_simulated_read(kind: str) -> None
     sensor, zone, unit, value = EXPECTED[kind]
     assert data == {
         "kind": kind,
-        "sensorCode": sensor,
+        "assetCode": sensor,
         "zoneCode": zone,
         "value": value,
         "unit": unit,
@@ -202,5 +202,5 @@ def test_the_sensors_are_the_sensor_facilities_of_the_bangkok_data() -> None:
         if feature["properties"]["facility_type"].endswith("_sensor")
     }
     assert authored == {
-        kind: (profile.sensor_code, profile.zone_code) for kind, profile in SENSOR_PROFILES.items()
+        kind: (profile.asset_code, profile.zone_code) for kind, profile in SENSOR_PROFILES.items()
     }

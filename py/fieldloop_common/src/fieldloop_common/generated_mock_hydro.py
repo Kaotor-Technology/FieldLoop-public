@@ -13,10 +13,10 @@ class MockHydroReading(BaseModel):
         extra="forbid",
     )
     kind: Literal["rain", "level", "tide"]
-    sensor_code: Annotated[
+    asset_code: Annotated[
         str,
         Field(
-            alias="sensorCode",
+            alias="assetCode",
             description="The synthetic sensor Facility that reports the reading.",
             pattern="^S-[A-Z][0-9]+$",
         ),

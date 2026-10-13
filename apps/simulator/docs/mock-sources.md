@@ -363,7 +363,7 @@ Both sources share these points:
 
 - Any other kind is `404`. The baselines are authored simulation values, not
   measurements or forecasts of a real place, and levels have no stated datum.
-- The body is `kind`, `sensorCode`, `zoneCode`, `value`, `unit`, `observedAt`,
+- The body is `kind`, `assetCode` (the sensor), `zoneCode`, `value`, `unit`, `observedAt`,
   `orgId`, `label`, `simulated` and `classification`.
 - A Scenario holds a reading and announces it:
 

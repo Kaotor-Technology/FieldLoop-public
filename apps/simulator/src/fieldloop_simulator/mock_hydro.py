@@ -34,7 +34,7 @@ class SensorProfile:
     ``swing`` is the half-range of a triangle wave of ``period`` around ``base``; zero is flat.
     """
 
-    sensor_code: str
+    asset_code: str
     zone_code: str
     tag: str
     unit: str
@@ -85,12 +85,12 @@ class SimulatedHydro:
         return Observation(
             source=SOURCE_ID,
             classification=CLASSIFICATION,
-            tag=f"{profile.sensor_code}.{profile.tag}",
+            tag=f"{profile.asset_code}.{profile.tag}",
             value=self.value_at(kind, at),
             observed_at=at,
             unit=profile.unit,
             payload={
-                "assetCode": profile.sensor_code,
+                "assetCode": profile.asset_code,
                 "zoneCode": profile.zone_code,
                 "kind": kind,
                 "label": LABEL,
@@ -103,7 +103,7 @@ class SimulatedHydro:
         return MockHydroReading.model_validate(
             {
                 "kind": kind,
-                "sensorCode": profile.sensor_code,
+                "assetCode": profile.asset_code,
                 "zoneCode": profile.zone_code,
                 "value": self.value_at(kind, as_of),
                 "unit": profile.unit,
