@@ -45,6 +45,8 @@
 !db/seed/dl-01/
 !db/seed/legal-corpus/
 !data/
+!data/scenarios/
+!data/scenarios/**
 !data/corpus/
 !data/corpus/legal/
 !data/corpus/legal/**
