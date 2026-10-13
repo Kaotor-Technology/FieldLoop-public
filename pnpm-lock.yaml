@@ -57,6 +57,9 @@ importers:
       '@fieldloop/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@fieldloop/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       fastify:
         specifier: 5.12.5
         version: 5.12.5

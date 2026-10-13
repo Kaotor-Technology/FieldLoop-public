@@ -5,6 +5,8 @@ import { registerAuthRoutes } from "./auth/routes.js";
 import { UnavailableAuthService } from "./auth/runtime.js";
 import type { AuthServicePort } from "./auth/service.js";
 import type { LoadedDomainPack } from "@fieldloop/adapters";
+import { registerRiskRoutes } from "./risk/routes.js";
+import type { RiskApiPort } from "./risk/service.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -17,6 +19,7 @@ export function buildApp(options: {
   auth?: AuthServicePort;
   baseUrl?: string;
   simulator?: SimulationPort;
+  risk?: RiskApiPort;
   domainPacks?: LoadedDomainPack[];
 } = {}) {
   const app = Fastify({ logger: { serializers: { req: serializeRequestForLog } } });
@@ -27,7 +30,8 @@ export function buildApp(options: {
   // Cloud Run reserves some paths ending in z; use this route for remote probes.
   app.get("/health", async () => ({ status: "ok" }));
   registerAuthRoutes(app, auth, options.baseUrl ?? process.env["FIELDLOOP_BASE_URL"]);
-  registerSimulationRoutes(app, options.simulator);
+  registerSimulationRoutes(app, options.simulator, options.risk);
+  registerRiskRoutes(app, options.risk);
   return app;
 }
 

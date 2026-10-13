@@ -19,6 +19,7 @@
     "@fastify/static": "10.1.6",
     "@fieldloop/adapters": "workspace:*",
     "@fieldloop/contracts": "workspace:*",
+    "@fieldloop/domain": "workspace:*",
     "fastify": "5.12.5",
     "jose": "6.2.12",
     "kysely": "0.29.6",

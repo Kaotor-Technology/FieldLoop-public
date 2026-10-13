@@ -5,6 +5,7 @@ import { once } from "node:events";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { CurrentUser } from "../auth/service.js";
 import { SimulationError, type PlayerCommand, type RunCreate, type SimulationPort, type SimulationRun } from "./client.js";
+import type { RiskApiPort } from "../risk/service.js";
 
 const classes = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"];
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -15,7 +16,7 @@ function permits(user: CurrentUser, classification: string): boolean {
   return ceiling >= 0 && level >= 0 && ceiling >= level;
 }
 
-export function registerSimulationRoutes(app: FastifyInstance, simulator?: SimulationPort): void {
+export function registerSimulationRoutes(app: FastifyInstance, simulator?: SimulationPort, risk?: RiskApiPort): void {
   app.register(async (routes) => {
     routes.setErrorHandler((error: unknown, request, reply) => {
       if (error instanceof SimulationError) return problem(reply, error.status, error.code);
@@ -26,9 +27,11 @@ export function registerSimulationRoutes(app: FastifyInstance, simulator?: Simul
     });
     routes.addHook("preHandler", async (request, reply) => {
       reply.header("cache-control", "private, no-store");
-      if (!simulator) throw new SimulationError(503, "simulation_unavailable");
       const user = request.fieldLoopCurrentUser;
-      if (!user || user.orgId !== simulator.orgId) throw new SimulationError(403, "organisation_denied");
+      const isEventStream = request.routeOptions.url === "/api/v1/events";
+      if (!isEventStream && !simulator) throw new SimulationError(503, "simulation_unavailable");
+      if (isEventStream && !simulator && !risk) throw new SimulationError(503, "simulation_unavailable");
+      if (!user || (!isEventStream && simulator && user.orgId !== simulator.orgId)) throw new SimulationError(403, "organisation_denied");
       if (request.method === "POST" && !user.roles.some((role) => ["fieldloop.operator", "fieldloop.manager"].includes(role))) {
         throw new SimulationError(403, "simulation_control_denied");
       }
@@ -70,7 +73,12 @@ export function registerSimulationRoutes(app: FastifyInstance, simulator?: Simul
     routes.get("/api/v1/events", async (request, reply) => {
       const abort = new AbortController();
       reply.raw.on("close", () => abort.abort());
-      let previous = checked(request, await port().current(abort.signal));
+      const user = currentUser(request);
+      const canStreamSimulation = simulator?.orgId === user.orgId;
+      let previous = canStreamSimulation ? checked(request, await port().current(abort.signal)) : null;
+      const lastEventId = request.headers["last-event-id"];
+      let riskCursor = parseRiskCursor(typeof lastEventId === "string" ? lastEventId : undefined);
+      if (!riskCursor) riskCursor = { createdAt: new Date(Date.now() - 2000).toISOString(), id: "00000000-0000-0000-0000-000000000000" };
       reply.hijack();
       reply.raw.writeHead(200, {
         "Content-Type": "text/event-stream", "Cache-Control": "private, no-store",
@@ -82,16 +90,26 @@ export function registerSimulationRoutes(app: FastifyInstance, simulator?: Simul
       let firstEvent = true;
       try {
         while (!abort.signal.aborted && Date.now() - started < 45_000) {
-          const current = checked(request, await port().current(abort.signal));
+          const current = canStreamSimulation ? checked(request, await port().current(abort.signal)) : null;
           if (current) {
             const reset = (previous && current.id !== previous.id) || (
               firstEvent && typeof request.headers["last-event-id"] === "string" && request.headers["last-event-id"].split(":")[0] !== current.id
             );
-            const payload = `id: ${current.id}:${current.revision}\nevent: ${reset ? "simulation.reset" : "simulation.state"}\ndata: ${JSON.stringify(current)}\n\n`;
+            const cursor = risk && riskCursor ? `|risk:${riskCursor.createdAt}:${riskCursor.id}` : "";
+            const payload = `id: ${current.id}:${current.revision}${cursor}\nevent: ${reset ? "simulation.reset" : "simulation.state"}\ndata: ${JSON.stringify(current)}\n\n`;
             if (!reply.raw.write(payload)) await once(reply.raw, "drain", { signal: abort.signal });
           } else reply.raw.write(": idle\n\n");
           previous = current;
           firstEvent = false;
+          if (risk) {
+            const events = await risk.riskEventsAfter(currentUser(request), riskCursor);
+            for (const event of events) {
+              const eventId = `${canStreamSimulation && previous ? `${previous.id}:${previous.revision}|` : ""}risk:${event.createdAt}:${event.id}`;
+              const payload = `id: ${eventId}\nevent: risk.recalculated\ndata: ${JSON.stringify(event)}\n\n`;
+              if (!reply.raw.write(payload)) await once(reply.raw, "drain", { signal: abort.signal });
+              riskCursor = { createdAt: event.createdAt, id: event.id };
+            }
+          }
           await delay(500, undefined, { signal: abort.signal });
           // Revalidate server-side session while streaming. Tokens never go to the browser.
           if (Date.now() - lastValidated >= 5000) {
@@ -109,6 +127,13 @@ export function registerSimulationRoutes(app: FastifyInstance, simulator?: Simul
       }
     });
   });
+}
+
+function parseRiskCursor(value: string | undefined): { createdAt: string; id: string } | null {
+  if (!value) return null;
+  const match = /(?:^|\|)risk:(.+):([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(value);
+  if (!match?.[1] || !match[2] || !Number.isFinite(new Date(match[1]).getTime())) return null;
+  return { createdAt: match[1], id: match[2] };
 }
 
 function currentUser(request: FastifyRequest): CurrentUser {

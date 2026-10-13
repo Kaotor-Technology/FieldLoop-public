@@ -5,6 +5,7 @@ import { KmsEnvelopeCrypto } from "./envelope-crypto.js";
 import { SecretManagerInternalTokenService } from "./internal-tokens.js";
 import { KeycloakOidcProvider } from "./keycloak-oidc.js";
 import { createAuthDatabase, createCloudSqlAuthDatabase, PostgresAuthStore } from "./postgres-store.js";
+import { PostgresRiskService } from "../risk/service.js";
 
 export class UnavailableAuthService implements AuthServicePort {
   async startLogin(): Promise<URL> { return this.unavailable(); }
@@ -25,6 +26,7 @@ export async function createProductionAuthRuntime(): Promise<{
   auth: AuthServicePort;
   close: () => Promise<void>;
   registerPacks?: (packs: LoadedDomainPack[]) => Promise<void>;
+  risk?: PostgresRiskService;
 }> {
   const baseUrl = process.env["FIELDLOOP_BASE_URL"];
   const defaultOrgId = process.env["FIELDLOOP_DEFAULT_ORG_ID"];
@@ -50,6 +52,7 @@ export async function createProductionAuthRuntime(): Promise<{
       : undefined;
   if (!database) return { auth: new UnavailableAuthService(), close: async () => {} };
   const packRuntime = {
+    risk: new PostgresRiskService(database.pool),
     registerPacks: (packs: LoadedDomainPack[]) => registerDomainPackRecords(database.db, defaultOrgId, packs),
     close: async () => {
       if ("close" in database && typeof database.close === "function") await database.close();
