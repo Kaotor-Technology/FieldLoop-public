@@ -23,9 +23,10 @@
     "lint:openapi": "spectral lint openapi.yaml --ruleset .spectral.yaml --fail-severity warn && spectral lint \"mock-*.openapi.json\" --ruleset .spectral.mock.yaml --fail-severity warn && spectral lint signal-worker.v1.openapi.json --ruleset .spectral.worker.yaml --fail-severity warn",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "generate": "openapi-typescript openapi.yaml -o src/generated/api.ts && pnpm generate:signal && pnpm generate:domain-packs",
-    "generate:domain-packs": "node scripts/generate-domain-packs.mjs",
-    "generate:signal": "node scripts/generate-signal.mjs && node scripts/generate-worker.mjs && openapi-typescript signal-worker.v1.openapi.json -o src/generated/worker-api.ts"
+    "generate": "openapi-typescript openapi.yaml -o src/generated/api.ts && pnpm generate:signal && pnpm generate:risk && pnpm generate:domain-packs",
+    "generate:signal": "node scripts/generate-signal.mjs && node scripts/generate-worker.mjs && openapi-typescript signal-worker.v1.openapi.json -o src/generated/worker-api.ts",
+    "generate:risk": "node scripts/generate-risk.mjs",
+    "generate:domain-packs": "node scripts/generate-domain-packs.mjs"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",

@@ -7,6 +7,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./risk": {
+      "types": "./dist/risk/index.d.ts",
+      "import": "./dist/risk/index.js"
     }
   },
   "files": [
@@ -16,7 +20,10 @@
     "build": "tsc -p tsconfig.build.json",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@fieldloop/contracts": "workspace:*"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",
