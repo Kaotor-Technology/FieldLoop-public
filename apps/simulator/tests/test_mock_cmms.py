@@ -259,7 +259,7 @@ def test_a_work_order_past_its_due_date_arrives_as_an_overdue_signal(
 ) -> None:
     signal = emit(emitter, transport, "SYN-CMMS-001", SURVEY_DUE)
     assert signal["source"] == "mock-cmms"
-    assert signal["tag"] == "DL-01.work_order.overdue"
+    assert signal["tag"] == "DL-01.cathodic-protection.work_order.overdue"
     assert signal["value"] == 1
     assert signal["unit"] == "boolean"
     assert signal["observedAt"] == "2026-10-13T00:00:00Z"
@@ -284,6 +284,7 @@ def test_the_overdue_flag_follows_the_due_date_and_the_status(
     assert before["value"] == 0
     # A corrective work order is announced the same way; its kind is in the payload.
     corrective = emit(emitter, transport, "SYN-CMMS-003", datetime(2026, 12, 15, tzinfo=UTC))
+    assert corrective["tag"] == "DL-01.coating.work_order.overdue"
     assert corrective["value"] == 1
     assert isinstance(corrective["payload"], dict)
     assert corrective["payload"]["kind"] == "corrective"
@@ -294,13 +295,16 @@ def test_the_overdue_flag_follows_the_due_date_and_the_status(
     assert completed["payload"]["completedAt"] == "2026-09-15T00:00:00Z"
 
 
-def test_two_work_orders_at_one_instant_are_two_signals_and_a_replay_is_one(
+def test_each_barrier_has_its_own_tag_and_a_replay_keeps_its_signal_id(
     emitter: SimulatedSignalEmitter, transport: InMemoryTransport
 ) -> None:
     at = datetime(2027, 9, 15, tzinfo=UTC)
     first = emit(emitter, transport, "SYN-CMMS-001", at)
     second = emit(emitter, transport, "SYN-CMMS-002", at)
-    assert (first["tag"], first["value"]) == (second["tag"], second["value"])
+    # Both are overdue here; a rule tells them apart by tag, without reading the payload.
+    assert first["value"] == second["value"] == 1
+    assert second["tag"] == "DL-01.remote-automatic-valve-closure.work_order.overdue"
+    assert first["tag"] != second["tag"]
     assert first["id"] != second["id"]
     assert emit(emitter, transport, "SYN-CMMS-001", at)["id"] == first["id"]
 

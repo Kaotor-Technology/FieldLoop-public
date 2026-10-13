@@ -17,7 +17,6 @@ from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
 
 SOURCE_ID = "mock-cmms"
 CLASSIFICATION: Final = "INTERNAL"
-OVERDUE_TAG = "DL-01.work_order.overdue"
 # The Scenario time a read uses when it names none: the start of the DL-01 simulation, so a
 # bare read is reproducible (SIM-5).
 DEFAULT_AS_OF: Final = datetime(2026, 10, 12, tzinfo=UTC)
@@ -103,7 +102,8 @@ class SimulatedCmms:
 
         The flag is 1 while the work order is open and its due date is at or before ``at``, the
         Scenario time, and 0 before that or once it is completed, so completing the work clears
-        the condition. For a preventive work order this is the PM due date arriving.
+        the condition. For a preventive work order this is the PM due date arriving. The tag
+        names the Barrier, so a Signal rule can match one Barrier's work by tag alone.
         """
         if at.tzinfo is None:
             raise ValueError("Observation times need a timezone")
@@ -123,7 +123,7 @@ class SimulatedCmms:
         return Observation(
             source=SOURCE_ID,
             classification=CLASSIFICATION,
-            tag=OVERDUE_TAG,
+            tag=f"{order.asset_code}.{order.barrier_id}.work_order.overdue",
             value=1 if order.status == "open" and order.due_at <= at else 0,
             observed_at=at,
             unit="boolean",

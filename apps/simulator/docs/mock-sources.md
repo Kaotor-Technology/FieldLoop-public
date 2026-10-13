@@ -188,16 +188,19 @@ and the list is small and bounded, so it is not paginated.
   | Member | Value |
   | --- | --- |
   | `source`, `classification` | `mock-cmms`, `INTERNAL` |
-  | `tag` | `DL-01.work_order.overdue` |
+  | `tag` | `DL-01.<barrierId>.work_order.overdue`, for example `DL-01.cathodic-protection.work_order.overdue` |
   | `value`, `unit` | `1` while the work order is open and `dueAt` is at or before `at`; `0` before that and once it is completed; `boolean` |
   | `observedAt` | the Scenario time `at` |
   | `payload` | the work order: `assetCode`, `workOrderId`, `barrierId`, `kind`, `status`, `title`, `dueAt`, `completedAt` when completed, `label` |
 
   For a preventive work order the flag turning to `1` is its PM due date
-  arriving; `kind` in the payload tells preventive from corrective. The work
-  order is the subject of the Signal's identity, so two work orders overdue at
-  one instant stay distinct and a replay keeps its ID. No pack rule matches the
-  tag yet, so the Signal is stored as Evidence. A read never publishes.
+  arriving; `kind` in the payload tells preventive from corrective. The tag
+  names the Barrier, as a historian tag names its instrument, so a Signal rule
+  (source, tag, `eq 1`, unit) can match one Barrier's work without reading the
+  payload. The work order is the subject of the Signal's identity, so two work
+  orders on one Barrier stay distinct and a replay keeps its ID. No pack rule
+  matches these tags yet, so the Signal is stored as Evidence. A read never
+  publishes.
 
   ```python
   cmms = app.state.cmms
