@@ -7,6 +7,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from fieldloop_common.generated_scenario import Scenario
 from fieldloop_common.generated_simulation import PlayerCommand, RunCreate
 from fieldloop_common.memory_transport import InMemoryTransport
 from fieldloop_common.signal_publisher import SignalPublisher
@@ -16,7 +17,7 @@ from fieldloop_simulator.mock_signals import SimulatedSignalEmitter
 from fieldloop_simulator.player import ScenarioPlayer
 from fieldloop_simulator.player_service import SimulationService
 from fieldloop_simulator.player_store import PostgresPlayerStore
-from fieldloop_simulator.scenario import load_scenario
+from fieldloop_simulator.scenario import load_catalog, load_scenario
 
 root = Path(__file__).resolve().parents[1]
 connect, close_connector = sql_connection_factory(os.environ)
@@ -28,9 +29,16 @@ emitter = SimulatedSignalEmitter(
 scenario = load_scenario(root / "apps/simulator/tests/fixtures/player.json")
 
 
-def make_service() -> tuple[SimulationService, PostgresPlayerStore]:
+def without_epoch(messages: list[dict[str, object]]) -> list[dict[str, object]]:
+    return [
+        {k: v for k, v in message.items() if k not in {"id", "simulationRunId"}}
+        for message in messages
+    ]
+
+
+def make_service(selected: Scenario = scenario) -> tuple[SimulationService, PostgresPlayerStore]:
     store = PostgresPlayerStore(connect, org)
-    player = ScenarioPlayer({scenario.id: scenario}, org, lambda: emitter)
+    player = ScenarioPlayer({selected.id: selected}, org, lambda: emitter)
     return SimulationService(player, lambda: store, SimulatedHistorian(org_id=org)), store
 
 
@@ -87,6 +95,63 @@ try:
         "PASS: durable player, concurrent idempotency, reset/replay and cold start; "
         f"local read p50/p95={latencies[12]:.1f}/{latencies[23]:.1f} ms (25 samples)"
     )
+    # Exercise the actual authored catalog through PostgreSQL persistence, not just a fixture.
+    authored_catalog = load_catalog(root / "data/scenarios")
+    assert set(authored_catalog) == {"cp-rectifier-failure", "bangkok-storm"}
+    for authored in authored_catalog.values():
+        current = service.current()
+        assert current is not None
+        service.execute(
+            "/reset",
+            f"prepare-{authored.id}",
+            PlayerCommand(),
+            uuid.UUID(str(current["id"])),
+            "reset",
+        )
+        store.close()
+        service, store = make_service(authored)
+        created = service.execute(
+            "/runs",
+            f"create-{authored.id}",
+            RunCreate(scenarioId=authored.id, seed=75, speed=60),
+        )
+        begin = len(transport.messages)
+        service.execute(
+            "/bookmark",
+            f"complete-{authored.id}",
+            PlayerCommand(bookmarkId="complete"),
+            uuid.UUID(str(created["id"])),
+            "bookmark",
+        )
+        first_run = [json.loads(data) for _, data, _ in transport.messages[begin:]]
+        assert len(first_run) == len(authored.events)
+        store.close()
+        service, store = make_service(authored)
+        assert service.current()["state"] == "finished"
+        reset = service.execute(
+            "/reset",
+            f"reset-{authored.id}",
+            PlayerCommand(),
+            uuid.UUID(str(created["id"])),
+            "reset",
+        )
+        replay_begin = len(transport.messages)
+        service.execute(
+            "/bookmark",
+            f"replay-{authored.id}",
+            PlayerCommand(bookmarkId="complete"),
+            uuid.UUID(str(reset["id"])),
+            "bookmark",
+        )
+        replay = [json.loads(data) for _, data, _ in transport.messages[replay_begin:]]
+
+        assert without_epoch(first_run) == without_epoch(replay)
+        assert {s["id"] for s in first_run}.isdisjoint(s["id"] for s in replay)
+        assert all(s["simulated"] and s["payload"]["sandbox"] for s in replay)
+        print(
+            f"PASS: {authored.id}; {len(replay)} authored Signals; durable cold-start/reset replay"
+        )
+
 finally:
     store.close()
     close_connector()
