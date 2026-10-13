@@ -36,6 +36,9 @@ API and message contracts shared by the TypeScript and Python services
 | --- | --- |
 | `openapi.yaml` | The OpenAPI 3.1 contract of the platform API, including BFF auth/session routes and the shared components used by feature paths. |
 | `.spectral.yaml` | The Spectral ruleset that enforces the conventions below. |
+| `.spectral.mock.yaml` | The ruleset for the simulator's mock-source contracts; it extends `.spectral.yaml` ([Mock-source contracts](#mock-source-contracts-fl-71)). |
+| `mock-*.v1.openapi.json` | The OpenAPI 3.1 contract of one read-only mock source that `apps/simulator` serves under `/mock/` ([architecture §4.2](../../docs/architecture.md#42-main-endpoints)). |
+| `mock-*.v1.schema.json` | The JSON Schema of that source's 200 response, and the input of its generated Python model. |
 | `functions/shared-problem.js` | Checks resolved schema provenance against the canonical shared Problem, including cross-file response aliases. |
 | `test/` | Fixtures and a test that prove each rule fires, and that conforming paths pass. |
 
@@ -135,12 +138,56 @@ received bodies and attributes, and deletes its emulator resources. CI runs
 the same check using a digest-pinned Docker emulator with a random loopback
 port. Unit tests additionally cover SDK acknowledgement errors and timeouts.
 
+## Mock-source contracts (FL-71)
+
+`mock-historian`, `mock-patrol` and `mock-ili` are the read-only SYNTHETIC
+sources that `apps/simulator` serves under `/mock/`. Each is a pair:
+`mock-<source>.v1.openapi.json` and the JSON Schema of its 200 body,
+`mock-<source>.v1.schema.json`. They are service-to-service, so they are not
+part of `openapi.yaml` and no client is generated for them.
+
+`.spectral.mock.yaml` extends `.spectral.yaml` and changes only what the cookie
+session does not fit:
+
+| Convention | Rule |
+| --- | --- |
+| Paths start with `/mock/`. The platform's `/v1/`, `/auth/`, `/guardrail/v1/` and `/internal/` roots are switched off. | `fieldloop-mock-path-prefix` |
+| A path defines `get` and no other method: a mock source is read-only (SIM-2). | `fieldloop-mock-get-only` |
+| The default security is `serviceIdentity`, an HTTP bearer scheme that Cloud Run invoker IAM verifies, and it is the only scheme. There is no cookie session, no CSRF header and no operation-level `security`, so no operation is public. | `fieldloop-mock-service-identity-security`, `fieldloop-mock-service-identity-scheme`, `fieldloop-mock-no-operation-security` |
+| An error response is a `$ref` to `openapi.yaml#/components/responses/*`, or its `application/problem+json` schema is a `$ref` to `openapi.yaml#/components/schemas/Problem`. | `fieldloop-mock-error-problem-ref` |
+
+Everything else still comes from `.spectral.yaml`: camelCase names, kebab-case
+paths, `operationId`, `application/problem+json` as the only error media type,
+no `default` response, `info.contact` and `servers`.
+
+The Problem rule is not the platform's `fieldloop-error-problem-schema`. That
+rule's `shared-problem` function finds the canonical `openapi.yaml` next to the
+ruleset file, and Spectral gives a rule that arrives through `extends` or
+`overrides` no such file, so it could never pass. The mock rule checks the
+reference as written instead, which is why a mock contract sits beside
+`openapi.yaml` and names it as `openapi.yaml#/…`.
+
+Each `mock-<source>.v1.schema.json` generates a Python response model:
+
+```sh
+uv run --locked --all-packages python scripts/generate_mock_source.py historian
+```
+
+`<source>` is `historian`, `patrol` or `ili`. The output,
+`py/fieldloop_common/src/fieldloop_common/generated_mock_<source>.py`, is
+committed. A simulator test regenerates it and fails on any difference, so the
+schema stays the only place a response shape changes. Another test fails when
+a `/mock/` route has no contract, or a contract has no route.
+
 ## Checks
 
 ```sh
 pnpm lint:api                             # from the repository root; CI runs this
 pnpm --filter @fieldloop/contracts test   # ruleset tests
 ```
+
+`lint:api` lints `openapi.yaml` with `.spectral.yaml`, and every
+`mock-*.openapi.json` with `.spectral.mock.yaml`.
 
 Every finding fails the lint, warnings included.
 
@@ -149,7 +196,9 @@ Every finding fails the lint, warnings included.
 Add the path to `openapi.yaml` in the issue that implements the feature, reuse
 the shared components, and run `pnpm lint:api`.
 [`test/fixtures/conforming.yaml`](test/fixtures/conforming.yaml) is a worked
-example of a list and a command.
+example of a list and a command. A new mock source is two files named
+`mock-<source>.v1.openapi.json` and `mock-<source>.v1.schema.json`: the lint, the
+generator and the simulator's contract tests find them by name.
 
 ## Conventions
 
@@ -185,6 +234,7 @@ so the reviewer does.
 | `csrf_token_invalid` | 403 | `X-CSRF-Token` is missing or wrong. |
 | `reauthentication_required` | 403 | An approval needs a login newer than the allowed `authTime` age. |
 | `not_found` | 404 | The resource does not exist, or the user may not know that it does. |
+| `method_not_allowed` | 405 | The path does not serve this method; `Allow` lists the ones it does. |
 | `conflict` | 409 | The resource is not in a state that allows this. |
 | `idempotency_key_reused` | 409 | The `Idempotency-Key` was used before with a different body. |
 | `payload_hash_mismatch` | 409 | The `payloadHash` sent with an approval is not the current payload's hash. |

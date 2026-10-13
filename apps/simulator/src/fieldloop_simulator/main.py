@@ -1,47 +1,28 @@
-from fastapi import FastAPI, Request
-from fastapi.exception_handlers import http_exception_handler, request_validation_exception_handler
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, Response
-from starlette.exceptions import HTTPException as StarletteHTTPException
+import os
+
+from fastapi import FastAPI
 
 from fieldloop_simulator.mock_cmms import router as mock_cmms_router
+from fieldloop_simulator.mock_historian import SimulatedHistorian
+from fieldloop_simulator.mock_historian import router as mock_historian_router
+from fieldloop_simulator.mock_http import install_problem_handlers
+from fieldloop_simulator.mock_ili import SimulatedIliDrop
+from fieldloop_simulator.mock_ili import router as mock_ili_router
+from fieldloop_simulator.mock_patrol import SimulatedPatrol
+from fieldloop_simulator.mock_patrol import router as mock_patrol_router
+from fieldloop_simulator.organisation import org_id_from_environment
+
+ORG_ID = org_id_from_environment(os.environ)
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+install_problem_handlers(app)
+app.state.historian = SimulatedHistorian(org_id=ORG_ID)
+app.state.patrol = SimulatedPatrol(org_id=ORG_ID)
+app.state.ili = SimulatedIliDrop(bucket=os.environ.get("FIELDLOOP_ILI_DROP_BUCKET") or None)
 app.include_router(mock_cmms_router)
-
-
-@app.exception_handler(RequestValidationError)
-async def validation_problem(request: Request, exception: RequestValidationError) -> Response:
-    if not request.url.path.startswith("/mock/cmms/"):
-        return await request_validation_exception_handler(request, exception)
-    return JSONResponse(
-        status_code=400,
-        media_type="application/problem+json",
-        content={
-            "type": "about:blank",
-            "title": "Invalid mock CMMS query",
-            "status": 400,
-            "code": "validation_failed",
-            "detail": "Use a valid boolean and timezone-aware asOf.",
-        },
-    )
-
-
-@app.exception_handler(StarletteHTTPException)
-async def http_problem(request: Request, exception: StarletteHTTPException) -> Response:
-    if not request.url.path.startswith("/mock/cmms/"):
-        return await http_exception_handler(request, exception)
-    return JSONResponse(
-        status_code=exception.status_code,
-        media_type="application/problem+json",
-        headers=exception.headers,
-        content={
-            "type": "about:blank",
-            "title": str(exception.detail),
-            "status": exception.status_code,
-            "code": "not_found" if exception.status_code == 404 else "validation_failed",
-        },
-    )
+app.include_router(mock_historian_router)
+app.include_router(mock_patrol_router)
+app.include_router(mock_ili_router)
 
 
 @app.get("/healthz")

@@ -1,0 +1,132 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FieldLoop internal mock historian",
+    "version": "1.0.0",
+    "description": "Synthetic read-only simulator endpoint from architecture section 4.2. Not a web-api/BFF endpoint. Run behind Cloud Run invoker IAM in dev/demo; local reads need no credentials. No real historian connector, and no write operation. Simulated observations reach the platform only as signal.v1 messages that the Scenario player publishes in process.",
+    "contact": {
+      "name": "FieldLoop engineering",
+      "url": "https://github.com/Kaotor-Technology/FieldLoop-v2"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8082",
+      "description": "Local simulator as the repository README starts it. Deployed environments call the private simulator-{env} Cloud Run service with a Google OIDC ID token."
+    }
+  ],
+  "tags": [
+    {
+      "name": "mock-historian",
+      "description": "Internal SYNTHETIC readings"
+    }
+  ],
+  "security": [
+    {
+      "serviceIdentity": []
+    }
+  ],
+  "paths": {
+    "/mock/historian/tags/{tag}": {
+      "get": {
+        "operationId": "readMockHistorianTag",
+        "description": "Return deterministic synthetic samples on a 60 second UTC clock grid for one Demo A tag between from and to (inclusive, at most 24 hours). The series is a pure function of tag, timestamp and the simulator seed, plus any Scenario overrides; the clock is the caller's window, never wall time.",
+        "tags": [
+          "mock-historian"
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tag",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^DL-01\\.[a-z0-9_]+(\\.[a-z0-9_]+)*$"
+            },
+            "description": "Served tags: DL-01.pressure.line, DL-01.flow.line and DL-01.rectifier.output. Any other tag is 404."
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "description": "Timezone-aware RFC 3339 window start.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "description": "Timezone-aware RFC 3339 window end; must be after from and at most 24 hours later.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deterministic synthetic series",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "mock-historian.v1.schema.json"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid window; code validation_failed, input values are not echoed.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown tag; code not_found.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Only GET is served, so every other method is refused; code method_not_allowed, and Allow names the methods the path serves. No state mutation.",
+            "headers": {
+              "Allow": {
+                "schema": {
+                  "type": "string",
+                  "const": "GET"
+                }
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "serviceIdentity": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Google OIDC",
+        "description": "Verified by Cloud Run invoker IAM, not proxy headers. The handler does not implement browser auth or independently validate IAM."
+      }
+    }
+  }
+}

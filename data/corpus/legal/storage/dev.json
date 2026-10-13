@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "bucket": "example-project-fieldloop-dev-docs",
+  "records": [
+    {
+      "documentKey": "TH-FUELS-CONTROL-2542",
+      "revision": "B.E. 2542",
+      "contentSha256": "f17590de19dd4c5a49551b8ef3145ff993693e59d9207f66f74023de1ba58ee7",
+      "sourceSha256": "e7df2e648f3eab6f620985295f5d3f4926bf9388974aa4f38b016d72b175ea64",
+      "blobUri": "gs://example-project-fieldloop-dev-docs/legal/TH-FUELS-CONTROL-2542/e7df2e648f3eab6f620985295f5d3f4926bf9388974aa4f38b016d72b175ea64/source.pdf",
+      "textBlobUri": "gs://example-project-fieldloop-dev-docs/legal/TH-FUELS-CONTROL-2542/f17590de19dd4c5a49551b8ef3145ff993693e59d9207f66f74023de1ba58ee7/text",
+      "indexingEligibility": "eligible"
+    },
+    {
+      "documentKey": "TH-ENERGY-INDUSTRY-2550",
+      "revision": "B.E. 2550",
+      "contentSha256": "88dab340173f2ac6d4093fcff2774e1ec6a20f77a81e392fde98acfc7964d93a",
+      "sourceSha256": "9c733406539bb7f3fc19d5df3bcdecf500c6a49d0561eab7a8668b6351106e56",
+      "blobUri": "gs://example-project-fieldloop-dev-docs/legal/TH-ENERGY-INDUSTRY-2550/9c733406539bb7f3fc19d5df3bcdecf500c6a49d0561eab7a8668b6351106e56/source.pdf",
+      "textBlobUri": "gs://example-project-fieldloop-dev-docs/legal/TH-ENERGY-INDUSTRY-2550/88dab340173f2ac6d4093fcff2774e1ec6a20f77a81e392fde98acfc7964d93a/text",
+      "indexingEligibility": "quarantined"
+    },
+    {
+      "documentKey": "TH-PDPA-2562",
+      "revision": "B.E. 2562",
+      "contentSha256": "8d2f87a1962a21b66af5b44edb2c3fc089b3940b4be517002694e04ba49e1c76",
+      "sourceSha256": "9fd1027c2e5ad93029a01d68d52d524750c1e8946b97f12fb230c11959da2f70",
+      "blobUri": "gs://example-project-fieldloop-dev-docs/legal/TH-PDPA-2562/9fd1027c2e5ad93029a01d68d52d524750c1e8946b97f12fb230c11959da2f70/source.pdf",
+      "textBlobUri": "gs://example-project-fieldloop-dev-docs/legal/TH-PDPA-2562/8d2f87a1962a21b66af5b44edb2c3fc089b3940b4be517002694e04ba49e1c76/text",
+      "indexingEligibility": "eligible"
+    },
+    {
+      "documentKey": "TH-NATIONAL-DISASTER-PLAN-2564-2570",
+      "revision": "B.E. 2564–2570",
+      "contentSha256": "1aab2f8b65acd16d362e6dea0ff1b55a20cda541e67b7ab99ae005c59b46e520",
+      "sourceSha256": "eac718fed2bb41993fe6a04e884d5cb2ef52a6e053d76db1a7d00d2ec5398f23",
+      "blobUri": "gs://example-project-fieldloop-dev-docs/legal/TH-NATIONAL-DISASTER-PLAN-2564-2570/eac718fed2bb41993fe6a04e884d5cb2ef52a6e053d76db1a7d00d2ec5398f23/source.pdf",
+      "textBlobUri": "gs://example-project-fieldloop-dev-docs/legal/TH-NATIONAL-DISASTER-PLAN-2564-2570/1aab2f8b65acd16d362e6dea0ff1b55a20cda541e67b7ab99ae005c59b46e520/text",
+      "indexingEligibility": "quarantined"
+    },
+    {
+      "documentKey": "TH-BANGKOK-DISASTER-PLAN-2564-2570",
+      "revision": "B.E. 2564–2570",
+      "contentSha256": "05f4f00d6f0016122ffa84f873677814bcfd06fc70f19b03d046badbf7187c3f",
+      "sourceSha256": "3cac6f9ceed904b75ea45deb89c505c6fba1193683e58f4674a2818050ee1b67",
+      "blobUri": "gs://example-project-fieldloop-dev-docs/legal/TH-BANGKOK-DISASTER-PLAN-2564-2570/3cac6f9ceed904b75ea45deb89c505c6fba1193683e58f4674a2818050ee1b67/source.pdf",
+      "textBlobUri": "gs://example-project-fieldloop-dev-docs/legal/TH-BANGKOK-DISASTER-PLAN-2564-2570/05f4f00d6f0016122ffa84f873677814bcfd06fc70f19b03d046badbf7187c3f/text",
+      "indexingEligibility": "quarantined"
+    },
+    {
+      "documentKey": "TH-WATER-RESOURCES-2561",
+      "revision": "B.E. 2561",
+      "contentSha256": "516a40e02de7c700b17769f93d999d5ec46cad97dbb9626684a5aba7f687d647",
+      "sourceSha256": "08c4b166505b3f9f8ef2dcfbe4a47d688f83663739d1a2c3307334ed0c524487",
+      "blobUri": "gs://example-project-fieldloop-dev-docs/legal/TH-WATER-RESOURCES-2561/08c4b166505b3f9f8ef2dcfbe4a47d688f83663739d1a2c3307334ed0c524487/source.pdf",
+      "textBlobUri": "gs://example-project-fieldloop-dev-docs/legal/TH-WATER-RESOURCES-2561/516a40e02de7c700b17769f93d999d5ec46cad97dbb9626684a5aba7f687d647/text",
+      "indexingEligibility": "quarantined"
+    },
+    {
+      "documentKey": "TH-TOWN-PLANNING-2562",
+      "revision": "B.E. 2562",
+      "contentSha256": "46b9e051caa51d435d54326e5ca9dfc18692ca28a63353eb5629051a59333a02",
+      "sourceSha256": "10d509630f7a9d53033ab54a48deec72dff1de7fe11c4baa65a030deaaed2594",
+      "blobUri": "gs://example-project-fieldloop-dev-docs/legal/TH-TOWN-PLANNING-2562/10d509630f7a9d53033ab54a48deec72dff1de7fe11c4baa65a030deaaed2594/source.pdf",
+      "textBlobUri": "gs://example-project-fieldloop-dev-docs/legal/TH-TOWN-PLANNING-2562/46b9e051caa51d435d54326e5ca9dfc18692ca28a63353eb5629051a59333a02/text",
+      "indexingEligibility": "eligible"
+    },
+    {
+      "documentKey": "US-49-CFR-192",
+      "revision": "eCFR snapshot 2026-10-06",
+      "contentSha256": "d7f30ef02911a249f37ef165b706326214fa832ba3a06f79cdcfed52a65422c2",
+      "blobUri": "gs://example-project-fieldloop-dev-docs/legal/US-49-CFR-192/d7f30ef02911a249f37ef165b706326214fa832ba3a06f79cdcfed52a65422c2/text",
+      "textBlobUri": "gs://example-project-fieldloop-dev-docs/legal/US-49-CFR-192/d7f30ef02911a249f37ef165b706326214fa832ba3a06f79cdcfed52a65422c2/text",
+      "indexingEligibility": "eligible"
+    },
+    {
+      "documentKey": "US-49-CFR-195",
+      "revision": "eCFR snapshot 2026-10-06",
+      "contentSha256": "427cfcab1eb637fa9447570f6a24653b0308042854ceb4a2aef6033205b9bbc4",
+      "blobUri": "gs://example-project-fieldloop-dev-docs/legal/US-49-CFR-195/427cfcab1eb637fa9447570f6a24653b0308042854ceb4a2aef6033205b9bbc4/text",
+      "textBlobUri": "gs://example-project-fieldloop-dev-docs/legal/US-49-CFR-195/427cfcab1eb637fa9447570f6a24653b0308042854ceb4a2aef6033205b9bbc4/text",
+      "indexingEligibility": "eligible"
+    }
+  ]
+}
