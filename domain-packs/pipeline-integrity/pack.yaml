@@ -56,5 +56,6 @@ agentFiles:
   - agents/code-standard.yaml
   - agents/regulatory.yaml
   - agents/inspection-data-prep.yaml
+  - agents/pipeline-integrity.yaml
   - agents/report-generator.yaml
 warningTemplates: []

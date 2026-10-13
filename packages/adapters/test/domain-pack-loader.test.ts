@@ -27,7 +27,7 @@ describe("Domain Pack loading (FL-78 / D10 / D11)", () => {
     const packs = await loadDomainPacks(root, tools);
     expect(packs.map(({ content }) => content.id)).toEqual(["flood-water", "pipeline-integrity"]);
     expect(packs.flatMap(({ agents }) => agents.map(({ id }) => id)).sort()).toEqual([
-      "code-standard", "flood-situation", "inspection-data-prep", "integrity-orchestrator", "regulatory", "report-generator",
+      "code-standard", "flood-situation", "inspection-data-prep", "integrity-orchestrator", "pipeline-integrity", "regulatory", "report-generator",
     ]);
     expect(packs.flatMap(({ content }) => content.signalRules).every(({ effect }) => effect.kind === "health_proposal")).toBe(true);
     expect(await loadDomainPacks(root, tools)).toEqual(packs);

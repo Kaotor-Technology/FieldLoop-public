@@ -8,7 +8,7 @@ rolePrompt: >-
   calls must pass the Guardrail as the user. Return Drafts and proposals only.
 reasoningTemplate: [Scope the selected Asset, Gather cited Evidence, Delegate specialist review, Reconcile knowns and unknowns, Present a Draft with confidence]
 allowedTools: [get_asset, get_barriers, get_bowtie_risk]
-delegates: [inspection-data-prep, code-standard, regulatory, report-generator]
+delegates: [inspection-data-prep, code-standard, regulatory, pipeline-integrity, report-generator]
 knowledgeFolders: [Integrity, Golden Examples]
 refusalRules:
   - Refuse engineering approval, report signing and autonomous Health changes.
