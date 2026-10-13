@@ -214,7 +214,7 @@ try {
 
   // Calendar months follow Bangkok local dates rather than assuming 90 days or UTC day-of-month.
   const patrolBarrierCodes = ["right-of-way-patrol", "excavation-permit-one-call"];
-  const patrolCodeList = sql.join(patrolBarrierCodes.map((code) => sql`${code}`));
+  const patrolCodeList = sql.join(patrolBarrierCodes);
   await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code IN (${patrolCodeList})`.execute(database);
   await sql`UPDATE app.signal_dependency SET last_received_at = NULL, created_at = '2026-02-28T20:30:00Z'::timestamptz
     WHERE org_id = ${orgId} AND rule_id = ${patrolRule.id}::uuid`.execute(database);
@@ -283,22 +283,25 @@ try {
   const runSourceCheck = (headers) => app.inject({ method: "POST", url: "/internal/jobs/silent-sources", headers });
   assert.equal((await runSourceCheck({})).statusCode, 401, "the source check requires a service token");
   const barrierIdsFor = async (codes) => (await sql`SELECT id FROM app.barrier WHERE org_id = ${orgId}
-    AND code IN (${sql.join(codes.map((code) => sql`${code}`))})`.execute(database)).rows.map(({ id }) => id).sort();
-  const staleBarrierCode = "tidal-gates";
-  const silentBarrierCodes = [...patrolBarrierCodes, staleBarrierCode];
+    AND code IN (${sql.join(codes)})`.execute(database)).rows.map(({ id }) => id).sort();
+  const floodBarrierCode = "tidal-gates";
+  const silentBarrierCodes = [...patrolBarrierCodes, floodBarrierCode];
   const silentBarrierIds = await barrierIdsFor(silentBarrierCodes);
-  const [staleBarrierId] = await barrierIdsFor([staleBarrierCode]);
+  const [floodBarrierId] = await barrierIdsFor([floodBarrierCode]);
   assert.equal(silentBarrierIds.length, silentBarrierCodes.length);
-  const silentCodeList = sql.join(silentBarrierCodes.map((code) => sql`${code}`));
+  const silentCodeList = sql.join(silentBarrierCodes);
   await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND code IN (${silentCodeList})`.execute(database);
   await sql`UPDATE app.barrier SET health = 'failed' WHERE org_id = ${orgId} AND code = 'cathodic-protection'`.execute(database);
-  // Age the patrol, CP and flood-rain sources. Earlier sections left their last_received_at in the future.
-  await sql`UPDATE app.signal_dependency SET last_received_at = ${new Date(Date.now() - 270 * 86_400_000)}
-    WHERE org_id = ${orgId} AND (rule_id IN (${patrolRule.id}::uuid, ${cpRule.id}::uuid) OR barrier_id = ${staleBarrierId}::uuid)`.execute(database);
+  // Back-date the patrol, CP and flood-rain sources by 270 days; silence is induced in SQL, not by waiting.
+  const aged = await sql`UPDATE app.signal_dependency SET last_received_at = ${new Date(Date.now() - 270 * 86_400_000)}
+    WHERE org_id = ${orgId} AND (rule_id IN (${patrolRule.id}::uuid, ${cpRule.id}::uuid) OR barrier_id = ${floodBarrierId}::uuid)
+    RETURNING id`.execute(database);
+  assert.equal(aged.rows.length, patrolBarrierCodes.length + 2, "patrol, CP and flood-rain dependencies are aged");
+  const healthChangedSince = (index) => publishedEvents.slice(index).filter(({ type }) => type === "barrier.health_changed");
   const eventsBeforeCheck = publishedEvents.length;
   const sourceCheck = await runSourceCheck(serviceHeaders);
   assert.equal(sourceCheck.statusCode, 200);
-  const healthChangedEvents = publishedEvents.slice(eventsBeforeCheck).filter(({ type }) => type === "barrier.health_changed");
+  const healthChangedEvents = healthChangedSince(eventsBeforeCheck);
   assert.deepEqual(healthChangedEvents.map(({ barrierId }) => barrierId).sort(), silentBarrierIds, "only Barriers with a silent source change");
   assert.equal(sourceCheck.json().changed, healthChangedEvents.length);
   assert.deepEqual((await sql`SELECT code, health FROM app.barrier WHERE org_id = ${orgId}
@@ -310,16 +313,16 @@ try {
   ]);
 
   // Control: the same Barrier, Healthy again with a source that reported just now, must not change.
-  await sql`UPDATE app.barrier SET health = 'healthy' WHERE id = ${staleBarrierId}::uuid`.execute(database);
+  await sql`UPDATE app.barrier SET health = 'healthy' WHERE id = ${floodBarrierId}::uuid`.execute(database);
   const refreshed = await sql`UPDATE app.signal_dependency SET last_received_at = ${new Date()}
-    WHERE org_id = ${orgId} AND barrier_id = ${staleBarrierId}::uuid RETURNING id`.execute(database);
+    WHERE org_id = ${orgId} AND barrier_id = ${floodBarrierId}::uuid RETURNING id`.execute(database);
   assert.equal(refreshed.rows.length, 1, "the control Barrier has exactly one source dependency");
   const eventsBeforeControl = publishedEvents.length;
   const controlCheck = await runSourceCheck(serviceHeaders);
   assert.equal(controlCheck.statusCode, 200);
   assert.equal(controlCheck.json().changed, 0, "a fresh source changes nothing");
-  assert.deepEqual(publishedEvents.slice(eventsBeforeControl).filter(({ type }) => type === "barrier.health_changed"), []);
-  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${staleBarrierId}::uuid`.execute(database)).rows[0].health, "healthy");
+  assert.deepEqual(healthChangedSince(eventsBeforeControl), []);
+  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${floodBarrierId}::uuid`.execute(database)).rows[0].health, "healthy");
 
   // Source checking and Evidence insertion use the same dependency lock order.
   const race = await Promise.allSettled([
