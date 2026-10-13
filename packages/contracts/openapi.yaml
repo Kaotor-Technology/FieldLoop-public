@@ -884,6 +884,40 @@ components:
           not:
             pattern: '[\r\n]'
       required: []
+    ScenarioSummary:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
+          not:
+            pattern: '[\r\n]'
+        name:
+          type: string
+        version:
+          type: string
+        durationSeconds:
+          type: number
+        simulated:
+          const: true
+        classification:
+          type: string
+          enum:
+          - PUBLIC
+          - INTERNAL
+          - CONFIDENTIAL
+          - HIGHLY_RESTRICTED
+      required:
+      - id
+      - name
+      - version
+      - durationSeconds
+      - simulated
+      - classification
+    # END generated simulation schemas
     HealthDecision:
       type: object
       additionalProperties: false
@@ -926,40 +960,6 @@ components:
             items: { $ref: '#/components/schemas/Notification' }
           limit: { type: integer, minimum: 1, maximum: 200 }
         required: [items, limit]
-    ScenarioSummary:
-      type: object
-      additionalProperties: false
-      properties:
-        id:
-          type: string
-          minLength: 1
-          maxLength: 128
-          pattern: ^[A-Za-z0-9][A-Za-z0-9._:-]*$
-          not:
-            pattern: '[\r\n]'
-        name:
-          type: string
-        version:
-          type: string
-        durationSeconds:
-          type: number
-        simulated:
-          const: true
-        classification:
-          type: string
-          enum:
-          - PUBLIC
-          - INTERNAL
-          - CONFIDENTIAL
-          - HIGHLY_RESTRICTED
-      required:
-      - id
-      - name
-      - version
-      - durationSeconds
-      - simulated
-      - classification
-    # END generated simulation schemas
     CurrentUser:
       type: object
       required: [sub, roles, persona, orgId, clearance, csrfToken, authTime]
