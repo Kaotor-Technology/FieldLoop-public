@@ -18,7 +18,7 @@ export function registerLiveEventRoute(app: FastifyInstance, simulator?: Simulat
     const rawCursor = request.headers["last-event-id"];
     const parsed = typeof rawCursor === "string" ? parseCursor(rawCursor) : null;
     if (typeof rawCursor === "string" && !parsed) return sendProblem(reply, 400, "validation_failed");
-    let healthPosition = parsed?.health ?? (health ? await health.latestEventPosition() : null);
+    let healthPosition = parsed?.health ?? (health ? await health.latestEventPosition(user) : null);
     let simulationPosition = parsed?.simulation ?? null;
     let previous = simulator ? checked(user, await simulator.current()) : null;
     const abort = new AbortController();

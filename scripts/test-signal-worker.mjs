@@ -6,6 +6,7 @@ import { setTimeout } from "node:timers/promises";
 import { performance } from "node:perf_hooks";
 import { Kysely, PostgresDialect, sql } from "kysely";
 import pg from "pg";
+import { appendWorkerEvent } from "../packages/adapters/dist/postgres-domain-events.js";
 import { domainPackRecordId, loadDemoDomainPacks } from "../apps/api/dist/domain-packs.js";
 import { PostgresWorkerStore } from "../apps/signal-worker/dist/postgres-store.js";
 import { PostgresHealthStore } from "../apps/api/dist/health/postgres-store.js";
@@ -370,6 +371,32 @@ try {
   const healthStore = new PostgresHealthStore(apiDatabase);
   const owner = { sub: "synthetic-ageing-owner", roles: ["fieldloop.operator"], persona: "Integrity Engineer", orgId,
     clearance: "HIGHLY_RESTRICTED", csrfToken: "fixture-csrf", authTime: new Date("2026-10-13T00:00:00Z") };
+  let releaseEventWriter;
+  let markEventWriterReady;
+  const holdEventWriter = new Promise((resolve) => { releaseEventWriter = resolve; });
+  const eventWriterReady = new Promise((resolve) => { markEventWriterReady = resolve; });
+  const cursorRaceEvent = { id: randomUUID(), type: "barrier.health_changed", orgId, entityId: randomUUID(),
+    barrierId: patrolOwnerBarrier.id, simulated: true, classification: "CONFIDENTIAL" };
+  const eventWriter = database.transaction().execute(async (trx) => {
+    await appendWorkerEvent(trx, cursorRaceEvent, "worker-fixture");
+    markEventWriterReady();
+    await holdEventWriter;
+  });
+  await eventWriterReady;
+  let cursorReadFinished = false;
+  const cursorRead = healthStore.latestEventPosition(owner).then((position) => {
+    cursorReadFinished = true;
+    return position;
+  });
+  await setTimeout(50);
+  assert.equal(cursorReadFinished, false, "initial event cursor waits for an in-flight outbox transaction");
+  releaseEventWriter();
+  await eventWriter;
+  const raceSafeCursor = await cursorRead;
+  const cursorIncludesCommittedEvent = (await sql`SELECT (created_at, id) <= (${raceSafeCursor.createdAt}::timestamptz, ${raceSafeCursor.id}::uuid) AS included
+    FROM app.signal_event_outbox WHERE id = ${cursorRaceEvent.id}::uuid`.execute(database)).rows[0].included;
+  assert.equal(cursorIncludesCommittedEvent, true, "the initial cursor advances only after the pending event commits");
+  assert.ok(!(await healthStore.listEvents(owner, raceSafeCursor, 100)).some(({ event }) => event.id === cursorRaceEvent.id));
   const acceptedProposalId = randomUUID();
   await sql`INSERT INTO app.health_proposal (id, org_id, barrier_id, proposed_health, status, simulated, classification, created_by)
     VALUES (${acceptedProposalId}::uuid, ${orgId}, ${patrolOwnerBarrier.id}::uuid, 'degraded', 'open', true, 'CONFIDENTIAL', 'worker-fixture')`.execute(database);

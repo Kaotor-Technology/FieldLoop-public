@@ -42,7 +42,7 @@ export interface HealthServicePort {
     idempotencyKey: string;
   }): Promise<HealthDecisionResult>;
   listNotifications(user: CurrentUser, cursor: string | undefined, limit: number): Promise<NotificationPage>;
-  latestEventPosition(): Promise<EventPosition | null>;
+  latestEventPosition(user: CurrentUser): Promise<EventPosition | null>;
   listEvents(user: CurrentUser, after: EventPosition | null, limit: number): Promise<StoredHealthEvent[]>;
 }
 

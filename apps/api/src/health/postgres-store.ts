@@ -143,11 +143,14 @@ export class PostgresHealthStore implements HealthServicePort {
     return { items, limit, nextCursor: hasMore && last ? encodeCursor({ createdAt: last.created_at, id: last.id }) : null };
   }
 
-  async latestEventPosition(): Promise<EventPosition> {
-    const row = (await sql<EventPosition>`SELECT clock_timestamp()::text AS "createdAt",
-      '00000000-0000-0000-0000-000000000000'::text AS id`.execute(this.db)).rows[0];
-    if (!row) throw new Error("Database clock did not return an event cursor");
-    return row;
+  async latestEventPosition(user: CurrentUser): Promise<EventPosition> {
+    return this.db.transaction().execute(async (trx) => {
+      await sql`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify([user.orgId, "worker_event_outbox"])}, 0))`.execute(trx);
+      const row = (await sql<EventPosition>`SELECT clock_timestamp()::text AS "createdAt",
+        '00000000-0000-0000-0000-000000000000'::text AS id`.execute(trx)).rows[0];
+      if (!row) throw new Error("Database clock did not return an event cursor");
+      return row;
+    });
   }
 
   async listEvents(user: CurrentUser, after: EventPosition | null, limit: number): Promise<StoredHealthEvent[]> {
