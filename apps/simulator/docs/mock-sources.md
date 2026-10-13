@@ -387,12 +387,15 @@ Both sources share these points:
     source could not publish, at the member that is wrong: an unknown tag, a
     unit or target Asset that is not the source's, a rain rate that its noise
     could take below zero, a power status other than `available` or `lost`,
-    or a second event for one tag and Asset at the same time, since a read can
-    hold only one value for an instant (`storm_events.py`).
+    a hydrology value beyond a million with its noise, or a second event for
+    one tag and Asset at the same time, since a read can hold only one value
+    for an instant (`storm_events.py`).
   - **A run pinned earlier keeps its events.** A run stores the Scenario it was
-    created with. If such a run holds an event that these rules now refuse, the
-    player still publishes it exactly as before, an authored rainfall total
-    included, and the source's reads and rainfall sums leave it out.
+    created with. If such a run holds an event that these rules now refuse in
+    itself, the player still publishes it exactly as before, an authored
+    rainfall total included, and the source's reads and rainfall sums leave it
+    out. If it holds two events for one reading at one time, both are
+    published and the read holds the later.
 - **Scenario state is per process**, as the historian's overrides are, and is
   dropped by `reset()` and by scale-to-zero.
 - **No Barrier reference.** A Signal names its Facility, not a Barrier of

@@ -31,11 +31,13 @@ validator refuses anything else at the member that is wrong
 | `mock-pumps` | `pump.power` | `available` or `lost` | `state` | `P-1`, `P-2` or `P-3` |
 | `mock-pumps` | `gate.power` | `available` or `lost` | `state` | `G-1` or `G-2` |
 
-An event states a reading of one tag and Asset only once at any one time. Write no `payload`
-for these events: the source states the Asset code, zone and operating
-state, and the player adds `target` and `sandbox`. A read of the source follows the applied
-events, as of the run's clock when the caller names no `asOf`, whatever `startsAt` is. `rain.accumulation.24h` is derived: the player sums the `rain.rate` events before it
-over 24 hours, so place one where the run should report the total. It is what the Flood pack
+A Scenario states a reading of one tag and Asset only once at any one time, and a hydrology
+value, with its noise, stays within a million. Write no `payload` for these events: the
+source states the Asset code, zone and operating state, and the player adds `target` and
+`sandbox`. A read of the source follows the applied events, as of the run's clock when the
+caller names no `asOf`, whatever `startsAt` is. `rain.accumulation.24h` is derived: the
+player sums the `rain.rate` events before it over 24 hours, so place one where the run
+should report the total. It is what the Flood pack
 rule `rainfall-needs-fresh-evidence` matches (above 100 mm); at 60 mm/h that is 1 hour
 40 minutes after the rain starts. `pump.power` with `lost` is what `pump-power-lost` matches.
 PRD §8.1 has the storm trigger its rule before the pump fails, so a storyline with P-3 losing

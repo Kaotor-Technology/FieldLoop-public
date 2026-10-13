@@ -1,8 +1,10 @@
 """Deterministic, read-only simulated pump and gate status source for Demo B (SIM-2).
 
 Fixed Facilities with no wall clock and no I/O: no pump SCADA connector and no operation that
-starts, stops, opens or closes anything. A Scenario changes a Facility's power in process
-through ``set_power``; operating a real pump or gate is an L1 Command Package (ADR-0006).
+starts, stops, opens or closes anything. A Scenario changes a Facility's power in process:
+``set_power`` holds one change, and the Scenario player's service ``restore``s every change
+and the clock of a run at once. Operating a real pump or gate is an L1 Command Package
+(ADR-0006).
 """
 
 from collections.abc import Iterable, Mapping
