@@ -35,7 +35,7 @@ class SensorProfile:
 
     asset_code: str
     zone_code: str
-    tag: str
+    quantity: str
     unit: str
     base: float
     swing: float = 0.0
@@ -81,7 +81,7 @@ class SimulatedHydro:
         return Observation(
             source=SOURCE_ID,
             classification=CLASSIFICATION,
-            tag=f"{profile.asset_code}.{profile.tag}",
+            tag=f"{profile.asset_code}.{profile.quantity}",
             value=self.value_at(kind, at),
             observed_at=at,
             unit=profile.unit,
