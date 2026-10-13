@@ -85,7 +85,12 @@ _WORK_ORDERS = (
 
 class SimulatedCmms:
     def __init__(self, *, org_id: str = DEMO_ORG_ID) -> None:
-        self.org_id = require_org_id(org_id)
+        self._org_id = require_org_id(org_id)
+
+    @property
+    def org_id(self) -> str:
+        # Read-only: page() copies it into each work order without validating it again.
+        return self._org_id
 
     def page(self, *, pm_due: bool, as_of: datetime) -> MockCmmsPage:
         """Every work order, or with ``pm_due`` the open preventive ones due by ``as_of``."""

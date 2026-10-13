@@ -214,6 +214,12 @@ def test_patrol_rejects_an_invalid_organisation_id() -> None:
         SimulatedPatrol(org_id="not valid")
 
 
+def test_the_organisation_of_the_patrol_cannot_be_replaced() -> None:
+    # A page copies the Organisation into each finding without validating it again.
+    with pytest.raises(AttributeError):
+        SimulatedPatrol().org_id = "not valid!"
+
+
 def test_responses_match_the_canonical_wire_schema() -> None:
     schema = json.loads((ROOT / "packages/contracts/mock-patrol.v1.schema.json").read_text())
     validator = Draft202012Validator(schema, format_checker=FormatChecker())

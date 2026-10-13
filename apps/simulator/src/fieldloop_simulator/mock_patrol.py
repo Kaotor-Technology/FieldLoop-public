@@ -111,7 +111,12 @@ _FINDINGS_BY_ID = {finding.id: finding for finding in _FINDINGS}
 
 class SimulatedPatrol:
     def __init__(self, *, org_id: str = DEMO_ORG_ID) -> None:
-        self.org_id = require_org_id(org_id)
+        self._org_id = require_org_id(org_id)
+
+    @property
+    def org_id(self) -> str:
+        # Read-only: page() copies it into each finding without validating it again.
+        return self._org_id
 
     def observe(self, finding_id: str, at: datetime) -> Observation:
         """Announce a finding as a Signal; the report itself travels in the payload.

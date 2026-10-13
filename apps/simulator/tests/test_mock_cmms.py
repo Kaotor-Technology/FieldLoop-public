@@ -112,6 +112,12 @@ def test_cmms_rejects_an_invalid_organisation_id() -> None:
         SimulatedCmms(org_id="not valid")
 
 
+def test_the_organisation_of_the_cmms_cannot_be_replaced() -> None:
+    # A page copies the Organisation into each work order without validating it again.
+    with pytest.raises(AttributeError):
+        SimulatedCmms().org_id = "not valid!"
+
+
 @pytest.mark.parametrize("method", ["POST", "PUT", "PATCH", "DELETE", "TRACE", "CONNECT"])
 def test_mock_cmms_rejects_writes_without_mutating_fixtures(method: str) -> None:
     with TestClient(app) as client:
