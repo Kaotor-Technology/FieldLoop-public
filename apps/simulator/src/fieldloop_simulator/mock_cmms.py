@@ -15,7 +15,7 @@ from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
 
 CLASSIFICATION: Final = "INTERNAL"
 # The Scenario time a read uses when it names none, so a bare read is reproducible (SIM-5).
-DEFAULT_AS_OF = datetime(2026, 10, 10, tzinfo=UTC)
+DEFAULT_AS_OF: Final = datetime(2026, 10, 10, tzinfo=UTC)
 
 
 def _work_order(identifier: str, title: str, kind: str, status: str, due_at: datetime) -> WorkOrder:

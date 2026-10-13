@@ -158,6 +158,9 @@ is small and bounded, so it is not paginated.
   this source has no `observe()` and announces nothing. Whether a work order or
   a PM due date becomes a Signal is an open owner question; the emitter and
   `Observation` would carry it without change.
+- **No Scenario state.** The CMMS has no override and no reset: a response
+  depends only on the request and the configured Organisation. A Scenario moves
+  PM due by the `asOf` it reads with, not by changing the source.
 - **No write.** The simulator holds `SimulatedCmms` in `app.state.cmms` and has
   no operation that creates, closes or changes a work order. Work in a real
   CMMS is prepared as an Action Request (ADR-0006), never sent from here.
@@ -353,8 +356,10 @@ infrastructure operator, in this order, and record the results in `docs/contexts
 
 - **The sources are on the app.** `app.state.historian`, `app.state.cmms`, `app.state.patrol` and `app.state.ili` are
   the objects that the routes read. `tests/test_scenario_contract.py` is the executable form of
-  what a player may rely on: a read follows an override, a read never publishes, a replay keeps
-  its Signal ID, and a Signal is not labelled below its source's classification.
+  what a player may rely on: every source is on the app, a read follows an override, a read
+  never publishes, a replay keeps its Signal ID, and a Signal is not labelled below its
+  source's classification. Only the historian has overrides, and the CMMS has no `observe()`,
+  so the override, replay and classification cases do not involve the CMMS.
 - **State is per process.** Overrides and the run's seed live in the instance, so Terraform caps
   the service at one instance.
 - **An idle instance forgets.** The service has `min_instance_count = 0` and request-based CPU
