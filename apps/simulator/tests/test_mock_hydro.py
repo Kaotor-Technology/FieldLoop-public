@@ -145,6 +145,8 @@ def test_an_override_must_name_a_kind_a_timezone_and_a_finite_value(
         hydro.add_override("rain", start=datetime(2026, 10, 12, 6, 0), value=1.0)
     with pytest.raises(ValueError, match="finite"):
         hydro.add_override("rain", start=STORM, value=float("nan"))
+    with pytest.raises(ValueError, match="finite number"):
+        hydro.add_override("rain", start=STORM, value=True)
     with pytest.raises(ValueError, match="below"):
         hydro.add_override("rain", start=STORM, value=-0.1)
     assert hydro.value_at("rain", STORM) == 0.0

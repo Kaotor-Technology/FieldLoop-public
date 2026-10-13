@@ -1,6 +1,5 @@
 """What a Scenario holds a source at, in process, until the next reset (SIM-5)."""
 
-import math
 from datetime import datetime
 
 
@@ -14,11 +13,7 @@ class HeldValues[T]:
         if start.tzinfo is None:
             raise ValueError("Override times need a timezone")
         # Copy on write: readers on other threads never see a half-updated list.
-        self._held[key] = [*self._held.get(key, []), (start, self._accepted(value))]
-
-    def _accepted(self, value: T) -> T:
-        """The value as it is stored; a subclass refuses what its source cannot hold."""
-        return value
+        self._held[key] = [*self._held.get(key, []), (start, value)]
 
     def reset(self) -> None:
         self._held = {}
@@ -35,12 +30,3 @@ class HeldValues[T]:
         if not held:
             return None
         return max(reversed(held), key=lambda item: item[0])[1]
-
-
-class HeldNumbers(HeldValues[float]):
-    """Readings held from a start time on; a reading is a finite number."""
-
-    def _accepted(self, value: float) -> float:
-        if not math.isfinite(value):
-            raise ValueError("Override value must be finite")
-        return float(value)
