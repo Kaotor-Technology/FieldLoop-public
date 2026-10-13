@@ -77,6 +77,9 @@ describe("map layer API", () => {
     expect(RISK_INPUT_SQL).toContain("NOT EXISTS (SELECT 1 FROM app.consequence");
     expect(RISK_INPUT_SQL).toContain("app.barrier_path bp");
     expect(RISK_INPUT_SQL).toContain("app.independence_group ig");
+    expect(RISK_INPUT_SQL).toContain("e.simulated IS TRUE AND e.created_by IN ('seed:dl-01', 'seed:bangkok')");
+    expect(RISK_INPUT_SQL).toContain("latest_evidence.observed_at + b.evidence_interval <= statement_timestamp()");
+    expect(RISK_INPUT_SQL).toContain("WHEN latest_evidence.observed_at IS NULL THEN TRUE");
   });
 });
 

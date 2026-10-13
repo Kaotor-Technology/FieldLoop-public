@@ -120,7 +120,7 @@ export class PostgresMapLayerStore implements MapLayerStore {
             pfdBand,
             health,
             certified: false,
-            evidenceExpired: false,
+            evidenceExpired: row.evidence_expired === true,
             ...(row.independence_group_id ? { independenceGroupId: row.independence_group_id } : {}),
           };
           group.barriers.set(row.barrier_id, barrier);
@@ -239,6 +239,7 @@ interface RiskInputRow {
   pfd_band: number | string | null;
   health: string | null;
   independence_group_id: string | null;
+  evidence_expired: boolean | null;
   position: number | null;
 }
 
@@ -308,23 +309,35 @@ WITH selected_bowtie AS (
          NULL::text AS target_type, NULL::text AS target_id, t.frequency_per_year,
          NULL::numeric AS conditional_probability, NULL::jsonb AS severity,
          NULL::text AS barrier_id, NULL::text AS barrier_side, NULL::text AS barrier_type, NULL::numeric AS pfd_band,
-         NULL::text AS health, NULL::text AS independence_group_id, NULL::integer AS position
+         NULL::text AS health, NULL::text AS independence_group_id, NULL::boolean AS evidence_expired, NULL::integer AS position
   FROM selected_bowtie sb JOIN app.threat t ON t.bowtie_id = sb.bowtie_id AND t.org_id = $2
   WHERE (t.classification = ANY($3::text[]) OR ($4::boolean AND t.simulated IS TRUE AND t.created_by IN ('seed:dl-01', 'seed:bangkok')))
   UNION ALL
   SELECT sb.asset_id, sb.bowtie_id, 'consequence'::text, c.id::text,
          NULL::text, NULL::text, NULL::numeric, c.p_conditional, c.severity,
-         NULL::text, NULL::text, NULL::text, NULL::numeric, NULL::text, NULL::text, NULL::integer
+         NULL::text, NULL::text, NULL::text, NULL::numeric, NULL::text, NULL::text, NULL::boolean, NULL::integer
   FROM selected_bowtie sb JOIN app.consequence c ON c.bowtie_id = sb.bowtie_id AND c.org_id = $2
   WHERE (c.classification = ANY($3::text[]) OR ($4::boolean AND c.simulated IS TRUE AND c.created_by IN ('seed:dl-01', 'seed:bangkok')))
   UNION ALL
   SELECT sb.asset_id, sb.bowtie_id, 'path'::text, bp.id::text,
          CASE WHEN bp.threat_id IS NOT NULL THEN 'threat' ELSE 'consequence' END,
          COALESCE(bp.threat_id, bp.consequence_id)::text, NULL::numeric, NULL::numeric, NULL::jsonb,
-         b.id::text, b.side, b.type, b.pfd_band, b.health, b.independence_group_id::text, bp.position
+         b.id::text, b.side, b.type, b.pfd_band, b.health, b.independence_group_id::text,
+         CASE WHEN b.evidence_interval IS NULL THEN FALSE
+              WHEN latest_evidence.observed_at IS NULL THEN TRUE
+              ELSE latest_evidence.observed_at + b.evidence_interval <= statement_timestamp()
+         END AS evidence_expired, bp.position
   FROM selected_bowtie sb
   JOIN app.barrier_path bp ON bp.org_id = $2 AND (bp.threat_id IS NOT NULL OR bp.consequence_id IS NOT NULL)
   JOIN app.barrier b ON b.id = bp.barrier_id AND b.org_id = bp.org_id
+  LEFT JOIN LATERAL (
+    SELECT e.observed_at
+    FROM app.evidence e
+    WHERE e.barrier_id = b.id AND e.org_id = b.org_id
+      AND e.simulated IS TRUE AND e.created_by IN ('seed:dl-01', 'seed:bangkok')
+    ORDER BY e.observed_at DESC
+    LIMIT 1
+  ) latest_evidence ON true
   LEFT JOIN app.threat target_threat ON target_threat.id = bp.threat_id AND target_threat.org_id = bp.org_id
   LEFT JOIN app.consequence target_consequence ON target_consequence.id = bp.consequence_id AND target_consequence.org_id = bp.org_id
   LEFT JOIN app.independence_group ig ON ig.id = b.independence_group_id AND ig.org_id = b.org_id
@@ -341,7 +354,7 @@ WITH selected_bowtie AS (
 )
 SELECT asset_id::text, bowtie_id::text, entity_type, entity_id, target_type, target_id,
        frequency_per_year, conditional_probability, severity, barrier_id, barrier_side, barrier_type,
-       pfd_band, health, independence_group_id, position
+       pfd_band, health, independence_group_id, evidence_expired, position
 FROM risk_input`;
 
 export class MapServiceError extends Error {
