@@ -6,7 +6,6 @@ is read-only; a Scenario changes the series in process through ``add_override``.
 """
 
 import hashlib
-import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -19,7 +18,7 @@ from fieldloop_common.generated_mock_historian import MockHistorianSeries
 from fieldloop_simulator.mock_http import Rfc3339, app_state, known_query_only, problem
 from fieldloop_simulator.mock_signals import Classification, Observation
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
-from fieldloop_simulator.scenario_overrides import HeldValues
+from fieldloop_simulator.scenario_overrides import HeldNumbers
 
 SOURCE_ID = "mock-historian"
 CLASSIFICATION: Classification = "CONFIDENTIAL"
@@ -71,7 +70,7 @@ class SimulatedHistorian:
     def __init__(self, *, seed: int = DEMO_SEED, org_id: str = DEMO_ORG_ID) -> None:
         self.seed = seed
         self.org_id = require_org_id(org_id)
-        self._overrides: HeldValues[float] = HeldValues()
+        self._overrides = HeldNumbers()
 
     def profile(self, tag: str) -> TagProfile:
         return TAG_PROFILES[tag]
@@ -80,9 +79,7 @@ class SimulatedHistorian:
         """Hold a tag at ``value`` from ``start`` on, until the next reset."""
         if tag not in TAG_PROFILES:
             raise KeyError(tag)
-        if not math.isfinite(value):
-            raise ValueError("Override value must be finite")
-        self._overrides.hold(tag, start=start, value=float(value))
+        self._overrides.hold(tag, start=start, value=value)
 
     def reset(self, seed: int | None = None) -> None:
         """Forget every override, and take a new seed for the next run if one is given (SIM-5)."""

@@ -5,7 +5,6 @@ is no wall clock, no randomness, no I/O and no live public API (PRD Q49). The HT
 read-only; a Scenario changes a reading in process through ``add_override``.
 """
 
-import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -19,7 +18,7 @@ from fieldloop_simulator.bangkok_storm import LABEL, SIMULATION_STARTS_AT
 from fieldloop_simulator.mock_http import Rfc3339, app_state, known_query_only, problem
 from fieldloop_simulator.mock_signals import Classification, Observation
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
-from fieldloop_simulator.scenario_overrides import HeldValues
+from fieldloop_simulator.scenario_overrides import HeldNumbers
 
 SOURCE_ID = "mock-hydro"
 CLASSIFICATION: Classification = "CONFIDENTIAL"
@@ -57,16 +56,14 @@ SENSOR_PROFILES: Mapping[str, SensorProfile] = {
 class SimulatedHydro:
     def __init__(self, *, org_id: str = DEMO_ORG_ID) -> None:
         self.org_id = require_org_id(org_id)
-        self._overrides: HeldValues[float] = HeldValues()
+        self._overrides = HeldNumbers()
 
     def add_override(self, kind: str, *, start: datetime, value: float) -> None:
         """Hold a kind at ``value`` from ``start`` on, until the next reset."""
         profile = SENSOR_PROFILES[kind]
-        if not math.isfinite(value):
-            raise ValueError("Override value must be finite")
         if profile.minimum is not None and value < profile.minimum:
             raise ValueError("Override value is below what the sensor can read")
-        self._overrides.hold(kind, start=start, value=float(value))
+        self._overrides.hold(kind, start=start, value=value)
 
     def reset(self) -> None:
         """Forget every override, so the next run starts from the baseline (SIM-5)."""
