@@ -8,3 +8,4 @@ export { GooglePubSubTransport, createGooglePubSubTransport } from "./google-pub
 export { GoogleServiceIdentityVerifier, type ServiceIdentityVerifier } from "./google-service-identity.js";
 export { SignalPublisher, MAX_SIGNAL_BYTES, type MessageTransport, type SignalPublisherConfig, type SignalPublishResult } from "./signal-publisher.js";
 export { createCloudRunFetch, type ServiceFetch } from "./cloud-run-fetch.js";
+export { appendAuditEvent, appendWorkerEvent, hashAuditSnapshot, type AuditEventInput } from "./postgres-domain-events.js";

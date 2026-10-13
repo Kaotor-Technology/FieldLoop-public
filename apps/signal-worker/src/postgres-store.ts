@@ -1,6 +1,7 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { sql, type Kysely, type Transaction } from "kysely";
 import { parseRegisteredSignalRule, isWorkerEvent, type RegisteredSignalRule, type Signal, type WorkerEvent } from "@fieldloop/contracts";
+import { appendAuditEvent, appendWorkerEvent } from "@fieldloop/adapters";
 import { isRuleSignal, matchesRule, maximumClassification, streamKey } from "./rule-evaluator.js";
 import { WorkerError, type WorkerStore } from "./model.js";
 
@@ -110,8 +111,7 @@ export class PostgresWorkerStore implements WorkerStore {
   private async event(connection: Connection, type: WorkerEvent["type"], entityId: string, barrierId: string,
     simulated: boolean, classification: WorkerEvent["classification"]): Promise<void> {
     const event: WorkerEvent = { id: randomUUID(), type, orgId: this.orgId, entityId, barrierId, simulated, classification };
-    await sql`INSERT INTO app.signal_event_outbox (id, org_id, event, simulated, classification, created_by)
-      VALUES (${event.id}::uuid, ${this.orgId}, ${JSON.stringify(event)}::jsonb, ${simulated}, ${classification}, 'signal-worker')`.execute(connection);
+    await appendWorkerEvent(connection, event, "signal-worker");
   }
 
   async ingest(signal: Signal): Promise<void> {
@@ -209,14 +209,11 @@ export class PostgresWorkerStore implements WorkerStore {
           VALUES (${this.orgId}, ${dependency.barrier_id}::uuid, ${barrier.health}, 'unverified', ${reason}, 'ageing',
             ${dependency.simulated}, ${classification}, 'signal-worker') RETURNING id`.execute(trx)).rows[0];
         if (!change) throw new Error("Health change insert returned no identity");
-        await sql`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify([this.orgId, "audit_event"])}, 0))`.execute(trx);
-        const previous = (await sql<{ content: string }>`SELECT to_jsonb(a)::text AS content
-          FROM app.audit_event a WHERE org_id = ${this.orgId} ORDER BY created_at DESC, id DESC LIMIT 1`.execute(trx)).rows[0];
-        const previousHash = previous ? createHash("sha256").update(previous.content).digest("hex") : null;
-        const hash = (health: string) => createHash("sha256").update(JSON.stringify({ barrierId: dependency.barrier_id, health })).digest("hex");
-        await sql`INSERT INTO app.audit_event (org_id, actor, action, entity, before_hash, after_hash, prev_hash, simulated, classification, created_by, created_at)
-          VALUES (${this.orgId}, 'signal-worker:ageing', 'barrier.health_changed', ${dependency.barrier_id}, ${hash(barrier.health)},
-            ${hash("unverified")}, ${previousHash}, ${dependency.simulated}, ${classification}, 'signal-worker', clock_timestamp())`.execute(trx);
+        await appendAuditEvent(trx, {
+          orgId: this.orgId, actor: "signal-worker:ageing", action: "barrier.health_changed", entity: dependency.barrier_id,
+          before: { barrierId: dependency.barrier_id, health: barrier.health }, after: { barrierId: dependency.barrier_id, health: "unverified" },
+          simulated: dependency.simulated, classification, createdBy: "signal-worker",
+        });
         await this.event(trx, "barrier.health_changed", change.id, dependency.barrier_id, dependency.simulated, classification);
         // No approval is fabricated. Failed stays Failed; receipt alone never restores Health.
         count++;
