@@ -13,10 +13,18 @@ from fieldloop_common.generated_scenario import Event, Scenario
 from fieldloop_common.generated_simulation import PlayerCommand, RunCreate, SimulationRun
 from pydantic import BaseModel
 
+from fieldloop_simulator import storm_events
 from fieldloop_simulator.mock_historian import CLASSIFICATION as HISTORIAN_CLASSIFICATION
-from fieldloop_simulator.mock_signals import Observation, SimulatedSignalEmitter, utc_text
+from fieldloop_simulator.mock_hydro import SENSOR_PROFILES
+from fieldloop_simulator.mock_signals import (
+    Observation,
+    SignalValue,
+    SimulatedSignalEmitter,
+    utc_text,
+)
 
 Command = Literal["play", "pause", "step", "speed", "bookmark", "reset"]
+RAIN_RATE_TAG = SENSOR_PROFILES["rain"].quantity
 
 
 class PlayerError(ValueError):
@@ -226,7 +234,21 @@ def classification(
     return cast(Classification, classes[highest])
 
 
-def observation(snapshot: PlayerSnapshot, event: Event) -> Observation:
+def reading(snapshot: PlayerSnapshot, event: Event) -> SignalValue:
+    """The value an event publishes: as authored, with its seeded noise, or derived."""
+    at = datetime.fromisoformat(snapshot.scenario.starts_at.replace("Z", "+00:00"))
+    if storm_events.is_derived_rainfall(event):
+        # Summed from the rain rates before this event, so no author states a total.
+        events = snapshot.scenario.events
+        earlier = events[: next(i for i, item in enumerate(events) if item.id == event.id)]
+        rates = [
+            (at + timedelta(seconds=item.at_seconds), float(rate))
+            for item in earlier
+            if item.source == event.source
+            and item.tag == RAIN_RATE_TAG
+            and isinstance(rate := reading(snapshot, item), (float, int))
+        ]
+        return storm_events.rainfall(rates, at + timedelta(seconds=event.at_seconds))
     value = event.value
     if event.noise_amplitude:
         assert isinstance(value, (float, int)) and not isinstance(value, bool)
@@ -235,8 +257,15 @@ def observation(snapshot: PlayerSnapshot, event: Event) -> Observation:
         )
         rng = random.Random(int.from_bytes(hashlib.sha256(identity.encode()).digest(), "big"))
         value = float(value) + rng.uniform(-event.noise_amplitude, event.noise_amplitude)
+    return value
+
+
+def observation(snapshot: PlayerSnapshot, event: Event) -> Observation:
+    value = reading(snapshot, event)
     at = datetime.fromisoformat(snapshot.scenario.starts_at.replace("Z", "+00:00"))
     payload = dict(event.payload or {})
+    # A Demo B source states its own payload, so an author cannot contradict the source.
+    payload.update(storm_events.payload(event, value))
     payload.update(target=event.target.model_dump(), label="SIMULATION", sandbox=True)
     return Observation(
         source=event.source,

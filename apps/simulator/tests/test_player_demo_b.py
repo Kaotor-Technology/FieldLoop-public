@@ -1,4 +1,4 @@
-"""A Demo B run in process: the reads of the two sources follow what the run has applied."""
+"""A Demo B run end to end in process: the Signals it publishes and the reads that follow it."""
 
 import json
 from collections.abc import Iterator
@@ -108,11 +108,96 @@ class Run:
         return {event.id: signal for event, signal in zip(applied, published, strict=True)}
 
 
+def rule(identifier: str) -> dict[str, Any]:
+    golden = json.loads((ROOT / "domain-packs/flood-water/golden.json").read_text())
+    (found,) = [item for item in golden["rules"] if item["id"] == identifier]
+    return dict(found)
+
+
 @pytest.fixture
 def run() -> Run:
     started = Run(load_scenario(FIXTURE))
     started.create()
     return started
+
+
+def test_a_run_publishes_the_pump_signal_that_the_flood_pack_rule_matches(run: Run) -> None:
+    run.play_to_the_end()
+    signal = run.signals()["pump-loses-power"]
+    matched = rule("pump-power-lost")
+
+    assert (signal["source"], signal["tag"], signal["value"], signal["unit"]) == (
+        matched["source"],
+        matched["tag"],
+        matched["threshold"],
+        matched["unit"],
+    )
+    assert signal["observedAt"] == "2026-10-12T00:20:00Z"
+    # The author wrote no payload: the source states it, and the player adds its envelope.
+    assert signal["payload"] == {
+        "assetCode": "P-3",
+        "facilityType": "pump",
+        "zone": "Z3",
+        "operatingState": "stopped",
+        "label": "SIMULATION",
+        "target": {"kind": "asset", "id": "P-3"},
+        "sandbox": True,
+    }
+    assert (signal["simulated"], signal["classification"]) == (True, "CONFIDENTIAL")
+
+
+def test_a_run_publishes_the_rainfall_that_crosses_the_flood_pack_rule(run: Run) -> None:
+    run.play_to_the_end()
+    signals = run.signals()
+    after_one_hour, after_two_hours = signals["rainfall-after-1h"], signals["rainfall-after-2h"]
+    matched = rule("rainfall-needs-fresh-evidence")
+
+    assert matched["operator"] == "gt"
+    assert after_one_hour["value"] == 60
+    assert after_one_hour["value"] <= matched["threshold"]
+    assert after_two_hours["value"] == 120
+    assert after_two_hours["value"] > matched["threshold"]
+    assert (after_two_hours["source"], after_two_hours["tag"], after_two_hours["unit"]) == (
+        matched["source"],
+        matched["tag"],
+        matched["unit"],
+    )
+    assert after_two_hours["payload"] == {
+        "assetCode": "S-R1",
+        "zone": "Z3",
+        "kind": "rain",
+        "windowSeconds": matched["windowSeconds"],
+        "label": "SIMULATION",
+        "target": {"kind": "asset", "id": "S-R1"},
+        "sandbox": True,
+    }
+
+
+def test_the_rainfall_is_summed_from_the_rain_as_published_noise_included() -> None:
+    scenario = load_scenario(FIXTURE)
+    noisy = scenario.events[0].model_copy(update={"noise_amplitude": 5.0})
+    run = Run(scenario.model_copy(update={"events": [noisy, *scenario.events[1:]]}))
+    run.create()
+    run.play_to_the_end()
+    signals = run.signals()
+
+    rate = signals["rain-starts"]["value"]
+    assert rate != 60
+    assert 55 <= rate <= 65
+    assert signals["rainfall-after-1h"]["value"] == pytest.approx(rate)
+    assert signals["rainfall-after-2h"]["value"] == pytest.approx(2 * rate)
+
+
+def test_an_author_cannot_contradict_what_the_source_says_about_itself() -> None:
+    scenario = load_scenario(FIXTURE)
+    edited = scenario.events[0].model_copy(update={"payload": {"zone": "Z9", "note": "squall"}})
+    run = Run(scenario.model_copy(update={"events": [edited, *scenario.events[1:]]}))
+    run.create()
+    run.command("step")
+
+    payload = run.signals()["rain-starts"]["payload"]
+    assert payload["zone"] == "Z3"
+    assert payload["note"] == "squall"
 
 
 def test_reads_of_the_sources_follow_the_run(run: Run) -> None:
@@ -131,7 +216,9 @@ def test_reads_of_the_sources_follow_the_run(run: Run) -> None:
     run.play_to_the_end()
     assert run.hydro.value_at("rain", START + timedelta(hours=3)) == 10.0
     assert run.hydro.value_at("level", START + timedelta(hours=3)) == 1.9
+    # The source sums what the run applied, and agrees with the Signal the run published.
     assert run.hydro.rain_accumulation(START + timedelta(hours=2)) == 120
+    assert run.signals()["rainfall-after-2h"]["value"] == 120
 
 
 def test_a_reset_returns_the_reads_to_their_baseline(run: Run) -> None:
