@@ -245,7 +245,7 @@ def reading(snapshot: PlayerSnapshot, event: Event) -> SignalValue:
         for item in snapshot.scenario.events:
             if item.id == event.id:
                 break
-            if storm_events.is_rain_rate(item):
+            if (described := storm_events.stated(item)) and described.rain_rate:
                 rate = cast(float, reading(snapshot, item))
                 rates.append((starts_at + timedelta(seconds=item.at_seconds), float(rate)))
         return storm_events.rainfall(rates, starts_at + timedelta(seconds=event.at_seconds))
@@ -264,8 +264,10 @@ def observation(snapshot: PlayerSnapshot, event: Event) -> Observation:
     value = reading(snapshot, event)
     at = _starts_at(snapshot)
     payload = dict(event.payload or {})
-    # A Demo B source states its own payload, so an author cannot contradict the source.
-    payload.update(storm_events.payload(event, value))
+    described = storm_events.stated(event)
+    if described:
+        # A Demo B source states its own payload, so an author cannot contradict the source.
+        payload.update(described.payload)
     payload.update(target=event.target.model_dump(), label="SIMULATION", sandbox=True)
     return Observation(
         source=event.source,
@@ -276,5 +278,5 @@ def observation(snapshot: PlayerSnapshot, event: Event) -> Observation:
         observed_at=at + timedelta(seconds=event.at_seconds),
         payload=payload,
         # A Demo B Signal is identified by its Asset, as the source identifies it; others by event.
-        subject=storm_events.subject(event) or event.id,
+        subject=described.asset_code if described else event.id,
     )

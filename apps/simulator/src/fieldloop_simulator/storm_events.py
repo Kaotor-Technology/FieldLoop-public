@@ -6,6 +6,7 @@ source, and the service replays applied events into the source so that reads fol
 """
 
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import datetime
 from typing import cast, get_args
 
@@ -36,20 +37,6 @@ def is_derived_rainfall(event: Event) -> bool:
     A run pinned before that rule may hold one with an authored number; it stays as authored.
     """
     return _is_rainfall(event) and event.value is None
-
-
-def is_rain_rate(event: Event) -> bool:
-    """Whether the event is a valid rain rate, which the 24 hour rainfall sums."""
-    return (
-        event.source == mock_hydro.SOURCE_ID
-        and _KIND_OF_TAG.get(event.tag) == "rain"
-        and check(event) is None
-    )
-
-
-def holds_state(event: Event) -> bool:
-    """Whether a read of the source changes once the event is applied."""
-    return event.source in _SOURCES and not _is_rainfall(event) and check(event) is None
 
 
 def check(event: Event) -> tuple[str, str] | None:
@@ -101,26 +88,31 @@ def _check_pumps(event: Event) -> tuple[str, str] | None:
     return None
 
 
-def subject(event: Event) -> str | None:
-    """What a valid event's Signal is about: the Asset, as the source's own ``observe()`` has it.
+@dataclass(frozen=True)
+class Stated:
+    """A valid event of a Demo B source as the source states it, checked once for every caller."""
 
-    The Asset takes part in the Signal ``id``, so one reading has one ``id`` whether the player
-    or the source publishes it. ``None`` for other sources and for an event that is not valid.
-    """
-    return event.target.id if event.source in _SOURCES and check(event) is None else None
+    # The Asset the Signal is about. It is the Signal's identity, as in the source's own
+    # ``observe()``, so one reading has one ``id`` whether the player or the source publishes it.
+    asset_code: str
+    payload: dict[str, object]
+    # Whether the 24 hour rainfall sums the event.
+    rain_rate: bool
+    # Whether a read of the source changes once the event is applied.
+    holds_state: bool
 
 
-def payload(event: Event, value: object) -> dict[str, object]:
-    """The source's own payload for the Signal of a valid event; empty for other sources."""
-    if check(event) is not None:
-        return {}
+def stated(event: Event) -> Stated | None:
+    """What the source says of a valid event; ``None`` for another source or a refused event."""
+    if event.source not in _SOURCES or check(event) is not None:
+        return None
     if _is_rainfall(event):
-        return mock_hydro.rainfall_payload()
+        return Stated(event.target.id, mock_hydro.rainfall_payload(), False, False)
     if event.source == mock_hydro.SOURCE_ID:
-        return mock_hydro.signal_payload(_KIND_OF_TAG[event.tag])
-    if event.source == mock_pumps.SOURCE_ID:
-        return mock_pumps.signal_payload(event.target.id, cast(PowerStatus, event.value))
-    return {}
+        kind = _KIND_OF_TAG[event.tag]
+        return Stated(event.target.id, mock_hydro.signal_payload(kind), kind == "rain", True)
+    status = cast(PowerStatus, event.value)
+    return Stated(event.target.id, mock_pumps.signal_payload(event.target.id, status), False, True)
 
 
 def rainfall(rates: Iterable[tuple[datetime, float]], at: datetime) -> float:
@@ -136,11 +128,10 @@ def apply(
 ) -> None:
     """Make the source's reads show an applied event from ``at`` on.
 
-    An event the source cannot hold is left out: a run pinned before these rules existed must
-    not turn every read of the source into an error.
+    Only for an event that holds state (``Stated.holds_state``). An event the source cannot
+    hold is the caller's to leave out: a run pinned before these rules existed must not turn
+    every read of the source into an error.
     """
-    if not holds_state(event):
-        return
     if event.source == mock_hydro.SOURCE_ID:
         hydro.add_override(_KIND_OF_TAG[event.tag], start=at, value=float(cast(float, value)))
     else:
