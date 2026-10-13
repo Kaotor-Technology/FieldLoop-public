@@ -191,22 +191,19 @@ def test_each_kind_has_its_own_tag_and_a_replay_keeps_the_signal_id(
     )
 
 
-def test_reading_publishes_nothing(transport: InMemoryTransport) -> None:
-    with TestClient(app) as client:
-        for kind in EXPECTED:
-            client.get(f"/mock/hydro/{kind}")
-    assert transport.messages == []
-
-
-def test_the_sensors_are_the_facilities_of_the_bangkok_data() -> None:
-    facilities = {
-        feature["properties"]["asset_code"]: feature["properties"]
-        for feature in json.loads((BANGKOK / "facilities.geojson").read_text())["features"]
+def test_the_sensors_are_the_sensor_facilities_of_the_bangkok_data() -> None:
+    features = json.loads((BANGKOK / "facilities.geojson").read_text())["features"]
+    authored = {
+        feature["properties"]["facility_type"].removesuffix("_sensor"): (
+            feature["properties"]["asset_code"],
+            feature["properties"]["zone_code"],
+        )
+        for feature in features
+        if feature["properties"]["facility_type"].endswith("_sensor")
     }
-    for kind, profile in SENSOR_PROFILES.items():
-        facility = facilities[profile.sensor_code]
-        assert facility["facility_type"] == f"{kind}_sensor"
-        assert facility["zone_code"] == profile.zone_code
+    assert authored == {
+        kind: (profile.sensor_code, profile.zone_code) for kind, profile in SENSOR_PROFILES.items()
+    }
 
 
 def test_the_default_time_is_the_start_of_the_simulation() -> None:

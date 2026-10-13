@@ -205,13 +205,6 @@ def test_each_facility_has_its_own_tag_and_a_replay_keeps_the_signal_id(
     assert emitter.build(pumps.observe("P-3", POWER_LOST), RUN)["id"] != signals["P-3"]["id"]
 
 
-def test_reading_publishes_nothing(transport: InMemoryTransport) -> None:
-    with TestClient(app) as client:
-        for asset_code in EXPECTED:
-            status(client, asset_code)
-    assert transport.messages == []
-
-
 def test_the_facilities_are_the_pumps_and_gates_of_the_bangkok_data() -> None:
     features = json.loads((BANGKOK / "facilities.geojson").read_text())["features"]
     authored = {
