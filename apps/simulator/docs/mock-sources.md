@@ -343,7 +343,9 @@ Both sources share these points:
   The simulator image does not contain `data/`, so they are literals and a test
   keeps them in step. A response carries no coordinates.
 - **Classification** is `CONFIDENTIAL`, as the historian's readings are and as
-  the `signal.v1` example cases for these two sources state. The Facility
+  the `signal.v1` example cases for these two sources state. Those cases
+  (`packages/contracts/test/fixtures/signal-cases.json`) are the shape a Signal
+  rule may be written from, and a test holds each source's Signal to its case. The Facility
   positions are `HIGHLY_RESTRICTED` in the seed and are not served here.
 - **Scenario state is per process**, as the historian's overrides are, and is
   dropped by `reset()` and by scale-to-zero.

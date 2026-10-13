@@ -178,6 +178,10 @@ def test_power_lost_is_announced_as_a_validated_simulated_signal(
     assert "unit" not in signal
     assert (signal["simulated"], signal["classification"]) == (True, "CONFIDENTIAL")
     assert signal["simulationRunId"] == str(RUN)
+    cases = json.loads((ROOT / "packages/contracts/test/fixtures/signal-cases.json").read_text())
+    (example,) = [case["signal"] for case in cases if case["name"] == "pump power lost"]
+    for member in ("source", "tag", "value", "classification", "simulated"):
+        assert signal[member] == example[member], member
     assert signal["payload"] == {
         "assetCode": "P-3",
         "facilityType": "pump",

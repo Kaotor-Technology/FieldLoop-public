@@ -4,6 +4,7 @@ import uuid
 from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -26,6 +27,13 @@ EXPECTED = {
     "level": ("S-L1", "Z3", "m", 0.6),
     "tide": ("S-T1", "Z4", "m", 1.5),
 }
+
+
+def signal_example(name: str) -> dict[str, Any]:
+    """An example Signal of the signal.v1 contract, which a Signal rule may be written from."""
+    cases = json.loads((ROOT / "packages/contracts/test/fixtures/signal-cases.json").read_text())
+    (signal,) = [case["signal"] for case in cases if case["name"] == name]
+    return dict(signal)
 
 
 @pytest.fixture
@@ -187,6 +195,10 @@ def test_the_storm_is_announced_as_a_validated_simulated_signal(
     }
     assert (signal["simulated"], signal["classification"]) == (True, "CONFIDENTIAL")
     assert signal["simulationRunId"] == str(RUN)
+    example = signal_example("flood observation")
+    for member in ("source", "tag", "value", "unit", "classification", "simulated"):
+        assert signal[member] == example[member], member
+    assert signal["payload"].items() <= example["payload"].items()
     assert signal["payload"] == {
         "assetCode": "S-R1",
         "zoneCode": "Z3",
