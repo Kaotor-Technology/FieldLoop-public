@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timedelta
 from importlib.resources import files
 from pathlib import Path
+from typing import Any
 
 import yaml  # type: ignore[import-untyped]
 from fieldloop_common.generated_scenario import Scenario
@@ -97,11 +98,11 @@ class _ScenarioLoader(yaml.SafeLoader):  # type: ignore[misc]
         for key, value in yaml.SafeLoader.yaml_implicit_resolvers.items()
     }
 
-    def construct_mapping(self, node: object, deep: bool = False) -> dict[str, object]:
+    def construct_mapping(self, node: Any, deep: bool = False) -> dict[str, object]:
         pairs = [
             (self.construct_object(key, deep=deep), self.construct_object(value, deep=deep))
             for key, value in node.value
-        ]  # type: ignore[attr-defined]
+        ]
         return _unique_pairs(pairs)
 
 
