@@ -316,7 +316,7 @@ export function GeoCommandMap() {
         </div>}
         {mapConfig.data && layerError && <p className="map-inline-alert" role="alert">{t("mapLayerError")}</p>}
         <div className="map-overlay-top">
-          <div className="map-view-controls" aria-label={t("mapControls")}>
+          <div className="map-view-controls" role="group" aria-label={t("mapControls")}>
             <button type="button" className="map-view-preset" aria-label={t("obliqueView")} aria-pressed={viewport.tilt >= 30} onClick={() => changeTilt(45)}><span className="mono">45°</span></button>
             <button type="button" className="map-view-preset" aria-label={t("topDownView")} aria-pressed={viewport.tilt === 0} onClick={() => changeTilt(0)}><span className="mono">0°</span></button>
             <button type="button" aria-label={t("zoomIn")} onClick={() => changeZoom(1)}>+</button>
@@ -333,7 +333,7 @@ export function GeoCommandMap() {
             </fieldset>
           </details>
         </div>
-        <div className="map-legend" aria-label={t("riskLegend")}>
+        <div className="map-legend" aria-label={t("mapLegend")}>
           <div className="legend-group">
             <h3>{t("barrierHealth")}</h3>
             <span className="legend-health"><i className="health-failed" aria-hidden="true">{SYMBOLS.failed}</i>{t("failed")}</span>
