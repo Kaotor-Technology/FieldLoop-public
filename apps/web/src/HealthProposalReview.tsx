@@ -19,15 +19,20 @@ interface HealthProposalReviewProps {
   proposals: readonly HealthProposalReviewRecord[];
   isLoading?: boolean;
   hasError?: boolean;
-  onDecision: (input: { proposalId: string; decision: HealthProposalDecision; reason: string }) => Promise<void>;
+  canDecide?: boolean;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
+  onDecision: (input: { proposalId: string; decision: HealthProposalDecision; reason: string; idempotencyKey: string }) => Promise<void>;
 }
 
 interface SelectedDecision {
   proposalId: string;
   decision: HealthProposalDecision;
+  idempotencyKey: string;
 }
 
-export function HealthProposalReview({ proposals, isLoading = false, hasError = false, onDecision }: HealthProposalReviewProps) {
+export function HealthProposalReview({ proposals, isLoading = false, hasError = false, canDecide = true, hasMore = false, isLoadingMore = false, onLoadMore, onDecision }: HealthProposalReviewProps) {
   const { t, i18n } = useTranslation();
   const [selectedDecision, setSelectedDecision] = useState<SelectedDecision | null>(null);
   const [reason, setReason] = useState("");
@@ -37,7 +42,7 @@ export function HealthProposalReview({ proposals, isLoading = false, hasError = 
   const [savedProposalId, setSavedProposalId] = useState<string | null>(null);
 
   const openDecision = (proposalId: string, decision: HealthProposalDecision) => {
-    setSelectedDecision({ proposalId, decision });
+    setSelectedDecision({ proposalId, decision, idempotencyKey: crypto.randomUUID() });
     setReason("");
     setReasonInvalid(false);
     setDecisionFailed(false);
@@ -78,7 +83,7 @@ export function HealthProposalReview({ proposals, isLoading = false, hasError = 
   const language = i18n.resolvedLanguage ?? i18n.language;
   const healthLabel = (health: BarrierHealth) => t(health, { defaultValue: t(`healthProposalHealth.${health}`) });
 
-  return <section className="health-proposal-section" aria-labelledby="health-proposal-heading" lang={language} aria-busy={isLoading || submitting}>
+  return <section className="health-proposal-section context-summary-section" aria-labelledby="health-proposal-heading" lang={language} aria-busy={isLoading || submitting}>
     <div className="health-proposal-heading">
       <h3 id="health-proposal-heading">{t("healthProposals")}</h3>
       <strong className="mono" aria-label={t("healthProposalCount", { count: proposals.length })}>{proposals.length}</strong>
@@ -100,7 +105,7 @@ export function HealthProposalReview({ proposals, isLoading = false, hasError = 
         const formId = `health-proposal-reason-${proposal.id}`;
         return <li key={proposal.id} className="health-proposal-row">
           <div className="health-proposal-target">
-            {proposal.barrierName && <strong>{proposal.barrierName}</strong>}
+            {proposal.barrierName && <strong className="mono">{proposal.barrierName}</strong>}
             <code className="mono">{proposal.barrierId}</code>
           </div>
           <div className="health-proposal-transition" role="group" aria-label={t("healthProposalChange")}>
@@ -112,7 +117,7 @@ export function HealthProposalReview({ proposals, isLoading = false, hasError = 
           {proposal.simulated && <span className="health-proposal-simulation">{t("healthProposalSimulationLabel")}</span>}
 
           {saved && <p className="health-proposal-saved" role="status">{t("healthProposalDecisionSaved")}</p>}
-          {!saved && !isSelected && <div className="health-proposal-actions">
+          {!saved && !isSelected && canDecide && <div className="health-proposal-actions">
             <Button type="button" variant="primary" disabled={submitting} aria-label={t("healthProposalAcceptFor", { barrier: targetName })} onClick={() => openDecision(proposal.id, "accept")}>
               {t("healthProposalAccept")}
             </Button>
@@ -121,7 +126,8 @@ export function HealthProposalReview({ proposals, isLoading = false, hasError = 
             </Button>
           </div>}
 
-          {isSelected && <form className="health-proposal-decision-form" aria-labelledby={`${formId}-heading`} onSubmit={(event) => { void submitDecision(event); }}>
+          {!saved && !isSelected && !canDecide && <p className="health-proposal-empty">{t("healthProposalDecisionUnavailable")}</p>}
+          {isSelected && canDecide && <form className="health-proposal-decision-form" aria-labelledby={`${formId}-heading`} onSubmit={(event) => { void submitDecision(event); }}>
             <h4 id={`${formId}-heading`}>{selectedDecision.decision === "accept" ? t("healthProposalAcceptTitle") : t("healthProposalRejectTitle")}</h4>
             <Textarea
               id={formId}
@@ -144,6 +150,7 @@ export function HealthProposalReview({ proposals, isLoading = false, hasError = 
         </li>;
       })}
     </ul>}
+    {hasMore && onLoadMore && <Button type="button" variant="secondary" loading={isLoadingMore} onClick={onLoadMore}>{t("healthProposalsLoadMore")}</Button>}
     {decisionFailed && !selectedDecision && <p className="health-proposal-error" role="alert">{t("healthProposalDecisionFailed")}</p>}
   </section>;
 }
