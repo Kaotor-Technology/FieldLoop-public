@@ -417,12 +417,12 @@ export function GeoCommandMap() {
             </fieldset>
           </details>
         </div>
-        <div className="map-legend" aria-label={t(showRainLegend ? "mapLegend" : "mapLegendBase")}>
+        <div className="map-legend" role="group" aria-label={t(showRainLegend ? "mapLegend" : "mapLegendBase")}>
           <div className="legend-group">
             <h2>{t("barrierHealthLabel")}</h2>
-            <span className="legend-health"><i className="health-failed" aria-hidden="true">{SYMBOLS.failed}</i>{t("failed")}</span>
-            <span className="legend-health"><i className="health-degraded" aria-hidden="true">{SYMBOLS.degraded}</i>{t("degraded")}</span>
-            <span className="legend-health"><i className="health-unverified" aria-hidden="true">{SYMBOLS.unverified}</i>{t("unverified")}</span>
+            <span className="legend-health"><i className="health-failed" aria-hidden="true">{SYMBOLS.failed}</i>{t("barrierHealth.failed")}</span>
+            <span className="legend-health"><i className="health-degraded" aria-hidden="true">{SYMBOLS.degraded}</i>{t("barrierHealth.degraded")}</span>
+            <span className="legend-health"><i className="health-unverified" aria-hidden="true">{SYMBOLS.unverified}</i>{t("barrierHealth.unverified")}</span>
           </div>
           <div className="legend-group legend-risk-group">
             <h2>{t("riskLegend")}</h2>
@@ -450,7 +450,7 @@ export function GeoCommandMap() {
 
     <aside className="context-panel" aria-label={t("contextPanel")}>
       <header className="context-header">
-        <div><p className="eyebrow">{t("mapSelection")}</p><h2>{selectedFeature?.properties.name ?? t("overview")}</h2>
+        <div><p className="eyebrow">{t("mapSelection")}</p><h2>{selectedFeature?.properties.name ? <span lang="en">{selectedFeature.properties.name}</span> : t("overview")}</h2>
           {selectedFeature?.properties.chainageFrom !== null && selectedFeature?.properties.chainageFrom !== undefined &&
             <p className="context-chainage mono">{t("chainage")} {formatChainage(selectedFeature.properties.chainageFrom)}–{formatChainage(selectedFeature.properties.chainageTo ?? selectedFeature.properties.chainageFrom)} m</p>}
         </div>
@@ -486,11 +486,11 @@ export function GeoCommandMap() {
             {features.slice(0, 150).map((feature) => <li key={`${feature.properties.featureKind}-${feature.id}`}>
               <button type="button" className="feature-list-item" onClick={() => chooseFeature(feature)}>
                 <FeatureSymbol feature={feature} />
-                <span className="feature-list-copy"><strong>{feature.properties.name ?? t("unnamedFeature")}</strong><span>{feature.properties.featureKind} · {feature.properties.health ?? feature.properties.riskBand ?? feature.properties.classification}</span>
+                <span className="feature-list-copy"><strong>{feature.properties.name ? <span lang="en">{feature.properties.name}</span> : t("unnamedFeature")}</strong><span>{t(`featureKinds.${feature.properties.featureKind}`, { defaultValue: t("asset") })} · {feature.properties.health ? t(`barrierHealth.${feature.properties.health}`) : feature.properties.riskBand ? t(feature.properties.riskBand) : t(`classifications.${feature.properties.classification}`, { defaultValue: feature.properties.classification ?? t("unknown") })}</span>
                   {feature.properties.featureKind === "segment" && (feature.properties.chainageFrom !== null || feature.properties.chainageTo !== null) &&
                     <span className="feature-list-chainage mono">{t("chainage")}: {feature.properties.chainageFrom ?? "?"}–{feature.properties.chainageTo ?? "?"} m</span>}
                 </span>
-                {feature.properties.simulated && <span className="sim-tag">SIM</span>}
+                {feature.properties.simulated && <span className="sim-tag" lang="en" aria-label={t("healthProposalSimulationLabel")}>SIM</span>}
               </button>
             </li>)}
           </ul> : null}
@@ -499,7 +499,7 @@ export function GeoCommandMap() {
       </div>
       <footer className="context-footer">
         <span>{t("visibleDataScope")}</span>
-        <code>{features[0]?.properties.classification ?? t("noFeatures")}</code>
+        <span>{features[0] ? t(`classifications.${features[0].properties.classification}`, { defaultValue: features[0].properties.classification ?? t("unknown") }) : t("noFeatures")}</span>
       </footer>
     </aside>
   </main>;
@@ -577,19 +577,19 @@ function FeatureOverview({ feature }: { feature: MapFeature }) {
   const { t, i18n } = useTranslation();
   const health = feature.properties.health;
   return <dl className="feature-overview">
-    <div><dt>{t("featureType")}</dt><dd>{feature.properties.featureKind ?? t("asset")}</dd></div>
+    <div><dt>{t("featureType")}</dt><dd>{t(`featureKinds.${feature.properties.featureKind}`, { defaultValue: t("asset") })}</dd></div>
     {feature.properties.chainageFrom !== null && feature.properties.chainageFrom !== undefined && <div><dt>{t("chainage")}</dt><dd className="mono">{formatChainage(feature.properties.chainageFrom)}–{formatChainage(feature.properties.chainageTo ?? feature.properties.chainageFrom)} m</dd></div>}
-    <div><dt>{t("classification")}</dt><dd>{feature.properties.classification ?? t("unknown")}</dd></div>
-    {typeof feature.properties.simulated === "boolean" && <div><dt>{t("provenance")}</dt><dd>{feature.properties.simulated ? t("simulationLabel") : feature.properties.label ?? t("publicBaseMap")}</dd></div>}
+    <div><dt>{t("classification")}</dt><dd>{t(`classifications.${feature.properties.classification}`, { defaultValue: feature.properties.classification ?? t("unknown") })}</dd></div>
+    {typeof feature.properties.simulated === "boolean" && <div><dt>{t("provenance")}</dt><dd>{feature.properties.simulated ? t("simulationLabel") : feature.properties.label ? <span lang="en">{feature.properties.label}</span> : t("publicBaseMap")}</dd></div>}
     {health && <div><dt>{t("barrierHealthLabel")}</dt><dd><HealthBadge health={health} /></dd></div>}
-    {feature.properties.riskBand && <div><dt>{t("riskBand")}</dt><dd>{feature.properties.riskBand}</dd></div>}
+    {feature.properties.riskBand && <div><dt>{t("riskBand")}</dt><dd>{t(feature.properties.riskBand)}</dd></div>}
     {feature.properties.evidenceObservedAt && <div><dt>{t("latestEvidence")}</dt><dd><time className="mono" dateTime={feature.properties.evidenceObservedAt}>{new Date(feature.properties.evidenceObservedAt).toLocaleDateString(i18n.language === "th" ? "th-TH" : "en-GB", { timeZone: "Asia/Bangkok" })}</time></dd></div>}
   </dl>;
 }
 
 function HealthBadge({ health }: { health: string }) {
   const { t } = useTranslation();
-  return <span className={`health-badge health-${health}`}><span aria-hidden="true">{SYMBOLS[health] ?? "●"}</span>{t(health)}</span>;
+  return <span className={`health-badge health-${health}`}><span aria-hidden="true">{SYMBOLS[health] ?? "●"}</span>{t(`barrierHealth.${health}`)}</span>;
 }
 
 function FeatureSymbol({ feature }: { feature: MapFeature }) {

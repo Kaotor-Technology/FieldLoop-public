@@ -362,7 +362,15 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 .risk-change-list { padding-inline-start: var(--spacing-space-5); }
 .risk-change-list li { padding-block: var(--spacing-space-3); border-block-end: var(--spacing-border-hairline) solid var(--outline); }
 .risk-change-list p { overflow-wrap: anywhere; }
-:lang(th) { line-height: var(--type-body-md-line-height); }
+html[lang="th"] :lang(th), :lang(th) { line-height: var(--type-body-md-line-height); letter-spacing: normal; overflow-wrap: normal; word-break: normal; }
+html[lang="th"] .nav-rail-item:lang(th),
+html[lang="th"] .eyebrow:lang(th),
+html[lang="th"] .map-search-label:lang(th),
+html[lang="th"] .preferences > button:lang(th),
+html[lang="th"] .bowtie-provenance:lang(th),
+html[lang="th"] .bowtie-triad dt:lang(th),
+html[lang="th"] .bowtie-metadata dt:lang(th) { font-size: var(--type-body-sm-font-size); }
+html[lang="th"] small:lang(th) { font-size: var(--type-body-sm-font-size); }
 @media (max-width: 839px) {
   .workspace-banner { padding-inline: var(--spacing-page-margin-mobile); }
 }
@@ -391,6 +399,7 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 .bowtie-barrier-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--spacing-space-2); }
 .bowtie-barrier-heading strong { overflow-wrap: anywhere; }
 .bowtie-barrier-type { color: var(--muted); font-size: var(--type-body-sm-font-size); }
+.bowtie-path-membership { color: var(--muted); font-size: var(--type-body-sm-font-size); overflow-wrap: normal; }
 .bowtie-degradation { padding-top: var(--spacing-space-2); border-top: var(--spacing-border-hairline) solid var(--outline); }
 .bowtie-degradation h3, .bowtie-triad summary, .bowtie-groups h2, .bowtie-text-equivalent summary { font-size: var(--type-label-lg-font-size); }
 .bowtie-degradation ul, .bowtie-groups ul, .bowtie-text-equivalent ul { margin: var(--spacing-space-1) 0 0; padding-left: var(--spacing-space-5); }

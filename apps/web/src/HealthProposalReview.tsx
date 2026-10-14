@@ -81,7 +81,7 @@ export function HealthProposalReview({ proposals, isLoading = false, hasError = 
   };
 
   const language = i18n.resolvedLanguage ?? i18n.language;
-  const healthLabel = (health: BarrierHealth) => t(health, { defaultValue: t(`healthProposalHealth.${health}`) });
+  const healthLabel = (health: BarrierHealth) => t(`barrierHealth.${health}`);
 
   return <section className="health-proposal-section context-summary-section" aria-labelledby="health-proposal-heading" lang={language} aria-busy={isLoading || submitting}>
     <div className="health-proposal-heading">
@@ -114,7 +114,7 @@ export function HealthProposalReview({ proposals, isLoading = false, hasError = 
             <HealthBadge health={proposal.proposedHealth} label={healthLabel(proposal.proposedHealth)} />
           </div>
           {proposal.sourceReason && <p className="health-proposal-source-reason">{proposal.sourceReason}</p>}
-          {proposal.simulated && <span className="health-proposal-simulation">{t("healthProposalSimulationLabel")}</span>}
+          {proposal.simulated && <span className="health-proposal-simulation" lang="en">{t("healthProposalSimulationLabel")}</span>}
 
           {saved && <p className="health-proposal-saved" role="status">{t("healthProposalDecisionSaved")}</p>}
           {!saved && !isSelected && canDecide && <div className="health-proposal-actions">

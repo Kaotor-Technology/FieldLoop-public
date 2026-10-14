@@ -1,0 +1,62 @@
+# Guardrail Tier 1 latency probe
+
+This k6 probe measures `POST /guardrail/v1/content:scan` and fails when the
+latency Guardrail adds around the managed Tier 1 detector reaches 50 ms at p95
+(PRD GR-8, ADR-0005 amendment). Added latency is the request duration minus the
+`detector` stage from the `Server-Timing` header (Guardrail reports each stage
+in milliseconds with 0.1 ms precision; `detector` spans the whole Model Armor
+adapter call); the detector duration
+(Model Armor + SDP) is reported as `tier1_detector_latency` and the full request
+as `http_req_duration`, without thresholds. Only successful (200) scans feed
+`guardrail_added_latency`; fail-closed responses such as detector timeouts count
+against `http_req_failed` (< 1%) and `checks` instead. It also checks that requests succeed and return
+the same benign synthetic content. Each iteration uses a new idempotency key and
+creates normal Intercept and Evidence records.
+
+Run it from the selected self-hosted GitHub Actions runner outside GCP, using the
+pinned container below. The runner and container need an established private
+route and private DNS path to the internal Guardrail service, plus permission to
+invoke it. Set `GUARDRAIL_URL` to the branch-matched dev service origin used for
+the run, `GUARDRAIL_ID_TOKEN` to a Google-signed identity token whose audience is
+that origin, `GUARDRAIL_INTERNAL_USER_TOKEN` to a five-minute RS256 token minted
+server-side by `web-api` for a synthetic demo user, and `GUARDRAIL_AI_SYSTEM` to
+the registered demo AI System code. Keep both tokens in an approved secret store
+accessible to the runner; do not put them in source control or browser storage.
+
+```sh
+docker run --rm \
+  --volume "$PWD/apps/guardrail/performance:/scripts:ro" \
+  --env GUARDRAIL_URL \
+  --env GUARDRAIL_ID_TOKEN \
+  --env GUARDRAIL_INTERNAL_USER_TOKEN \
+  --env GUARDRAIL_AI_SYSTEM \
+  --env K6_VUS \
+  --env K6_ITERATIONS \
+  grafana/k6:2.3.0@sha256:9c2dee7f8ed74d317e4027c06a10f169b625638189de8d4555d0b3486a5aeb34 \
+  run /scripts/tier1-content-scan.js
+```
+
+The container pins k6 v2.3.0 by image digest. Verify that the runner's Docker
+network can use the private route and resolve the private Guardrail hostname
+before starting the measurement. Export the four required `GUARDRAIL_*`
+variables and, optionally, the two `K6_*` variables from the runner's approved
+secret/configuration store. Do not pass token values as command-line arguments
+or write them into the repository.
+
+The default run sends 100 requests with one virtual user. Set `K6_VUS` and
+`K6_ITERATIONS` to run a different load. This endpoint measurement includes
+Cloud Run ingress, Cloud SQL persistence, Model Armor and client network time; it
+is not an isolated in-process detector benchmark. Recorded runs and their results are in `docs/contexts/FL-86.md`.
+
+## In-VPC Cloud Run Job
+
+Guardrail is internal-only, so the measured run uses a one-off Cloud Run Job in
+the `fieldloop-v2-dev` subnet. Build `apps/guardrail/performance/Dockerfile` from
+committed files (for example Cloud Build on a `git archive` of the commit, so no
+ignored local files are uploaded), then create the job with the `web-api-dev`
+service account, `--network fieldloop-v2 --subnet fieldloop-v2-dev
+--vpc-egress private-ranges-only`, and `GUARDRAIL_URL`, `FIELDLOOP_BASE_URL`,
+`FIELDLOOP_DEFAULT_ORG_ID`, `GOOGLE_CLOUD_PROJECT` and `GUARDRAIL_AI_SYSTEM`.
+`run-in-vpc.mjs` signs the five-minute synthetic user token with the web-api
+signer and reads the identity token from the metadata server; neither token is
+printed or stored.

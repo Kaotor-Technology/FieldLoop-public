@@ -13,36 +13,46 @@ const TRIAD_DIMENSIONS: readonly TriadDimension[] = ["effective", "independent",
 
 export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
   const { t } = useTranslation();
-  const preventive = bowtie.barriers.filter((barrier) => barrier.side === "preventive");
-  const mitigative = bowtie.barriers.filter((barrier) => barrier.side === "mitigative");
+  const classificationLabel = bowtie.classification === "Not recorded"
+    ? t("notRecorded")
+    : t(`classifications.${bowtie.classification}`, { defaultValue: bowtie.classification });
+  const provenanceLabel = bowtie.provenance === "SYNTHETIC" ? t("syntheticData") : bowtie.provenance;
+  const seenBarrierIds = new Set<string>();
+  const barriers = bowtie.barriers.filter((barrier) => {
+    if (seenBarrierIds.has(barrier.id)) return false;
+    seenBarrierIds.add(barrier.id);
+    return true;
+  });
+  const preventive = barriers.filter((barrier) => barrier.side === "preventive");
+  const mitigative = barriers.filter((barrier) => barrier.side === "mitigative");
 
   return <main id="main-content" className="bowtie-screen" tabIndex={-1} aria-labelledby="bowtie-title">
     <header className="bowtie-header">
       <button type="button" className="bowtie-back-button" onClick={onBack}>{t("backToMap")}</button>
       <div>
         <p className="eyebrow">{t("readOnlyView")} · {t("bowtieCode", { code: bowtie.code })}</p>
-        <h1 id="bowtie-title">{monoNumericText(bowtie.title)}</h1>
+        <h1 id="bowtie-title" lang="en">{monoNumericText(bowtie.title)}</h1>
       </div>
-      <span className="bowtie-provenance">{bowtie.provenance}</span>
+      <span className="bowtie-provenance">{provenanceLabel}</span>
     </header>
 
     <div className="bowtie-canvas-viewport" role="region" aria-label={t("bowtieCanvas")}>
       <div className="bowtie-canvas">
         <section className="bowtie-column bowtie-centre-column" aria-labelledby="bowtie-centre-heading">
           <h2 id="bowtie-centre-heading">{t("hazard")}</h2>
-          <p className="bowtie-hazard">{monoNumericText(bowtie.hazard)}</p>
+          <p className="bowtie-hazard" lang="en">{monoNumericText(bowtie.hazard)}</p>
           <h2>{t("topEvent")}</h2>
-          <p className="bowtie-top-event">{monoNumericText(bowtie.topEvent)}</p>
+          <p className="bowtie-top-event" lang="en">{monoNumericText(bowtie.topEvent)}</p>
           <dl className="bowtie-metadata">
-            <div><dt>{t("domain")}</dt><dd>{monoNumericText(bowtie.domain)}</dd></div>
-            <div><dt>{t("classification")}</dt><dd>{monoNumericText(bowtie.classification)}</dd></div>
+            <div><dt>{t("domain")}</dt><dd lang="en">{monoNumericText(bowtie.domain)}</dd></div>
+            <div><dt>{t("classification")}</dt><dd>{classificationLabel}</dd></div>
           </dl>
         </section>
 
         <section className="bowtie-column bowtie-left-column" aria-labelledby="bowtie-left-heading">
           <h2 id="bowtie-left-heading">{t("threats")}</h2>
           <ul className="bowtie-entity-list">
-            {bowtie.threats.map((threat) => <li key={threat.id}>{monoNumericText(threat.name)}</li>)}
+            {bowtie.threats.map((threat) => <li key={threat.id} lang="en">{monoNumericText(threat.name)}</li>)}
           </ul>
           <h2>{t("preventiveBarriers")}</h2>
           <ul className="bowtie-barrier-list">
@@ -57,7 +67,7 @@ export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
           </ul>
           <h2>{t("consequences")}</h2>
           <ul className="bowtie-entity-list">
-            {bowtie.consequences.map((consequence) => <li key={consequence.id}>{consequence.name}</li>)}
+            {bowtie.consequences.map((consequence) => <li key={consequence.id} lang="en">{consequence.name}</li>)}
           </ul>
         </section>
       </div>
@@ -68,7 +78,7 @@ export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
       {bowtie.independenceGroups.length === 0
         ? <p>{t("noIndependenceGroups")}</p>
         : <ul>{bowtie.independenceGroups.map((group) => <li key={group.id}>
-          <strong>{monoNumericText(group.cause)}</strong>
+          <strong lang="en">{monoNumericText(group.cause)}</strong>
           {group.barrierIds.length > 0 && <span>{t("sharedByBarriers")}: {monoNumericText(group.barrierIds.map((id) => findBarrierName(bowtie, id)).join(", "))}</span>}
         </li>)}</ul>}
     </section>
@@ -76,26 +86,27 @@ export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
     <details className="bowtie-text-equivalent">
       <summary>{t("textEquivalent")}</summary>
       <div>
-        <p><strong>{t("bowtieCode", { code: bowtie.code })} · {t("readOnlyView")}:</strong> {monoNumericText(bowtie.title)}</p>
-        <p><strong>{t("provenance")}:</strong> {bowtie.provenance}</p>
-        <p><strong>{t("hazard")}:</strong> {monoNumericText(bowtie.hazard)}</p>
-        <p><strong>{t("topEvent")}:</strong> {monoNumericText(bowtie.topEvent)}</p>
-        <p><strong>{t("domain")}:</strong> {monoNumericText(bowtie.domain)}</p>
-        <p><strong>{t("classification")}:</strong> {monoNumericText(bowtie.classification)}</p>
+        <p><strong>{t("bowtieCode", { code: bowtie.code })} · {t("readOnlyView")}:</strong> <span lang="en">{monoNumericText(bowtie.title)}</span></p>
+        <p><strong>{t("provenance")}:</strong> <span>{provenanceLabel}</span></p>
+        <p><strong>{t("hazard")}:</strong> <span lang="en">{monoNumericText(bowtie.hazard)}</span></p>
+        <p><strong>{t("topEvent")}:</strong> <span lang="en">{monoNumericText(bowtie.topEvent)}</span></p>
+        <p><strong>{t("domain")}:</strong> <span lang="en">{monoNumericText(bowtie.domain)}</span></p>
+        <p><strong>{t("classification")}:</strong> <span>{classificationLabel}</span></p>
         <h3>{t("threats")}</h3>
-        <ul>{bowtie.threats.map((threat) => <li key={threat.id}>{monoNumericText(threat.name)}</li>)}</ul>
+        <ul>{bowtie.threats.map((threat) => <li key={threat.id} lang="en">{monoNumericText(threat.name)}</li>)}</ul>
         <h3>{t("barriers")}</h3>
-        <ul>{bowtie.barriers.map((barrier) => <li key={barrier.id}>
-          <strong>{monoNumericText(barrier.name)}</strong> · {t("barrierTypeLabel")}: {t(barrier.type)} · {t(barrier.side)} · {t(barrier.health)}
+        <ul>{barriers.map((barrier) => <li key={barrier.id}>
+          <strong lang="en">{monoNumericText(barrier.name)}</strong> · {t("barrierTypeLabel")}: {t(barrier.type)} · {t(barrier.side)} · {t(`barrierHealth.${barrier.health}`)}
+          {barrier.pathNames.length > 0 && <span className="bowtie-path-membership"> · {t("pathMembership")}: <span lang="en">{monoNumericText(barrier.pathNames.join(", "))}</span></span>}
           {barrier.degradationFactors.length === 0
             ? <> · {t("noDegradationFactors")}</>
-            : barrier.degradationFactors.map((factor) => <span key={factor.id}> · {t("degradationFactor")}: {monoNumericText(factor.description)}
-              {factor.controls.length > 0 && <> · {t("degradationControl")}: {monoNumericText(factor.controls.join(", "))}</>}
+            : barrier.degradationFactors.map((factor) => <span key={factor.id}> · {t("degradationFactor")}: <span lang="en">{monoNumericText(factor.description)}</span>
+              {factor.controls.length > 0 && <> · {t("degradationControl")}: <span lang="en">{monoNumericText(factor.controls.join(", "))}</span></>}
             </span>)}
           <TriadText barrier={barrier} />
         </li>)}</ul>
         <h3>{t("consequences")}</h3>
-        <ul>{bowtie.consequences.map((consequence) => <li key={consequence.id}>{monoNumericText(consequence.name)}</li>)}</ul>
+        <ul>{bowtie.consequences.map((consequence) => <li key={consequence.id} lang="en">{monoNumericText(consequence.name)}</li>)}</ul>
         <h3>{t("independenceGroups")}</h3>
         {bowtie.independenceGroups.length === 0
           ? <p>{t("noIndependenceGroups")}</p>
@@ -112,17 +123,18 @@ function BarrierCard({ barrier }: { barrier: BowtieView["barriers"][number] }) {
   const { t } = useTranslation();
   return <article className="bowtie-barrier-card">
     <div className="bowtie-barrier-heading">
-      <strong>{monoNumericText(barrier.name)}</strong>
-      <HealthBadge health={barrier.health as BarrierHealth} label={t(barrier.health)} />
+      <strong lang="en">{monoNumericText(barrier.name)}</strong>
+      <HealthBadge health={barrier.health as BarrierHealth} label={t(`barrierHealth.${barrier.health}`)} />
     </div>
     <p className="bowtie-barrier-type">{t("barrierTypeLabel")}: {t(barrier.type)}</p>
+    {barrier.pathNames.length > 0 && <p className="bowtie-path-membership">{t("pathMembership")}: <span lang="en">{monoNumericText(barrier.pathNames.join(", "))}</span></p>}
     <section className="bowtie-degradation" aria-label={t("degradationFactors")}>
       <h3>{t("degradationFactors")}</h3>
       {barrier.degradationFactors.length === 0
         ? <p>{t("noDegradationFactors")}</p>
         : <ul>{barrier.degradationFactors.map((factor) => <li key={factor.id}>
-          <span>{monoNumericText(factor.description)}</span>
-          {factor.controls.length > 0 && <small>{t("degradationControl")}: {monoNumericText(factor.controls.join(", "))}</small>}
+          <span lang="en">{monoNumericText(factor.description)}</span>
+          {factor.controls.length > 0 && <small>{t("degradationControl")}: <span lang="en">{monoNumericText(factor.controls.join(", "))}</span></small>}
         </li>)}</ul>}
     </section>
     <details className="bowtie-triad">
@@ -132,7 +144,7 @@ function BarrierCard({ barrier }: { barrier: BowtieView["barriers"][number] }) {
           const result = barrier.triad[dimension];
           return result ? <div key={dimension}>
             <dt>{t(dimension)}</dt>
-            <dd><span>{t(result.pass ? "pass" : "fail")}</span>{result.justification ? <> · {monoNumericText(result.justification)}</> : ""}</dd>
+            <dd><span>{t(result.pass ? "pass" : "fail")}</span>{result.justification ? <> · <span lang="en">{monoNumericText(result.justification)}</span></> : ""}</dd>
           </div> : null;
         })}</dl>
         : <p>{t("notRecorded")}</p>}

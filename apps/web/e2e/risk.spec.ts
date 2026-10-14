@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { expectThaiTypography } from "./thai-typography";
 
 const bowtieId = "50000000-0000-4000-8000-000000000001";
 const threatId = "50000000-0000-4000-8000-000000000002";
@@ -123,3 +124,47 @@ test("Bowtie canvas displays a pending notice when Organisation calibration is u
   await page.getByRole("button", { name: "Explain score" }).click();
   await expect(page.getByRole("complementary", { name: "Explain score" }).getByText(/controlled standard reference and version/)).toBeVisible();
 });
+
+for (const colorScheme of ["light", "dark"] as const) for (const width of [390, 1280]) {
+  test(`Thai Bowtie details accessibility and typography: ${colorScheme}, ${width}`, async ({ page }) => {
+    await mockRiskApi(page, true);
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
+    await page.goto("/map");
+    await page.getByRole("link", { name: "Sign in as viewer" }).click();
+    await page.getByRole("link", { name: /Synthetic flood barrier failure/ }).click();
+    await page.getByRole("button", { name: "ภาษาไทย", exact: true }).click();
+
+    await expect(page.locator("html")).toHaveAttribute("lang", "th");
+    await expect(page.getByRole("heading", { name: "Synthetic flood barrier failure", exact: true })).toHaveAttribute("lang", "en");
+    await expect(page.getByText("คะแนนความเสี่ยงของ Organisation")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Threat และ Barrier ป้องกัน", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "อธิบายคะแนน", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "อธิบายคะแนน", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: "อธิบายคะแนน", exact: true })).toBeVisible();
+    await expect(page.getByText("Risk changed after the listed Barrier and risk input changes.", { exact: true })).toHaveAttribute("lang", "en");
+    await expect(page.getByText("Health accepted by a reviewer.", { exact: true })).toHaveAttribute("lang", "en");
+    await expect(page.locator(".bowtie-top-event-panel > p")).toHaveAttribute("lang", "en");
+    await expect(page.getByText("Synthetic power interruption", { exact: true })).toHaveAttribute("lang", "en");
+
+    const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+    expect(axe.violations).toEqual([]);
+    await expectThaiTypography(page);
+
+    // A locale change must not reload the document or discard the open explanation.
+    const documentIdentity = await page.evaluate(() => performance.timeOrigin);
+    const url = page.url();
+    await page.getByRole("button", { name: "English", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: "Explain score", exact: true })).toBeVisible();
+    await expect(page.getByText("Healthy → Degraded", { exact: true })).toBeVisible();
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
+    expect(page.url()).toBe(url);
+    await page.getByRole("button", { name: "ภาษาไทย", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "อธิบายคะแนน", exact: true })).toBeVisible();
+
+    await page.setViewportSize({ width: 320, height: 900 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  });
+}
