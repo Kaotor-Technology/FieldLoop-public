@@ -72,6 +72,43 @@ test("searchable Scenario selection exposes Thai popup labels and an empty resul
   await expect(page.getByLabel("สถานการณ์จำลอง", { exact: true })).toBeFocused();
 });
 
+test("long Thai Scenario labels remain visible in the picker at 320px", async ({ page }) => {
+  const longScenarioName = "สถานการณ์จำลองเพื่อประเมินความเสี่ยงของสินทรัพย์และแนวป้องกันในพื้นที่เมืองที่มีฝนตกหนักต่อเนื่อง";
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.route("**/api/v1/scenarios", async (route) => {
+    await route.fulfill({ json: Array.from({ length: 11 }, (_, index) => ({
+      id: `synthetic-scenario-${index}`, name: index === 0 ? longScenarioName : `SYNTHETIC Scenario ${index}`,
+    })) });
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "ภาษาไทย", exact: true }).click();
+  const scenario = page.getByLabel("สถานการณ์จำลอง", { exact: true });
+  await scenario.click();
+  await page.getByRole("option", { name: longScenarioName, exact: true }).click();
+  await expect(scenario).toContainText(longScenarioName);
+  const metrics = await scenario.evaluate((button) => {
+    const buttonRect = button.getBoundingClientRect();
+    const label = button.childNodes[0];
+    const range = document.createRange();
+    range.selectNodeContents(label);
+    const labelRect = range.getBoundingClientRect();
+    return {
+      viewportWidth: document.documentElement.clientWidth,
+      documentWidth: document.documentElement.scrollWidth,
+      buttonWidth: button.clientWidth,
+      buttonScrollWidth: button.scrollWidth,
+      labelLeft: labelRect.left,
+      labelRight: labelRect.right,
+      buttonLeft: buttonRect.left,
+      buttonRight: buttonRect.right,
+    };
+  });
+  expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth);
+  expect(metrics.buttonScrollWidth).toBeLessThanOrEqual(metrics.buttonWidth);
+  expect(metrics.labelLeft).toBeGreaterThanOrEqual(metrics.buttonLeft);
+  expect(metrics.labelRight).toBeLessThanOrEqual(metrics.buttonRight);
+});
+
 for (const colorScheme of ["light", "dark"] as const) for (const width of [390, 1280]) {
   test(`Thai demo accessibility and typography: ${colorScheme}, ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
