@@ -3,6 +3,7 @@ import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-q
 import { api, SessionError } from "./api-client";
 import { applySimulationEvent, simulationKey, type SimulationRun } from "./simulation-events";
 import { applyRiskRecalculatedEvent } from "./risk-events";
+import { invalidateHealthProposalQueries } from "./health-proposals";
 
 export function useSimulation(): UseQueryResult<SimulationRun | null, SessionError> {
   return useQuery({ queryKey: simulationKey, queryFn: async ({ signal }) => {
@@ -42,6 +43,9 @@ export function useSimulationEvents() {
       }
       setConnected(true);
     });
+    const refreshHealthProposals: EventListener = (event) => { void invalidateHealthProposalQueries(client, event.type); };
+    stream.addEventListener("health_proposal.created", refreshHealthProposals);
+    stream.addEventListener("barrier.health_changed", refreshHealthProposals);
     return () => { stream.close(); };
   }, [client]);
   return connected;

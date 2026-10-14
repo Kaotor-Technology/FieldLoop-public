@@ -152,6 +152,22 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 .context-summary-section h3 { margin: 0 0 var(--spacing-space-2); }
 .context-summary-scope { margin: 0 0 var(--spacing-space-2); color: var(--muted); font-size: var(--type-body-sm-font-size); }
 .context-summary-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.health-proposal-section { padding-bottom: var(--spacing-space-4); border-bottom: var(--spacing-border-hairline) solid var(--outline); }
+.health-proposal-heading { display: flex; align-items: baseline; justify-content: space-between; gap: var(--spacing-space-2); margin-bottom: var(--spacing-space-2); }
+.health-proposal-heading h3 { margin: 0; font-size: var(--type-headline-sm-font-size); }
+.health-proposal-loading, .health-proposal-row, .health-proposal-decision-form { display: grid; gap: var(--spacing-space-3); }
+.health-proposal-loading { color: var(--muted); }
+.health-proposal-list { margin: 0; padding: 0; list-style: none; }
+.health-proposal-row { padding-block: var(--spacing-space-4); border-top: var(--spacing-border-hairline) solid var(--outline); }
+.health-proposal-row:first-child { border-top: 0; }
+.health-proposal-target, .health-proposal-transition, .health-proposal-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-space-2); }
+.health-proposal-target code { overflow-wrap: anywhere; }
+.health-proposal-source-reason, .health-proposal-empty { margin: 0; color: var(--muted); }
+.health-proposal-simulation { justify-self: start; padding: var(--spacing-space-1) var(--spacing-space-2); border-radius: var(--rounded-sm); background: var(--banner); color: var(--banner-ink); font-size: var(--type-label-sm-font-size); }
+.health-proposal-decision-form { padding: var(--spacing-space-3); border-inline-start: var(--spacing-indicator-width) solid var(--action); background: var(--canvas); border-radius: var(--rounded-sm); }
+.health-proposal-decision-form h4 { margin: 0; font-size: var(--type-headline-sm-font-size); }
+.health-proposal-error { margin: 0; color: var(--color-error); }
+.health-proposal-saved { margin: 0; color: var(--muted); }
 .risk-summary-row, .barrier-summary-row { display: flex; align-items: center; gap: var(--spacing-space-2); min-height: var(--spacing-space-8); border-top: var(--spacing-border-hairline) solid var(--outline); }
 .risk-summary-row strong, .barrier-summary-row strong { margin-left: auto; }
 .context-risk-mark { flex: 0 0 auto; width: var(--spacing-space-5); height: var(--spacing-space-5); box-sizing: border-box; border: var(--spacing-border-hairline) solid var(--ink); }
