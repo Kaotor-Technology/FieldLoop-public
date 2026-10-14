@@ -30,6 +30,41 @@ BEGIN
     EXCEPTION WHEN check_violation THEN NULL;
     END;
 END $$;
+
+-- PRD AX-1: the requester kind is recorded, scoped to the request's AI System and immutable.
+INSERT INTO app.ai_system (id, org_id, name, simulated, classification) VALUES
+    ('87000000-0000-4000-8000-0000000000a1', 'synthetic-action-test', 'Synthetic AI', true, 'INTERNAL'),
+    ('87000000-0000-4000-8000-0000000000a2', 'synthetic-other-org', 'Synthetic other AI', true, 'INTERNAL');
+INSERT INTO app.action_request (id, org_id, action_type, action_level, target, payload, status, simulated, classification,
+    requester_kind, requester_ai_system_id)
+VALUES ('87000000-0000-4000-8000-000000000002', 'synthetic-action-test', 'system_of_record', 'l1', 'cmms', '{}', 'open', true, 'INTERNAL',
+    'assistant', '87000000-0000-4000-8000-0000000000a1');
+DO $$
+DECLARE scope_case record;
+BEGIN
+    IF (SELECT requester_kind FROM app.action_request WHERE id='87000000-0000-4000-8000-000000000001') <> 'person' THEN
+        RAISE EXCEPTION 'Action Request without an AI System must default to a person requester';
+    END IF;
+    FOR scope_case IN SELECT * FROM (VALUES
+        ('assistant', NULL::uuid), ('person', '87000000-0000-4000-8000-0000000000a1'::uuid),
+        ('assistant', '87000000-0000-4000-8000-0000000000a2'::uuid), ('signal_rule', NULL::uuid)) AS c(kind, ai_system_id)
+    LOOP
+        BEGIN
+            INSERT INTO app.action_request (org_id, action_type, action_level, target, payload, status, simulated, classification,
+                requester_kind, requester_ai_system_id)
+            VALUES ('synthetic-action-test', 'system_of_record', 'l1', 'cmms', '{}', 'open', true, 'INTERNAL',
+                scope_case.kind, scope_case.ai_system_id);
+            RAISE EXCEPTION 'Invalid requester % / % was accepted', scope_case.kind, scope_case.ai_system_id;
+        EXCEPTION WHEN check_violation THEN NULL;
+        END;
+    END LOOP;
+    BEGIN
+        UPDATE app.action_request SET requester_kind='person', requester_ai_system_id=NULL
+        WHERE id='87000000-0000-4000-8000-000000000002';
+        RAISE EXCEPTION 'Action requester was rebound without invalidating its payload hash';
+    EXCEPTION WHEN check_violation THEN NULL;
+    END;
+END $$;
 ROLLBACK;
 
 DO $$
