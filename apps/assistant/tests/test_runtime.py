@@ -41,7 +41,11 @@ def test_read_tool_runs_after_allow_with_user_identity_and_streams_every_event()
 
 def test_geo_extraction_is_registered_and_runs_only_after_guardrail_check() -> None:
     document_id = "11111111-2222-4333-8444-555555555555"
-    h = Harness([call("extract_geo_references", document_id=document_id), answer()])
+    h = Harness(
+        [call("extract_geo_references", document_id=document_id), answer()],
+        platform={"/api/v1/simulation/runs/current": {"id": RUN_ID}},
+        simulated=True,
+    )
 
     events = run(h, "inspection-data-prep")
 
@@ -52,7 +56,8 @@ def test_geo_extraction_is_registered_and_runs_only_after_guardrail_check() -> N
     envelope = json.loads(check.content)
     assert envelope["tool"] == "extract_geo_references"
     assert envelope["target"] == "fieldloop"
-    assert "actionType" not in envelope and "actionLevel" not in envelope
+    assert envelope["actionType"] == "internal_record" and envelope["actionLevel"] == "l0"
+    assert envelope["simulationRunId"] == RUN_ID
     assert check.headers[TOKEN_HEADER] == USER_TOKEN
     scan_request = next(
         request for request in h.guardrail_requests
@@ -62,7 +67,12 @@ def test_geo_extraction_is_registered_and_runs_only_after_guardrail_check() -> N
     assert scan_request.headers["x-fieldloop-classification"] == "INTERNAL"
     assert scan_request.headers["idempotency-key"].startswith("geo-scan:")
 
-    source_request, save_request = h.platform_requests
+    source_request = next(
+        request for request in h.platform_requests if request.url.path.endswith("/geo-source")
+    )
+    save_request = next(
+        request for request in h.platform_requests if request.url.path.endswith("/geo-references")
+    )
     assert source_request.method == "GET" and source_request.url.path.endswith("/geo-source")
     assert source_request.headers[TOKEN_HEADER] == USER_TOKEN
     assert "authorization" not in source_request.headers
@@ -85,6 +95,33 @@ def test_geo_extraction_is_registered_and_runs_only_after_guardrail_check() -> N
         "platform/api/internal/assistant/documents/" + document_id + "/geo-source"
     )
     assert [event.name for event in events].count("guardrail.decision") == 1
+
+
+def test_simulated_geo_extraction_is_blocked_without_an_active_run() -> None:
+    h = Harness(
+        [
+            call("extract_geo_references", document_id="11111111-2222-4333-8444-555555555555"),
+            answer(),
+        ],
+        platform={"/api/v1/simulation/runs/current": {"id": None}},
+        simulated=True,
+    )
+
+    events = run(h, "inspection-data-prep")
+
+    assert h.platform_requests and all(
+        not request.url.path.endswith("/geo-source")
+        and not request.url.path.endswith("/geo-references")
+        for request in h.platform_requests
+    )
+    assert not any(
+        request.url.path.endswith("tool-calls:check") for request in h.guardrail_requests
+    )
+    assert any(
+        event.name == "guardrail.decision"
+        and event.data.get("reason") == "simulation_run_unavailable"
+        for event in events
+    )
 
 
 def test_geo_extraction_never_fetches_or_saves_when_guardrail_blocks_tool_call() -> None:

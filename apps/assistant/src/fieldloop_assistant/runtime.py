@@ -141,6 +141,9 @@ def build_envelope(
             rationale=f"Draft proposed by agent {turn.definition.id}",
             citations=args.get("citations") or ["draft"],
         )
+    elif tool == "extract_geo_references":
+        # Geo Reference candidates are internal Drafts and stay subject to human confirmation.
+        envelope.update(actionType="internal_record", actionLevel="l0", target="fieldloop")
     if simulation_run_id and tool in PROPOSE_TOOLS:
         envelope["simulationRunId"] = simulation_run_id
     return {k: v for k, v in envelope.items() if v is not None}

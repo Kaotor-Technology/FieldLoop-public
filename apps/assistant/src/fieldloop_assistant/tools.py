@@ -89,7 +89,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec("get_bowtie_risk", "read", "Read the current Risk Score of a Bowtie."),
     ToolSpec("get_scenario_state", "read", "Read the current simulation run state."),
     ToolSpec(
-        "extract_geo_references", "read",
+        "extract_geo_references", "propose",
         "Extract grounded location references into human-reviewable drafts.",
     ),
     ToolSpec("create_action_request", "propose", "Propose an L1/L2 Action Request for a person."),

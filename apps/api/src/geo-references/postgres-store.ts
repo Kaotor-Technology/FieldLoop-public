@@ -78,6 +78,13 @@ export class PostgresGeoReferenceStore implements GeoReferenceStore {
     }
     return this.db.transaction().execute(async (trx) => {
       const source = await readSource(trx, input.documentId, input.scope);
+      if (source.simulated) {
+        const activeRun = (await sql<{ active_run_id: string | null }>`
+          SELECT active_run_id::text FROM app.simulation_workspace WHERE org_id = ${input.scope.orgId}
+        `.execute(trx)).rows[0]?.active_run_id;
+        if (!activeRun) throw new GeoReferenceServiceError(409, "simulation_run_unavailable");
+        await sql`SELECT set_config('app.simulation_run_id', ${activeRun}, true)`.execute(trx);
+      }
       const references = input.references.map((candidate) => validateCandidate(candidate, source));
       const keyPrefix = digest(input.idempotencyKey).slice(0, 48);
       const extractionKeys = references.map((_candidate, index) => `${keyPrefix}:${index}`);
@@ -99,11 +106,6 @@ export class PostgresGeoReferenceStore implements GeoReferenceStore {
           return { references: await loadReferences(trx, previous.map((row) => row.id), input.scope), replayed: true };
         }
       }
-
-      const activeRun = source.simulated
-        ? (await sql<{ active_run_id: string | null }>`SELECT active_run_id::text FROM app.simulation_workspace WHERE org_id = ${input.scope.orgId}`.execute(trx)).rows[0]?.active_run_id
-        : null;
-      if (activeRun) await sql`SELECT set_config('app.simulation_run_id', ${activeRun}, true)`.execute(trx);
 
       const ids: string[] = [];
       for (let index = 0; index < references.length; index += 1) {
