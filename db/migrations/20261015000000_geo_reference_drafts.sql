@@ -35,6 +35,8 @@ CREATE UNIQUE INDEX uq_geo_reference_decision_key
     WHERE decided_by IS NOT NULL AND decision_key IS NOT NULL;
 
 -- migrate:down
+SET search_path = app, public;
+
 DROP INDEX uq_geo_reference_extraction_key;
 DROP INDEX uq_geo_reference_decision_key;
 DROP INDEX idx_geo_reference_document_status;
