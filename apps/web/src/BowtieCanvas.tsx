@@ -32,7 +32,7 @@ export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
           <h2 id="bowtie-centre-heading">{t("hazard")}</h2>
           <p className="bowtie-hazard">{monoNumericText(bowtie.hazard)}</p>
           <h2>{t("topEvent")}</h2>
-          <p className="bowtie-top-event">{monoNumericText(bowtie.topEvent)}</p>
+          <p className="bowtie-event-card">{monoNumericText(bowtie.topEvent)}</p>
           <dl className="bowtie-metadata">
             <div><dt>{t("domain")}</dt><dd>{monoNumericText(bowtie.domain)}</dd></div>
             <div><dt>{t("classification")}</dt><dd>{monoNumericText(bowtie.classification)}</dd></div>

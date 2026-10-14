@@ -354,9 +354,9 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 .bowtie-centre-column { grid-column: 2; grid-row: 1; align-self: start; }
 .bowtie-right-column { grid-column: 3; grid-row: 1; }
 .bowtie-column > h2 { padding-bottom: var(--spacing-space-2); border-bottom: var(--spacing-border-hairline) solid var(--outline); }
-.bowtie-hazard, .bowtie-top-event { padding: var(--spacing-space-3); border-radius: var(--rounded-md); }
+.bowtie-hazard, .bowtie-event-card { padding: var(--spacing-space-3); border-radius: var(--rounded-md); }
 .bowtie-hazard { background: var(--canvas); }
-.bowtie-top-event { color: var(--on-action); background: var(--action); font-weight: var(--type-label-lg-font-weight); }
+.bowtie-event-card { color: var(--on-action); background: var(--action); font-weight: var(--type-label-lg-font-weight); }
 .bowtie-entity-list, .bowtie-barrier-list { display: grid; gap: var(--spacing-space-2); margin: 0; padding: 0; list-style: none; }
 .bowtie-entity-list li { padding: var(--spacing-space-3); background: var(--canvas); border-left: var(--spacing-indicator-width) solid var(--outline); border-radius: var(--rounded-sm); }
 .bowtie-barrier-card { display: grid; gap: var(--spacing-space-2); padding: var(--spacing-space-3); background: var(--surface); border: var(--spacing-border-hairline) solid var(--outline); border-radius: var(--rounded-md); }

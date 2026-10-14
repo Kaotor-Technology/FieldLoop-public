@@ -422,8 +422,8 @@ export function GeoCommandMap() {
       <div className="context-body" tabIndex={0}>
         <MapOverviewSummary summary={contextSummary} />
         {selectedFeature ? <FeatureOverview feature={selectedFeature} /> : <p className="context-hint">{t("selectMapFeature")}</p>}
-        <section className="feature-list-section" aria-labelledby="available-bowties-title">
-          <div className="section-heading"><h3 id="available-bowties-title">{t("bowties")}</h3></div>
+        <section className="feature-list-section" aria-labelledby="bowtie-shortcuts-title">
+          <div className="section-heading"><h3 id="bowtie-shortcuts-title">{t("bowtieShortcuts")}</h3></div>
           <ul className="feature-list">{BOWTIE_LINKS.map((bowtie) => <li key={bowtie.id}>
             <button type="button" className="feature-list-item" onClick={() => {
               void navigate({ to: "/bowtie/$bowtieId", params: { bowtieId: bowtie.id }, search });
