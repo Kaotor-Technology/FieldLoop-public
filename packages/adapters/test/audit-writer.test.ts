@@ -3,12 +3,15 @@ import { describe, expect, it, vi } from "vitest";
 import * as adapters from "../src/index.js";
 
 const input = { orgId: "org-test", actor: "synthetic-user", action: "barrier.health_changed", entity: "barrier:synthetic-1", beforeHash: null, afterHash: "a".repeat(64), simulated: true, classification: "INTERNAL" };
+const appended = { event_id: "event-1", previous_hash: "b".repeat(64), event_hash: "c".repeat(64) };
+const receipt = { id: "event-1", prevHash: "b".repeat(64), hash: "c".repeat(64) };
+const appendValues = [input.orgId, input.actor, input.action, input.entity, null, input.afterHash, true, "INTERNAL"];
 
 function fixture() {
   const calls: { sql: string; values: unknown[] | undefined }[] = [];
-  const query = vi.fn(async (sql: string, values?: unknown[]): Promise<{ rows: { id: string; prev_hash: string | null; hash: string }[] }> => {
+  const query = vi.fn(async (sql: string, values?: unknown[]): Promise<{ rows: (typeof appended)[] }> => {
     calls.push({ sql, values });
-    return { rows: sql.includes("INSERT INTO") ? [{ id: "event-1", prev_hash: "b".repeat(64), hash: "c".repeat(64) }] : [] };
+    return { rows: sql.includes("app.append_audit_event") ? [appended] : [] };
   });
   const release = vi.fn();
   const connect = vi.fn(async () => ({ query, release }));
@@ -17,11 +20,11 @@ function fixture() {
 
 function writer() {
   const append = (adapters as Record<string, unknown>)["appendAuditEventAtomically"];
-  expect(typeof append, "shared audit writer is exported").toBe("function");
+  expect(typeof append, "atomic audit writer is exported").toBe("function");
   return append as (pool: Pool, event: typeof input) => Promise<{ id: string; prevHash: string | null; hash: string }>;
 }
 
-describe("shared audit writer", () => {
+describe("atomic audit writer", () => {
   it("rolls back when the domain mutation fails without appending audit", async () => {
     const f = fixture();
     const failure = new Error("synthetic domain mutation failed");
@@ -30,23 +33,23 @@ describe("shared audit writer", () => {
       throw failure;
     })).rejects.toBe(failure);
     expect(f.calls.at(-1)?.sql).toBe("ROLLBACK");
-    expect(f.calls.some((call) => call.sql.includes("app.audit_event"))).toBe(false);
+    expect(f.calls.some((call) => call.sql.includes("append_audit_event"))).toBe(false);
     expect(f.calls.some((call) => call.sql === "COMMIT")).toBe(false);
     expect(f.release).toHaveBeenCalledExactlyOnceWith();
   });
 
-  it("rolls back the domain mutation when audit insertion fails", async () => {
+  it("rolls back the domain mutation when the audit append fails", async () => {
     const f = fixture();
-    const failure = new Error("synthetic audit insertion failed");
+    const failure = new Error("synthetic audit append failed");
     f.query.mockImplementation(async (sql, values) => {
       f.calls.push({ sql, values });
-      if (sql.includes("INSERT INTO app.audit_event")) throw failure;
+      if (sql.includes("append_audit_event")) throw failure;
       return { rows: [] };
     });
     await expect(adapters.appendAuditEventAtomically(f.pool, input as adapters.AtomicAuditEventInput, async (transaction) => {
       await transaction.query("UPDATE synthetic_domain SET value = $1", [2]);
     })).rejects.toBe(failure);
-    expect(f.calls[3]?.sql).toBe("UPDATE synthetic_domain SET value = $1");
+    expect(f.calls[1]?.sql).toBe("UPDATE synthetic_domain SET value = $1");
     expect(f.calls.at(-1)?.sql).toBe("ROLLBACK");
     expect(f.calls.some((call) => call.sql === "COMMIT")).toBe(false);
     expect(f.release).toHaveBeenCalledExactlyOnceWith();
@@ -69,7 +72,7 @@ describe("shared audit writer", () => {
     f.query.mockImplementation(async (sql, values) => {
       f.calls.push({ sql, values });
       if (sql === "COMMIT") throw failure;
-      return { rows: sql.includes("INSERT INTO") ? [{ id: "event-1", prev_hash: null, hash: "c".repeat(64) }] : [] };
+      return { rows: sql.includes("append_audit_event") ? [appended] : [] };
     });
     await expect(adapters.appendAuditEventAtomically(f.pool, input as adapters.AtomicAuditEventInput, async () => {
       mutations++;
@@ -79,38 +82,33 @@ describe("shared audit writer", () => {
     expect(f.calls.filter((call) => call.sql === "COMMIT")).toHaveLength(1);
   });
 
-  it("pairs a domain mutation with audit on the same transaction client", async () => {
+  it("pairs a domain mutation with the shared append on the same transaction client, audit last", async () => {
     const f = fixture();
     await expect(adapters.appendAuditEventAtomically(f.pool, input as adapters.AtomicAuditEventInput, async (transaction) => {
       await transaction.query("INSERT INTO synthetic_domain (id) VALUES ($1)", ["synthetic-1"]);
-    })).resolves.toEqual({ id: "event-1", prevHash: "b".repeat(64), hash: "c".repeat(64) });
+    })).resolves.toEqual(receipt);
     expect(f.connect).toHaveBeenCalledOnce();
-    expect(f.calls.map((call) => call.sql.trim().split("\n")[0])).toEqual([
-      "BEGIN ISOLATION LEVEL READ COMMITTED", "SET LOCAL TIME ZONE 'UTC'",
-      "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+    expect(f.calls.map((call) => call.sql)).toEqual([
+      "BEGIN ISOLATION LEVEL READ COMMITTED",
       "INSERT INTO synthetic_domain (id) VALUES ($1)",
-      "INSERT INTO app.audit_event (org_id, actor, action, entity, before_hash, after_hash,", "COMMIT",
+      "SELECT event_id, previous_hash, event_hash FROM app.append_audit_event($1, $2, $3, $4, $5, $6, $7, $8)",
+      "COMMIT",
     ]);
     expect(f.release).toHaveBeenCalledExactlyOnceWith();
   });
 
-  it("appends a server-hashed event under the Organisation transaction lock", async () => {
+  it("appends through the shared SQL function, which owns the lock, chain and UTC hashing", async () => {
     const f = fixture();
-    await expect(writer()(f.pool, input)).resolves.toEqual({ id: "event-1", prevHash: "b".repeat(64), hash: "c".repeat(64) });
+    await expect(writer()(f.pool, input)).resolves.toEqual(receipt);
     expect(f.calls[0]?.sql).toBe("BEGIN ISOLATION LEVEL READ COMMITTED");
-    expect(f.calls[1]?.sql).toBe("SET LOCAL TIME ZONE 'UTC'");
-    expect(f.calls[2]?.sql).toContain("pg_advisory_xact_lock");
-    expect(f.calls[2]?.values).toEqual(["fieldloop:audit:org-test"]);
-    const insert = f.calls[3];
-    expect(insert?.sql).toContain("app.payload_sha256(to_jsonb(event))");
-    expect(insert?.sql).toContain("WHERE event.org_id = $1");
-    expect(insert?.sql).toContain("ORDER BY event.created_at DESC, event.id DESC");
-    expect(insert?.values).toEqual([input.orgId, input.actor, input.action, input.entity, null, input.afterHash, true, "INTERNAL"]);
-    expect(f.calls[4]?.sql).toBe("COMMIT");
+    expect(f.calls[1]?.sql).toContain("app.append_audit_event");
+    expect(f.calls[1]?.values).toEqual(appendValues);
+    expect(f.calls[2]?.sql).toBe("COMMIT");
+    expect(f.calls.some((call) => /pg_advisory_xact_lock|INSERT INTO|TIME ZONE/.test(call.sql))).toBe(false);
     expect(f.release).toHaveBeenCalledOnce();
   });
 
-  it.each(["connect", "lock query"])("keeps invocation metadata when the caller changes it during %s", async (stage) => {
+  it.each(["connect", "mutation"])("keeps invocation metadata when the caller changes it during %s", async (stage) => {
     const f = fixture();
     const callerInput = { ...input };
     let resume!: () => void;
@@ -123,17 +121,13 @@ describe("shared audit writer", () => {
         await pending;
         return { query: f.query, release: f.release };
       });
-    } else {
-      f.query.mockImplementation(async (sql, values) => {
-        f.calls.push({ sql, values });
-        if (sql.includes("pg_advisory_xact_lock")) {
-          signalPending();
-          await pending;
-        }
-        return { rows: sql.includes("INSERT INTO") ? [{ id: "event-1", prev_hash: "b".repeat(64), hash: "c".repeat(64) }] : [] };
-      });
     }
-    const append = writer()(f.pool, callerInput);
+    const append = stage === "connect"
+      ? writer()(f.pool, callerInput)
+      : adapters.appendAuditEventAtomically(f.pool, callerInput as adapters.AtomicAuditEventInput, async () => {
+        signalPending();
+        await pending;
+      });
     await entered;
     const changed = {
       orgId: "org-changed", actor: "synthetic-user-changed", action: "synthetic.changed",
@@ -143,14 +137,10 @@ describe("shared audit writer", () => {
     expect(Object.isFrozen(callerInput)).toBe(false);
     Object.assign(callerInput, changed);
     resume();
-    await expect(append).resolves.toEqual({ id: "event-1", prevHash: "b".repeat(64), hash: "c".repeat(64) });
-    expect(f.calls[2]?.values).toEqual(["fieldloop:audit:org-test"]);
-    expect(f.calls[3]?.values).toEqual([
-      "org-test", "synthetic-user", "barrier.health_changed", "barrier:synthetic-1",
-      null, "a".repeat(64), true, "INTERNAL",
-    ]);
+    await expect(append).resolves.toEqual(receipt);
+    expect(f.calls.find((call) => call.sql.includes("append_audit_event"))?.values).toEqual(appendValues);
     expect(callerInput).toEqual(changed);
-    expect(f.calls[4]?.sql).toBe("COMMIT");
+    expect(f.calls.at(-1)?.sql).toBe("COMMIT");
     expect(f.release).toHaveBeenCalledOnce();
   });
 
@@ -168,11 +158,21 @@ describe("shared audit writer", () => {
     const f = fixture();
     const appendError = new Error("append failed");
     f.query.mockImplementation(async (sql) => {
-      if (sql.includes("INSERT INTO")) throw appendError;
+      if (sql.includes("append_audit_event")) throw appendError;
       if (sql === "ROLLBACK") throw new Error("connection lost");
       return { rows: [] };
     });
     await expect(writer()(f.pool, input)).rejects.toBe(appendError);
     expect(f.release).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  it("fails when the append function returns no event", async () => {
+    const f = fixture();
+    f.query.mockImplementation(async (sql, values) => {
+      f.calls.push({ sql, values });
+      return { rows: [] };
+    });
+    await expect(writer()(f.pool, input)).rejects.toThrow("Audit append returned no event");
+    expect(f.calls.at(-1)?.sql).toBe("ROLLBACK");
   });
 });
