@@ -212,6 +212,7 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
   .app-shell { display: grid; grid-template-rows: var(--spacing-top-bar-height) var(--spacing-control-sm) minmax(0, 1fr) auto; height: 100dvh; min-height: 100dvh; overflow: hidden; }
   .top-bar { min-height: var(--spacing-top-bar-height); padding-block: 0; }
   .workspace-banner { display: flex; align-items: center; min-height: var(--spacing-control-sm); }
+  .map-entry { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; overflow: hidden; }
   .geo-command-map { height: 100%; min-height: 0; overflow: hidden; }
   .map-stage { grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; overflow: hidden; }
   .map-canvas-wrap { min-height: 0; }

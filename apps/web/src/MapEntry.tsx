@@ -15,7 +15,7 @@ export function MapEntry() {
     },
     retry: false,
   });
-  return <>
+  return <div className="map-entry">
     <section className="bowtie-list" aria-labelledby="bowtie-list-title">
       <h2 id="bowtie-list-title">{t("bowties")}</h2>
       {bowties.isPending ? <p role="status">{t("loadingBowties")}</p> : null}
@@ -30,5 +30,5 @@ export function MapEntry() {
       </li>)}</ul> : !bowties.isPending && !bowties.isError ? <p>{t("noBowties")}</p> : null}
     </section>
     <GeoCommandMap />
-  </>;
+  </div>;
 }
