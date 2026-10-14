@@ -6,12 +6,17 @@ import json
 import math
 import re
 from collections.abc import Collection, Mapping
-from dataclasses import dataclass
 from typing import Any, Protocol
 from uuid import uuid4
 
+from fieldloop_common.generated_geo_reference import (
+    GeoReferenceCandidate,
+    GeoReferenceDraftCreate,
+)
+from pydantic import ValidationError
+
 MAX_DOCUMENT_CHARS = 100_000
-MAX_REFERENCES = 50
+MAX_CHAINAGE_METRES = 1_000_000_000
 GEO_AI_SYSTEM = "demo-uc-1"
 _KP_MEASURE = re.compile(r"(?<![\w.])(\d{1,6})\s*\+\s*(\d{1,3}(?:\.\d{1,3})?)(?!\d)", re.IGNORECASE)
 _CHAINAGE_LABEL = re.compile(
@@ -30,30 +35,6 @@ _LATITUDE = re.compile(
 _LONGITUDE = re.compile(
     r"(?:\blon(?:gitude)?\b|ลองจิจูด)\s*[:=]?\s*(-?\d{1,3}(?:\.\d+)?)", re.IGNORECASE
 )
-
-
-@dataclass(frozen=True)
-class GeoReferenceCandidate:
-    latitude: float | None
-    longitude: float | None
-    chainage_from: float | None
-    chainage_to: float | None
-    asset_code: str | None
-    place_name: str | None
-    source_snippet: str
-    confidence: float
-
-    def as_api_payload(self) -> dict[str, Any]:
-        return {
-            "latitude": self.latitude,
-            "longitude": self.longitude,
-            "chainageFrom": self.chainage_from,
-            "chainageTo": self.chainage_to,
-            "assetCode": self.asset_code,
-            "placeName": self.place_name,
-            "sourceSnippet": self.source_snippet,
-            "confidence": self.confidence,
-        }
 
 
 class GeoExtractionPlatform(Protocol):
@@ -153,49 +134,36 @@ def parse_coordinates(source: str) -> tuple[float, float] | None:
 
 def validate_geo_references(value: Any, source_text: str) -> list[GeoReferenceCandidate]:
     """Validate and normalize structured model output against exact source excerpts."""
-    if not isinstance(value, dict) or set(value) != {"references"}:
-        raise GeoExtractionValidationError("Structured output must contain only references")
-    raw_references = value["references"]
-    if not isinstance(raw_references, list) or len(raw_references) > MAX_REFERENCES:
-        raise GeoExtractionValidationError("Reference count is outside the allowed range")
+    try:
+        draft = GeoReferenceDraftCreate.model_validate(value, strict=True)
+    except ValidationError as error:
+        raise GeoExtractionValidationError(
+            "Structured output does not match the Geo Reference contract"
+        ) from error
 
     candidates: list[GeoReferenceCandidate] = []
-    expected = {
-        "latitude",
-        "longitude",
-        "chainageFrom",
-        "chainageTo",
-        "assetCode",
-        "placeName",
-        "sourceSnippet",
-        "confidence",
-    }
-    for raw in raw_references:
-        if not isinstance(raw, dict) or set(raw) != expected:
-            raise GeoExtractionValidationError(
-                "Candidate fields do not match the extraction schema"
-            )
-        snippet = raw["sourceSnippet"]
-        if (
-            not isinstance(snippet, str)
-            or not 1 <= len(snippet) <= 1200
-            or snippet not in source_text
-        ):
+    for candidate in draft.references:
+        snippet = candidate.source_snippet
+        if snippet not in source_text:
             raise GeoExtractionValidationError(
                 "Source excerpt is not an exact substring of the document"
             )
-        confidence = raw["confidence"]
-        if (
-            isinstance(confidence, bool)
-            or not isinstance(confidence, (int, float))
-            or not math.isfinite(confidence)
-            or not 0 <= confidence <= 1
+        if not math.isfinite(candidate.confidence):
+            raise GeoExtractionValidationError("Confidence must be finite")
+        if any(
+            value is not None and not math.isfinite(value)
+            for value in (
+                candidate.latitude,
+                candidate.longitude,
+                candidate.chainage_from,
+                candidate.chainage_to,
+            )
         ):
-            raise GeoExtractionValidationError("Confidence must be between 0 and 1")
+            raise GeoExtractionValidationError("Numeric location values must be finite")
 
         parsed_coordinates = parse_coordinates(snippet)
-        model_latitude = _nullable_number(raw["latitude"], -90, 90, "latitude")
-        model_longitude = _nullable_number(raw["longitude"], -180, 180, "longitude")
+        model_latitude = candidate.latitude
+        model_longitude = candidate.longitude
         latitude: float | None = None
         longitude: float | None = None
         if (model_latitude is None) != (model_longitude is None):
@@ -212,17 +180,15 @@ def validate_geo_references(value: Any, source_text: str) -> list[GeoReferenceCa
             latitude, longitude = parsed_coordinates
 
         parsed_chainage = parse_chainage(snippet)
-        model_from = _nullable_number(raw["chainageFrom"], 0, 1_000_000_000, "chainageFrom")
-        model_to = _nullable_number(raw["chainageTo"], 0, 1_000_000_000, "chainageTo")
         chainage_from: float | None = None
         chainage_to: float | None = None
         if parsed_chainage:
             chainage_from, chainage_to = parsed_chainage
-        elif model_from is not None or model_to is not None:
+        elif candidate.chainage_from is not None or candidate.chainage_to is not None:
             raise GeoExtractionValidationError("Chainage is not grounded in the source excerpt")
 
-        asset_code = _nullable_text(raw["assetCode"], 128, "assetCode")
-        place_name = _nullable_text(raw["placeName"], 256, "placeName")
+        asset_code = candidate.asset_code
+        place_name = candidate.place_name
         snippet_folded = snippet.casefold()
         if asset_code and asset_code.casefold() not in snippet_folded:
             raise GeoExtractionValidationError("Asset code is not present in the source excerpt")
@@ -233,15 +199,13 @@ def validate_geo_references(value: Any, source_text: str) -> list[GeoReferenceCa
                 "Candidate does not contain a grounded location reference"
             )
         candidates.append(
-            GeoReferenceCandidate(
-                latitude=latitude,
-                longitude=longitude,
-                chainage_from=chainage_from,
-                chainage_to=chainage_to,
-                asset_code=asset_code,
-                place_name=place_name,
-                source_snippet=snippet,
-                confidence=float(confidence),
+            candidate.model_copy(
+                update={
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "chainage_from": chainage_from,
+                    "chainage_to": chainage_to,
+                }
             )
         )
     return candidates
@@ -322,50 +286,22 @@ async def extract_geo_references(
         document_id,
         internal_user_token,
         key,
-        [candidate.as_api_payload() for candidate in candidates],
+        [candidate.model_dump(by_alias=True) for candidate in candidates],
     )
 
 
 def geo_reference_response_format() -> dict[str, Any]:
-    nullable_number = {"anyOf": [{"type": "number"}, {"type": "null"}]}
-    nullable_string = {"anyOf": [{"type": "string"}, {"type": "null"}]}
-    candidate = {
-        "type": "object",
-        "additionalProperties": False,
-        "required": [
-            "latitude",
-            "longitude",
-            "chainageFrom",
-            "chainageTo",
-            "assetCode",
-            "placeName",
-            "sourceSnippet",
-            "confidence",
-        ],
-        "properties": {
-            "latitude": nullable_number,
-            "longitude": nullable_number,
-            "chainageFrom": nullable_number,
-            "chainageTo": nullable_number,
-            "assetCode": nullable_string,
-            "placeName": nullable_string,
-            "sourceSnippet": {"type": "string"},
-            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-        },
-    }
+    schema = GeoReferenceDraftCreate.model_json_schema(by_alias=True)
+    candidate_schema = schema.pop("$defs")["GeoReferenceCandidate"]
+    schema.pop("$schema", None)
+    schema.pop("title", None)
+    schema["properties"]["references"]["items"] = candidate_schema
     return {
         "type": "json_schema",
         "json_schema": {
             "name": "geo_reference_candidates",
             "strict": True,
-            "schema": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["references"],
-                "properties": {
-                    "references": {"type": "array", "maxItems": MAX_REFERENCES, "items": candidate}
-                },
-            },
+            "schema": schema,
         },
     }
 
@@ -395,28 +331,11 @@ def _metric_distance(value: str | None, unit: str | None) -> float | None:
     normalized_unit = (unit or "m").casefold()
     if normalized_unit in {"km", "kilometer", "kilometers", "kilometre", "kilometres", "กม."}:
         distance *= 1000
-    return distance if math.isfinite(distance) and distance >= 0 else None
-
-
-def _nullable_number(value: Any, minimum: float, maximum: float, field: str) -> float | None:
-    if value is None:
-        return None
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not math.isfinite(value)
-        or not minimum <= value <= maximum
-    ):
-        raise GeoExtractionValidationError(f"{field} is outside the allowed range")
-    return float(value)
-
-
-def _nullable_text(value: Any, maximum: int, field: str) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str) or len(value) > maximum or not value.strip():
-        raise GeoExtractionValidationError(f"{field} is invalid")
-    return value
+    return (
+        distance
+        if math.isfinite(distance) and 0 <= distance <= MAX_CHAINAGE_METRES
+        else None
+    )
 
 
 def _same_coordinate(left: float | None, right: float) -> bool:

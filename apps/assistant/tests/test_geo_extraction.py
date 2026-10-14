@@ -61,6 +61,43 @@ def test_rejects_unverifiable_coordinates_and_source_excerpt() -> None:
         validate_geo_references({"references": [candidate]}, "A site is near the river.")
 
 
+def test_validates_grounded_coordinate_pair() -> None:
+    excerpt = "Valve marker at 13.756, 100.501 near the canal."
+    candidate = {
+        "latitude": 13.756,
+        "longitude": 100.501,
+        "chainageFrom": None,
+        "chainageTo": None,
+        "assetCode": None,
+        "placeName": None,
+        "sourceSnippet": excerpt,
+        "confidence": 0.9,
+    }
+
+    parsed = validate_geo_references({"references": [candidate]}, excerpt)[0]
+
+    assert parsed.latitude == 13.756
+    assert parsed.longitude == 100.501
+
+
+def test_validates_thai_place_name_from_exact_excerpt() -> None:
+    excerpt = "จุดตรวจอยู่ใกล้บางกระเจ้า"
+    candidate = {
+        "latitude": None,
+        "longitude": None,
+        "chainageFrom": None,
+        "chainageTo": None,
+        "assetCode": None,
+        "placeName": "บางกระเจ้า",
+        "sourceSnippet": excerpt,
+        "confidence": 0.75,
+    }
+
+    parsed = validate_geo_references({"references": [candidate]}, excerpt)[0]
+
+    assert parsed.place_name == "บางกระเจ้า"
+
+
 class FakePlatform:
     def __init__(self, text: str) -> None:
         self.text = text
@@ -138,6 +175,11 @@ def test_tool_scans_then_saves_only_grounded_drafts() -> None:
         assert guardrail.scanned == [source]
         assert guardrail.completion is not None
         assert guardrail.completion["response_format"]["type"] == "json_schema"
+        schema = guardrail.completion["response_format"]["json_schema"]["schema"]
+        candidate_schema = schema["properties"]["references"]["items"]
+        assert "$defs" not in schema
+        max_chainage = candidate_schema["properties"]["chainageFrom"]["anyOf"][0]["maximum"]
+        assert max_chainage == 1_000_000_000
         assert platform.created[0]["chainageFrom"] == 45_200
         assert result["replayed"] is False
 
