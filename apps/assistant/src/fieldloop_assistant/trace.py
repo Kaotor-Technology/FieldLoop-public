@@ -6,9 +6,10 @@ own session storage lives in the `adk` schema and is not touched here.
 
 import hashlib
 import json
+import time
 from collections.abc import Mapping
-from dataclasses import dataclass, field
-from typing import Any, Protocol
+from dataclasses import dataclass, field, replace
+from typing import Any, Literal, Protocol, cast
 from uuid import uuid4
 
 from psycopg import AsyncConnection
@@ -17,6 +18,10 @@ from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
 
 RESULT_SUMMARY_LIMIT = 500
+# A turn lasts at most 60 s (architecture §7.5), so a longer `running` mark is a crashed turn.
+STALE_TURN_SECONDS = 90
+# `cancelling` is written by :cancel so a turn on another instance stops between steps.
+SessionStatus = Literal["active", "running", "cancelling", "cancelled", "failed"]
 
 
 def args_hash(args: Mapping[str, Any]) -> str:
@@ -38,7 +43,7 @@ class SessionRecord:
     user_sub: str
     simulated: bool
     classification: str
-    status: str
+    status: SessionStatus
 
 
 @dataclass
@@ -64,7 +69,20 @@ class SessionStore(Protocol):
 
     async def get(self, session_id: str, org_id: str, user_sub: str) -> SessionRecord | None: ...
 
-    async def set_status(self, session_id: str, org_id: str, status: str, tokens: int) -> None: ...
+    async def set_status(
+        self, session: SessionRecord, status: SessionStatus, tokens: int
+    ) -> None: ...
+
+    async def claim_turn(self, session: SessionRecord) -> int | None:
+        """Atomically marks the session `running`; returns the last trace seq, or None if busy.
+
+        A `running` mark older than STALE_TURN_SECONDS is a crashed turn and may be reclaimed.
+        """
+        ...
+
+    async def request_cancel(self, session: SessionRecord) -> bool:
+        """Marks a `running` session `cancelling`; False when no turn is running."""
+        ...
 
 
 class TraceSink(Protocol):
@@ -78,6 +96,7 @@ class MemoryStore:
     sessions: dict[str, SessionRecord] = field(default_factory=dict)
     steps: list[tuple[str, StepRecord]] = field(default_factory=list)
     tokens: dict[str, int] = field(default_factory=dict)
+    claimed_at: dict[str, float] = field(default_factory=dict)
 
     async def create(
         self, *, org_id: str, agent_id: str, user_sub: str, simulated: bool, classification: str
@@ -92,13 +111,27 @@ class MemoryStore:
         found = self.sessions.get(session_id)
         return found if found and found.org_id == org_id and found.user_sub == user_sub else None
 
-    async def set_status(self, session_id: str, org_id: str, status: str, tokens: int) -> None:
-        current = self.sessions[session_id]
-        self.sessions[session_id] = SessionRecord(
-            current.id, current.org_id, current.agent_id, current.user_sub,
-            current.simulated, current.classification, status,
-        )
-        self.tokens[session_id] = tokens
+    async def set_status(
+        self, session: SessionRecord, status: SessionStatus, tokens: int
+    ) -> None:
+        self.sessions[session.id] = replace(self.sessions[session.id], status=status)
+        self.tokens[session.id] = self.tokens.get(session.id, 0) + tokens
+
+    async def claim_turn(self, session: SessionRecord) -> int | None:
+        current = self.sessions[session.id]
+        started = self.claimed_at.get(session.id, 0.0)
+        if current.status == "running" and time.monotonic() - started < STALE_TURN_SECONDS:
+            return None
+        self.sessions[session.id] = replace(current, status="running")
+        self.claimed_at[session.id] = time.monotonic()
+        return max((s.seq for sid, s in self.steps if sid == session.id), default=0)
+
+    async def request_cancel(self, session: SessionRecord) -> bool:
+        current = self.sessions[session.id]
+        if current.status != "running":
+            return False
+        self.sessions[session.id] = replace(current, status="cancelling")
+        return True
 
     async def record(self, session: SessionRecord, step: StepRecord) -> None:
         self.steps.append((session.id, step))
@@ -149,20 +182,55 @@ class PostgresStore:
             return None
         return SessionRecord(
             str(row["id"]), row["org_id"], row["agent_id"], row["created_by"],
-            row["simulated"], row["classification"], row["status"],
+            row["simulated"], row["classification"], cast(SessionStatus, row["status"]),
         )
 
-    async def set_status(self, session_id: str, org_id: str, status: str, tokens: int) -> None:
+    async def set_status(
+        self, session: SessionRecord, status: SessionStatus, tokens: int
+    ) -> None:
         async with self._pool.connection() as connection, connection.transaction():
             await connection.execute(
                 """
                 UPDATE app.assistant_session
-                SET status = %(status)s,
+                SET status = %(status)s, status_updated_at = now(),
                     token_budget_used = COALESCE(token_budget_used, 0) + %(tokens)s
                 WHERE id = %(id)s AND org_id = %(org)s
                 """,
-                {"id": session_id, "org": org_id, "status": status, "tokens": tokens},
+                {"id": session.id, "org": session.org_id, "status": status, "tokens": tokens},
             )
+
+    async def claim_turn(self, session: SessionRecord) -> int | None:
+        async with self._pool.connection() as connection, connection.transaction():
+            cursor = await connection.execute(
+                """
+                UPDATE app.assistant_session
+                SET status = 'running', status_updated_at = now()
+                WHERE id = %(id)s AND org_id = %(org)s
+                  AND (status <> 'running'
+                       OR status_updated_at < now() - make_interval(secs => %(stale)s))
+                RETURNING id
+                """,
+                {"id": session.id, "org": session.org_id, "stale": STALE_TURN_SECONDS},
+            )
+            if await cursor.fetchone() is None:
+                return None
+            cursor = await connection.execute(
+                "SELECT COALESCE(max(seq), 0) AS last FROM app.agent_step WHERE session_id = %s",
+                (session.id,),
+            )
+            row = await cursor.fetchone()
+        return int(row["last"]) if row else 0
+
+    async def request_cancel(self, session: SessionRecord) -> bool:
+        async with self._pool.connection() as connection, connection.transaction():
+            cursor = await connection.execute(
+                """
+                UPDATE app.assistant_session SET status = 'cancelling', status_updated_at = now()
+                WHERE id = %(id)s AND org_id = %(org)s AND status = 'running' RETURNING id
+                """,
+                {"id": session.id, "org": session.org_id},
+            )
+            return await cursor.fetchone() is not None
 
     async def record(self, session: SessionRecord, step: StepRecord) -> None:
         async with self._pool.connection() as connection, connection.transaction():

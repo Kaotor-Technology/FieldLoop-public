@@ -44,8 +44,8 @@ def test_session_is_scoped_to_organisation_and_user_and_status_accumulates_token
         assert (await store.get(record.id, ORG, "user-1")) == record
         assert await store.get(record.id, "other-org", "user-1") is None
         assert await store.get(record.id, ORG, "user-2") is None
-        await store.set_status(record.id, ORG, "active", 120)
-        await store.set_status(record.id, ORG, "cancelled", 30)
+        await store.set_status(record, "active", 120)
+        await store.set_status(record, "cancelled", 30)
         async with pool.connection() as connection:
             row = await (await connection.execute(
                 "SELECT status, token_budget_used FROM app.assistant_session WHERE id = %s",
@@ -86,3 +86,29 @@ def test_steps_and_drafts_are_stored_with_session_identity() -> None:
     assert draft["created_by"] == "agent:report-generator on_behalf_of:user-1"
     assert str(draft["assistant_session_id"]) == session_id
     assert draft["citations"] == ["EV-1"]
+
+
+def test_turn_claim_is_exclusive_cancel_needs_a_running_turn_and_seq_continues() -> None:
+    async def scenario(pool):  # type: ignore[no-untyped-def]
+        store = PostgresStore(pool)
+        record = await store.create(
+            org_id=ORG, agent_id="flood-situation", user_sub="user-1", simulated=True,
+            classification="INTERNAL",
+        )
+        idle_cancel = await store.request_cancel(record)  # nothing running yet
+        first = await store.claim_turn(record)
+        second = await store.claim_turn(record)  # another instance, same instant
+        await store.record(record, StepRecord(kind="model", agent_id="flood-situation", seq=7))
+        cancelled = await store.request_cancel(record)
+        seen = await store.get(record.id, ORG, "user-1")
+        await store.set_status(record, "active", 0)
+        reclaimed = await store.claim_turn(record)
+        # A crashed turn: the `running` mark is older than the stale window.
+        async with pool.connection() as connection:
+            await connection.execute(
+                "UPDATE app.assistant_session SET status_updated_at = now() - interval '5 minutes'"
+                " WHERE id = %s", (record.id,))
+        recovered = await store.claim_turn(record)
+        return idle_cancel, first, second, cancelled, seen.status, reclaimed, recovered
+
+    assert run(scenario) == (False, 0, None, True, "cancelling", 7, 7)
