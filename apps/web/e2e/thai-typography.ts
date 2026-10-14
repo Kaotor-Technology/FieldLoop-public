@@ -7,9 +7,12 @@ export async function expectThaiTypography(page: Page) {
     return Array.from(body.querySelectorAll("*")).filter(hasThaiText).flatMap((element) => {
       const style = getComputedStyle(element);
       const fontSize = Number.parseFloat(style.fontSize);
-      const lineHeight = Number.parseFloat(style.lineHeight) / fontSize;
+      const computedLineHeight = Number.parseFloat(style.lineHeight);
+      const lineHeight = computedLineHeight / fontSize;
       const letterSpacing = style.letterSpacing;
-      return fontSize < 13 || lineHeight < 1.5 || (letterSpacing !== "normal" && Number.parseFloat(letterSpacing) !== 0)
+      return !Number.isFinite(fontSize) || fontSize < 13
+        || !Number.isFinite(computedLineHeight) || lineHeight < 1.5
+        || (letterSpacing !== "normal" && Number.parseFloat(letterSpacing) !== 0)
         ? [{
           element: `${element.tagName.toLowerCase()}${element.className ? `.${String(element.className).replaceAll(" ", ".")}` : ""}`,
           text: element.textContent?.trim().slice(0, 40), fontSize, lineHeight, letterSpacing,
