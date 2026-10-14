@@ -1,0 +1,203 @@
+import asyncio
+import json
+
+from fieldloop_assistant.guardrail_client import TOKEN_HEADER
+
+from .harness import Harness, answer, call, say
+from .support import BOWTIE, RUN_ID, USER_TOKEN
+
+CANVAS = {"id": BOWTIE, "simulated": True, "classification": "INTERNAL", "barriers": [
+    {"id": "b1", "name": "Coating", "health": "degraded"}]}
+
+
+def run(h: Harness, agent: str = "integrity-orchestrator", message: str = "Review DL-01"):
+    return asyncio.run(h.run(agent, message))
+
+
+def final(events):
+    return next(e for e in events if e.name.startswith("answer."))
+
+
+def test_read_tool_runs_after_allow_with_user_identity_and_streams_every_event() -> None:
+    h = Harness(
+        [call("get_barriers", bowtie_id=BOWTIE), answer(citations=["DL-01"])],
+        platform={rf"/api/v1/bowties/{BOWTIE}": CANVAS},
+    )
+    events = run(h)
+
+    assert h.names(events)[0] == "agent.step" and h.names(events)[-1] == "answer.final"
+    # tool.call precedes the decision, which precedes the result.
+    order = [n for n in h.names(events) if n in {"tool.call", "guardrail.decision", "tool.result"}]
+    assert order == ["tool.call", "guardrail.decision", "tool.result"]
+    check = h.guardrail_requests[0]
+    body = json.loads(check.content)
+    assert body["tool"] == "get_barriers" and body["target"] == "fieldloop"
+    assert body["aiSystem"] == "demo-uc-1"
+    assert check.headers[TOKEN_HEADER] == USER_TOKEN
+    assert len(check.headers["idempotency-key"]) >= 16
+    assert h.platform_requests[0].headers["authorization"] == f"Bearer {USER_TOKEN}"
+    assert final(events).data["citations"] == ["DL-01"]
+
+
+def test_user_token_never_enters_session_state_or_the_trace() -> None:
+    h = Harness([call("get_barriers", bowtie_id=BOWTIE), answer()],
+                platform={rf"/api/v1/bowties/{BOWTIE}": CANVAS})
+    record = asyncio.run(h.session("integrity-orchestrator"))
+    asyncio.run(h.collect(record, "integrity-orchestrator"))
+    stored = asyncio.run(h.adk.get_session(
+        app_name="fieldloop-assistant", user_id="user-1", session_id=record.id))
+    assert stored is not None
+    assert USER_TOKEN not in stored.model_dump_json()
+    assert USER_TOKEN not in json.dumps([vars(s) for _, s in h.store.steps], default=str)
+    assert {s.kind for _, s in h.store.steps} >= {"model", "guardrail", "tool"}
+    assert all(s.seq > 0 for _, s in h.store.steps)
+
+
+def test_model_calls_carry_the_token_and_ai_system_per_request() -> None:
+    h = Harness([answer()])
+    run(h)
+    headers = h.llm.requests[0].config.http_options.headers  # type: ignore[union-attr]
+    assert headers[TOKEN_HEADER] == USER_TOKEN
+    assert headers["X-FieldLoop-Ai-System"] == "demo-uc-1"
+
+
+def test_convert_decision_skips_the_tool_and_reports_the_action_request() -> None:
+    request_id = "11111111-2222-4333-8444-555555555555"
+    h = Harness(
+        [call("create_action_request", action_type="system_of_record", action_level="l1",
+              target="cmms", payload={"order": "inspect"}, rationale="Coating degraded",
+              citations=["EV-1"]), answer()],
+        guardrail=lambda body: {"decision": "convert_l1", "reason": "human_action_required",
+                                "ceiling": "l1", "actionRequest": {"id": request_id}},
+        platform={"/api/v1/simulation/runs/current": {"id": RUN_ID}},
+        simulated=True,
+    )
+    events = run(h, "flood-situation")
+    envelope = json.loads(h.guardrail_requests[0].content)
+    assert envelope["actionType"] == "system_of_record" and envelope["target"] == "cmms"
+    assert envelope["simulationRunId"] == RUN_ID
+    decision = next(e for e in events if e.name == "guardrail.decision")
+    assert decision.data["decision"] == "convert_l1"
+    assert decision.data["action_request_id"] == request_id
+    assert final(events).data["action_request_ids"] == [request_id]
+
+
+def test_l2_hold_is_reported_and_never_executed() -> None:
+    held = "99999999-2222-4333-8444-555555555555"
+    h = Harness(
+        [call("create_action_request", action_type="emergency_communication", action_level="l2",
+              target="stakeholders", payload={"text": "warn"}, rationale="Flood",
+              citations=["EV-2"]),
+         answer()],
+        guardrail=lambda body: {"decision": "hold_l2", "reason": "human_action_required",
+                                "heldRequestId": held},
+        platform={"/api/v1/simulation/runs/current": {"id": RUN_ID}}, simulated=True,
+    )
+    events = run(h, "flood-situation")
+    assert final(events).data["held_request_ids"] == [held]
+    assert not any(r.url.path.startswith("/api/v1/action-requests") for r in h.platform_requests)
+
+
+def test_block_decision_skips_the_tool() -> None:
+    h = Harness([call("get_barriers", bowtie_id=BOWTIE), answer()],
+                guardrail=lambda body: {"decision": "block", "reason": "tool_not_registered"},
+                platform={rf"/api/v1/bowties/{BOWTIE}": CANVAS})
+    events = run(h)
+    assert h.platform_requests == []
+    assert next(e for e in events if e.name == "guardrail.decision").data["decision"] == "block"
+
+
+def test_guardrail_failures_fail_closed() -> None:
+    for outcome in (503, {"decision": "maybe", "reason": "x"}):
+        h = Harness([call("get_barriers", bowtie_id=BOWTIE), answer()],
+                    guardrail=lambda body, o=outcome: o,
+                    platform={rf"/api/v1/bowties/{BOWTIE}": CANVAS})
+        events = run(h)
+        assert h.platform_requests == []
+        assert next(e for e in events if e.name == "guardrail.decision").data["decision"] == "block"
+
+
+def test_unregistered_write_tool_is_blocked_even_if_the_guardrail_wrongly_allows() -> None:
+    h = Harness([call("cmms_create_work_order", asset_id="DL-01"), answer()],
+                guardrail=lambda body: {"decision": "allow", "reason": "misconfigured"})
+    events = run(h)
+    assert len(h.guardrail_requests) == 1  # asked, so the Intercept is recorded
+    assert h.platform_requests == []
+    decision = next(e for e in events if e.name == "guardrail.decision")
+    assert decision.data["decision"] == "block"
+    assert decision.data["reason"] == "tool_not_in_definition"
+    results = [e for e in events if e.name == "tool.result"]
+    assert not any("recommendation" in e.data["summary"] for e in results)
+
+
+def test_registered_tool_outside_the_agent_definition_is_blocked() -> None:
+    # integrity-orchestrator does not list create_action_request.
+    h = Harness([call("create_action_request", action_type="system_of_record", action_level="l1",
+                      target="cmms", payload={}, rationale="r", citations=["c"]), answer()],
+                guardrail=lambda body: {"decision": "allow", "reason": "misconfigured"})
+    events = run(h)
+    decision = next(e for e in events if e.name == "guardrail.decision")
+    assert decision.data["decision"] == "block"
+
+
+def test_tool_call_limit_returns_an_incomplete_partial_answer() -> None:
+    script = [call("get_barriers", bowtie_id=BOWTIE)] * 12 + [answer()]
+    h = Harness(script, platform={rf"/api/v1/bowties/{BOWTIE}": CANVAS})
+    events = run(h)
+    assert len(h.guardrail_requests) <= 8
+    last = final(events)
+    assert last.name == "answer.incomplete" and last.data["incomplete"] == "tool_calls"
+
+
+def test_handoff_is_visible_and_capped() -> None:
+    script = [call("transfer_to_agent", agent_name="code_standard"), answer()]
+    h = Harness(script)
+    events = run(h)
+    handoffs = [e for e in events if e.data.get("phase") == "handoff"]
+    assert [e.data["to"] for e in handoffs] == ["code-standard"]
+    assert h.guardrail_requests == []  # a hand-off is control flow, not a registry tool call
+
+
+def test_handoff_to_a_non_delegate_is_refused() -> None:
+    h = Harness([call("transfer_to_agent", agent_name="flood_situation"), answer()])
+    events = run(h)
+    assert not [e for e in events if e.data.get("phase") == "handoff"]
+
+
+def test_more_than_three_handoffs_are_refused() -> None:
+    script = [call("transfer_to_agent", agent_name="code_standard")] * 6 + [answer()]
+    h = Harness(script)
+    events = run(h)
+    assert len([e for e in events if e.data.get("phase") == "handoff"]) <= 3
+
+
+def test_cancel_stops_before_the_next_model_step() -> None:
+    h = Harness([call("get_barriers", bowtie_id=BOWTIE), answer()],
+                platform={rf"/api/v1/bowties/{BOWTIE}": CANVAS})
+
+    async def go() -> list:
+        record = await h.session("integrity-orchestrator")
+        events = []
+        turn = h.runtime.run_turn(record, USER_TOKEN, "Review", "integrity-orchestrator")
+        async for event in turn:
+            events.append(event)
+            h.runtime.cancel(record.id)
+        return events
+
+    events = asyncio.run(asyncio.wait_for(go(), 20))
+    assert final(events).name == "answer.incomplete"
+    assert final(events).data["incomplete"] == "cancelled"
+
+
+def test_unstructured_model_output_degrades_to_a_labelled_answer() -> None:
+    h = Harness([say("plain text with no JSON")])
+    last = final(run(h))
+    assert last.name == "answer.final"
+    assert last.data["confidence"] == "low"
+    assert last.data["unknown"]
+
+
+def test_token_budget_exhaustion_is_incomplete() -> None:
+    h = Harness([say("x", tokens=40_000)])
+    last = final(run(h))
+    assert last.name == "answer.incomplete" and last.data["incomplete"] == "token_budget"
