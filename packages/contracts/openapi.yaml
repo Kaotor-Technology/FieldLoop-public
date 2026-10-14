@@ -253,6 +253,11 @@ paths:
       security:
         - serviceIdentity: []
       parameters:
+        - name: X-FieldLoop-Internal-User-Token
+          in: header
+          required: true
+          description: Five-minute RS256 token minted by web-api; this token is server-to-server and never sent to the browser.
+          schema: { type: string, minLength: 16, maxLength: 8192 }
         - name: X-FieldLoop-Classification
           in: header
           required: false
@@ -276,8 +281,8 @@ paths:
             text/event-stream:
               schema: { type: string }
         "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthenticated" }
-        "403": { $ref: "#/components/responses/Forbidden" }
+        "401": { $ref: "#/components/responses/GuardrailUnauthenticated" }
+        "403": { $ref: "#/components/responses/GuardrailForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "413": { $ref: "#/components/responses/PayloadTooLarge" }
         "415": { $ref: "#/components/responses/UnsupportedMediaType" }
@@ -300,6 +305,11 @@ paths:
         - serviceIdentity: []
       parameters:
         - $ref: "#/components/parameters/IdempotencyKey"
+        - name: X-FieldLoop-Internal-User-Token
+          in: header
+          required: true
+          description: Five-minute RS256 token minted by web-api; this token is server-to-server and never sent to the browser.
+          schema: { type: string, minLength: 16, maxLength: 8192 }
         - name: X-FieldLoop-Classification
           in: header
           required: false
@@ -320,8 +330,8 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/GuardrailContentScanResult" }
         "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthenticated" }
-        "403": { $ref: "#/components/responses/Forbidden" }
+        "401": { $ref: "#/components/responses/GuardrailUnauthenticated" }
+        "403": { $ref: "#/components/responses/GuardrailForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "413": { $ref: "#/components/responses/PayloadTooLarge" }
@@ -1760,6 +1770,18 @@ components:
             $ref: "#/components/schemas/Problem"
     Unauthenticated:
       description: No valid session (`unauthenticated`). The SPA sends the user to `/auth/login`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    GuardrailUnauthenticated:
+      description: The verified internal user token is missing or invalid (`unauthenticated`). This service-to-service response does not start a browser login flow.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    GuardrailForbidden:
+      description: The token Organisation does not match this Guardrail service, or the caller's clearance or Guardrail policy blocks the request (`forbidden`, `clearance_denied`, or `guardrail_blocked`).
       content:
         application/problem+json:
           schema:

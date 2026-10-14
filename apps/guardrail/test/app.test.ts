@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GuardrailClassification, Tier1ScanResult } from "@fieldloop/adapters";
 import { buildApp } from "../src/app.js";
+import { InternalUserTokenVerifierUnavailableError, InvalidInternalUserTokenError } from "../src/internal-user-token.js";
 import type { GuardrailDependencies, GuardrailPolicy, GuardrailSystem, RecordContentScanInput, StoredContentScan } from "../src/model.js";
 
 const apps: ReturnType<typeof buildApp>[] = [];
@@ -17,6 +18,44 @@ describe("Guardrail gateway", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({ status: "ok" });
     expect(dependencies.store.loadSystem).not.toHaveBeenCalled();
+  });
+
+  it("requires a verified internal user token before protected route processing", async () => {
+    const dependencies = createDependencies();
+    const app = buildApp(dependencies);
+    apps.push(app);
+    const missing = await app.inject({ method: "POST", url: "/guardrail/v1/chat/completions", payload: {} });
+    const invalid = await app.inject({
+      method: "POST", url: "/guardrail/v1/chat/completions",
+      headers: { "x-fieldloop-internal-user-token": "invalid-test-token" }, payload: {},
+    });
+
+    expect(missing.statusCode).toBe(401);
+    expect(missing.headers["content-type"]).toContain("application/problem+json");
+    expect(invalid.statusCode).toBe(401);
+    expect(dependencies.store.loadSystem).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the signing JWKS is unavailable and rejects another Organisation", async () => {
+    const unavailableDependencies = createDependencies({ verificationFailure: "unavailable" });
+    const unavailableApp = buildApp(unavailableDependencies);
+    apps.push(unavailableApp);
+    const unavailable = await unavailableApp.inject({
+      method: "POST", url: "/guardrail/v1/chat/completions",
+      headers: { "x-fieldloop-internal-user-token": "synthetic-test-user-token" }, payload: {},
+    });
+
+    const wrongOrgDependencies = createDependencies({ tokenOrgId: "another-org" });
+    const wrongOrgApp = buildApp(wrongOrgDependencies);
+    apps.push(wrongOrgApp);
+    const wrongOrg = await wrongOrgApp.inject({
+      method: "POST", url: "/guardrail/v1/chat/completions",
+      headers: { "x-fieldloop-internal-user-token": "synthetic-test-user-token" }, payload: {},
+    });
+
+    expect(unavailable.statusCode).toBe(503);
+    expect(wrongOrg.statusCode).toBe(403);
+    expect(wrongOrgDependencies.store.loadSystem).not.toHaveBeenCalled();
   });
 
   it("blocks prompt injection in content:scan and records its mapped Evidence", async () => {
@@ -138,6 +177,25 @@ describe("Guardrail gateway", () => {
     }));
   });
 
+  it("blocks retrieved content above the caller's clearance", async () => {
+    const dependencies = createDependencies({
+      clearance: "INTERNAL",
+      scanUserPrompt: async () => ({
+        action: "redact", text: "Account [REDACTED]", reason: "PII", classification: "CONFIDENTIAL", findings: ["PERSON_NAME"],
+      }),
+    });
+    const app = createApp(dependencies);
+    const response = await app.inject({
+      method: "POST", url: "/guardrail/v1/content:scan", headers: { "idempotency-key": "content-scan-test-0004" },
+      payload: { aiSystem: "demo-uc-1", content: "Account synthetic person" },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toMatchObject({ code: "guardrail_blocked", error: { code: "guardrail_blocked" } });
+    expect(response.body).not.toContain("synthetic person");
+    expect(dependencies.model.complete).not.toHaveBeenCalled();
+  });
+
   it("routes through the configured private model and buffers streams until output scanning finishes", async () => {
     const dependencies = createDependencies();
     const app = createApp(dependencies);
@@ -171,6 +229,40 @@ describe("Guardrail gateway", () => {
     expect(dependencies.model.complete).toHaveBeenCalledWith("configured-flash-model", expect.objectContaining({ messages: [{ role: "user", content: "Account [REDACTED]" }] }));
     expect(dependencies.store.recordIntercept).toHaveBeenCalledWith(expect.objectContaining({
       policy: expect.objectContaining({ id: "routing-policy" }), decision: "reroute", classification: "HIGHLY_RESTRICTED",
+    }));
+  });
+
+  it("blocks chat input and output classifications above the caller's clearance", async () => {
+    const inputDependencies = createDependencies({
+      clearance: "INTERNAL",
+      scanUserPrompt: async () => ({
+        action: "redact", text: "[REDACTED]", reason: "PII", classification: "CONFIDENTIAL", findings: ["PERSON_NAME"],
+      }),
+    });
+    const inputApp = createApp(inputDependencies);
+    const inputResponse = await inputApp.inject({
+      method: "POST", url: "/guardrail/v1/chat/completions",
+      payload: { aiSystem: "demo-uc-1", messages: [{ role: "user", content: "synthetic person" }] },
+    });
+
+    const outputDependencies = createDependencies({
+      clearance: "INTERNAL",
+      scanModelResponse: async () => ({
+        action: "allow", text: "", reason: null, classification: "CONFIDENTIAL", findings: ["PERSON_NAME"],
+      }),
+    });
+    const outputApp = createApp(outputDependencies);
+    const outputResponse = await outputApp.inject({
+      method: "POST", url: "/guardrail/v1/chat/completions",
+      payload: { aiSystem: "demo-uc-1", messages: [{ role: "user", content: "hello" }] },
+    });
+
+    expect(inputResponse.statusCode).toBe(403);
+    expect(inputDependencies.model.complete).not.toHaveBeenCalled();
+    expect(outputResponse.statusCode).toBe(403);
+    expect(outputResponse.body).not.toContain("safe answer");
+    expect(outputDependencies.store.recordIntercept).toHaveBeenCalledWith(expect.objectContaining({
+      policy: expect.objectContaining({ id: "output-dlp-policy" }), decision: "block",
     }));
   });
 
@@ -250,8 +342,22 @@ const allowResult: Tier1ScanResult = { action: "allow", text: "", reason: null, 
 
 function createApp(dependencies: GuardrailDependencies) {
   const app = buildApp(dependencies);
+  const inject = app.inject.bind(app);
+  Object.defineProperty(app, "inject", {
+    value: (options: TestInjectOptions) => inject({
+      ...options,
+      headers: { "x-fieldloop-internal-user-token": "synthetic-test-user-token", ...options.headers },
+    }),
+  });
   apps.push(app);
   return app;
+}
+
+interface TestInjectOptions {
+  method: "GET" | "POST";
+  url: string;
+  headers?: Record<string, string>;
+  payload?: string | Record<string, unknown>;
 }
 
 function createDependencies(options: {
@@ -259,6 +365,9 @@ function createDependencies(options: {
   scanModelResponse?: (text: string, prompt: string) => Promise<Tier1ScanResult>;
   recordFailure?: boolean;
   allowedClasses?: GuardrailClassification[];
+  clearance?: GuardrailClassification;
+  tokenOrgId?: string;
+  verificationFailure?: "invalid" | "unavailable";
 } = {}): GuardrailDependencies {
   const policies: GuardrailPolicy[] = [
     { id: "injection-policy", code: "injection-detector", barrierId: "injection-barrier", kind: "injection", mode: "enforce", failMode: "fail-closed", config: {} },
@@ -304,8 +413,20 @@ function createDependencies(options: {
   const model = { complete: vi.fn(async () => ({
     id: "completion-id", object: "chat.completion", model: "configured-pro-model", choices: [{ index: 0, message: { role: "assistant", content: "safe answer" }, finish_reason: "stop" }],
   })) };
+  const userTokenVerifier = {
+    verify: vi.fn(async (token: string) => {
+      if (options.verificationFailure === "unavailable") throw new InternalUserTokenVerifierUnavailableError();
+      if (options.verificationFailure === "invalid" || token !== "synthetic-test-user-token") throw new InvalidInternalUserTokenError();
+      return {
+        sub: "synthetic-reviewer",
+        roles: ["fieldloop.viewer"],
+        clearance: options.clearance ?? "HIGHLY_RESTRICTED",
+        orgId: options.tokenOrgId ?? "fieldloop-demo",
+      };
+    }),
+  };
   return {
-    store, scanner, model, orgId: "fieldloop-demo", simulated: true,
+    store, scanner, model, userTokenVerifier, orgId: "fieldloop-demo", simulated: true,
     vertexModels: { flash: "configured-flash-model", pro: "configured-pro-model" },
   };
 }

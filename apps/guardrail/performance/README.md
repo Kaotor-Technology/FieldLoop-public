@@ -8,7 +8,10 @@ creates normal Intercept and Evidence records.
 Run it from an approved runner inside the project VPC, with permission to invoke
 the private Guardrail service. Set `GUARDRAIL_URL` to the demo service origin,
 `GUARDRAIL_ID_TOKEN` to a Google-signed identity token whose audience is that
-origin, and `GUARDRAIL_AI_SYSTEM` to the registered demo AI System code.
+origin, `GUARDRAIL_INTERNAL_USER_TOKEN` to a five-minute RS256 token minted by
+`web-api` for a synthetic demo user, and `GUARDRAIL_AI_SYSTEM` to the registered
+demo AI System code. Keep both tokens in the approved runner's secret store; do
+not put them in source control or browser storage.
 
 ```sh
 k6 run apps/guardrail/performance/tier1-content-scan.js

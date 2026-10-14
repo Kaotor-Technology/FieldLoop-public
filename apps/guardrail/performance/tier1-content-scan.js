@@ -5,6 +5,7 @@ import http from "k6/http";
 
 const guardrailUrl = requiredEnv("GUARDRAIL_URL").replace(/\/$/, "");
 const identityToken = requiredEnv("GUARDRAIL_ID_TOKEN");
+const internalUserToken = requiredEnv("GUARDRAIL_INTERNAL_USER_TOKEN");
 const aiSystem = requiredEnv("GUARDRAIL_AI_SYSTEM");
 const vus = positiveIntegerEnv("K6_VUS", 1);
 const iterations = positiveIntegerEnv("K6_ITERATIONS", 100);
@@ -27,6 +28,7 @@ export default function () {
     {
       headers: {
         authorization: `Bearer ${identityToken}`,
+        "x-fieldloop-internal-user-token": internalUserToken,
         "content-type": "application/json",
         "idempotency-key": `fieldloop-k6-${__VU}-${__ITER}-${Date.now()}-probe`,
         "x-fieldloop-classification": "INTERNAL",

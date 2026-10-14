@@ -1,4 +1,5 @@
 import type { GuardrailClassification, Tier1ScanResult, Tier1TextScanner, VertexChatCompletions } from "@fieldloop/adapters";
+import type { InternalUserTokenVerifier } from "./internal-user-token.js";
 export type { GuardrailClassification };
 
 export type GuardrailDecision = "allow" | "redact" | "block" | "reroute";
@@ -78,6 +79,7 @@ export interface GuardrailDependencies {
   store: GuardrailStore;
   scanner: Tier1TextScanner;
   model: VertexChatCompletions;
+  userTokenVerifier: InternalUserTokenVerifier;
   orgId: string;
   simulated: boolean;
   vertexModels: Readonly<Record<"flash" | "pro", string>>;

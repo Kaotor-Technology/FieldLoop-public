@@ -1,9 +1,17 @@
-import Fastify, { type FastifyReply } from "fastify";
+import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { isClassification, type ChatCompletionRequest, type ChatMessage, type GuardrailClassification, type GuardrailDependencies } from "./model.js";
 import { GuardrailEngine, type GuardrailHttpResult } from "./guardrail-engine.js";
+import { InternalUserTokenVerifierUnavailableError, InvalidInternalUserTokenError, type InternalUserIdentity } from "./internal-user-token.js";
 
 const OPENAI_CHAT_COMPLETIONS_PATH = "/guardrail/v1/chat/completions";
 const CONTENT_SCAN_PATH = "/guardrail/v1/content:scan";
+const INTERNAL_USER_TOKEN_HEADER = "x-fieldloop-internal-user-token";
+
+declare module "fastify" {
+  interface FastifyRequest {
+    fieldLoopInternalUser?: InternalUserIdentity;
+  }
+}
 
 export function buildApp(dependencies: GuardrailDependencies) {
   const app = Fastify({ logger: true, bodyLimit: 1_048_576 });
@@ -31,7 +39,7 @@ export function buildApp(dependencies: GuardrailDependencies) {
 
   app.get("/health", async () => ({ status: "ok" }));
 
-  app.post(CONTENT_SCAN_PATH, async (request, reply) => {
+  app.post(CONTENT_SCAN_PATH, { onRequest: (request, reply) => authenticateUser(request, reply, dependencies) }, async (request, reply) => {
     if (!isJsonMediaType(request.headers["content-type"])) {
       return reply.code(415).type("application/problem+json").send(errorBody("unsupported_media_type", "Content-Type must be application/json", 415, "unsupported_media_type"));
     }
@@ -43,11 +51,13 @@ export function buildApp(dependencies: GuardrailDependencies) {
     }
     const classification = requestClassification(request.headers["x-fieldloop-classification"]);
     if (!classification) return reply.code(400).type("application/problem+json").send(errorBody("validation_failed", "Classification header is invalid", 400, "invalid_classification"));
-    const result = await engine.scanContent({ ...body, classification, idempotencyKey });
+    const identity = request.fieldLoopInternalUser;
+    if (!identity) return sendAuthProblem(reply, 401, "unauthenticated", "A valid internal user token is required");
+    const result = await engine.scanContent({ ...body, classification, idempotencyKey, clearance: identity.clearance });
     return sendResult(reply, result, classification);
   });
 
-  app.post(OPENAI_CHAT_COMPLETIONS_PATH, async (request, reply) => {
+  app.post(OPENAI_CHAT_COMPLETIONS_PATH, { onRequest: (request, reply) => authenticateUser(request, reply, dependencies) }, async (request, reply) => {
     if (!isJsonMediaType(request.headers["content-type"])) {
       return reply.code(415).type("application/problem+json").send(errorBody("unsupported_media_type", "Content-Type must be application/json", 415, "unsupported_media_type"));
     }
@@ -55,11 +65,40 @@ export function buildApp(dependencies: GuardrailDependencies) {
     if (!body) return reply.code(400).type("application/problem+json").send(errorBody("validation_failed", "Expected aiSystem and text chat messages", 400, "invalid_request"));
     const classification = requestClassification(request.headers["x-fieldloop-classification"]);
     if (!classification) return reply.code(400).type("application/problem+json").send(errorBody("validation_failed", "Classification header is invalid", 400, "invalid_classification"));
-    const result = await engine.chatCompletion(body, classification);
+    const identity = request.fieldLoopInternalUser;
+    if (!identity) return sendAuthProblem(reply, 401, "unauthenticated", "A valid internal user token is required");
+    const result = await engine.chatCompletion(body, classification, identity.clearance);
     return sendResult(reply, result, classification, body.stream === true);
   });
 
   return app;
+}
+
+async function authenticateUser(request: FastifyRequest, reply: FastifyReply, dependencies: GuardrailDependencies) {
+  const token = request.headers[INTERNAL_USER_TOKEN_HEADER];
+  if (typeof token !== "string" || token.length < 16 || token.length > 8_192 || token.trim() !== token) {
+    return sendAuthProblem(reply, 401, "unauthenticated", "A valid internal user token is required");
+  }
+  try {
+    const identity = await dependencies.userTokenVerifier.verify(token);
+    if (identity.orgId !== dependencies.orgId) {
+      return sendAuthProblem(reply, 403, "forbidden", "Internal user token Organisation is not available to this service");
+    }
+    request.fieldLoopInternalUser = identity;
+  } catch (error) {
+    if (error instanceof InvalidInternalUserTokenError) {
+      return sendAuthProblem(reply, 401, "unauthenticated", "Internal user token failed verification");
+    }
+    if (error instanceof InternalUserTokenVerifierUnavailableError) {
+      return sendAuthProblem(reply, 503, "service_unavailable", "Internal user token verification is unavailable");
+    }
+    request.log.error({ err: error }, "Guardrail internal identity verification failed");
+    return sendAuthProblem(reply, 503, "service_unavailable", "Internal user token verification is unavailable");
+  }
+}
+
+function sendAuthProblem(reply: FastifyReply, status: number, code: string, message: string) {
+  return reply.code(status).type("application/problem+json").send(errorBody(code, message, status, code));
 }
 
 function parseContentScan(value: unknown): { aiSystem: string; content: string } | null {

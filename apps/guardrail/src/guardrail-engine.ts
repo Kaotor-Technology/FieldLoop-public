@@ -29,6 +29,7 @@ interface ContentScanInput {
   aiSystem: string;
   content: string;
   classification: GuardrailClassification;
+  clearance: GuardrailClassification;
   idempotencyKey: string;
 }
 
@@ -50,7 +51,17 @@ export class GuardrailEngine {
     catch { return unavailable("Content scan idempotency record is unavailable"); }
     if (previous) {
       if (previous.requestHash !== requestHash) return idempotencyConflict();
+      if (classificationRank(previous.classification) > classificationRank(input.clearance)) {
+        return clearanceDenied(routing, input.clearance);
+      }
       return contentScanResult(previous, input.content);
+    }
+
+    if (classificationRank(input.classification) > classificationRank(input.clearance)) {
+      const reason = "Request classification exceeds the caller's clearance";
+      return await this.persistContentScan(system, input, idempotencyKeyHash, requestHash, [{
+        system, policy: routing, decision: "block", reason, classification: input.classification, latencyMs: 0,
+      }], { statusCode: 403, decision: "block", classification: input.classification, reason, policyId: routing.id }, 0);
     }
 
     const startedAt = performance.now();
@@ -84,6 +95,14 @@ export class GuardrailEngine {
       }, 0);
     }
 
+    if (classificationRank(classification) > classificationRank(input.clearance)) {
+      const reason = "Detected content classification exceeds the caller's clearance";
+      records.push({ system, policy: routing, decision: "block", reason, classification, latencyMs: elapsedMs(startedAt) });
+      return await this.persistContentScan(system, input, idempotencyKeyHash, requestHash, records, {
+        statusCode: 403, decision: "block", classification, reason, policyId: routing.id,
+      }, records.length - 1);
+    }
+
     if (!system.dataClasses.includes(classification)) {
       records.push({ system, policy: routing, decision: "block", reason: "Detected content classification is not registered for this AI System", classification, latencyMs: elapsedMs(startedAt) });
       return await this.persistContentScan(system, input, idempotencyKeyHash, requestHash, records, {
@@ -112,7 +131,7 @@ export class GuardrailEngine {
     }, 0);
   }
 
-  async chatCompletion(request: ChatCompletionRequest, classification: GuardrailClassification): Promise<GuardrailHttpResult> {
+  async chatCompletion(request: ChatCompletionRequest, classification: GuardrailClassification, clearance: GuardrailClassification): Promise<GuardrailHttpResult> {
     const loaded = await this.load(request.ai_system);
     if ("result" in loaded) return loaded.result;
     const { system } = loaded;
@@ -125,6 +144,9 @@ export class GuardrailEngine {
     }
 
     const startedAt = performance.now();
+    if (classificationRank(classification) > classificationRank(clearance)) {
+      return await this.deny(system, routing, "Request classification exceeds the caller's clearance", classification, startedAt);
+    }
     const inputSegments = request.messages
       .filter((message) => message.role === "user" || message.role === "tool")
       .flatMap((message) => typeof message.content === "string" && message.content.length > 0
@@ -140,6 +162,11 @@ export class GuardrailEngine {
         return await this.failClosed(system, injection, "Tier 1 detector unavailable", effectiveClassification, startedAt);
       }
       effectiveClassification = raiseClassification(effectiveClassification, scan.classification);
+      if (classificationRank(effectiveClassification) > classificationRank(clearance)) {
+        const intercept = await this.record(system, routing, "block", "Detected request classification exceeds the caller's clearance", effectiveClassification, startedAt);
+        if ("result" in intercept) return intercept.result;
+        return blocked(routing, intercept.id, "Detected request classification exceeds the caller's clearance", effectiveClassification);
+      }
       const detectedInjection = scan.action === "block";
       const enforcedBlock = detectedInjection && injection.mode === "enforce";
       const reason = detectedInjection
@@ -202,11 +229,13 @@ export class GuardrailEngine {
       return await this.failClosed(system, outputDlp, "Tier 1 output detector unavailable", effectiveClassification, startedAt);
     }
     const outputClassification = raiseClassification(effectiveClassification, outputScan.classification);
-    const outputBlock = outputScan.action === "block" && outputDlp.mode === "enforce";
+    const outputExceedsClearance = classificationRank(outputClassification) > classificationRank(clearance);
+    const outputBlock = outputExceedsClearance || outputScan.action === "block" && outputDlp.mode === "enforce";
     const outputRedact = outputScan.action === "redact" && outputDlp.mode === "enforce";
     const outputDecision = outputBlock ? "block" : outputRedact ? "redact" : "allow";
-    const outputReason = outputBlock
-      ? "Model response did not pass Tier 1 output checks"
+    const outputReason = outputExceedsClearance
+      ? "Model response classification exceeds the caller's clearance"
+      : outputBlock ? "Model response did not pass Tier 1 output checks"
       : outputRedact ? "Sensitive values were redacted from the model response" : "Tier 1 output scan completed";
     const outputIntercept = await this.record(system, outputDlp, outputDecision, outputReason, outputClassification, startedAt);
     if ("result" in outputIntercept) return outputIntercept.result;
@@ -425,6 +454,16 @@ function idempotencyConflict(): GuardrailHttpResult {
   return {
     statusCode: 409,
     body: errorBody("idempotency_key_reused", "Idempotency key was already used for different content", 409, "idempotency_key_reused"),
+  };
+}
+
+function clearanceDenied(policy: GuardrailPolicy, classification: GuardrailClassification): GuardrailHttpResult {
+  const reason = "Stored content classification exceeds the caller's clearance";
+  return {
+    statusCode: 403,
+    body: errorBody("clearance_denied", reason, 403, "clearance_denied", policy.id),
+    policyId: policy.id,
+    classification,
   };
 }
 
