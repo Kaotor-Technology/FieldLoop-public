@@ -27,6 +27,7 @@
     "db:seed:bangkok": "node db/seed/bangkok/seed.mjs",
     "db:migrate": "dbmate --migrations-table public.schema_migrations up",
     "test:migrations": "bash scripts/test-migrations.sh",
+    "test:audit-api": "bash scripts/test-audit-api.sh",
     "test:risk-service": "bash scripts/test-risk-service.sh",
     "test:guardrail-store": "bash scripts/test-guardrail-store.sh",
     "test:seed": "bash scripts/test-seed.sh",
