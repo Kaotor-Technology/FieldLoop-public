@@ -36,6 +36,8 @@ tags:
     description: Organisation-scoped source Evidence metadata.
   - name: Health
     description: Barrier Health decisions and in-app notifications.
+  - name: Audit
+    description: Read-only, hash-chained audit events within Organisation and clearance scope.
   - name: Guardrail
     description: Internal service-to-service OpenAI-compatible model gateway and Tier 1 content scan.
   - name: Actions
@@ -1090,6 +1092,41 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/audit:
+    get:
+      operationId: listAuditEvents
+      summary: List audit events, newest first
+      description: |
+        Returns audit events of the signed-in user's Organisation, within the user's clearance, newest
+        first. `entityType` is the namespace of the event action (`barrier` for `barrier.health_changed`)
+        and `entityId` is the audited entity identifier; both are optional exact-match filters. Events
+        are append-only; this endpoint never changes them. Restricted to operators and managers.
+      tags: [Audit]
+      parameters:
+      - name: entityType
+        in: query
+        description: Action namespace to match, for example `health_proposal`, `barrier` or `simulation`.
+        schema: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+      - name: entityId
+        in: query
+        description: Identifier of the audited entity to match exactly.
+        schema: { type: string, minLength: 1, maxLength: 256 }
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Audit events in reverse chronological order.
+          headers:
+            Cache-Control:
+              description: Always `private, no-store`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditEventPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 components:
   securitySchemes:
     serviceIdentity:
@@ -1796,6 +1833,34 @@ components:
           items:
             type: array
             items: { $ref: '#/components/schemas/Notification' }
+          limit: { type: integer, minimum: 1, maximum: 200 }
+        required: [items, limit]
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      description: One append-only audit record. `hash` is the v1 SHA-256 of the record; the next record of the Organisation carries it as `prevHash`.
+      properties:
+        id: { type: string, format: uuid }
+        entityType: { type: string, description: Action namespace, the text before the first dot of `action`. }
+        entity: { type: string }
+        action: { type: string }
+        actor: { type: string }
+        beforeHash: { type: [string, 'null'], pattern: '^[a-f0-9]{64}$' }
+        afterHash: { type: [string, 'null'], pattern: '^[a-f0-9]{64}$' }
+        prevHash: { type: [string, 'null'], pattern: '^[a-f0-9]{64}$' }
+        hash: { type: string, pattern: '^[a-f0-9]{64}$' }
+        createdAt: { type: string, format: date-time }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+      required: [id, entityType, entity, action, actor, beforeHash, afterHash, prevHash, hash, createdAt, simulated, classification]
+    AuditEventPage:
+      allOf:
+      - $ref: '#/components/schemas/CursorPage'
+      - type: object
+        properties:
+          items:
+            type: array
+            items: { $ref: '#/components/schemas/AuditEvent' }
           limit: { type: integer, minimum: 1, maximum: 200 }
         required: [items, limit]
     CurrentUser:
