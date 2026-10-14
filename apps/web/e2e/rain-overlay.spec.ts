@@ -42,7 +42,32 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1280]) {
     await page.getByRole("link", { name: "Sign in as operator" }).click();
     if (theme === "dark") await page.getByRole("button", { name: "Night shift" }).click();
     const canvas = page.locator(".map-canvas canvas");
-    const canvasImage = () => canvas.screenshot({ style: ".map-legend, .map-overlay-top, .map-overlay-top * { visibility: hidden !important; }" });
+    // Count pixels painted with the actual DESIGN rain-high token. Comparing the
+    // entire PNG would also compare canvas resizing and surrounding layout.
+    const rainPixelCount = async () => {
+      const screenshot = await page.locator(".map-canvas").screenshot({
+        style: ".map-legend, .map-overlay-top, .map-overlay-top * { visibility: hidden !important; }",
+      });
+      return page.evaluate(async (base64) => {
+        const image = new Image();
+        image.src = `data:image/png;base64,${base64}`;
+        await image.decode();
+        const sample = document.createElement("canvas");
+        sample.width = image.width; sample.height = image.height;
+        const context = sample.getContext("2d");
+        if (!context) throw new Error("Pixel inspection is unavailable");
+        context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--color-rain-high");
+        context.fillRect(0, 0, 1, 1);
+        const expected = context.getImageData(0, 0, 1, 1).data;
+        context.drawImage(image, 0, 0);
+        const pixels = context.getImageData(0, 0, image.width, image.height).data;
+        let count = 0;
+        for (let index = 0; index < pixels.length; index += 4) {
+          if (pixels[index] === expected[0] && pixels[index + 1] === expected[1] && pixels[index + 2] === expected[2]) count++;
+        }
+        return count;
+      }, screenshot.toString("base64"));
+    };
     await expect(canvas).toBeVisible();
     await page.getByLabel("Scenario", { exact: true }).click();
     await page.getByRole("option", { name: "Demo B storm", exact: true }).click();
@@ -52,15 +77,18 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1280]) {
     await page.getByRole("button", { name: "Play", exact: true }).click();
     await expect(legend).toBeVisible();
     await expect(page.locator(".workspace-banner")).toContainText("SIMULATION");
+    // Keep the Scenario geometry available while removing its translucent Asset
+    // fill, so the rain pixels can be checked directly against the design token.
+    await page.getByRole("checkbox", { name: "Assets and Segments", exact: true }).uncheck();
     const rainToggle = page.getByRole("checkbox", { name: "Scenario rain (SIMULATION)" });
     await rainToggle.focus();
     await page.keyboard.press("Space");
     await expect(legend).toHaveCount(0);
-    const dryCanvas = await canvasImage();
+    await expect.poll(rainPixelCount).toBe(0);
     await rainToggle.focus();
     await page.keyboard.press("Space");
     await expect(legend).toBeVisible();
-    await expect.poll(async () => (await canvasImage()).equals(dryCanvas)).toBe(false);
+    await expect.poll(rainPixelCount).toBeGreaterThan(0);
     expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
     await page.getByRole("button", { name: "Pause", exact: true }).click();
     await expect(legend).toBeVisible();
@@ -72,7 +100,7 @@ for (const theme of ["light", "dark"]) for (const width of [390, 1280]) {
     await page.getByRole("button", { name: "Step", exact: true }).click();
     await expect(page.getByRole("progressbar")).toHaveAttribute("value", "7200");
     await expect(legend).toHaveCount(0);
-    await expect.poll(async () => (await canvasImage()).equals(dryCanvas)).toBe(true);
+    await expect.poll(rainPixelCount).toBe(0);
     await page.getByRole("button", { name: "Reset simulation", exact: true }).click();
     await expect(page.getByRole("progressbar")).toHaveAttribute("value", "0");
     await expect(legend).toHaveCount(0);
