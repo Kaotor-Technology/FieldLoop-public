@@ -6,7 +6,8 @@ DECLARE
     guardrail_role text;
     runtime_role text;
 BEGIN
-    IF current_database() NOT IN ('fieldloop_dev', 'fieldloop_demo', 'fieldloop_test', 'fieldloop_restricted') THEN
+    -- Disposable test databases follow the fieldloop_*test naming used by the repo's test scripts.
+    IF NOT (current_database() IN ('fieldloop_dev', 'fieldloop_demo', 'fieldloop_restricted') OR current_database() LIKE 'fieldloop\_%test') THEN
         RAISE EXCEPTION 'guardrail runtime grants are restricted to FieldLoop dev/demo and disposable migration test databases';
     END IF;
 
@@ -54,7 +55,7 @@ DECLARE
     guardrail_role text;
     runtime_role text;
 BEGIN
-    IF current_database() IN ('fieldloop_dev', 'fieldloop_demo', 'fieldloop_test', 'fieldloop_restricted') THEN
+    IF current_database() IN ('fieldloop_dev', 'fieldloop_demo', 'fieldloop_restricted') OR current_database() LIKE 'fieldloop\_%test' THEN
         environment := replace(current_database(), 'fieldloop_', '');
         guardrail_role := 'fieldloop_guardrail_' || environment;
         runtime_role := 'fl-v2-guardrail-' || environment || '@example-project.iam';
@@ -73,7 +74,7 @@ DO $$
 DECLARE
     guardrail_role text;
 BEGIN
-    IF current_database() IN ('fieldloop_dev', 'fieldloop_demo', 'fieldloop_test', 'fieldloop_restricted') THEN
+    IF current_database() IN ('fieldloop_dev', 'fieldloop_demo', 'fieldloop_restricted') OR current_database() LIKE 'fieldloop\_%test' THEN
         guardrail_role := 'fieldloop_guardrail_' || replace(current_database(), 'fieldloop_', '');
         IF EXISTS (SELECT FROM pg_roles WHERE rolname = guardrail_role) THEN
             EXECUTE format('DROP ROLE %I', guardrail_role);
