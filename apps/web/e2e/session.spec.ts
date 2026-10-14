@@ -130,6 +130,8 @@ test("all account and preference controls work by keyboard with visible focus", 
   await page.keyboard.press("Tab");
   await expect(page.locator(".account-switcher > summary")).toBeFocused();
   await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "Ask agent" })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(page.getByRole("button", { name: "ภาษาไทย" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.locator("html")).toHaveAttribute("lang", "th");
@@ -139,6 +141,8 @@ test("all account and preference controls work by keyboard with visible focus", 
   await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Enter");
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await page.keyboard.press("Shift+Tab");
+  await expect(page.getByRole("link", { name: "Ask agent" })).toBeFocused();
   await page.keyboard.press("Shift+Tab");
   await expect(page.locator(".account-switcher > summary")).toBeFocused();
   await page.keyboard.press("Shift+Tab");
