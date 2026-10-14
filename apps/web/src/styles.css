@@ -60,6 +60,7 @@ h1 { font-size: var(--type-headline-lg-font-size); font-weight: var(--type-headl
 h2 { font-size: var(--type-headline-md-font-size); font-weight: var(--type-headline-md-font-weight); line-height: var(--type-headline-md-line-height); }
 h3 { font-size: var(--type-label-lg-font-size); font-weight: var(--type-label-lg-font-weight); line-height: var(--type-label-lg-line-height); }
 button, input, summary { font: inherit; }
+html[lang="th"] :lang(th), :lang(th) { line-height: var(--type-body-md-line-height); letter-spacing: normal; }
 button, summary { cursor: pointer; }
 button { min-height: var(--spacing-touch-target); }
 button:disabled { cursor: not-allowed; color: var(--color-neutral-600); background: var(--color-neutral-100); }

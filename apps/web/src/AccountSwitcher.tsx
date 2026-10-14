@@ -10,7 +10,7 @@ export function AccountSwitcher({ user }: { user: CurrentUser }) {
     onSuccess: (destination) => { queryClient.clear(); window.location.assign(destination); },
   });
   return <details className="account-switcher">
-    <summary>{user.persona}</summary>
+    <summary lang="en">{user.persona}</summary>
     <div className="account-menu">
       <h2>{t("identity")}</h2>
       <dl>

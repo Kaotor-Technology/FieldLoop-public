@@ -114,7 +114,7 @@ export function HealthProposalReview({ proposals, isLoading = false, hasError = 
             <HealthBadge health={proposal.proposedHealth} label={healthLabel(proposal.proposedHealth)} />
           </div>
           {proposal.sourceReason && <p className="health-proposal-source-reason">{proposal.sourceReason}</p>}
-          {proposal.simulated && <span className="health-proposal-simulation">{t("healthProposalSimulationLabel")}</span>}
+          {proposal.simulated && <span className="health-proposal-simulation" lang="en">{t("healthProposalSimulationLabel")}</span>}
 
           {saved && <p className="health-proposal-saved" role="status">{t("healthProposalDecisionSaved")}</p>}
           {!saved && !isSelected && canDecide && <div className="health-proposal-actions">
