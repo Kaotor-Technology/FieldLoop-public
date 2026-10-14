@@ -1,0 +1,59 @@
+import { expect, test } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
+
+test.beforeEach(async ({ page, request }) => {
+  await request.get("/test/reset");
+  await page.goto("/map?fl84Viewport=preserved");
+  await page.getByRole("link", { name: "Sign in as operator" }).click();
+  await expect(page.getByRole("heading", { name: "Geo Command Map", exact: true })).toBeVisible();
+});
+
+for (const colorScheme of ["light", "dark"] as const) {
+  for (const width of [390, 1280]) {
+    test(`Bowtie canvas ${colorScheme} ${width}px layout and accessibility`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      if (colorScheme === "dark") await page.getByRole("button", { name: "Night shift" }).click();
+      await page.getByRole("button", { name: /Bowtie A/ }).click();
+      await expect(page.getByRole("heading", { name: /Pipeline integrity/ })).toBeVisible();
+
+      const layout = await page.locator(".bowtie-canvas").evaluate((element) => ({
+        columns: getComputedStyle(element).gridTemplateColumns.split(" ").length,
+        viewportWidth: element.parentElement?.clientWidth ?? 0,
+        canvasWidth: element.parentElement?.scrollWidth ?? 0,
+      }));
+      expect(layout.columns).toBe(width < 840 ? 1 : 3);
+      expect(layout.canvasWidth).toBeLessThanOrEqual(layout.viewportWidth);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+
+      const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+      expect(axe.violations).toEqual([]);
+    });
+  }
+}
+
+test("Thai layout reflows at 320px and the keyboard can return to the map", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.getByRole("button", { name: /Bowtie A/ }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".bowtie-screen")).toBeVisible();
+  await page.getByRole("button", { name: "ภาษาไทย", exact: true }).click();
+
+  const reflow = await page.locator(".bowtie-screen").evaluate((element) => ({
+    fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
+    lineHeight: Number.parseFloat(getComputedStyle(element).lineHeight),
+    scrollWidth: document.documentElement.scrollWidth,
+    viewportWidth: document.documentElement.clientWidth,
+    canvasWidth: element.querySelector(".bowtie-canvas-viewport")?.scrollWidth ?? 0,
+    canvasViewportWidth: element.querySelector(".bowtie-canvas-viewport")?.clientWidth ?? 0,
+  }));
+  expect(reflow.lineHeight / reflow.fontSize).toBeGreaterThanOrEqual(1.5);
+  expect(reflow.scrollWidth).toBeLessThanOrEqual(reflow.viewportWidth);
+  expect(reflow.canvasWidth).toBeLessThanOrEqual(reflow.canvasViewportWidth);
+
+  await page.locator(".skip-link").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#main-content")).toBeFocused();
+  await page.getByRole("button", { name: "กลับไปแผนที่", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/map\?fl84Viewport=preserved$/);
+});
