@@ -19,6 +19,11 @@ content, call a model, emit Intercepts or execute a tool. Guardrail startup load
 and validates the policies before listening. FL-86 supplies gateway enforcement
 and Intercept Evidence; FL-87 supplies guarded tool execution and Action Requests.
 
+Consequence severity uses the shared RiskSeverity vocabulary (`legalRegulatory: 5`
+for restricted-data disclosure, `people: 4` for wrong engineering decisions).
+The contract enforces the AS-4 Human/Organisational PFD ceiling of 0.1 and pins the
+demo Bowtie identity to `uc-1-bowtie-c`, so a renamed parent cannot bypass review.
+
 The default model route is private Flash-class; a private Pro-class route is
 available for long report Drafts. Public SaaS is disabled. Confidential and Highly
 Restricted data require a private in-country boundary without retention or
@@ -43,9 +48,20 @@ to Organisation/pack/entity/code. Each policy's `config` records its authored ID
 version, detector settings, AI System code, model routes and Bowtie ID/code;
 `barrier_id` and `ai_system_id` are actual foreign keys. No migration is required.
 
-Reloading updates retained authored definitions while preserving Barrier Health,
-owner and reviewed Bowtie status. It never creates Evidence, Intercepts,
-approvals or Health changes. Renaming/removing published IDs or changing graph
+Reloading a Draft updates retained authored definitions while preserving Barrier
+Health and owner. The seed locks the parent Bowtie inside the catalog transaction.
+Every policy records `config.seedDefinitionHash`, computed from canonical authored
+pack/safety data (object-key order is ignored). Once the Bowtie leaves Draft,
+identical seed content leaves the whole graph, AI System, policy records and
+reviewed local overrides untouched. Changed content or version, renamed policies,
+missing proof or incompatible proof aborts the transaction. Concurrent human
+review cannot be overwritten by startup registration.
+
+Existing reviewed registrations from older code without that hash fail closed;
+they require an explicit human-reviewed migration. This task does not implement
+a review/migration UI or silently adopt legacy proof. A code rollback retains
+historical rows. Registration never creates Evidence, Intercepts, approvals or
+Health changes. Renaming/removing published IDs or changing graph
 membership needs a retirement/migration design; this seed does not delete
 historical records. Without database settings, the catalog is validated in
 memory and startup reports `persisted: false`.
@@ -68,9 +84,11 @@ pnpm check:safety
 The contract/adapter/Guardrail suites reject unknown detectors, fail-open,
 monitor-only, missing policies, incompatible policy Barriers, broken graph paths,
 unsafe routes and an incompatible Agent line-up. The disposable PostGIS test
-runs migrations and seeds under the application role. It checks counts and
+runs migrations and seeds under the application role, validating persisted
+severity against the shared contract. It checks counts and
 foreign keys, SIMULATION/classification, idempotency, version updates, preserved
-Health, Organisation isolation, full rollback after a late policy error and
+Health, reviewed states/local overrides, changed-definition rejection, concurrent
+human review, legacy proof rejection, Organisation isolation, full rollback after a late policy error and
 unchanged Evidence/Action/approval tables. It also proves both production
 servers reject an unknown detector before listening. It prints local startup
 p50/p95 for the original two packs and all three, plus the policy/Barrier query
