@@ -148,7 +148,7 @@ export class GuardrailEngine {
       const intercept = await this.record(system, injection, enforcedBlock ? "block" : "allow", reason, effectiveClassification, startedAt);
       if ("result" in intercept) return intercept.result;
       if (enforcedBlock) return blocked(injection, intercept.id, reason, effectiveClassification);
-      if (scan.action === "redact" && scan.text) {
+      if (scan.action === "redact") {
         const replacements = splitSegments(scan.text, joined.separator, inputSegments.length);
         if (!replacements) return await this.failClosed(system, injection, "Safe input classification could not be applied", effectiveClassification, startedAt);
         replacements.forEach((value, index) => inputSegments[index]?.set(value));

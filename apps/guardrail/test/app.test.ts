@@ -137,6 +137,22 @@ describe("Guardrail gateway", () => {
     }));
   });
 
+  it("applies a complete input redaction even when the safe replacement is empty", async () => {
+    const dependencies = createDependencies({ scanUserPrompt: async () => ({
+      action: "redact", text: "", reason: "Entire input was sensitive", classification: "CONFIDENTIAL", findings: ["AUTH_TOKEN"],
+    }) });
+    const app = createApp(dependencies);
+    const response = await app.inject({
+      method: "POST", url: "/guardrail/v1/chat/completions",
+      payload: { aiSystem: "demo-uc-1", messages: [{ role: "user", content: "sensitive token" }] },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(dependencies.model.complete).toHaveBeenCalledWith("configured-flash-model", expect.objectContaining({
+      messages: [{ role: "user", content: "" }],
+    }));
+  });
+
   it("fails closed when a detector times out and does not call the model", async () => {
     const dependencies = createDependencies({ scanUserPrompt: async () => { throw new Error("timeout"); } });
     const app = createApp(dependencies);
