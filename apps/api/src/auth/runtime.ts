@@ -11,6 +11,8 @@ import type { Kysely } from "kysely";
 import { PostgresMapLayerStore, UnavailableMapLayerStore, type MapLayerStore } from "../map/layers.js";
 import { PostgresRiskService } from "../risk/service.js";
 import { createRiskDatabase } from "../risk/database.js";
+import { PostgresGeoReferenceStore } from "../geo-references/postgres-store.js";
+import type { GeoReferenceStore } from "../geo-references/model.js";
 
 export class UnavailableAuthService implements AuthServicePort {
   async startLogin(): Promise<URL> { return this.unavailable(); }
@@ -30,6 +32,7 @@ export class UnavailableAuthService implements AuthServicePort {
 export async function createProductionAuthRuntime(): Promise<{
   auth: AuthServicePort;
   mapLayers: MapLayerStore;
+  geoReferences?: GeoReferenceStore;
   health?: HealthServicePort;
   actions?: ActionServicePort;
   close: () => Promise<void>;
@@ -61,6 +64,7 @@ export async function createProductionAuthRuntime(): Promise<{
   if (!database) return { auth: new UnavailableAuthService(), mapLayers: new UnavailableMapLayerStore(), close: async () => {} };
   const runtime = {
     mapLayers: new PostgresMapLayerStore(database.db),
+    geoReferences: new PostgresGeoReferenceStore(database.db),
     actions: new PostgresActionStore(database.db as unknown as Kysely<Record<string, never>>),
     health: new PostgresHealthStore(database.db as unknown as Kysely<Record<string, never>>),
     risk: new PostgresRiskService(createRiskDatabase(database.pool)),

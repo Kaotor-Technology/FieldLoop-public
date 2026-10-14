@@ -14,6 +14,9 @@ const PUBLIC_ROUTES = new Set([
   "GET /api/auth/callback",
   "POST /api/auth/backchannel-logout",
   "GET /api/internal/auth/jwks",
+  // These exact routes perform their own signed-token verification in the handler.
+  "GET /api/internal/assistant/documents/:documentId/geo-source",
+  "POST /api/internal/assistant/documents/:documentId/geo-references",
 ]);
 const CONSEQUENTIAL_DECISION =
   /^\/api\/v1\/(?:(?:held-requests|drafts)\/[^/]+:(?:approve|reject)|action-requests\/[^/]+(?:\/approvals|:(?:approve|reject|release|execute)))\/?$/;

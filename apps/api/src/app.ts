@@ -13,6 +13,8 @@ import type { RiskApiPort } from "./risk/service.js";
 import { registerHealthRoutes } from "./health/routes.js";
 import type { HealthServicePort } from "./health/model.js";
 import { registerLiveEventRoute } from "./live-events.js";
+import { registerGeoReferenceRoutes } from "./geo-references/routes.js";
+import type { GeoReferenceStore } from "./geo-references/model.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -30,6 +32,7 @@ export function buildApp(options: {
   simulator?: SimulationPort;
   risk?: RiskApiPort;
   health?: HealthServicePort;
+  geoReferences?: GeoReferenceStore;
   domainPacks?: LoadedDomainPack[];
 } = {}) {
   const app = Fastify({ logger: { serializers: { req: serializeRequestForLog } } });
@@ -45,6 +48,7 @@ export function buildApp(options: {
   registerRiskRoutes(app, options.risk);
   registerHealthRoutes(app, options.health);
   registerActionRoutes(app, options.actions);
+  registerGeoReferenceRoutes(app, options.geoReferences, options.baseUrl ?? process.env["FIELDLOOP_BASE_URL"]);
   registerLiveEventRoute(app, options.simulator, options.health, options.risk);
   return app;
 }
