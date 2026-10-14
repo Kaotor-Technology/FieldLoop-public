@@ -173,7 +173,7 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
             asset_id: The Asset identifier.
         """
         wanted = _text(asset_id, "asset_id", 128)
-        if not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", wanted):
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", wanted):
             raise ToolInputError("asset_id contains unsupported characters")
         asset = await ctx.platform.get(f"/api/v1/assets/{wanted}", ctx.user_token)
         if isinstance(asset, dict) and "id" in asset:

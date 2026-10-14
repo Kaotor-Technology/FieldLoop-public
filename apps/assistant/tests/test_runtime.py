@@ -352,9 +352,10 @@ def test_begin_failure_after_the_claim_releases_the_session() -> None:
             pass
         finally:
             TurnBudget.for_agent = original  # type: ignore[method-assign]
-        return h.runtime.busy(record.id)
+        return h.runtime.busy(record.id), h.store.sessions[record.id].status
 
-    assert asyncio.run(go()) is False
+    # Released locally and in the shared status, so another instance is not refused.
+    assert asyncio.run(go()) == (False, "active")
 
 
 def test_trace_sequence_continues_across_turns_of_one_session() -> None:

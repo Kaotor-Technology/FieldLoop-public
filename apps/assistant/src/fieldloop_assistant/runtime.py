@@ -10,7 +10,7 @@ import json
 import re
 import time
 from collections.abc import AsyncIterator, Callable, Mapping
-from contextlib import aclosing
+from contextlib import aclosing, suppress
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
@@ -234,6 +234,7 @@ class AgentRuntime:
             raise TurnInProgressError(session.id)
         cancel = asyncio.Event()
         self._cancels[session.id] = cancel  # no await between the check and this registration
+        base_seq: int | None = None
         try:
             base_seq = await self._deps.sessions.claim_turn(session)
             if base_seq is None:
@@ -246,6 +247,11 @@ class AgentRuntime:
             task = asyncio.create_task(self._drive(turn, message))
         except BaseException:
             self._cancels.pop(session.id, None)
+            if base_seq is not None:
+                # The claim succeeded but the turn never started: release the shared mark too,
+                # or other instances are refused until it goes stale.
+                with suppress(Exception):
+                    await asyncio.shield(self._deps.sessions.set_status(session, "active", 0))
             raise
         return TurnHandle(turn, task)
 
