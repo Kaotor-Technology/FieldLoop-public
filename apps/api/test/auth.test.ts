@@ -386,6 +386,25 @@ describe("BFF auth service", () => {
     expect(store.deletedSessions).toEqual([hash("opaque-session-value")]);
   });
 
+  it("derives a read-only identity from a verified internal user token", async () => {
+    const verified = { sub: "assistant-user", roles: ["fieldloop.operator", "other.role"], clearance: "INTERNAL", orgId: "fieldloop-demo" };
+    const make = (claims: typeof verified | Error) => new BffAuthService({
+      store: new TestAuthStore(sessionFixture()),
+      crypto: testCrypto(),
+      oidc: testOidc({}),
+      internalTokens: { ...testInternalTokens(), verify: async () => { if (claims instanceof Error) throw claims; return claims; } },
+      baseUrl: "https://fieldloop-dev.kaotor.com",
+      defaultOrgId: "fieldloop-demo",
+    });
+
+    const user = await make(verified).getCurrentUserFromInternalToken("token");
+    expect(user).toMatchObject({ sub: "assistant-user", roles: ["fieldloop.operator"], orgId: "fieldloop-demo", csrfToken: "" });
+    expect(user.authTime.getTime()).toBe(0); // never recent enough for a decision
+    await expect(make(new Error("bad signature")).getCurrentUserFromInternalToken("token")).rejects.toMatchObject({ statusCode: 401 });
+    await expect(make({ ...verified, orgId: "other-org" }).getCurrentUserFromInternalToken("token")).rejects.toMatchObject({ statusCode: 403 });
+    await expect(make({ ...verified, roles: ["other.role"] }).getCurrentUserFromInternalToken("token")).rejects.toMatchObject({ statusCode: 403 });
+  });
+
   it("persists the 60-second introspection cache and forces introspection before refresh for decisions", async () => {
     const store = new TestAuthStore(sessionFixture());
     const events: string[] = [];

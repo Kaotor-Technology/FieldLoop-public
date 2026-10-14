@@ -314,6 +314,29 @@ paths:
               schema: { $ref: "#/components/schemas/MapConfig" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/assets/{assetId}:
+    get:
+      operationId: getAsset
+      summary: Read one Asset by identifier or asset code
+      description: Returns the Asset visible to the signed-in Organisation and clearance. Also readable with the five-minute internal user token as a Bearer credential (read-only, used by the assistant tools); the token is never accepted for a state change, a decision or the event stream.
+      tags: [Map]
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: Asset UUID or asset code, for example DL-01.
+          schema: { type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' }
+      responses:
+        "200":
+          description: The scoped Asset.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetRecord" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/map/layers/{layer}:
     get:
       operationId: getMapLayer
@@ -1470,6 +1493,21 @@ components:
         policyId: { type: string, format: uuid }
         reason: { type: string }
       additionalProperties: false
+
+    AssetRecord:
+      type: object
+      additionalProperties: false
+      required: [id, type, name, code, label, domainPack, simulated, classification, geometry]
+      properties:
+        id: { type: string }
+        type: { type: string }
+        name: { type: string }
+        code: { type: [string, 'null'] }
+        label: { type: [string, 'null'], description: SIMULATION or SYNTHETIC label shown with the Asset. }
+        domainPack: { type: [string, 'null'] }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+        geometry: { description: GeoJSON geometry or null. }
 
     MapConfig:
       type: object
