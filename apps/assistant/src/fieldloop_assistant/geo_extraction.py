@@ -120,12 +120,17 @@ def parse_chainage(source: str) -> tuple[float, float | None] | None:
                 return parsed[0], parsed[1]
         return parsed[0], None
 
-    match = _CHAINAGE_LABEL.search(source)
-    if not match:
+    chainage_match = _CHAINAGE_LABEL.search(source)
+    if not chainage_match:
         return None
-    start = _metric_distance(match.group(1), match.group(2))
-    end = _metric_distance(match.group(3), match.group(4)) if match.group(3) else None
-    if start is None or (match.group(3) and end is None) or (end is not None and end < start):
+    start = _metric_distance(chainage_match.group(1), chainage_match.group(2))
+    end_text = chainage_match.group(3)
+    end = _metric_distance(end_text, chainage_match.group(4)) if end_text else None
+    if (
+        start is None
+        or (end_text and end is None)
+        or (end is not None and end < start)
+    ):
         return None
     return start, end
 
@@ -191,6 +196,8 @@ def validate_geo_references(value: Any, source_text: str) -> list[GeoReferenceCa
         parsed_coordinates = parse_coordinates(snippet)
         model_latitude = _nullable_number(raw["latitude"], -90, 90, "latitude")
         model_longitude = _nullable_number(raw["longitude"], -180, 180, "longitude")
+        latitude: float | None = None
+        longitude: float | None = None
         if (model_latitude is None) != (model_longitude is None):
             raise GeoExtractionValidationError("Latitude and longitude must appear together")
         if model_latitude is not None:
@@ -203,32 +210,16 @@ def validate_geo_references(value: Any, source_text: str) -> list[GeoReferenceCa
                     "Coordinates are not grounded in the source excerpt"
                 )
             latitude, longitude = parsed_coordinates
-        else:
-            latitude = longitude = None
 
         parsed_chainage = parse_chainage(snippet)
         model_from = _nullable_number(raw["chainageFrom"], 0, 1_000_000_000, "chainageFrom")
         model_to = _nullable_number(raw["chainageTo"], 0, 1_000_000_000, "chainageTo")
+        chainage_from: float | None = None
+        chainage_to: float | None = None
         if parsed_chainage:
             chainage_from, chainage_to = parsed_chainage
         elif model_from is not None or model_to is not None:
             raise GeoExtractionValidationError("Chainage is not grounded in the source excerpt")
-        else:
-            chainage_from = chainage_to = None
-        if (
-            model_from is not None
-            and parsed_chainage
-            and not _same_coordinate(model_from, parsed_chainage[0])
-        ):
-            # The deterministic parser is authoritative; the model value is intentionally ignored.
-            pass
-        if (
-            model_to is not None
-            and parsed_chainage
-            and parsed_chainage[1] is not None
-            and not _same_coordinate(model_to, parsed_chainage[1])
-        ):
-            pass
 
         asset_code = _nullable_text(raw["assetCode"], 128, "assetCode")
         place_name = _nullable_text(raw["placeName"], 256, "placeName")
@@ -386,9 +377,12 @@ def _completion_content(completion: Mapping[str, Any] | str) -> str:
     if not isinstance(choices, list) or not choices or not isinstance(choices[0], dict):
         raise GeoExtractionValidationError("Guardrail completion has no choice")
     message = choices[0].get("message")
-    if not isinstance(message, dict) or not isinstance(message.get("content"), str):
+    if not isinstance(message, dict):
         raise GeoExtractionValidationError("Guardrail completion has no structured content")
-    return message["content"]
+    content = message.get("content")
+    if not isinstance(content, str):
+        raise GeoExtractionValidationError("Guardrail completion has no structured content")
+    return content
 
 
 def _metric_distance(value: str | None, unit: str | None) -> float | None:
