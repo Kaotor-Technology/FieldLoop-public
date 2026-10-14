@@ -38,6 +38,9 @@ describe("registered worker contracts", () => {
     const event = { id: rule.id, type: "health_proposal.created", orgId: "fixture", barrierId: rule.id, entityId: rule.id, simulated: true, classification: "CONFIDENTIAL" };
     expect(isWorkerEvent(event)).toBe(true); expect(isWorkerEvent({ ...event, simulated: undefined })).toBe(false);
     expect(isWorkerEvent({ ...event, type: "notification.delivered" })).toBe(true);
+    expect(isWorkerEvent({ ...event, type: "barrier.health_changed" })).toBe(true);
+    expect(isWorkerEvent({ ...event, type: "barrier.health_changed", health: "degraded" })).toBe(true);
+    expect(isWorkerEvent({ ...event, type: "barrier.health_changed", health: "unknown" })).toBe(false);
     expect(isWorkerEvent({ ...event, type: "barrier.health.applied" })).toBe(false);
   });
 });

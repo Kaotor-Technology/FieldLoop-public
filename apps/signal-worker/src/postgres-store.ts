@@ -115,8 +115,9 @@ export class PostgresWorkerStore implements WorkerStore {
   }
 
   private async event(connection: Connection, type: WorkerEvent["type"], entityId: string, barrierId: string,
-    simulated: boolean, classification: WorkerEvent["classification"]): Promise<void> {
-    const event: WorkerEvent = { id: randomUUID(), type, orgId: this.orgId, entityId, barrierId, simulated, classification };
+    simulated: boolean, classification: WorkerEvent["classification"], health?: WorkerEvent["health"]): Promise<void> {
+    const event: WorkerEvent = { id: randomUUID(), type, orgId: this.orgId, entityId, barrierId, simulated, classification,
+      ...(health ? { health } : {}) };
     await appendWorkerEvent(connection, event, "signal-worker");
   }
 
@@ -220,7 +221,7 @@ export class PostgresWorkerStore implements WorkerStore {
           before: { barrierId: dependency.barrier_id, health: barrier.health }, after: { barrierId: dependency.barrier_id, health: "unverified" },
           simulated: dependency.simulated, classification, createdBy: "signal-worker",
         });
-        await this.event(trx, "barrier.health_changed", change.id, dependency.barrier_id, dependency.simulated, classification);
+        await this.event(trx, "barrier.health_changed", change.id, dependency.barrier_id, dependency.simulated, classification, "unverified");
         if (barrier.owner_id) await this.notifyOwner(trx, {
           ownerId: barrier.owner_id, subject: "health_change", subjectId: change.id,
           barrierId: dependency.barrier_id, simulated: dependency.simulated, classification,
@@ -297,7 +298,7 @@ export class PostgresWorkerStore implements WorkerStore {
           before: { barrierId: barrier.id, health: barrier.health }, after: { barrierId: barrier.id, health: "unverified" },
           simulated: barrier.simulated, classification, createdBy: "signal-worker",
         });
-        await this.event(trx, "barrier.health_changed", change.id, barrier.id, barrier.simulated, classification);
+        await this.event(trx, "barrier.health_changed", change.id, barrier.id, barrier.simulated, classification, "unverified");
         if (barrier.owner_id && await this.notifyOwner(trx, {
           ownerId: barrier.owner_id, subject: "health_change", subjectId: change.id,
           barrierId: barrier.id, simulated: barrier.simulated, classification,

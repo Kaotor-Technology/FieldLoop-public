@@ -91,7 +91,7 @@ export class PostgresHealthStore implements HealthServicePort {
       if (row.status !== "open") throw new HealthServiceError(409, "conflict");
       const classification = maximumClassification(row.proposal_classification, row.barrier_classification);
       if (!permits(input.user.clearance, classification)) throw new HealthServiceError(403, "forbidden");
-      const health = input.decision === "accept" ? validHealth(row.proposed_health) : row.barrier_health;
+      const health = validHealth(input.decision === "accept" ? row.proposed_health : row.barrier_health);
       const status = input.decision === "accept" ? "accepted" : "rejected";
       const result: HealthDecisionResult = { healthProposalId: row.id, status, barrierId: row.barrier_id, health };
 
@@ -115,7 +115,7 @@ export class PostgresHealthStore implements HealthServicePort {
           simulated: row.simulated, classification, createdBy: input.user.sub,
         });
         const event: WorkerEvent = { id: randomUUID(), type: "barrier.health_changed", orgId: input.user.orgId,
-          entityId: change.id, barrierId: row.barrier_id, simulated: row.simulated, classification };
+          entityId: change.id, barrierId: row.barrier_id, simulated: row.simulated, classification, health };
         await appendWorkerEvent(trx, event, input.user.sub);
         if (row.owner_id && row.barrier_health !== health && ["degraded", "failed"].includes(health)) {
           await this.notifyOwner(trx, { orgId: input.user.orgId, ownerId: row.owner_id, healthChangeId: change.id,
@@ -242,9 +242,9 @@ function requireHealthRole(user: CurrentUser): void {
     throw new HealthServiceError(403, "forbidden");
   }
 }
-function validHealth(value: string): string {
-  if (!["healthy", "degraded", "failed", "unverified"].includes(value)) throw new Error("Health Proposal contains an invalid Health value");
-  return value;
+function validHealth(value: string): NonNullable<WorkerEvent["health"]> {
+  if (value === "healthy" || value === "degraded" || value === "failed" || value === "unverified") return value;
+  throw new Error("Health Proposal contains an invalid Health value");
 }
 function maximumClassification(...values: string[]): Classification {
   const valid = values.map((value) => classifications.indexOf(value as Classification));
