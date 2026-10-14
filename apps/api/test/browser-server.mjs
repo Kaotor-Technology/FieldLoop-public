@@ -26,6 +26,20 @@ const seedHealthProposals = () => [
   { id: "00000000-0000-4000-8000-000000000083", barrierId: "00000000-0000-4000-8000-000000000183", barrierName: "SYNTHETIC-CP-01", currentHealth: "healthy", proposedHealth: "degraded", sourceReason: "SIMULATION rectifier reading is below the registered threshold", simulated: true, createdAt: "2026-10-14T00:00:00.000Z", status: "open", ownerSub: "synthetic-operator" },
   { id: "00000000-0000-4000-8000-000000000084", barrierId: "00000000-0000-4000-8000-000000000184", barrierName: "SYNTHETIC-CP-02", currentHealth: "healthy", proposedHealth: "failed", sourceReason: "SIMULATION inspection signal requires owner review", simulated: true, createdAt: "2026-10-14T00:01:00.000Z", status: "open", ownerSub: "synthetic-operator" },
 ];
+const digest = (letter) => letter.repeat(64);
+const auditEvents = [
+  { id: "00000000-0000-4000-8000-000000000391", entityType: "barrier", entity: "00000000-0000-4000-8000-000000000183", action: "barrier.health_changed", actor: "synthetic-operator", beforeHash: digest("a"), afterHash: digest("b"), prevHash: digest("d"), hash: digest("e"), createdAt: "2026-10-14T00:03:00.000003Z", simulated: true, classification: "CONFIDENTIAL" },
+  { id: "00000000-0000-4000-8000-000000000392", entityType: "health_proposal", entity: "00000000-0000-4000-8000-000000000083", action: "health_proposal.accepted", actor: "synthetic-operator", beforeHash: digest("c"), afterHash: digest("a"), prevHash: digest("f"), hash: digest("d"), createdAt: "2026-10-14T00:02:00.000002Z", simulated: true, classification: "CONFIDENTIAL" },
+  { id: "00000000-0000-4000-8000-000000000393", entityType: "simulation", entity: "00000000-0000-4000-8000-000000000501", action: "simulation.reset", actor: "simulator", beforeHash: null, afterHash: null, prevHash: null, hash: digest("f"), createdAt: "2026-10-14T00:01:00.000001Z", simulated: true, classification: "INTERNAL" },
+];
+const audit = {
+  listEvents: async (_user, filter, cursor, limit) => {
+    const matches = auditEvents.filter((event) => (!filter.entityType || event.entityType === filter.entityType) && (!filter.entityId || event.entity === filter.entityId));
+    const start = cursor ? Number(cursor) : 0;
+    const items = matches.slice(start, start + limit);
+    return { items, limit, nextCursor: start + limit < matches.length ? String(start + limit) : null };
+  },
+};
 let healthProposals = seedHealthProposals();
 let healthDecisions = [];
 let healthEvents = [];
@@ -122,7 +136,7 @@ const risk = {
   riskEventsAfter: async () => [],
   processHealthChanges: async () => 0,
 };
-const app = buildApp({ auth, baseUrl, simulator, health, risk });
+const app = buildApp({ auth, baseUrl, simulator, health, risk, audit });
 await registerReference(app, fileURLToPath(new URL("reference/", import.meta.resolve("@fieldloop/contracts"))));
 await registerSpa(app, fileURLToPath(new URL("../../web/dist/", import.meta.url)));
 await app.ready();

@@ -1,11 +1,12 @@
 import { SimulationBanner } from "./SimulationBanner";
 import { lazy, Suspense, useLayoutEffect } from "react";
-import { Outlet } from "@tanstack/react-router";
+import { Link, Outlet } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { SessionGate } from "./SessionGate";
 import { AccountSwitcher } from "./AccountSwitcher";
 import { usePreferences } from "./preferences";
 import type { CurrentUser } from "./api-client";
+import { canReadAudit } from "./audit-events";
 
 const SimulationControls = lazy(() => import("./SimulationControls").then(({ SimulationControls }) => ({ default: SimulationControls })));
 
@@ -30,6 +31,7 @@ function SignedInWorkspace({ user }: { user: CurrentUser }) {
     <header className="top-bar">
       <a href="/map" className="wordmark" aria-label="FieldLoop-v2">FieldLoop-<span>v2</span></a>
       <div className="preferences">
+        {canReadAudit(user.roles) && <Link to="/audit" className="top-bar-link">{t("auditNav")}</Link>}
         <AccountSwitcher user={user} />
         <button type="button" onClick={toggleLanguage} lang={language === "en" ? "th" : "en"} aria-label={t(language === "en" ? "languageThai" : "languageEnglish")}>{t("languageToggle")}</button>
         <button onClick={toggleNightShift} aria-pressed={nightShift}>{t("nightShift")}</button>
