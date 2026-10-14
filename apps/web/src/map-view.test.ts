@@ -1,14 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { MapFeature } from "@fieldloop/map";
 import type { SimulationRun } from "./simulation-events";
 import {
   barrierMarkerStatus,
   countVisibleBarrierAlerts,
+  formatChainage,
+  mapLayerFeedback,
   rainLayerVisualStyle,
   riskBandVisualStyle,
   selectSimulatedRainCell,
   searchVisibleFeatures,
   selectBarrierMarkerFeatures,
+  selectMapFeature,
   selectVisibleFeatures,
   summarizeVisibleFeatures,
 } from "./map-view.js";
@@ -29,6 +32,15 @@ const rainZone = feature({
   health: null,
   domainPack: "flood-water",
   featureKind: "area",
+  geometry: { type: "Polygon", coordinates: [[[100, 13], [101, 13], [101, 14], [100, 13]]] },
+});
+const floodConsequence = feature({
+  id: "synthetic-impact-zone",
+  name: "Synthetic impact zone",
+  simulated: true,
+  health: null,
+  domainPack: "flood-water",
+  featureKind: "consequence",
   geometry: { type: "Polygon", coordinates: [[[100, 13], [101, 13], [101, 14], [100, 13]]] },
 });
 const bangkokStormRun: SimulationRun = {
@@ -95,6 +107,66 @@ describe("map visible feature state", () => {
     expect(rendered.map((item) => item.id)).toEqual(["synthetic-asset"]);
     expect(countVisibleBarrierAlerts(rendered)).toEqual({ degraded: 0, failed: 0, unverified: 0 });
     expect(searchVisibleFeatures(rendered, "valve")).toEqual([]);
+  });
+
+  it("keeps Healthy Barriers in the keyboard feature list while excluding them from map markers", () => {
+    const visible = selectVisibleFeatures([
+      { layer: "barriers", features: [healthyBarrier, failedBarrier] },
+    ], ["barriers"], "all");
+
+    expect(visible).toContain(healthyBarrier);
+    expect(selectBarrierMarkerFeatures(visible)).not.toContain(healthyBarrier);
+  });
+
+  it("shows Consequence features when their map layer and Domain are active", () => {
+    expect(selectVisibleFeatures([
+      { layer: "consequences", features: [floodConsequence] },
+    ], ["consequences"], "flood-water")).toEqual([floodConsequence]);
+  });
+
+  it("selects a valid map feature for the Overview panel and formats Chainage in mono-friendly groups", () => {
+    const setSelectedFeature = vi.fn();
+
+    expect(selectMapFeature(segment, setSelectedFeature)).toBe(true);
+    expect(setSelectedFeature).toHaveBeenCalledWith(segment);
+    expect(selectMapFeature({ type: "Feature", id: null }, setSelectedFeature)).toBe(false);
+    expect(formatChainage(segment.properties.chainageFrom ?? 0)).toBe("1,200");
+  });
+
+  it("shows a skeleton while requested map layers load and on their inline-error state", () => {
+    const requests = [
+      { layer: "assets" as const, isPending: true, isError: false },
+      { layer: "barriers" as const, isPending: false, isError: false },
+      { layer: "consequences" as const, isPending: false, isError: false },
+    ];
+
+    expect(mapLayerFeedback(requests, ["assets"], false, "all", true)).toEqual({
+      isLoading: true, hasError: false, showSkeleton: true,
+    });
+    expect(mapLayerFeedback([
+      { layer: "assets", isPending: false, isError: false },
+      { layer: "barriers", isPending: false, isError: true },
+      { layer: "consequences", isPending: false, isError: false },
+    ], ["barriers"], false, "all", true)).toEqual({
+      isLoading: false, hasError: true, showSkeleton: true,
+    });
+    expect(mapLayerFeedback([
+      { layer: "assets", isPending: false, isError: false },
+      { layer: "barriers", isPending: false, isError: true },
+      { layer: "consequences", isPending: false, isError: false },
+    ], ["assets"], false, "all", true)).toEqual({
+      isLoading: false, hasError: false, showSkeleton: false,
+    });
+    expect(mapLayerFeedback([
+      { layer: "assets", isPending: true, isError: false },
+      { layer: "barriers", isPending: false, isError: false },
+      { layer: "consequences", isPending: false, isError: false },
+    ], [], true, "flood-water", true)).toEqual({
+      isLoading: true, hasError: false, showSkeleton: true,
+    });
+    expect(mapLayerFeedback(requests, ["assets"], false, "all", false)).toEqual({
+      isLoading: false, hasError: false, showSkeleton: false,
+    });
   });
 
   it("finds a Segment by its Chainage range", () => {
