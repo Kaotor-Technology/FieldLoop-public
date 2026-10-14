@@ -9,7 +9,7 @@ export { GooglePubSubTransport, createGooglePubSubTransport } from "./google-pub
 export { GoogleServiceIdentityVerifier, type ServiceIdentityVerifier } from "./google-service-identity.js";
 export { SignalPublisher, MAX_SIGNAL_BYTES, type MessageTransport, type SignalPublisherConfig, type SignalPublishResult } from "./signal-publisher.js";
 export { createCloudRunFetch, type ServiceFetch } from "./cloud-run-fetch.js";
-export { appendAuditEventAtomically, type AtomicAuditEventInput, type AuditEventReceipt } from "./audit-writer.js";
+export { appendAuditEventAtomically, AuditCommitUnknownError, findCommittedAuditEvent, type AtomicAuditEventInput, type AuditEventLookup, type AuditEventReceipt } from "./audit-writer.js";
 export { appendAuditEvent, appendWorkerEvent, hashAuditSnapshot, insertWorkerEventOutbox, lockWorkerEventOutbox, workerEventOutboxRow, type AuditEventInput } from "./postgres-domain-events.js";
 export {
   GoogleModelArmorAdapter,

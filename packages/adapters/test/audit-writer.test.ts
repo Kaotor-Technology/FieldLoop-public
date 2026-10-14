@@ -65,7 +65,7 @@ describe("atomic audit writer", () => {
     expect(f.connect).not.toHaveBeenCalled();
   });
 
-  it("propagates an ambiguous commit error without retrying the mutation", async () => {
+  it("reports an unknown COMMIT outcome as a typed error, discards the connection and never retries", async () => {
     const f = fixture();
     const failure = new Error("synthetic commit connection failure");
     let mutations = 0;
@@ -74,12 +74,32 @@ describe("atomic audit writer", () => {
       if (sql === "COMMIT") throw failure;
       return { rows: sql.includes("append_audit_event") ? [appended] : [] };
     });
-    await expect(adapters.appendAuditEventAtomically(f.pool, input as adapters.AtomicAuditEventInput, async () => {
+    const error = await adapters.appendAuditEventAtomically(f.pool, input as adapters.AtomicAuditEventInput, async () => {
       mutations++;
-    })).rejects.toBe(failure);
+    }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(adapters.AuditCommitUnknownError);
+    expect((error as adapters.AuditCommitUnknownError).cause).toBe(failure);
+    expect((error as adapters.AuditCommitUnknownError).lookup).toEqual({
+      orgId: input.orgId, action: input.action, entity: input.entity, afterHash: input.afterHash,
+    });
     expect(mutations).toBe(1);
     expect(f.connect).toHaveBeenCalledOnce();
     expect(f.calls.filter((call) => call.sql === "COMMIT")).toHaveLength(1);
+    expect(f.calls.some((call) => call.sql === "ROLLBACK")).toBe(false);
+    expect(f.release).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  it("rethrows a server verdict on COMMIT unchanged after rolling back", async () => {
+    const f = fixture();
+    const failure = Object.assign(new Error("deferred constraint failed"), { code: "23505" });
+    f.query.mockImplementation(async (sql, values) => {
+      f.calls.push({ sql, values });
+      if (sql === "COMMIT") throw failure;
+      return { rows: sql.includes("append_audit_event") ? [appended] : [] };
+    });
+    await expect(writer()(f.pool, input)).rejects.toBe(failure);
+    expect(f.calls.at(-1)?.sql).toBe("ROLLBACK");
+    expect(f.release).toHaveBeenCalledExactlyOnceWith();
   });
 
   it("pairs a domain mutation with the shared append on the same transaction client, audit last", async () => {
@@ -176,3 +196,35 @@ describe("atomic audit writer", () => {
     expect(f.calls.at(-1)?.sql).toBe("ROLLBACK");
   });
 });
+
+describe("findCommittedAuditEvent", () => {
+  const lookup = { orgId: "org-test", action: "barrier.health_changed", entity: "barrier:synthetic-1", afterHash: "a".repeat(64) };
+  function pool(rows: unknown[]) {
+    const query = vi.fn(async () => ({ rows }));
+    return { pool: { query } as unknown as Pool, query };
+  }
+
+  it("returns the committed receipt and queries by identity inside a database-clock window", async () => {
+    const p = pool([appended]);
+    await expect(adapters.findCommittedAuditEvent(p.pool, lookup, 300)).resolves.toEqual(receipt);
+    const [sql, values] = p.query.mock.calls[0] as unknown as [string, unknown[]];
+    expect(sql).toContain("app.audit_event_hash(e)");
+    expect(sql).toContain("clock_timestamp() - make_interval(secs => $5)");
+    expect(values).toEqual(["org-test", "barrier.health_changed", "barrier:synthetic-1", "a".repeat(64), 300]);
+  });
+
+  it("returns null when nothing matches", async () => {
+    await expect(adapters.findCommittedAuditEvent(pool([]).pool, lookup, 60)).resolves.toBeNull();
+  });
+
+  it("refuses an ambiguous match instead of guessing", async () => {
+    await expect(adapters.findCommittedAuditEvent(pool([appended, appended]).pool, lookup, 60)).rejects.toThrow("ambiguous");
+  });
+
+  it.each([0, 3601, 1.5, Number.NaN])("rejects reconciliation window %s before querying", async (window) => {
+    const p = pool([]);
+    await expect(adapters.findCommittedAuditEvent(p.pool, lookup, window)).rejects.toThrow("Invalid reconciliation window");
+    expect(p.query).not.toHaveBeenCalled();
+  });
+});
+

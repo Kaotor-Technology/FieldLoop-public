@@ -87,7 +87,7 @@ try {
     await pool.query(shared.split('-- migrate:down')[0].split('-- The simulation reset appends')[0]);
   }
   // Import the public production export, not a copy, after fixture setup.
-  const { appendAuditEventAtomically } = await import('../packages/adapters/dist/index.js');
+  const { appendAuditEventAtomically, findCommittedAuditEvent } = await import('../packages/adapters/dist/index.js');
   await pool.query("CREATE TABLE app.synthetic_audit_domain (id text PRIMARY KEY, org_id text NOT NULL, simulated boolean NOT NULL, classification text NOT NULL, value integer NOT NULL); INSERT INTO app.synthetic_audit_domain VALUES ('synthetic-1','synthetic-atomic-org',true,'INTERNAL',0)");
   const input = { orgId: 'synthetic-atomic-org', actor: 'synthetic-user', action: 'synthetic.updated', entity: 'synthetic:1', beforeHash: null, afterHash: 'a'.repeat(64), simulated: true, classification: 'INTERNAL' };
   const mutate = async (transaction) => {
@@ -143,6 +143,16 @@ try {
   } finally { auditClient.release(); }
   await state(18, 18);
   console.log('PASS 32 concurrent audit-only appends form one chain without domain-row locks');
+  // Reconciliation after an unknown COMMIT: the committed row is found by identity, absence is null, repeats are ambiguous.
+  const reconcileInput = { ...input, orgId: 'synthetic-reconcile-org', action: 'synthetic.reconcile' };
+  const lookup = { orgId: reconcileInput.orgId, action: reconcileInput.action, entity: reconcileInput.entity, afterHash: reconcileInput.afterHash };
+  assert.equal(await findCommittedAuditEvent(pool, lookup, 60), null);
+  const reconciled = await appendAuditEventAtomically(pool, reconcileInput);
+  assert.deepEqual(await findCommittedAuditEvent(pool, lookup, 60), reconciled);
+  assert.equal(await findCommittedAuditEvent(pool, { ...lookup, action: 'synthetic.missing' }, 60), null);
+  await appendAuditEventAtomically(pool, reconcileInput);
+  await assert.rejects(findCommittedAuditEvent(pool, lookup, 60), /ambiguous/);
+  console.log('PASS reconciliation finds a committed event, reports absence and refuses repeats');
 } catch (error) {
   primaryError = error;
   fixtureFailed = true;
