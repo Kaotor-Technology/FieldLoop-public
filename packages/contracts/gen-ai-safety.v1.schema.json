@@ -399,6 +399,7 @@
                 "additionalProperties": false,
                 "required": [
                   "allowedTools",
+                  "allowedTargets",
                   "blockedTargets",
                   "onSystemOfRecordWrite",
                   "onUnknownTool",
@@ -415,6 +416,29 @@
                       "pattern": "^[a-z][a-z0-9_]*$"
                     },
                     "uniqueItems": true
+                  },
+                  "allowedTargets": {
+                    "description": "Per-AI-System target allowlist (PRD GR-4); values match the Action contract's ActionTarget.",
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "enum": [
+                        "fieldloop",
+                        "cmms",
+                        "integrity-database",
+                        "gis",
+                        "asset-register",
+                        "siem",
+                        "historian",
+                        "scada",
+                        "ot",
+                        "engineering-authority",
+                        "stakeholders",
+                        "regulator",
+                        "external-party"
+                      ]
+                    }
                   },
                   "blockedTargets": {
                     "type": "array",
