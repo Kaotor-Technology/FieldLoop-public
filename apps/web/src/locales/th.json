@@ -165,5 +165,9 @@
     "INTERNAL": "ใช้ภายใน",
     "CONFIDENTIAL": "ลับ",
     "HIGHLY_RESTRICTED": "จำกัดสิทธิ์สูงสุด"
-  }
+  },
+  "searchOptions": "ค้นหาตัวเลือก",
+  "noMatchingOptions": "ไม่มีตัวเลือกที่ตรงกัน",
+  "scrollOptionsUp": "เลื่อนตัวเลือกขึ้น",
+  "scrollOptionsDown": "เลื่อนตัวเลือกลง"
 }

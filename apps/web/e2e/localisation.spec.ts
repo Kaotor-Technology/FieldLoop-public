@@ -55,6 +55,22 @@ test("language survives reload and account switching without sharing one user's 
   await expect(page.locator("html")).toHaveAttribute("lang", "th");
 });
 
+test("searchable Scenario selection exposes Thai popup labels and an empty result", async ({ page }) => {
+  await page.route("**/api/v1/scenarios", async (route) => {
+    await route.fulfill({ json: Array.from({ length: 11 }, (_, index) => ({ id: `synthetic-scenario-${index}`, name: `SYNTHETIC Scenario ${index}` })) });
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "ภาษาไทย", exact: true }).click();
+  await page.getByLabel("สถานการณ์จำลอง", { exact: true }).click();
+  const search = page.getByRole("combobox", { name: "ค้นหาตัวเลือก", exact: true });
+  await expect(search).toBeFocused();
+  await expect(page.locator(".fl-select-menu")).toHaveAttribute("lang", "th");
+  await search.fill("ไม่พบ");
+  await expect(page.locator(".fl-select-menu").getByRole("status")).toContainText("ไม่มีตัวเลือกที่ตรงกัน");
+  await page.keyboard.press("Escape");
+  await expect(page.getByLabel("สถานการณ์จำลอง", { exact: true })).toBeFocused();
+});
+
 for (const colorScheme of ["light", "dark"] as const) for (const width of [390, 1280]) {
   test(`Thai demo accessibility and typography: ${colorScheme}, ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });

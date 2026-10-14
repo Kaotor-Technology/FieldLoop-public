@@ -165,5 +165,9 @@
     "INTERNAL": "Internal",
     "CONFIDENTIAL": "Confidential",
     "HIGHLY_RESTRICTED": "Highly restricted"
-  }
+  },
+  "searchOptions": "Search options",
+  "noMatchingOptions": "No matching options",
+  "scrollOptionsUp": "Scroll options up",
+  "scrollOptionsDown": "Scroll options down"
 }
