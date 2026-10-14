@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { decideGeoReference, geoReferenceDraftsQueryKey, getGeoReferenceDrafts, type GeoReference } from "./geo-references";
+import { monoNumericText } from "./mono-numeric-text";
 import { useCurrentSession } from "./SessionGate";
 
 interface TargetAsset {
@@ -66,11 +67,11 @@ export function GeoReferenceReview({ targetAssets }: { targetAssets: TargetAsset
         const coordinates = reference.geometry?.type === "Point" ? reference.geometry.coordinates : null;
         return <li className="geo-reference-row" key={reference.id}>
           <div className="geo-reference-row-heading">
-            <strong>{reference.proposedLabel ?? reference.documentTitle}</strong>
+            <strong>{monoNumericText(reference.proposedLabel ?? reference.documentTitle)}</strong>
             {reference.simulated && <span className="health-proposal-simulation" lang="en">SIMULATION</span>}
           </div>
           <p className="geo-reference-source">{t("geoReferenceReview.fromDocument", { title: reference.documentTitle })}</p>
-          <p className="geo-reference-snippet">“{reference.sourceSnippet}”</p>
+          <p className="geo-reference-snippet">“{monoNumericText(reference.sourceSnippet)}”</p>
           <dl className="geo-reference-metadata">
             <div><dt>{t("geoReferenceReview.type")}</dt><dd>{t(`geoReferenceReview.kinds.${reference.kind}`)}</dd></div>
             <div><dt>{t("geoReferenceReview.confidence")}</dt><dd className="mono">{new Intl.NumberFormat(i18n.language === "th" ? "th-TH" : "en-GB", { style: "percent", maximumFractionDigits: 0 }).format(reference.confidence)}</dd></div>
