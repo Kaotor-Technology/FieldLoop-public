@@ -379,7 +379,7 @@ export function GeoCommandMap() {
         </div>
         <div className="map-legend" aria-label={t("mapLegend")}>
           <div className="legend-group">
-            <h2>{t("barrierHealth")}</h2>
+            <h2>{t("barrierHealthLabel")}</h2>
             <span className="legend-health"><i className="health-failed" aria-hidden="true">{SYMBOLS.failed}</i>{t("failed")}</span>
             <span className="legend-health"><i className="health-degraded" aria-hidden="true">{SYMBOLS.degraded}</i>{t("degraded")}</span>
             <span className="legend-health"><i className="health-unverified" aria-hidden="true">{SYMBOLS.unverified}</i>{t("unverified")}</span>
@@ -518,7 +518,7 @@ function FeatureOverview({ feature }: { feature: MapFeature }) {
     {feature.properties.chainageFrom !== null && feature.properties.chainageFrom !== undefined && <div><dt>{t("chainage")}</dt><dd className="mono">{formatChainage(feature.properties.chainageFrom)}–{formatChainage(feature.properties.chainageTo ?? feature.properties.chainageFrom)} m</dd></div>}
     <div><dt>{t("classification")}</dt><dd>{feature.properties.classification ?? t("unknown")}</dd></div>
     {typeof feature.properties.simulated === "boolean" && <div><dt>{t("provenance")}</dt><dd>{feature.properties.simulated ? t("simulationLabel") : feature.properties.label ?? t("publicBaseMap")}</dd></div>}
-    {health && <div><dt>{t("barrierHealth")}</dt><dd><HealthBadge health={health} /></dd></div>}
+    {health && <div><dt>{t("barrierHealthLabel")}</dt><dd><HealthBadge health={health} /></dd></div>}
     {feature.properties.riskBand && <div><dt>{t("riskBand")}</dt><dd>{feature.properties.riskBand}</dd></div>}
     {feature.properties.evidenceObservedAt && <div><dt>{t("latestEvidence")}</dt><dd><time className="mono" dateTime={feature.properties.evidenceObservedAt}>{new Date(feature.properties.evidenceObservedAt).toLocaleDateString(i18n.language === "th" ? "th-TH" : "en-GB", { timeZone: "Asia/Bangkok" })}</time></dd></div>}
   </dl>;

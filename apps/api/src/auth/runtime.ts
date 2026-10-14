@@ -9,6 +9,8 @@ import { PostgresHealthStore } from "../health/postgres-store.js";
 import type { HealthServicePort } from "../health/model.js";
 import type { Kysely } from "kysely";
 import { PostgresMapLayerStore, UnavailableMapLayerStore, type MapLayerStore } from "../map/layers.js";
+import { PostgresRiskService } from "../risk/service.js";
+import { createRiskDatabase } from "../risk/database.js";
 
 export class UnavailableAuthService implements AuthServicePort {
   async startLogin(): Promise<URL> { return this.unavailable(); }
@@ -31,6 +33,7 @@ export async function createProductionAuthRuntime(): Promise<{
   health?: HealthServicePort;
   close: () => Promise<void>;
   registerPacks?: (packs: LoadedDomainPack[]) => Promise<void>;
+  risk?: PostgresRiskService;
 }> {
   const baseUrl = process.env["FIELDLOOP_BASE_URL"];
   const defaultOrgId = process.env["FIELDLOOP_DEFAULT_ORG_ID"];
@@ -58,6 +61,7 @@ export async function createProductionAuthRuntime(): Promise<{
   const runtime = {
     mapLayers: new PostgresMapLayerStore(database.db),
     health: new PostgresHealthStore(database.db as unknown as Kysely<Record<string, never>>),
+    risk: new PostgresRiskService(createRiskDatabase(database.pool)),
     close: async () => {
       if ("close" in database && typeof database.close === "function") await database.close();
       else await database.db.destroy();
