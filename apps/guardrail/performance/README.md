@@ -1,7 +1,11 @@
 # Guardrail Tier 1 latency probe
 
-This k6 probe measures the end-to-end latency of `POST /guardrail/v1/content:scan`
-and fails when p95 reaches 50 ms. It also checks that requests succeed and return
+This k6 probe measures `POST /guardrail/v1/content:scan` and fails when the
+latency Guardrail adds around the managed Tier 1 detector reaches 50 ms at p95
+(PRD GR-8, ADR-0005 amendment). Added latency is the request duration minus the
+`detector` stage from the `Server-Timing` header; the detector duration
+(Model Armor + SDP) is reported as `tier1_detector_latency` and the full request
+as `http_req_duration`, without thresholds. It also checks that requests succeed and return
 the same benign synthetic content. Each iteration uses a new idempotency key and
 creates normal Intercept and Evidence records.
 
@@ -40,3 +44,16 @@ The default run sends 100 requests with one virtual user. Set `K6_VUS` and
 Cloud Run ingress, Cloud SQL persistence, Model Armor and client network time; it
 is not an isolated in-process detector benchmark. No live latency result is
 claimed until the probe runs against a deployed service.
+
+## In-VPC Cloud Run Job
+
+Guardrail is internal-only, so the measured run uses a one-off Cloud Run Job in
+the `fieldloop-v2-dev` subnet. Build `apps/guardrail/performance/Dockerfile` from
+committed files (for example Cloud Build on a `git archive` of the commit, so no
+ignored local files are uploaded), then create the job with the `web-api-dev`
+service account, `--network fieldloop-v2 --subnet fieldloop-v2-dev
+--vpc-egress private-ranges-only`, and `GUARDRAIL_URL`, `FIELDLOOP_BASE_URL`,
+`FIELDLOOP_DEFAULT_ORG_ID`, `GOOGLE_CLOUD_PROJECT` and `GUARDRAIL_AI_SYSTEM`.
+`run-in-vpc.mjs` signs the five-minute synthetic user token with the web-api
+signer and reads the identity token from the metadata server; neither token is
+printed or stored.
