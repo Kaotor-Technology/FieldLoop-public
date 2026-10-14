@@ -1,7 +1,7 @@
 import { GoogleModelArmorAdapter, GoogleVertexChatCompletionsAdapter, createGoogleCloudSqlPool } from "@fieldloop/adapters";
 import { Kysely, PostgresDialect } from "kysely";
 import { buildApp } from "./app.js";
-import { RemoteInternalUserTokenVerifier } from "./internal-user-token.js";
+import { LocalJwksInternalUserTokenVerifier } from "./internal-user-token.js";
 import { PostgresGuardrailStore } from "./postgres-store.js";
 import { loadGuardrailPolicies } from "./policies.js";
 
@@ -38,8 +38,8 @@ const model = new GoogleVertexChatCompletionsAdapter({
   location,
   timeoutMs: readPositiveIntegerEnv("FIELDLOOP_VERTEX_TIMEOUT_MS", "60000", 300_000),
 });
-const userTokenVerifier = new RemoteInternalUserTokenVerifier({
-  jwksUrl: requiredEnv("FIELDLOOP_INTERNAL_JWKS_URL"),
+const userTokenVerifier = new LocalJwksInternalUserTokenVerifier({
+  jwks: requiredEnv("FIELDLOOP_INTERNAL_JWKS"),
   issuer: requiredEnv("FIELDLOOP_INTERNAL_TOKEN_ISSUER"),
   audience: process.env["FIELDLOOP_INTERNAL_TOKEN_AUDIENCE"] ?? "fieldloop-services",
 });

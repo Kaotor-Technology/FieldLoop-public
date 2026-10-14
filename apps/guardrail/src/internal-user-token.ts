@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from "jose";
+import { createLocalJWKSet, errors as joseErrors, jwtVerify, type JSONWebKeySet } from "jose";
 import type { GuardrailClassification } from "@fieldloop/adapters";
 
 const allowedRoles = new Set(["fieldloop.viewer", "fieldloop.operator", "fieldloop.manager"]);
@@ -28,16 +28,13 @@ export class InternalUserTokenVerifierUnavailableError extends Error {
   }
 }
 
-export class RemoteInternalUserTokenVerifier implements InternalUserTokenVerifier {
-  private readonly jwks: ReturnType<typeof createRemoteJWKSet>;
+// The public key set is configuration, so verification needs no call to web-api (which stays private).
+export class LocalJwksInternalUserTokenVerifier implements InternalUserTokenVerifier {
+  private readonly jwks: ReturnType<typeof createLocalJWKSet>;
 
-  constructor(private readonly options: { jwksUrl: string; issuer: string; audience: string }) {
-    const jwksUrl = new URL(options.jwksUrl);
-    if (jwksUrl.protocol !== "https:" && !(jwksUrl.protocol === "http:" && isLoopback(jwksUrl.hostname))) {
-      throw new Error("Internal token JWKS URL must use HTTPS");
-    }
+  constructor(private readonly options: { jwks: string; issuer: string; audience: string }) {
     if (!options.issuer || !options.audience) throw new Error("Internal token issuer and audience are required");
-    this.jwks = createRemoteJWKSet(jwksUrl, { timeoutDuration: 3_000, cooldownDuration: 30_000, cacheMaxAge: 300_000 });
+    this.jwks = createLocalJWKSet(parsePublicKeySet(options.jwks));
   }
 
   async verify(token: string): Promise<InternalUserIdentity> {
@@ -52,9 +49,6 @@ export class RemoteInternalUserTokenVerifier implements InternalUserTokenVerifie
       });
       payload = result.payload;
     } catch (error) {
-      if (error instanceof joseErrors.JWKSTimeout || error instanceof joseErrors.JWKSInvalid) {
-        throw new InternalUserTokenVerifierUnavailableError();
-      }
       if (error instanceof joseErrors.JOSEError) throw new InvalidInternalUserTokenError();
       throw new InternalUserTokenVerifierUnavailableError();
     }
@@ -74,10 +68,26 @@ export class RemoteInternalUserTokenVerifier implements InternalUserTokenVerifie
   }
 }
 
-function isClassification(value: unknown): value is GuardrailClassification {
-  return value === "PUBLIC" || value === "INTERNAL" || value === "CONFIDENTIAL" || value === "HIGHLY_RESTRICTED";
+function parsePublicKeySet(value: string): JSONWebKeySet {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    throw new Error("Internal token JWKS must be a JSON key set");
+  }
+  const keys = typeof parsed === "object" && parsed !== null ? (parsed as { keys?: unknown }).keys : undefined;
+  if (!Array.isArray(keys) || keys.length === 0 || !keys.every(isRsaPublicKey)) {
+    throw new Error("Internal token JWKS must contain RSA public keys only");
+  }
+  return { keys };
 }
 
-function isLoopback(hostname: string): boolean {
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+function isRsaPublicKey(key: unknown): key is JSONWebKeySet["keys"][number] {
+  if (typeof key !== "object" || key === null) return false;
+  const jwk = key as Record<string, unknown>;
+  return jwk["kty"] === "RSA" && typeof jwk["n"] === "string" && typeof jwk["e"] === "string" && !("d" in jwk);
+}
+
+function isClassification(value: unknown): value is GuardrailClassification {
+  return value === "PUBLIC" || value === "INTERNAL" || value === "CONFIDENTIAL" || value === "HIGHLY_RESTRICTED";
 }

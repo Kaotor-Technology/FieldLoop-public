@@ -1,35 +1,23 @@
-import { createServer, type Server } from "node:http";
 import { generateKeyPairSync } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { exportJWK, SignJWT } from "jose";
-import { InvalidInternalUserTokenError, RemoteInternalUserTokenVerifier } from "../src/internal-user-token.js";
+import { InvalidInternalUserTokenError, LocalJwksInternalUserTokenVerifier } from "../src/internal-user-token.js";
 
 const issuer = "https://fieldloop.test";
 const audience = "fieldloop-services";
 const keyId = "guardrail-test-key";
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048, publicExponent: 0x10001 });
-const server: Server = createServer(async (request, response) => {
-  if (request.url !== "/jwks") {
-    response.writeHead(404).end();
-    return;
-  }
-  const jwk = await exportJWK(publicKey);
-  response.writeHead(200, { "content-type": "application/json", "cache-control": "public, max-age=300" });
-  response.end(JSON.stringify({ keys: [{ ...jwk, kid: keyId, use: "sig", alg: "RS256" }] }));
-});
 
-let verifier: RemoteInternalUserTokenVerifier;
-let jwksUrl = "";
+let jwks = "";
+let verifier: LocalJwksInternalUserTokenVerifier;
 
 beforeAll(async () => {
-  const port = await listen(server);
-  jwksUrl = `http://127.0.0.1:${port}/jwks`;
-  verifier = new RemoteInternalUserTokenVerifier({ jwksUrl, issuer, audience });
+  const jwk = await exportJWK(publicKey);
+  jwks = JSON.stringify({ keys: [{ ...jwk, kid: keyId, use: "sig", alg: "RS256" }] });
+  verifier = new LocalJwksInternalUserTokenVerifier({ jwks, issuer, audience });
 });
 
-afterAll(async () => close(server));
-
-describe("RemoteInternalUserTokenVerifier", () => {
+describe("LocalJwksInternalUserTokenVerifier", () => {
   it("verifies the RS256 signature, issuer, audience, five-minute age and identity claims", async () => {
     const token = await signToken();
 
@@ -53,9 +41,22 @@ describe("RemoteInternalUserTokenVerifier", () => {
     await expect(verifier.verify(invalidRole)).rejects.toBeInstanceOf(InvalidInternalUserTokenError);
   });
 
-  it("requires HTTPS for a non-loopback JWKS URL", () => {
-    expect(() => new RemoteInternalUserTokenVerifier({ jwksUrl: "http://example.test/jwks", issuer, audience }))
-      .toThrow("Internal token JWKS URL must use HTTPS");
+  it("rejects a token signed by a key that is not in the configured JWKS", async () => {
+    const other = generateKeyPairSync("rsa", { modulusLength: 2048, publicExponent: 0x10001 });
+    const foreign = await signToken({ key: other.privateKey });
+
+    await expect(verifier.verify(foreign)).rejects.toBeInstanceOf(InvalidInternalUserTokenError);
+  });
+
+  it("refuses a malformed, empty or private-key JWKS at construction", async () => {
+    const privateJwk = await exportJWK(privateKey);
+
+    expect(() => new LocalJwksInternalUserTokenVerifier({ jwks: "not json", issuer, audience }))
+      .toThrow("Internal token JWKS must be a JSON key set");
+    expect(() => new LocalJwksInternalUserTokenVerifier({ jwks: JSON.stringify({ keys: [] }), issuer, audience }))
+      .toThrow("Internal token JWKS must contain RSA public keys only");
+    expect(() => new LocalJwksInternalUserTokenVerifier({ jwks: JSON.stringify({ keys: [{ ...privateJwk, kid: keyId }] }), issuer, audience }))
+      .toThrow("Internal token JWKS must contain RSA public keys only");
   });
 });
 
@@ -65,6 +66,7 @@ async function signToken(options: {
   issuedAt?: number;
   roles?: string[];
   sub?: string;
+  key?: typeof privateKey;
 } = {}): Promise<string> {
   const issuedAt = options.issuedAt ?? Math.floor(Date.now() / 1000);
   return new SignJWT({ roles: options.roles ?? ["fieldloop.viewer"], clearance: "INTERNAL", org_id: "fieldloop-demo" })
@@ -75,25 +77,5 @@ async function signToken(options: {
     .setJti("synthetic-test-token")
     .setIssuedAt(issuedAt)
     .setExpirationTime(issuedAt + 300)
-    .sign(privateKey);
-}
-
-function listen(target: Server): Promise<number> {
-  return new Promise((resolve, reject) => {
-    target.once("error", reject);
-    target.listen(0, "127.0.0.1", () => {
-      const address = target.address();
-      if (!address || typeof address === "string") {
-        reject(new Error("Test JWKS server has no TCP address"));
-        return;
-      }
-      resolve(address.port);
-    });
-  });
-}
-
-function close(target: Server): Promise<void> {
-  return new Promise((resolve, reject) => {
-    target.close((error) => error ? reject(error) : resolve());
-  });
+    .sign(options.key ?? privateKey);
 }
