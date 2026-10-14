@@ -33,6 +33,18 @@ interface ContentScanInput {
   idempotencyKey: string;
 }
 
+/** Stages of a content scan, in order; each duration is reported in Server-Timing (ms, 0.1 precision). */
+export const CONTENT_SCAN_STAGES = ["load", "idempotency", "detector", "persist"] as const;
+export type ContentScanStage = (typeof CONTENT_SCAN_STAGES)[number];
+export type ContentScanTimings = Partial<Record<ContentScanStage, number>>;
+
+export interface ContentScanOutcome {
+  result: GuardrailHttpResult;
+  timings: ContentScanTimings;
+}
+
+type TimedContentScanInput = ContentScanInput & { timings: ContentScanTimings };
+
 export class GuardrailEngine {
   constructor(private readonly dependencies: GuardrailDependencies) {}
 
@@ -41,8 +53,19 @@ export class GuardrailEngine {
     return unavailable(message);
   }
 
-  async scanContent(input: ContentScanInput): Promise<GuardrailHttpResult> {
+  async scanContent(input: ContentScanInput): Promise<ContentScanOutcome> {
+    const timings: ContentScanTimings = {};
+    const result = await this.scanContentStages({ ...input, timings });
+    return { result, timings };
+  }
+
+  // Content reaches the detector only after the AI System loads, the request is not a replay
+  // and the request classification is within the caller's clearance.
+  private async scanContentStages(input: TimedContentScanInput): Promise<GuardrailHttpResult> {
+    const { timings } = input;
+    const loadStartedAt = performance.now();
     const loaded = await this.load(input.aiSystem);
+    timings.load = elapsedMs(loadStartedAt, 1);
     if ("result" in loaded) return loaded.result;
     const { system } = loaded;
     const injection = findPolicy(system, "injection");
@@ -52,8 +75,10 @@ export class GuardrailEngine {
     const idempotencyKeyHash = sha256(input.idempotencyKey);
     const requestHash = sha256(JSON.stringify([system.id, input.classification, input.content]));
     let previous: StoredContentScan | null;
+    const idempotencyStartedAt = performance.now();
     try { previous = await this.dependencies.store.getContentScan(system.orgId, idempotencyKeyHash); }
     catch (error) { return this.unavailable(error, "Content scan idempotency record is unavailable"); }
+    finally { timings.idempotency = elapsedMs(idempotencyStartedAt, 1); }
     if (previous) {
       if (previous.requestHash !== requestHash) return idempotencyConflict();
       if (classificationRank(previous.classification) > classificationRank(input.clearance)) {
@@ -74,6 +99,7 @@ export class GuardrailEngine {
     try {
       scan = await this.dependencies.scanner.scanUserPrompt(input.content);
     } catch (error) {
+      timings.detector = elapsedMs(startedAt, 1);
       this.dependencies.logError?.(error, "Tier 1 detector unavailable");
       return await this.persistContentScan(system, input, idempotencyKeyHash, requestHash, [{
         system, policy: injection, decision: "block", reason: "Tier 1 detector unavailable",
@@ -83,6 +109,7 @@ export class GuardrailEngine {
         reason: "Tier 1 detector unavailable", policyId: injection.id,
       }, 0);
     }
+    timings.detector = elapsedMs(startedAt, 1);
 
     const classification = raiseClassification(input.classification, scan.classification);
     const detectedInjection = scan.action === "block";
@@ -312,13 +339,14 @@ export class GuardrailEngine {
 
   private async persistContentScan(
     system: GuardrailSystem,
-    input: ContentScanInput,
+    input: TimedContentScanInput,
     idempotencyKeyHash: string,
     requestHash: string,
     records: RecordInterceptInput[],
     result: RecordContentScanInput["result"],
     primaryRecordIndex: number,
   ): Promise<GuardrailHttpResult> {
+    const persistStartedAt = performance.now();
     try {
       const stored = await this.dependencies.store.recordContentScan({
         system, idempotencyKeyHash, requestHash, records, result, primaryRecordIndex,
@@ -327,6 +355,8 @@ export class GuardrailEngine {
     } catch (error) {
       if (error instanceof IdempotencyKeyReusedError) return idempotencyConflict();
       return this.unavailable(error, "Content scan and Evidence could not be recorded");
+    } finally {
+      input.timings.persist = elapsedMs(persistStartedAt, 1);
     }
   }
 
@@ -503,8 +533,10 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
-function elapsedMs(startedAt: number): number {
-  return Math.max(0, Math.min(2_147_483_647, Math.round(performance.now() - startedAt)));
+/** Milliseconds since startedAt, rounded to `decimals` places and clamped to the Intercept latency column range. */
+function elapsedMs(startedAt: number, decimals = 0): number {
+  const scale = 10 ** decimals;
+  return Math.max(0, Math.min(2_147_483_647, Math.round((performance.now() - startedAt) * scale) / scale));
 }
 
 function sha256(value: string): string {

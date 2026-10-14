@@ -2,6 +2,12 @@
 
 import { check } from "k6";
 import http from "k6/http";
+import { Trend } from "k6/metrics";
+
+// GR-8: the 50 ms budget is the latency Guardrail adds around the managed detector (Model Armor + SDP).
+// The detector duration comes from the Server-Timing header and is reported, not targeted.
+const guardrailAdded = new Trend("guardrail_added_latency", true);
+const tier1Detector = new Trend("tier1_detector_latency", true);
 
 const guardrailUrl = requiredEnv("GUARDRAIL_URL").replace(/\/$/, "");
 const identityToken = requiredEnv("GUARDRAIL_ID_TOKEN");
@@ -14,7 +20,7 @@ export const options = {
   vus,
   iterations,
   thresholds: {
-    http_req_duration: ["p(95)<50"],
+    guardrail_added_latency: ["p(95)<50"],
     http_req_failed: ["rate<0.01"],
     checks: ["rate>0.99"],
   },
@@ -42,8 +48,15 @@ export default function () {
     console.warn(`content:scan returned ${response.status}: ${String(response.body).slice(0, 500)}`);
   }
 
+  const detectorMs = serverTimingDuration(response.headers["Server-Timing"], "detector");
+  if (response.status === 200 && detectorMs !== null) {
+    tier1Detector.add(detectorMs);
+    guardrailAdded.add(Math.max(0, response.timings.duration - detectorMs));
+  }
+
   check(response, {
     "content scan returns 200": (result) => result.status === 200,
+    "content scan reports the detector duration": () => detectorMs !== null,
     "content scan returns the supplied content": (result) => {
       try {
         return result.json("content") === content;
@@ -52,6 +65,13 @@ export default function () {
       }
     },
   });
+}
+
+function serverTimingDuration(header, stage) {
+  if (typeof header !== "string") return null;
+  const match = header.split(",").map((part) => part.trim()).find((part) => part.startsWith(`${stage};`));
+  const duration = match ? Number(/dur=([0-9.]+)/.exec(match)?.[1]) : NaN;
+  return Number.isFinite(duration) ? duration : null;
 }
 
 function requiredEnv(name) {
