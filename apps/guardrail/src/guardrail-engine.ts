@@ -36,6 +36,11 @@ interface ContentScanInput {
 export class GuardrailEngine {
   constructor(private readonly dependencies: GuardrailDependencies) {}
 
+  private unavailable(error: unknown, message: string): GuardrailHttpResult {
+    this.dependencies.logError?.(error, message);
+    return unavailable(message);
+  }
+
   async scanContent(input: ContentScanInput): Promise<GuardrailHttpResult> {
     const loaded = await this.load(input.aiSystem);
     if ("result" in loaded) return loaded.result;
@@ -48,7 +53,7 @@ export class GuardrailEngine {
     const requestHash = sha256(JSON.stringify([system.id, input.classification, input.content]));
     let previous: StoredContentScan | null;
     try { previous = await this.dependencies.store.getContentScan(system.orgId, idempotencyKeyHash); }
-    catch { return unavailable("Content scan idempotency record is unavailable"); }
+    catch (error) { return this.unavailable(error, "Content scan idempotency record is unavailable"); }
     if (previous) {
       if (previous.requestHash !== requestHash) return idempotencyConflict();
       if (classificationRank(previous.classification) > classificationRank(input.clearance)) {
@@ -68,7 +73,8 @@ export class GuardrailEngine {
     let scan: Tier1ScanResult;
     try {
       scan = await this.dependencies.scanner.scanUserPrompt(input.content);
-    } catch {
+    } catch (error) {
+      this.dependencies.logError?.(error, "Tier 1 detector unavailable");
       return await this.persistContentScan(system, input, idempotencyKeyHash, requestHash, [{
         system, policy: injection, decision: "block", reason: "Tier 1 detector unavailable",
         classification: input.classification, latencyMs: elapsedMs(startedAt),
@@ -158,7 +164,8 @@ export class GuardrailEngine {
       let scan: Tier1ScanResult;
       try {
         scan = await this.dependencies.scanner.scanUserPrompt(joined.text);
-      } catch {
+      } catch (error) {
+        this.dependencies.logError?.(error, "Tier 1 detector unavailable");
         return await this.failClosed(system, injection, "Tier 1 detector unavailable", effectiveClassification, startedAt);
       }
       effectiveClassification = raiseClassification(effectiveClassification, scan.classification);
@@ -205,7 +212,8 @@ export class GuardrailEngine {
       delete modelRequest["model"];
       delete modelRequest["stream"];
       completion = await this.dependencies.model.complete(route.model, modelRequest);
-    } catch {
+    } catch (error) {
+      this.dependencies.logError?.(error, "Model service unavailable");
       return await this.failClosed(system, routing, "Model service unavailable", effectiveClassification, startedAt);
     }
 
@@ -225,7 +233,8 @@ export class GuardrailEngine {
     let outputScan: Tier1ScanResult;
     try {
       outputScan = await this.dependencies.scanner.scanModelResponse(joinedOutput.text, prompt);
-    } catch {
+    } catch (error) {
+      this.dependencies.logError?.(error, "Tier 1 output detector unavailable");
       return await this.failClosed(system, outputDlp, "Tier 1 output detector unavailable", effectiveClassification, startedAt);
     }
     const outputClassification = raiseClassification(effectiveClassification, outputScan.classification);
@@ -261,7 +270,7 @@ export class GuardrailEngine {
       return { system: await this.dependencies.store.loadSystem(code, this.dependencies.orgId, this.dependencies.simulated) };
     } catch (error) {
       if (error instanceof UnknownGuardrailSystemError) return { result: { statusCode: 404, body: errorBody("not_found", "AI System is not registered", 404, "unknown_ai_system") } };
-      return { result: unavailable("AI System policy configuration is unavailable") };
+      return { result: this.unavailable(error, "AI System policy configuration is unavailable") };
     }
   }
 
@@ -278,8 +287,8 @@ export class GuardrailEngine {
         system, policy, decision, reason, classification, latencyMs: elapsedMs(startedAt),
       });
       return { id };
-    } catch {
-      return { result: unavailable("Guardrail decision could not be recorded") };
+    } catch (error) {
+      return { result: this.unavailable(error, "Guardrail decision could not be recorded") };
     }
   }
 
@@ -317,7 +326,7 @@ export class GuardrailEngine {
       return contentScanResult(stored, input.content);
     } catch (error) {
       if (error instanceof IdempotencyKeyReusedError) return idempotencyConflict();
-      return unavailable("Content scan and Evidence could not be recorded");
+      return this.unavailable(error, "Content scan and Evidence could not be recorded");
     }
   }
 

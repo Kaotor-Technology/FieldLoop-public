@@ -83,6 +83,8 @@ export interface GuardrailDependencies {
   orgId: string;
   simulated: boolean;
   vertexModels: Readonly<Record<"flash" | "pro", string>>;
+  /** Receives errors that are answered with a generic fail-closed response, so operators can see the cause. */
+  logError?: (error: unknown, message: string) => void;
 }
 
 export interface ChatCompletionRequest {

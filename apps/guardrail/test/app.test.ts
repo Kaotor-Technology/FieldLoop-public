@@ -310,6 +310,20 @@ describe("Guardrail gateway", () => {
     expect(dependencies.model.complete).not.toHaveBeenCalled();
   });
 
+  it("logs the cause when a content scan cannot be recorded but keeps the response generic", async () => {
+    const logError = vi.fn();
+    const dependencies = { ...createDependencies({ recordFailure: true }), logError };
+    const app = createApp(dependencies);
+    const response = await app.inject({
+      method: "POST", url: "/guardrail/v1/content:scan", headers: { "idempotency-key": "fieldloop-test-record-failure-key" },
+      payload: { aiSystem: "demo-uc-1", content: "SYNTHETIC routine document" },
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.body).not.toContain("database unavailable");
+    expect(logError).toHaveBeenCalledWith(expect.objectContaining({ message: "database unavailable" }), "Content scan and Evidence could not be recorded");
+  });
+
   it("blocks when no configured private route allows the detected class", async () => {
     const dependencies = createDependencies({ allowedClasses: ["PUBLIC"] });
     const app = createApp(dependencies);

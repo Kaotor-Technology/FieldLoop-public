@@ -15,7 +15,10 @@ declare module "fastify" {
 
 export function buildApp(dependencies: GuardrailDependencies) {
   const app = Fastify({ logger: true, bodyLimit: 1_048_576 });
-  const engine = new GuardrailEngine(dependencies);
+  const engine = new GuardrailEngine({
+    ...dependencies,
+    logError: dependencies.logError ?? ((error, message) => app.log.error({ err: error }, message)),
+  });
 
   app.setErrorHandler((error, _request, reply) => {
     const errorRecord = error !== null && typeof error === "object" ? error as Record<string, unknown> : null;
