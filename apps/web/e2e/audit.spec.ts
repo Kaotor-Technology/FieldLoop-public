@@ -49,6 +49,8 @@ test("an operator reads, filters and pages the audit log through the BFF", async
 });
 
 test("the audit log has no axe violations in light and night shift themes", async ({ page }) => {
+  // Buttons transition colours when the theme changes; axe must not sample a blended frame.
+  await page.emulateMedia({ reducedMotion: "reduce" });
   await signIn(page, "operator");
   await page.goto("/audit");
   await expect(page.getByRole("table", { name: "Audit events, newest first" })).toBeVisible();
