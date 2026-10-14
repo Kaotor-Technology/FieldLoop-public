@@ -196,6 +196,8 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 .health-unverified { color: var(--color-health-unverified); }
 .feature-list-section { margin-top: var(--spacing-space-6); }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-space-2); margin-bottom: var(--spacing-space-2); }
+.map-feature-skeletons { display: grid; gap: var(--spacing-space-3); margin-block: var(--spacing-space-3); }
+.map-feature-loading { margin-block: var(--spacing-space-2); color: var(--muted); font-size: var(--type-body-sm-font-size); }
 .feature-list { margin: 0; padding: 0; list-style: none; }
 .feature-list-item { display: flex; align-items: center; gap: var(--spacing-space-2); width: 100%; min-height: var(--spacing-touch-target); padding: var(--spacing-space-2); color: var(--ink); background: transparent; border: 0; border-top: var(--spacing-border-hairline) solid var(--outline); text-align: left; }
 .feature-list-item:hover { background: var(--color-primary-subtle); }
