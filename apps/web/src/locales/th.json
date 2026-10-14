@@ -151,6 +151,7 @@
   "preventiveBarriers": "Barrier เชิงป้องกัน",
   "mitigativeBarriers": "Barrier เชิงบรรเทา",
   "barrierTypeLabel": "ประเภท",
+  "pathMembership": "เส้นทาง",
   "technical": "ด้านเทคนิค",
   "organisational": "ด้านองค์กร",
   "human": "ด้านบุคคล",

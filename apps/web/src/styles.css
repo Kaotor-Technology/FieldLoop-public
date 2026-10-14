@@ -378,6 +378,7 @@ html[lang="th"] small:lang(th) { font-size: var(--type-body-sm-font-size); }
 .bowtie-barrier-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: var(--spacing-space-2); }
 .bowtie-barrier-heading strong { overflow-wrap: anywhere; }
 .bowtie-barrier-type { color: var(--muted); font-size: var(--type-body-sm-font-size); }
+.bowtie-path-membership { color: var(--muted); font-size: var(--type-body-sm-font-size); overflow-wrap: normal; }
 .bowtie-degradation { padding-top: var(--spacing-space-2); border-top: var(--spacing-border-hairline) solid var(--outline); }
 .bowtie-degradation h3, .bowtie-triad summary, .bowtie-groups h2, .bowtie-text-equivalent summary { font-size: var(--type-label-lg-font-size); }
 .bowtie-degradation ul, .bowtie-groups ul, .bowtie-text-equivalent ul { margin: var(--spacing-space-1) 0 0; padding-left: var(--spacing-space-5); }
