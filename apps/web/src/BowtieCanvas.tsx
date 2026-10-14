@@ -13,8 +13,14 @@ const TRIAD_DIMENSIONS: readonly TriadDimension[] = ["effective", "independent",
 
 export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
   const { t } = useTranslation();
-  const preventive = bowtie.barriers.filter((barrier) => barrier.side === "preventive");
-  const mitigative = bowtie.barriers.filter((barrier) => barrier.side === "mitigative");
+  const seenBarrierIds = new Set<string>();
+  const barriers = bowtie.barriers.filter((barrier) => {
+    if (seenBarrierIds.has(barrier.id)) return false;
+    seenBarrierIds.add(barrier.id);
+    return true;
+  });
+  const preventive = barriers.filter((barrier) => barrier.side === "preventive");
+  const mitigative = barriers.filter((barrier) => barrier.side === "mitigative");
 
   return <main id="main-content" className="bowtie-screen" tabIndex={-1} aria-labelledby="bowtie-title">
     <header className="bowtie-header">
@@ -85,8 +91,9 @@ export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
         <h3>{t("threats")}</h3>
         <ul>{bowtie.threats.map((threat) => <li key={threat.id}>{monoNumericText(threat.name)}</li>)}</ul>
         <h3>{t("barriers")}</h3>
-        <ul>{bowtie.barriers.map((barrier) => <li key={barrier.id}>
+        <ul>{barriers.map((barrier) => <li key={barrier.id}>
           <strong>{monoNumericText(barrier.name)}</strong> · {t("barrierTypeLabel")}: {t(barrier.type)} · {t(barrier.side)} · {t(barrier.health)}
+          {barrier.pathNames.length > 0 && <span className="bowtie-path-membership"> · {t("pathMembership")}: {monoNumericText(barrier.pathNames.join(", "))}</span>}
           {barrier.degradationFactors.length === 0
             ? <> · {t("noDegradationFactors")}</>
             : barrier.degradationFactors.map((factor) => <span key={factor.id}> · {t("degradationFactor")}: {monoNumericText(factor.description)}
@@ -116,6 +123,7 @@ function BarrierCard({ barrier }: { barrier: BowtieView["barriers"][number] }) {
       <HealthBadge health={barrier.health as BarrierHealth} label={t(barrier.health)} />
     </div>
     <p className="bowtie-barrier-type">{t("barrierTypeLabel")}: {t(barrier.type)}</p>
+    {barrier.pathNames.length > 0 && <p className="bowtie-path-membership">{t("pathMembership")}: {monoNumericText(barrier.pathNames.join(", "))}</p>}
     <section className="bowtie-degradation" aria-label={t("degradationFactors")}>
       <h3>{t("degradationFactors")}</h3>
       {barrier.degradationFactors.length === 0

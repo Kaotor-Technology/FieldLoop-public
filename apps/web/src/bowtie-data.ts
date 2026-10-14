@@ -22,6 +22,7 @@ export interface BowtieView {
     type: string;
     side: "preventive" | "mitigative";
     health: BarrierHealth;
+    pathNames: string[];
     degradationFactors: Array<{ id: string; description: string; controls: string[] }>;
     triad: Partial<Record<TriadDimension, { pass: boolean; justification?: string }>>;
   }>;
@@ -37,6 +38,7 @@ interface RawBowtieSeed {
   metadata?: { label?: string; simulated?: boolean; classification?: string };
   threats?: Array<{ id: string; name: string }>;
   consequences?: Array<{ id: string; name: string }>;
+  paths?: Array<{ side: string; targetId: string; barrierIds: string[] }>;
   barriers?: Array<{
     id: string;
     name: string;
@@ -146,6 +148,19 @@ export function getBowtie(id: string): BowtieView | undefined {
 }
 
 function toBowtieView(seed: RawBowtieSeed, code: BowtieCode, title: string): BowtieView {
+  const targetNames = new Map(
+    [...(seed.threats ?? []), ...(seed.consequences ?? [])].map(({ id, name }) => [id, name]),
+  );
+  const barrierPathNames = new Map<string, Set<string>>();
+  for (const path of seed.paths ?? []) {
+    const pathName = targetNames.get(path.targetId) ?? path.targetId;
+    for (const barrierId of path.barrierIds) {
+      const pathNames = barrierPathNames.get(barrierId) ?? new Set<string>();
+      pathNames.add(pathName);
+      barrierPathNames.set(barrierId, pathNames);
+    }
+  }
+
   return {
     id: seed.id,
     code,
@@ -163,6 +178,7 @@ function toBowtieView(seed: RawBowtieSeed, code: BowtieCode, title: string): Bow
       type: barrier.type,
       side: barrier.side === "mitigative" ? "mitigative" : "preventive",
       health: isBarrierHealth(barrier.health) ? barrier.health : "unverified",
+      pathNames: [...(barrierPathNames.get(barrier.id) ?? [])],
       degradationFactors: (barrier.degradationFactors ?? []).map((factor) => ({
         id: factor.id,
         description: factor.description,

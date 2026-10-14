@@ -30,6 +30,16 @@ describe("Bowtie viewer data", () => {
     expect(bowtieD?.independenceGroups.length).toBeGreaterThan(0);
   });
 
+  it("retains every consequence path for a shared Bowtie A Barrier", () => {
+    const sharedBarrier = getBowtie("dl-01-bowtie-a")?.barriers.find(({ id }) => id === "emergency-response-plan");
+
+    expect(sharedBarrier?.pathNames).toEqual([
+      "Jet fire near a High Consequence Area",
+      "Supply interruption",
+      "Environmental damage at a river crossing",
+    ]);
+  });
+
   it("keeps Bowtie C Unverified where no operational Evidence is available", () => {
     const bowtieC = getBowtie("uc-1-bowtie-c");
     expect(bowtieC?.barriers.length).toBeGreaterThan(0);
