@@ -76,6 +76,9 @@ class SessionStore(Protocol):
     async def claim_turn(self, session: SessionRecord) -> int | None:
         """Atomically marks the session `running`; returns the last trace seq, or None if busy.
 
+        `running` and `cancelling` are both busy: a cancelled turn holds the session until it
+        writes its final status.
+
         A `running` mark older than STALE_TURN_SECONDS is a crashed turn and may be reclaimed.
         """
         ...
@@ -120,15 +123,16 @@ class MemoryStore:
     async def claim_turn(self, session: SessionRecord) -> int | None:
         current = self.sessions[session.id]
         started = self.claimed_at.get(session.id, 0.0)
-        if current.status == "running" and time.monotonic() - started < STALE_TURN_SECONDS:
-            return None
+        held = current.status in ("running", "cancelling")
+        if held and time.monotonic() - started < STALE_TURN_SECONDS:
+            return None  # a `cancelling` turn is still running until it writes its final status
         self.sessions[session.id] = replace(current, status="running")
         self.claimed_at[session.id] = time.monotonic()
         return max((s.seq for sid, s in self.steps if sid == session.id), default=0)
 
     async def request_cancel(self, session: SessionRecord) -> bool:
         current = self.sessions[session.id]
-        if current.status != "running":
+        if current.status not in ("running", "cancelling"):
             return False
         self.sessions[session.id] = replace(current, status="cancelling")
         return True
@@ -206,7 +210,7 @@ class PostgresStore:
                 UPDATE app.assistant_session
                 SET status = 'running', status_updated_at = now()
                 WHERE id = %(id)s AND org_id = %(org)s
-                  AND (status <> 'running'
+                  AND (status NOT IN ('running', 'cancelling')
                        OR status_updated_at < now() - make_interval(secs => %(stale)s))
                 RETURNING id
                 """,
@@ -226,7 +230,8 @@ class PostgresStore:
             cursor = await connection.execute(
                 """
                 UPDATE app.assistant_session SET status = 'cancelling', status_updated_at = now()
-                WHERE id = %(id)s AND org_id = %(org)s AND status = 'running' RETURNING id
+                WHERE id = %(id)s AND org_id = %(org)s
+                  AND status IN ('running', 'cancelling') RETURNING id
                 """,
                 {"id": session.id, "org": session.org_id},
             )

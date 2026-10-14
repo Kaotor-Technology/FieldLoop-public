@@ -101,6 +101,8 @@ def test_turn_claim_is_exclusive_cancel_needs_a_running_turn_and_seq_continues()
         await store.record(record, StepRecord(kind="model", agent_id="flood-situation", seq=7))
         cancelled = await store.request_cancel(record)
         seen = await store.get(record.id, ORG, "user-1")
+        # The cancelled turn is still running until it writes its final status.
+        while_cancelling = await store.claim_turn(record)
         await store.set_status(record, "active", 0)
         reclaimed = await store.claim_turn(record)
         # A crashed turn: the `running` mark is older than the stale window.
@@ -109,6 +111,7 @@ def test_turn_claim_is_exclusive_cancel_needs_a_running_turn_and_seq_continues()
                 "UPDATE app.assistant_session SET status_updated_at = now() - interval '5 minutes'"
                 " WHERE id = %s", (record.id,))
         recovered = await store.claim_turn(record)
-        return idle_cancel, first, second, cancelled, seen.status, reclaimed, recovered
+        return (idle_cancel, first, second, cancelled, seen.status, while_cancelling, reclaimed,
+                recovered)
 
-    assert run(scenario) == (False, 0, None, True, "cancelling", 7, 7)
+    assert run(scenario) == (False, 0, None, True, "cancelling", None, 7, 7)

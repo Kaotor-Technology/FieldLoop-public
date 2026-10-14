@@ -236,18 +236,17 @@ class AgentRuntime:
         self._cancels[session.id] = cancel  # no await between the check and this registration
         try:
             base_seq = await self._deps.sessions.claim_turn(session)
+            if base_seq is None:
+                raise TurnInProgressError(session.id)
+            turn = _Turn(
+                session=session, definition=definition, user_token=user_token,
+                budget=TurnBudget.for_agent(definition), state=TurnState(), cancel=cancel,
+                events=asyncio.Queue(), step=base_seq,
+            )
+            task = asyncio.create_task(self._drive(turn, message))
         except BaseException:
             self._cancels.pop(session.id, None)
             raise
-        if base_seq is None:
-            self._cancels.pop(session.id, None)
-            raise TurnInProgressError(session.id)
-        turn = _Turn(
-            session=session, definition=definition, user_token=user_token,
-            budget=TurnBudget.for_agent(definition), state=TurnState(), cancel=cancel,
-            events=asyncio.Queue(), step=base_seq,
-        )
-        task = asyncio.create_task(self._drive(turn, message))
         return TurnHandle(turn, task)
 
     async def stream(self, handle: "TurnHandle") -> AsyncIterator[StreamEvent]:

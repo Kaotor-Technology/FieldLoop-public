@@ -323,6 +323,40 @@ def test_only_one_of_two_simultaneous_turns_is_admitted() -> None:
     assert asyncio.run(asyncio.wait_for(go(), 20)) == (1, 1, "active", False)
 
 
+def test_a_cancelling_session_cannot_be_claimed_by_another_instance() -> None:
+    h = Harness([answer()])
+
+    async def go():  # type: ignore[no-untyped-def]
+        record = await h.session("integrity-orchestrator")
+        assert await h.store.claim_turn(record) == 0  # instance A is running a turn
+        assert await h.store.request_cancel(record) is True
+        # Instance B (no local state) must still be refused while A winds down.
+        return await h.store.claim_turn(record)
+
+    assert asyncio.run(go()) is None
+
+
+def test_begin_failure_after_the_claim_releases_the_session() -> None:
+    from fieldloop_assistant.limits import TurnBudget
+
+    h = Harness([answer()])
+
+    async def go():  # type: ignore[no-untyped-def]
+        record = await h.session("integrity-orchestrator")
+        original = TurnBudget.for_agent
+        TurnBudget.for_agent = classmethod(  # type: ignore[method-assign,assignment]
+            lambda cls, definition: (_ for _ in ()).throw(RuntimeError("boom")))
+        try:
+            await h.runtime.begin(record, USER_TOKEN, "a", "integrity-orchestrator")
+        except RuntimeError:
+            pass
+        finally:
+            TurnBudget.for_agent = original  # type: ignore[method-assign]
+        return h.runtime.busy(record.id)
+
+    assert asyncio.run(go()) is False
+
+
 def test_trace_sequence_continues_across_turns_of_one_session() -> None:
     h = Harness([answer(), answer()])
 
