@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isRiskSnapshot, type RiskInput, type RiskSnapshot } from "@fieldloop/contracts";
-import { calculateRisk, calculateRiskChangeImpact, RiskInputError, validateRiskMatrix } from "./index.js";
+import { calculateRisk, calculateRiskChangeImpact, isEvidenceExpired, RiskInputError, validateRiskMatrix } from "./index.js";
 import { seedInput, testMatrix } from "./test-fixtures.js";
 
 const BOWTIE_A = "../../../../data/synthetic/dl-01/bowtie-a.json";
@@ -23,6 +23,13 @@ describe("Organisation Risk Matrix validation and explanation impact", () => {
 
   it("ranks changes by the sum of absolute consequence-frequency deltas", () => {
     expect(calculateRiskChangeImpact([0.25, -0.5, 0])).toBe(0.75);
+  });
+
+  it("expires Evidence only when it is older than the configured interval", () => {
+    expect(isEvidenceExpired(null, 10_000, null)).toBe(false);
+    expect(isEvidenceExpired(null, 10_000, 5)).toBe(true);
+    expect(isEvidenceExpired(5_000, 10_000, 5)).toBe(false);
+    expect(isEvidenceExpired(4_999, 10_000, 5)).toBe(true);
   });
 });
 

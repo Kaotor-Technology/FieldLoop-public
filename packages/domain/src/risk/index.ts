@@ -35,6 +35,12 @@ export function calculateRiskChangeImpact(deltas: readonly number[]): number {
   return deltas.reduce((sum, delta) => sum + Math.abs(delta), 0);
 }
 
+/** Apply the configured Evidence interval to a stored observation time. */
+export function isEvidenceExpired(observedAtMs: number | null, calculationTimeMs: number, intervalSeconds: number | null): boolean {
+  return intervalSeconds !== null
+    && (observedAtMs === null || calculationTimeMs - observedAtMs > intervalSeconds * 1000);
+}
+
 const ZONE_ORDER = { green: 0, amber: 1, red: 2 } as const;
 
 function byId(a: { id: string }, b: { id: string }): number {

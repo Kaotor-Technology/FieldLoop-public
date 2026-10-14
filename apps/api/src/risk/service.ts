@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { calculateRisk, calculateRiskChangeImpact, RiskInputError, validateRiskMatrix } from "@fieldloop/domain/risk";
+import { calculateRisk, calculateRiskChangeImpact, isEvidenceExpired, RiskInputError, validateRiskMatrix } from "@fieldloop/domain/risk";
 import type { RiskInput, RiskSnapshot } from "@fieldloop/contracts";
 import { sql, type Kysely } from "kysely";
 import type { CurrentUser } from "../auth/service.js";
@@ -508,7 +508,7 @@ export class PostgresRiskService implements RiskApiPort {
       const latest = barrierEvidence.get(id);
       const intervalSeconds = row.evidence_interval === null || row.evidence_interval === undefined
         ? null : parseIntervalSeconds(String(row.evidence_interval));
-      const evidenceExpired = intervalSeconds === null ? false : !latest || calculationTime - latest.observedAt.getTime() > intervalSeconds * 1000;
+      const evidenceExpired = isEvidenceExpired(latest?.observedAt.getTime() ?? null, calculationTime, intervalSeconds);
       return {
         id, type: String(row.type) as RiskInput["barriers"][number]["type"],
         side: String(row.side) as RiskInput["barriers"][number]["side"],
