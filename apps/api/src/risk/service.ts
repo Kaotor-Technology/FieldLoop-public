@@ -295,9 +295,12 @@ export class PostgresRiskService implements RiskApiPort {
       const impact = calculateRiskChangeImpact(consequenceFrequencyDeltasPerYear.map((item) => item.delta));
       const evidenceId = currentStored.evidenceByBarrier[barrierId] ?? null;
       const evidenceExpired = after.evidenceExpired && !before.evidenceExpired;
+      const reason = healthChange?.actor === "ageing" || evidenceExpired
+        ? "Evidence older than interval"
+        : changeReason ?? "Barrier risk input changed.";
       changes.push({
         barrierId, beforeHealth: before.health, afterHealth: after.health,
-        reason: changeReason ?? (evidenceExpired ? "Evidence is older than the configured interval." : "Barrier risk input changed."),
+        reason,
         sourceEvidenceId: evidenceId,
         sourceEvidenceHref: evidenceId ? `/api/v1/evidence/${evidenceId}` : null,
         topEventFrequencyDeltaPerYear: currentSnapshot.topEventFrequencyPerYear - beforeCounterfactual.topEventFrequencyPerYear,
@@ -656,8 +659,8 @@ function numberValue(value: unknown): number {
 }
 
 function parseIntervalSeconds(value: string): number {
-  const match = /^(?:(\d+) years? )?(?:(\d+) mons? )?(?:(\d+) days? )?(?:(\d+):(\d+):(\d+(?:\.\d+)?))?$/.exec(value.trim());
-  if (!match) throw new RiskServiceError(503, "risk_input_invalid");
+  const match = /^(?:(\d+) years?(?: |$))?(?:(\d+) mons?(?: |$))?(?:(\d+) days?(?: |$))?(?:(\d+):(\d+):(\d+(?:\.\d+)?))?$/.exec(value.trim());
+  if (!match || match.slice(1).every((part) => part === undefined)) throw new RiskServiceError(503, "risk_input_invalid");
   return Number(match[1] ?? 0) * 365.25 * 86400 + Number(match[2] ?? 0) * 30.4375 * 86400 + Number(match[3] ?? 0) * 86400
     + Number(match[4] ?? 0) * 3600 + Number(match[5] ?? 0) * 60 + Number(match[6] ?? 0);
 }
