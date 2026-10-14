@@ -16,7 +16,7 @@ describe("demo localisation", () => {
   });
   it("resolves every dynamic demo status and feature key in both languages without fallback", async () => {
     const featureKinds = {
-      area: true, linear: true, segment: true, facility: true, barrier: true, consequence: true,
+      area: true, linear: true, segment: true, facility: true, barrier: true, consequence: true, geo_reference: true,
     } satisfies Record<NonNullable<MapFeatureProperties["featureKind"]>, boolean>;
     const bowtieStories = ["bowtieStoryA", "bowtieStoryC", "bowtieStoryD"] as const;
     const barrierTypes = { technical: true, organisational: true, human: true } satisfies Record<BarrierType, boolean>;

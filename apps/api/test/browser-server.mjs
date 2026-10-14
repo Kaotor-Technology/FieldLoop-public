@@ -30,6 +30,56 @@ let healthProposals = seedHealthProposals();
 let healthDecisions = [];
 let healthEvents = [];
 let healthEventTime = new Date();
+const seedGeoReferenceDrafts = () => [{
+  id: "00000000-0000-4000-8000-000000000092",
+  documentId: "00000000-0000-4000-8000-000000000091",
+  documentTitle: "SYNTHETIC · inspection summary",
+  kind: "point",
+  geometry: { type: "Point", coordinates: [100.501, 13.756] },
+  chainageFrom: null,
+  chainageTo: null,
+  proposedLabel: "Synthetic valve marker",
+  sourceSnippet: "Valve marker at coordinates 13.756, 100.501.",
+  confidence: 0.85,
+  targetAssetId: null,
+  status: "draft",
+  simulated: true,
+  classification: "INTERNAL",
+  createdAt: "2026-10-15T00:00:00.000Z",
+}];
+let geoReferenceDrafts = seedGeoReferenceDrafts();
+const geoReferences = {
+  getSource: async (documentId, scope) => ({
+    id: documentId, title: "SYNTHETIC · inspection summary", folder: "Safety", text: "Valve marker at coordinates 13.756, 100.501.",
+    simulated: true, classification: scope.clearance,
+  }),
+  createDrafts: async () => ({ references: [], replayed: false }),
+  listDrafts: async (_scope, _cursor, limit) => ({ items: geoReferenceDrafts.filter((item) => item.status === "draft").slice(0, limit), limit, nextCursor: null }),
+  decide: async ({ geoReferenceId, decision }) => {
+    const item = geoReferenceDrafts.find((candidate) => candidate.id === geoReferenceId);
+    if (!item || item.status !== "draft") throw new Error("Fixture Geo Reference is unavailable");
+    item.status = decision === "confirm" ? "confirmed" : "rejected";
+    return item;
+  },
+};
+const mapLayers = {
+  getLayer: async ({ layer }) => ({
+    type: "FeatureCollection",
+    features: layer === "geo-references" ? geoReferenceDrafts
+      .filter((item) => item.status === "confirmed" && item.geometry)
+      .map((item) => ({
+        type: "Feature", id: item.id, geometry: item.geometry,
+        properties: {
+          name: item.proposedLabel ?? item.documentTitle, code: null, featureKind: "geo_reference",
+          classification: item.classification, simulated: item.simulated, label: item.simulated ? "SIMULATION" : null,
+          health: null, riskBand: null, chainageFrom: item.chainageFrom, chainageTo: item.chainageTo,
+          evidenceObservedAt: null, domainPack: null, geoReferenceId: item.id, assetId: item.targetAssetId,
+          documentId: item.documentId, geoReferenceKind: item.kind, sourceSnippet: item.sourceSnippet,
+          confidence: item.confidence,
+        },
+      })) : [],
+  }),
+};
 const health = {
   listProposals: async (user, cursor, limit) => {
     const open = healthProposals.filter((proposal) => proposal.status === "open" && proposal.ownerSub === user.sub).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -122,7 +172,7 @@ const risk = {
   riskEventsAfter: async () => [],
   processHealthChanges: async () => 0,
 };
-const app = buildApp({ auth, baseUrl, simulator, health, risk });
+const app = buildApp({ auth, baseUrl, simulator, health, risk, geoReferences, mapLayers });
 await registerReference(app, fileURLToPath(new URL("reference/", import.meta.resolve("@fieldloop/contracts"))));
 await registerSpa(app, fileURLToPath(new URL("../../web/dist/", import.meta.url)));
 await app.ready();
@@ -134,6 +184,7 @@ const server = createServer({ key: await readFile(join(directory, "key.pem")), c
     const url = new URL(request.url, baseUrl);
     if (url.pathname === "/test/reset") {
       resetSimulationFixture(); resetHealthFixture();
+      geoReferenceDrafts = seedGeoReferenceDrafts();
       sessions.clear(); transactions.clear(); authorizations.clear(); codes.clear(); now = Date.now(); active = true; unavailable = false;
       response.end("reset"); return;
     }

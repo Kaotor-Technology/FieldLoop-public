@@ -10,6 +10,7 @@ import { GoogleMapsOverlay } from "@deck.gl/google-maps";
 import type { MapFeature, MapFeatureCollection, MapLayerName, MapViewport } from "@fieldloop/map";
 import { Skeleton, type BarrierHealth } from "@fieldloop/ui";
 import { HealthProposalReview } from "./HealthProposalReview";
+import { GeoReferenceReview } from "./GeoReferenceReview";
 import { applyBarrierHealthToMapCache, decideHealthProposal, getHealthProposalPage, healthProposalsQueryKey } from "./health-proposals";
 import { useCurrentSession } from "./SessionGate";
 import { getMapConfig, getMapLayer } from "./map-api";
@@ -30,7 +31,7 @@ import {
   summarizeVisibleFeatures,
 } from "./map-view";
 
-const LAYERS: MapLayerName[] = ["assets", "barriers", "consequences"];
+const LAYERS: MapLayerName[] = ["assets", "barriers", "consequences", "geo-references"];
 const DEFAULT_VIEW: MapViewport = { latitude: 13.775, longitude: 100.58, zoom: 13, heading: 0, tilt: 45 };
 const PIPELINE_VIEW: MapViewport = { latitude: 18.79258, longitude: 99.54886, zoom: 8, heading: 0, tilt: 45 };
 const FLOOD_VIEW: MapViewport = { latitude: 13.775, longitude: 100.58, zoom: 13, heading: 0, tilt: 45 };
@@ -85,8 +86,7 @@ export function GeoCommandMap() {
         zoom: bounds?.zoom ?? 0,
         signal,
       }),
-      enabled: Boolean(bounds) && (activeLayers.includes(layer) ||
-        (layer === "assets" && rainOverlayVisible && domain !== "pipeline-integrity")),
+      enabled: Boolean(bounds) && (activeLayers.includes(layer) || layer === "assets"),
       staleTime: 30_000,
       retry: 1,
     })),
@@ -188,6 +188,17 @@ export function GeoCommandMap() {
   })), activeLayers, rainOverlayVisible, domain, Boolean(bounds));
   const featureCounts = useMemo(() => countVisibleBarrierAlerts(visibleFeatures), [visibleFeatures]);
   const contextSummary = useMemo(() => summarizeVisibleFeatures(visibleFeatures), [visibleFeatures]);
+  const geoTargetAssets = useMemo(() => {
+    const options = new Map<string, { id: string; name: string; type: "linear" | "asset" }>();
+    for (const feature of collections.get("assets")?.features ?? []) {
+      const kind = feature.properties.featureKind;
+      if (kind !== "linear" && kind !== "segment" && kind !== "facility" && kind !== "area") continue;
+      const id = feature.properties.assetId ?? (kind === "segment" ? null : feature.id);
+      if (!id || options.has(id)) continue;
+      options.set(id, { id, name: feature.properties.name ?? feature.properties.code ?? id, type: kind === "linear" || kind === "segment" ? "linear" : "asset" });
+    }
+    return [...options.values()].sort((left, right) => left.name.localeCompare(right.name));
+  }, [collections]);
 
   useEffect(() => {
     if (!overlay.current) return;
@@ -199,6 +210,7 @@ export function GeoCommandMap() {
     const assets = collections.get("assets");
     const barriers = collections.get("barriers");
     const consequences = collections.get("consequences");
+    const geoReferences = collections.get("geo-references");
     if (rainOverlayVisible && domain !== "pipeline-integrity" && rainCell) {
       const style = rainLayerVisualStyle(rainCell.rateMillimetersPerHour);
       const lowColor = tokenColor(style.lowToken, 255);
@@ -292,6 +304,33 @@ export function GeoCommandMap() {
         getSize: barrierMarkerSize,
         sizeUnits: "pixels",
         getColor: (feature) => healthColor(feature.properties.health),
+        onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
+      }));
+    }
+    if (activeLayers.includes("geo-references") && geoReferences) {
+      const points = geoReferences.features.filter((feature) => feature.geometry.type === "Point");
+      layers.push(new ScatterplotLayer<MapFeature>({
+        id: "geo-reference-marker-hit-area",
+        data: points,
+        pickable: true,
+        radiusUnits: "pixels",
+        getPosition: (feature) => pointPosition(feature),
+        getRadius: barrierHitRadius,
+        getFillColor: [0, 0, 0, 0],
+        stroked: false,
+        onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
+      }));
+      layers.push(new ScatterplotLayer<MapFeature>({
+        id: "geo-reference-markers",
+        data: points,
+        pickable: true,
+        radiusUnits: "pixels",
+        getPosition: (feature) => pointPosition(feature),
+        getRadius: assetPointRadius * 1.5,
+        getFillColor: tokenColor("--color-brand-mint", 240),
+        getLineColor: tokenColor("--color-neutral-900", 255),
+        lineWidthMinPixels: lineWidth,
+        stroked: true,
         onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
       }));
     }
@@ -460,7 +499,7 @@ export function GeoCommandMap() {
         <span className="context-tab-active">{t("overview")}</span>
       </div>
       <div className="context-body" tabIndex={0}>
-        <MapOverviewSummary summary={contextSummary} />
+        <MapOverviewSummary summary={contextSummary} geoTargetAssets={geoTargetAssets} />
         {selectedFeature ? <FeatureOverview feature={selectedFeature} /> : <p className="context-hint">{t("selectMapFeature")}</p>}
         <section className="feature-list-section" aria-labelledby="bowtie-shortcuts-title">
           <div className="section-heading"><h3 id="bowtie-shortcuts-title">{t("bowtieShortcuts")}</h3></div>
@@ -507,7 +546,10 @@ export function GeoCommandMap() {
 
 type VisibleFeatureSummary = ReturnType<typeof summarizeVisibleFeatures>;
 
-function MapOverviewSummary({ summary }: { summary: VisibleFeatureSummary }) {
+function MapOverviewSummary({ summary, geoTargetAssets }: {
+  summary: VisibleFeatureSummary;
+  geoTargetAssets: { id: string; name: string; type: "linear" | "asset" }[];
+}) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const session = useCurrentSession();
@@ -566,6 +608,7 @@ function MapOverviewSummary({ summary }: { summary: VisibleFeatureSummary }) {
       onLoadMore={() => { void proposalPages.fetchNextPage(); }}
       onDecision={submitDecision}
     />
+    <GeoReferenceReview targetAssets={geoTargetAssets} />
     <section className="context-summary-section" aria-labelledby="action-summary-title">
       <h3 id="action-summary-title">{t("openActionRequests")}</h3>
       <p className="empty-note">{t("actionRequestsUnavailable")}</p>
@@ -584,6 +627,10 @@ function FeatureOverview({ feature }: { feature: MapFeature }) {
     {health && <div><dt>{t("barrierHealthLabel")}</dt><dd><HealthBadge health={health} /></dd></div>}
     {feature.properties.riskBand && <div><dt>{t("riskBand")}</dt><dd>{t(feature.properties.riskBand)}</dd></div>}
     {feature.properties.evidenceObservedAt && <div><dt>{t("latestEvidence")}</dt><dd><time className="mono" dateTime={feature.properties.evidenceObservedAt}>{new Date(feature.properties.evidenceObservedAt).toLocaleDateString(i18n.language === "th" ? "th-TH" : "en-GB", { timeZone: "Asia/Bangkok" })}</time></dd></div>}
+    {feature.properties.geoReferenceKind && <div><dt>{t("geoReferenceReview.type")}</dt><dd>{t(`geoReferenceReview.kinds.${feature.properties.geoReferenceKind}`)}</dd></div>}
+    {feature.properties.confidence !== null && feature.properties.confidence !== undefined && <div><dt>{t("geoReferenceReview.confidence")}</dt><dd className="mono">{new Intl.NumberFormat(i18n.language === "th" ? "th-TH" : "en-GB", { style: "percent", maximumFractionDigits: 0 }).format(feature.properties.confidence)}</dd></div>}
+    {feature.properties.sourceSnippet && <div><dt>{t("geoReferenceReview.source")}</dt><dd>{feature.properties.sourceSnippet}</dd></div>}
+    {feature.properties.documentId && <div><dt>{t("geoReferenceReview.documentId")}</dt><dd className="mono">{feature.properties.documentId}</dd></div>}
   </dl>;
 }
 

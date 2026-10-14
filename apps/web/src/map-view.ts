@@ -86,7 +86,8 @@ export function formatChainage(value: number): string {
 }
 
 export function filterFeaturesByDomain(features: readonly MapFeature[], domain: MapDomain): MapFeature[] {
-  return domain === "all" ? [...features] : features.filter((feature) => feature.properties.domainPack === domain);
+  return domain === "all" ? [...features] : features.filter((feature) =>
+    feature.properties.domainPack === domain || (feature.properties.featureKind === "geo_reference" && feature.properties.domainPack === null));
 }
 
 export function summarizeVisibleFeatures(features: readonly MapFeature[]) {

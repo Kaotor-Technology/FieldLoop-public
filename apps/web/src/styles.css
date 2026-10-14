@@ -172,6 +172,24 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 .health-proposal-decision-form h4 { margin: 0; font-size: var(--type-headline-sm-font-size); }
 .health-proposal-error { margin: 0; color: var(--color-error); }
 .health-proposal-saved { margin: 0; color: var(--muted); }
+.geo-reference-section { display: grid; gap: var(--spacing-space-3); padding-bottom: var(--spacing-space-4); border-bottom: var(--spacing-border-hairline) solid var(--outline); }
+.geo-reference-heading, .geo-reference-row-heading, .geo-reference-actions { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-space-2); }
+.geo-reference-heading h3 { margin: 0; font-size: var(--type-headline-sm-font-size); }
+.geo-reference-list { display: grid; gap: var(--spacing-space-3); margin: 0; padding: 0; list-style: none; }
+.geo-reference-row { display: grid; gap: var(--spacing-space-3); padding: var(--spacing-space-3); border: var(--spacing-border-hairline) solid var(--outline); border-radius: var(--rounded-md); background: var(--surface-raised); }
+.geo-reference-row-heading { justify-content: flex-start; flex-wrap: wrap; }
+.geo-reference-source, .geo-reference-empty { color: var(--muted); }
+.geo-reference-snippet { padding: var(--spacing-space-3); border-inline-start: var(--spacing-indicator-width) solid var(--action); background: var(--canvas); overflow-wrap: anywhere; }
+.geo-reference-metadata { display: grid; gap: var(--spacing-space-2); margin: 0; }
+.geo-reference-metadata > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--spacing-space-2); }
+.geo-reference-metadata dt { color: var(--muted); }
+.geo-reference-metadata dd { margin: 0; text-align: end; overflow-wrap: anywhere; }
+.geo-reference-target-label { display: grid; gap: var(--spacing-space-2); }
+.geo-reference-target-label select { min-height: var(--spacing-touch-target); width: 100%; padding: var(--spacing-space-2); color: var(--ink); background: var(--surface); border: var(--spacing-border-hairline) solid var(--outline); border-radius: var(--rounded-sm); }
+.geo-reference-actions { justify-content: flex-start; flex-wrap: wrap; }
+.geo-reference-actions button { min-height: var(--spacing-touch-target); padding-inline: var(--spacing-space-4); color: var(--ink); background: var(--surface); border: var(--spacing-border-hairline) solid var(--outline); border-radius: var(--rounded-sm); }
+.geo-reference-actions .geo-reference-confirm { color: var(--on-action); background: var(--action); border-color: var(--action); }
+.geo-reference-error { color: var(--color-error); }
 .risk-summary-row, .barrier-summary-row { display: flex; align-items: center; gap: var(--spacing-space-2); min-height: var(--spacing-space-8); border-top: var(--spacing-border-hairline) solid var(--outline); }
 .risk-summary-row strong, .barrier-summary-row strong { margin-left: auto; }
 .context-risk-mark { flex: 0 0 auto; width: var(--spacing-space-5); height: var(--spacing-space-5); box-sizing: border-box; border: var(--spacing-border-hairline) solid var(--ink); }
