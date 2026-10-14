@@ -74,6 +74,12 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
     await expect(store.create(user, body, key())).rejects.toThrow("above_action_ceiling");
     await expect(pool.query("UPDATE app.action_ceiling SET action_level='l2' WHERE org_id=$1", [user.orgId])).rejects.toThrow();
   });
+  it("does not replay a converted tool call after its target leaves the AI System allowlist (PRD GR-4)", async () => {
+    const { user, check, policyId } = await fixture(), savedKey = key();
+    expect((await store.check(user, check, savedKey)).decision).toBe("convert_l1");
+    await pool.query("UPDATE app.guardrail_policy SET config = jsonb_set(config, '{settings,allowedTargets}', '[\"fieldloop\"]') WHERE id=$1", [policyId]);
+    expect(await store.check(user, check, savedKey)).toEqual({ decision: "block", reason: "target_not_registered" });
+  });
   it("fails closed on missing, ambiguous or monitor-only policy and incomplete action metadata", async () => {
     const { user, check, policyId } = await fixture();
     await expect(store.check(user, { ...check, aiSystem: "unknown" }, key())).rejects.toThrow("tool_registry_unavailable");
