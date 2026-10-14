@@ -123,4 +123,19 @@ describe.skipIf(!url)("KML imports against migrated PostGIS", () => {
       expect((await pool.query("SELECT count(*)::int AS count FROM app.kml_import_item WHERE kml_import_id=$1",[mapped.id])).rows[0]?.count).toBe(0);
     } finally {await locker.query("ROLLBACK");locker.release();}
   });
+  it("preserves Geo References added after an Evidence import and rejects rollback atomically",async()=>{
+    const {user,assetId,mapping}=await fixture();
+    const created=await store.create(user,content(),"kml",randomUUID());
+    const mapped=await store.map(user,created.id,created.version,mapping);
+    const committed=await store.command(user,mapped.id,mapped.version,"commit",randomUUID());
+    const evidence=(await pool.query<{id:string}>("SELECT id FROM app.evidence WHERE org_id=$1",[user.orgId])).rows[0];
+    if(!evidence) throw new Error("Fixture Evidence missing");
+    const laterReferenceId=randomUUID();
+    await pool.query("INSERT INTO app.geo_reference(id,org_id,evidence_id,target_type,target_id,kind,geom,status,simulated,classification,created_by) VALUES($1,$2,$3,'asset',$4,'point',ST_SetSRID(ST_MakePoint(100,20.006),4326),'reviewed',true,'HIGHLY_RESTRICTED','synthetic-later-editor')",[laterReferenceId,user.orgId,evidence.id,assetId]);
+    await expect(store.command(user,committed.id,committed.version,"rollback",randomUUID())).rejects.toMatchObject({status:409,code:"rollback_conflict"});
+    expect((await pool.query("SELECT id FROM app.geo_reference WHERE id=$1",[laterReferenceId])).rows).toEqual([{id:laterReferenceId}]);
+    expect((await pool.query("SELECT count(*)::int AS count FROM app.geo_reference WHERE org_id=$1",[user.orgId])).rows[0]?.count).toBe(2);
+    expect((await store.preview(user,committed.id)).status).toBe("committed");
+    expect((await pool.query("SELECT action FROM app.audit_event WHERE org_id=$1",[user.orgId])).rows).toEqual([{action:"import.commit"}]);
+  });
 });

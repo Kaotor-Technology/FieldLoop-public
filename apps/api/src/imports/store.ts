@@ -177,6 +177,7 @@ export class PostgresImportStore implements ImportPort {
         if (row.preview.some((point) => point.flags.includes("duplicate"))) throw new ImportError(409,"duplicates_require_new_upload");
         for (const point of row.preview) {
           const targetId = randomUUID();
+          const geoReferenceId = mapping.target === "evidence" ? randomUUID() : null;
           const location = sql`ST_SetSRID(ST_MakePoint(${point.longitude},${point.latitude}),4326)`;
           const duplicate = (await sql<{ duplicate: boolean }>`SELECT EXISTS (SELECT 1 FROM app.kml_import_item i JOIN app.kml_import k ON k.id=i.kml_import_id AND k.org_id=i.org_id
             WHERE i.org_id=${user.orgId} AND k.status='committed' AND i.simulated IS TRUE AND i.geom && ${location} AND ST_Equals(i.geom,${location}))
@@ -190,16 +191,30 @@ export class PostgresImportStore implements ImportPort {
           } else {
             await sql`INSERT INTO app.evidence (id,org_id,barrier_id,kind,source,observed_at,simulated,classification,created_by)
               VALUES (${targetId}::uuid,${user.orgId},${mapping.barrierId}::uuid,'kml_import',${`kml:${row.file_hash}:${point.id}`},${row.created_at},true,${row.classification},${user.sub})`.execute(trx);
-            await sql`INSERT INTO app.geo_reference (org_id,evidence_id,target_type,target_id,kind,geom,chainage_from,chainage_to,status,simulated,classification,created_by)
-              VALUES (${user.orgId},${targetId}::uuid,'asset',${mapping.assetId}::uuid,'point',${location},${point.chainageMetres},${point.chainageMetres},'imported',true,${row.classification},${user.sub})`.execute(trx);
+            await sql`INSERT INTO app.geo_reference (id,org_id,evidence_id,target_type,target_id,kind,geom,chainage_from,chainage_to,status,simulated,classification,created_by)
+              VALUES (${geoReferenceId}::uuid,${user.orgId},${targetId}::uuid,'asset',${mapping.assetId}::uuid,'point',${location},${point.chainageMetres},${point.chainageMetres},'imported',true,${row.classification},${user.sub})`.execute(trx);
           }
           await sql`INSERT INTO app.kml_import_item (id,org_id,kml_import_id,geom,snapped_chainage,distance,target,target_id,asset_id,attributes,flags,simulated,classification,created_by)
             VALUES (${point.id}::uuid,${user.orgId},${id}::uuid,${location},${point.chainageMetres},${point.distanceMetres},${mapping.target},${targetId}::uuid,${mapping.assetId}::uuid,
-            ${JSON.stringify(attributes)}::jsonb,${JSON.stringify(point.flags)}::jsonb,true,${row.classification},${user.sub})`.execute(trx);
+            ${JSON.stringify({...attributes,geoReferenceId})}::jsonb,${JSON.stringify(point.flags)}::jsonb,true,${row.classification},${user.sub})`.execute(trx);
         }
       } else {
+        // Lock imported parents before checking later FK dependants.
+        await sql`SELECT id FROM app.evidence WHERE org_id=${user.orgId} AND id IN
+          (SELECT target_id FROM app.kml_import_item WHERE kml_import_id=${id}::uuid AND org_id=${user.orgId} AND target='evidence') ORDER BY id FOR UPDATE`.execute(trx);
+        await sql`SELECT id FROM app.asset WHERE org_id=${user.orgId} AND id IN
+          (SELECT target_id FROM app.kml_import_item WHERE kml_import_id=${id}::uuid AND org_id=${user.orgId} AND target='facility') ORDER BY id FOR UPDATE`.execute(trx);
+        const laterReferences = (await sql<{exists:boolean}>`SELECT EXISTS (
+          SELECT 1 FROM app.geo_reference g JOIN app.kml_import_item i
+          ON i.org_id=g.org_id AND ((i.target='evidence' AND i.target_id=g.evidence_id)
+            OR (i.target='facility' AND g.target_type='asset' AND i.target_id=g.target_id))
+          WHERE i.org_id=${user.orgId} AND i.kml_import_id=${id}::uuid
+            AND (i.target='facility' OR i.attributes->>'geoReferenceId' IS NULL OR g.id::text<>i.attributes->>'geoReferenceId')
+        ) AS exists`.execute(trx)).rows[0];
+        if (laterReferences?.exists) throw new ImportError(409,"rollback_conflict");
         // Only this batch's created records are removed; audit history remains append-only.
-        await sql`DELETE FROM app.geo_reference WHERE org_id=${user.orgId} AND evidence_id IN (SELECT target_id FROM app.kml_import_item WHERE kml_import_id=${id}::uuid AND org_id=${user.orgId} AND target='evidence')`.execute(trx);
+        await sql`DELETE FROM app.geo_reference WHERE org_id=${user.orgId} AND id IN
+          (SELECT (attributes->>'geoReferenceId')::uuid FROM app.kml_import_item WHERE kml_import_id=${id}::uuid AND org_id=${user.orgId} AND target='evidence')`.execute(trx);
         await sql`DELETE FROM app.evidence WHERE org_id=${user.orgId} AND id IN (SELECT target_id FROM app.kml_import_item WHERE kml_import_id=${id}::uuid AND org_id=${user.orgId} AND target='evidence')`.execute(trx);
         await sql`DELETE FROM app.asset WHERE org_id=${user.orgId} AND id IN (SELECT target_id FROM app.kml_import_item WHERE kml_import_id=${id}::uuid AND org_id=${user.orgId} AND target='facility')`.execute(trx);
       }
@@ -208,6 +223,9 @@ export class PostgresImportStore implements ImportPort {
       const saved = (await sql<ImportRow>`UPDATE app.kml_import SET status=${command === "commit" ? "committed" : "rolled_back"},version=version+1,
         ${command === "commit" ? sql`commit_key=${key}` : sql`rollback_key=${key}`} WHERE id=${id}::uuid AND org_id=${user.orgId} RETURNING *`.execute(trx)).rows[0];
       if (!saved) throw new ImportError(503,"service_unavailable"); return result(saved);
+    }).catch((error:unknown) => {
+      if (command === "rollback" && (error as {code?:unknown} | null)?.code === "23503") throw new ImportError(409,"rollback_conflict");
+      throw error;
     });
   }
 }
