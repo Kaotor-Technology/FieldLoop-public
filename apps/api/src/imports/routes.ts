@@ -25,10 +25,10 @@ export function registerImportRoutes(app: FastifyInstance, imports?: ImportPort)
       const body = object(request.body);
       const content = body["contentBase64"], format = body["format"];
       const key = request.headers["idempotency-key"];
-      if (typeof key !== "string" || !keyPattern.test(key) || !["kml","kmz"].includes(String(format))
+      if (typeof key !== "string" || !keyPattern.test(key) || (format !== "kml" && format !== "kmz")
         || typeof content !== "string" || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(content)
         || Object.keys(body).some((field) => !["format","contentBase64"].includes(field))) throw new ImportError(400,"validation_failed");
-      return service().create(currentUser(request),Buffer.from(content,"base64"),format as "kml" | "kmz",key);
+      return service().create(currentUser(request),Buffer.from(content,"base64"),format,key);
     });
     routes.get("/api/v1/imports/:importId/preview", async (request) => service().preview(currentUser(request),id(request.params)));
     routes.put("/api/v1/imports/:importId/mapping", async (request) => {
@@ -39,7 +39,7 @@ export function registerImportRoutes(app: FastifyInstance, imports?: ImportPort)
         || typeof mapping["assetId"] !== "string" || !uuid.test(mapping["assetId"])
         || typeof mapping["toleranceMetres"] !== "number" || !Number.isFinite(mapping["toleranceMetres"]) || mapping["toleranceMetres"] < 0 || mapping["toleranceMetres"] > 1000
         || !["nameField","descriptionField","categoryField"].every((key) => typeof mapping[key] === "string" && mapping[key].length <= 200)
-        || !["evidence","facility"].includes(String(mapping["target"]))
+        || (mapping["target"] !== "evidence" && mapping["target"] !== "facility")
         || (mapping["barrierId"] !== null && (typeof mapping["barrierId"] !== "string" || !uuid.test(mapping["barrierId"])))) throw new ImportError(400,"validation_failed");
       return service().map(currentUser(request),id(request.params),Number(version),mapping as unknown as ImportMapping);
     });

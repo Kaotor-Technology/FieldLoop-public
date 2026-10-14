@@ -38,3 +38,11 @@ it("validates versions, UUIDs and snap tolerance before mapping or command",asyn
   expect((await app.inject({method:"GET",url:"/api/v1/imports/not-uuid/preview",headers})).statusCode).toBe(400);
   expect(imports.map).not.toHaveBeenCalled();expect(imports.command).not.toHaveBeenCalled();
 });
+it("rejects array-valued format and target enums before calling persistence",async()=>{
+  const {app,imports,headers}=fixture(),id="00000000-0000-4000-8000-000000000100";
+  const upload=await app.inject({method:"POST",url:"/api/v1/imports",headers,payload:{format:["kml"],contentBase64:"c3ludGhldGlj"}});
+  expect(upload.statusCode).toBe(400);
+  const mapped=await app.inject({method:"PUT",url:`/api/v1/imports/${id}/mapping`,headers,payload:{version:1,mapping:{assetId:id,toleranceMetres:50,nameField:"name",descriptionField:"",categoryField:"folder",target:["facility"],barrierId:null}}});
+  expect(mapped.statusCode).toBe(400);
+  expect(imports.create).not.toHaveBeenCalled();expect(imports.map).not.toHaveBeenCalled();
+});
