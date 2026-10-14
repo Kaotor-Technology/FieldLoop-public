@@ -10,12 +10,15 @@ export async function expectThaiTypography(page: Page) {
       const computedLineHeight = Number.parseFloat(style.lineHeight);
       const lineHeight = computedLineHeight / fontSize;
       const letterSpacing = style.letterSpacing;
+      const overflowWrap = style.overflowWrap;
+      const wordBreak = style.wordBreak;
       return !Number.isFinite(fontSize) || fontSize < 13
         || !Number.isFinite(computedLineHeight) || lineHeight < 1.5
         || (letterSpacing !== "normal" && Number.parseFloat(letterSpacing) !== 0)
+        || overflowWrap === "anywhere" || overflowWrap === "break-word" || wordBreak === "break-all"
         ? [{
           element: `${element.tagName.toLowerCase()}${element.className ? `.${String(element.className).replaceAll(" ", ".")}` : ""}`,
-          text: element.textContent?.trim().slice(0, 40), fontSize, lineHeight, letterSpacing,
+          text: element.textContent?.trim().slice(0, 40), fontSize, lineHeight, letterSpacing, overflowWrap, wordBreak,
         }]
         : [];
     });

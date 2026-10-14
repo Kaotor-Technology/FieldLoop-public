@@ -145,10 +145,24 @@ for (const colorScheme of ["light", "dark"] as const) for (const width of [390, 
     await expect(page.getByRole("heading", { name: "อธิบายคะแนน", exact: true })).toBeVisible();
     await expect(page.getByText("Risk changed after the listed Barrier and risk input changes.", { exact: true })).toHaveAttribute("lang", "en");
     await expect(page.getByText("Health accepted by a reviewer.", { exact: true })).toHaveAttribute("lang", "en");
+    await expect(page.locator(".bowtie-top-event-panel > p")).toHaveAttribute("lang", "en");
+    await expect(page.getByText("Synthetic power interruption", { exact: true })).toHaveAttribute("lang", "en");
 
     const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
     expect(axe.violations).toEqual([]);
     await expectThaiTypography(page);
+
+    // A locale change must not reload the document or discard the open explanation.
+    const documentIdentity = await page.evaluate(() => performance.timeOrigin);
+    const url = page.url();
+    await page.getByRole("button", { name: "English", exact: true }).focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: "Explain score", exact: true })).toBeVisible();
+    await expect(page.getByText("Healthy → Degraded", { exact: true })).toBeVisible();
+    expect(await page.evaluate(() => performance.timeOrigin)).toBe(documentIdentity);
+    expect(page.url()).toBe(url);
+    await page.getByRole("button", { name: "ภาษาไทย", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "อธิบายคะแนน", exact: true })).toBeVisible();
 
     await page.setViewportSize({ width: 320, height: 900 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);

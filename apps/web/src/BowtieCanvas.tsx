@@ -13,6 +13,10 @@ const TRIAD_DIMENSIONS: readonly TriadDimension[] = ["effective", "independent",
 
 export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
   const { t } = useTranslation();
+  const classificationLabel = bowtie.classification === "Not recorded"
+    ? t("notRecorded")
+    : t(`classifications.${bowtie.classification}`, { defaultValue: bowtie.classification });
+  const provenanceLabel = bowtie.provenance === "SYNTHETIC" ? t("syntheticData") : bowtie.provenance;
   const seenBarrierIds = new Set<string>();
   const barriers = bowtie.barriers.filter((barrier) => {
     if (seenBarrierIds.has(barrier.id)) return false;
@@ -29,7 +33,7 @@ export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
         <p className="eyebrow">{t("readOnlyView")} · {t("bowtieCode", { code: bowtie.code })}</p>
         <h1 id="bowtie-title" lang="en">{monoNumericText(bowtie.title)}</h1>
       </div>
-      <span className="bowtie-provenance" lang="en">{bowtie.provenance}</span>
+      <span className="bowtie-provenance">{provenanceLabel}</span>
     </header>
 
     <div className="bowtie-canvas-viewport" role="region" aria-label={t("bowtieCanvas")}>
@@ -41,7 +45,7 @@ export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
           <p className="bowtie-top-event" lang="en">{monoNumericText(bowtie.topEvent)}</p>
           <dl className="bowtie-metadata">
             <div><dt>{t("domain")}</dt><dd lang="en">{monoNumericText(bowtie.domain)}</dd></div>
-            <div><dt>{t("classification")}</dt><dd>{monoNumericText(bowtie.classification)}</dd></div>
+            <div><dt>{t("classification")}</dt><dd>{classificationLabel}</dd></div>
           </dl>
         </section>
 
@@ -83,11 +87,11 @@ export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
       <summary>{t("textEquivalent")}</summary>
       <div>
         <p><strong>{t("bowtieCode", { code: bowtie.code })} · {t("readOnlyView")}:</strong> <span lang="en">{monoNumericText(bowtie.title)}</span></p>
-        <p><strong>{t("provenance")}:</strong> <span lang="en">{bowtie.provenance}</span></p>
+        <p><strong>{t("provenance")}:</strong> <span>{provenanceLabel}</span></p>
         <p><strong>{t("hazard")}:</strong> <span lang="en">{monoNumericText(bowtie.hazard)}</span></p>
         <p><strong>{t("topEvent")}:</strong> <span lang="en">{monoNumericText(bowtie.topEvent)}</span></p>
         <p><strong>{t("domain")}:</strong> <span lang="en">{monoNumericText(bowtie.domain)}</span></p>
-        <p><strong>{t("classification")}:</strong> <span lang="en">{monoNumericText(bowtie.classification)}</span></p>
+        <p><strong>{t("classification")}:</strong> <span>{classificationLabel}</span></p>
         <h3>{t("threats")}</h3>
         <ul>{bowtie.threats.map((threat) => <li key={threat.id} lang="en">{monoNumericText(threat.name)}</li>)}</ul>
         <h3>{t("barriers")}</h3>

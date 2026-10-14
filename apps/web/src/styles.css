@@ -341,7 +341,7 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 .risk-change-list { padding-inline-start: var(--spacing-space-5); }
 .risk-change-list li { padding-block: var(--spacing-space-3); border-block-end: var(--spacing-border-hairline) solid var(--outline); }
 .risk-change-list p { overflow-wrap: anywhere; }
-html[lang="th"] :lang(th), :lang(th) { line-height: var(--type-body-md-line-height); letter-spacing: normal; }
+html[lang="th"] :lang(th), :lang(th) { line-height: var(--type-body-md-line-height); letter-spacing: normal; overflow-wrap: normal; word-break: normal; }
 html[lang="th"] .nav-rail-item:lang(th),
 html[lang="th"] .eyebrow:lang(th),
 html[lang="th"] .map-search-label:lang(th),

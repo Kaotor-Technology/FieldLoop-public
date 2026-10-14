@@ -62,9 +62,16 @@ for (const colorScheme of ["light", "dark"] as const) {
       }
       await page.getByRole("button", { name: "ภาษาไทย", exact: true }).click();
       await expect(page.locator("#bowtie-title")).toHaveAttribute("lang", "en");
+      await expect(page.locator(".bowtie-provenance")).toHaveText("ข้อมูลสังเคราะห์ (SYNTHETIC)");
+      await expect(page.locator(".bowtie-metadata dd").last()).toHaveText("ลับ");
+      const textEquivalent = page.locator(".bowtie-text-equivalent");
+      if (await textEquivalent.getAttribute("open") === null) await textEquivalent.locator("summary").click();
+      await expect(page.locator(".bowtie-text-equivalent")).toContainText("ระดับชั้นข้อมูล: ลับ");
+      await expect(textEquivalent).toContainText("ที่มาข้อมูล: ข้อมูลสังเคราะห์ (SYNTHETIC)");
       await expectThaiTypography(page);
       const thaiAxe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
       expect(thaiAxe.violations).toEqual([]);
+      await textEquivalent.locator("summary").click();
       if (colorScheme === "light" && width === 1280) {
         await page.screenshot({ path: "e2e/evidence/bowtie-canvas-thai.png", fullPage: true });
       }
