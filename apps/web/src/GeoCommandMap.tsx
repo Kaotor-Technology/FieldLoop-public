@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { importLibrary, setOptions } from "@googlemaps/js-api-loader";
@@ -8,6 +8,10 @@ import { FillStyleExtension, PathStyleExtension } from "@deck.gl/extensions";
 import type { FillStyleExtensionProps, PathStyleExtensionProps } from "@deck.gl/extensions";
 import { GoogleMapsOverlay } from "@deck.gl/google-maps";
 import type { MapFeature, MapFeatureCollection, MapLayerName, MapViewport } from "@fieldloop/map";
+import type { BarrierHealth } from "@fieldloop/ui";
+import { HealthProposalReview } from "./HealthProposalReview";
+import { decideHealthProposal, getHealthProposalPage, healthProposalsQueryKey } from "./health-proposals";
+import { useCurrentSession } from "./SessionGate";
 import { getMapConfig, getMapLayer } from "./map-api";
 import {
   barrierMarkerStatus,
@@ -380,7 +384,7 @@ export function GeoCommandMap() {
         </div>
         <div className="map-legend" aria-label={t("mapLegend")}>
           <div className="legend-group">
-            <h2>{t("barrierHealth")}</h2>
+            <h2>{t("barrierHealthLabel")}</h2>
             <span className="legend-health"><i className="health-failed" aria-hidden="true">{SYMBOLS.failed}</i>{t("failed")}</span>
             <span className="legend-health"><i className="health-degraded" aria-hidden="true">{SYMBOLS.degraded}</i>{t("degraded")}</span>
             <span className="legend-health"><i className="health-unverified" aria-hidden="true">{SYMBOLS.unverified}</i>{t("unverified")}</span>
@@ -458,6 +462,33 @@ type VisibleFeatureSummary = ReturnType<typeof summarizeVisibleFeatures>;
 
 function MapOverviewSummary({ summary }: { summary: VisibleFeatureSummary }) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const session = useCurrentSession();
+  const proposalPages = useInfiniteQuery({
+    queryKey: healthProposalsQueryKey,
+    queryFn: ({ signal, pageParam }) => getHealthProposalPage(signal, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    retry: 1,
+  });
+  const proposals = proposalPages.data?.pages.flatMap((page) => page.items.map((proposal) => ({
+    id: proposal.id,
+    barrierId: proposal.barrierId,
+    ...(proposal.barrierName ? { barrierName: proposal.barrierName } : {}),
+    ...(proposal.currentHealth ? { currentHealth: proposal.currentHealth as BarrierHealth } : {}),
+    proposedHealth: proposal.proposedHealth as BarrierHealth,
+    ...(proposal.sourceReason ? { sourceReason: proposal.sourceReason } : {}),
+    simulated: proposal.simulated,
+  }))) ?? [];
+  const canDecide = Boolean(session.data?.roles.some((role) => role === "fieldloop.operator" || role === "fieldloop.manager"));
+  const submitDecision = async (input: { proposalId: string; decision: "accept" | "reject"; reason: string; idempotencyKey: string }) => {
+    if (!session.data) throw new Error("Session is unavailable");
+    await decideHealthProposal({ ...input, csrfToken: session.data.csrfToken });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: healthProposalsQueryKey }),
+      queryClient.invalidateQueries({ queryKey: ["map-layer", "barriers"] }),
+    ]);
+  };
   return <div className="context-overview-summary">
     <section className="context-summary-section" aria-labelledby="risk-summary-title">
       <h3 id="risk-summary-title">{t("riskSummary")}</h3>
@@ -480,6 +511,16 @@ function MapOverviewSummary({ summary }: { summary: VisibleFeatureSummary }) {
         </li>)}
       </ul>
     </section>
+    <HealthProposalReview
+      proposals={proposals}
+      isLoading={proposalPages.isLoading}
+      hasError={proposalPages.isError}
+      canDecide={canDecide}
+      hasMore={proposalPages.hasNextPage}
+      isLoadingMore={proposalPages.isFetchingNextPage}
+      onLoadMore={() => { void proposalPages.fetchNextPage(); }}
+      onDecision={submitDecision}
+    />
     <section className="context-summary-section" aria-labelledby="action-summary-title">
       <h3 id="action-summary-title">{t("openActionRequests")}</h3>
       <p className="empty-note">{t("actionRequestsUnavailable")}</p>
@@ -495,7 +536,7 @@ function FeatureOverview({ feature }: { feature: MapFeature }) {
     {feature.properties.chainageFrom !== null && feature.properties.chainageFrom !== undefined && <div><dt>{t("chainage")}</dt><dd className="mono">{formatChainage(feature.properties.chainageFrom)}–{formatChainage(feature.properties.chainageTo ?? feature.properties.chainageFrom)} m</dd></div>}
     <div><dt>{t("classification")}</dt><dd>{feature.properties.classification ?? t("unknown")}</dd></div>
     {typeof feature.properties.simulated === "boolean" && <div><dt>{t("provenance")}</dt><dd>{feature.properties.simulated ? t("simulationLabel") : feature.properties.label ?? t("publicBaseMap")}</dd></div>}
-    {health && <div><dt>{t("barrierHealth")}</dt><dd><HealthBadge health={health} /></dd></div>}
+    {health && <div><dt>{t("barrierHealthLabel")}</dt><dd><HealthBadge health={health} /></dd></div>}
     {feature.properties.riskBand && <div><dt>{t("riskBand")}</dt><dd>{feature.properties.riskBand}</dd></div>}
     {feature.properties.evidenceObservedAt && <div><dt>{t("latestEvidence")}</dt><dd><time className="mono" dateTime={feature.properties.evidenceObservedAt}>{new Date(feature.properties.evidenceObservedAt).toLocaleDateString(i18n.language === "th" ? "th-TH" : "en-GB", { timeZone: "Asia/Bangkok" })}</time></dd></div>}
   </dl>;

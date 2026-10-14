@@ -5,7 +5,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { simulator, resetSimulationFixture } from "./simulation-fixture.mjs";
 import { buildApp } from "../dist/app.js";
 import { registerSpa } from "../dist/spa.js";
@@ -21,6 +21,51 @@ const codes = new Map();
 let now = Date.now();
 let active = true;
 let unavailable = false;
+const emptyEventId = "00000000-0000-0000-0000-000000000000";
+const seedHealthProposals = () => [
+  { id: "00000000-0000-4000-8000-000000000083", barrierId: "00000000-0000-4000-8000-000000000183", barrierName: "SYNTHETIC-CP-01", currentHealth: "healthy", proposedHealth: "degraded", sourceReason: "SIMULATION rectifier reading is below the registered threshold", simulated: true, createdAt: "2026-10-14T00:00:00.000Z", status: "open", ownerSub: "synthetic-operator" },
+  { id: "00000000-0000-4000-8000-000000000084", barrierId: "00000000-0000-4000-8000-000000000184", barrierName: "SYNTHETIC-CP-02", currentHealth: "healthy", proposedHealth: "failed", sourceReason: "SIMULATION inspection signal requires owner review", simulated: true, createdAt: "2026-10-14T00:01:00.000Z", status: "open", ownerSub: "synthetic-operator" },
+];
+let healthProposals = seedHealthProposals();
+let healthDecisions = [];
+let healthEvents = [];
+let healthEventTime = new Date();
+const health = {
+  listProposals: async (user, cursor, limit) => {
+    const open = healthProposals.filter((proposal) => proposal.status === "open" && proposal.ownerSub === user.sub).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const items = cursor ? [] : open.slice(0, limit).map((proposal) => ({
+      id: proposal.id, barrierId: proposal.barrierId, barrierName: proposal.barrierName,
+      currentHealth: proposal.currentHealth, proposedHealth: proposal.proposedHealth,
+      sourceReason: proposal.sourceReason, simulated: proposal.simulated, createdAt: proposal.createdAt,
+    }));
+    return { items, limit, nextCursor: open.length > limit ? "fixture-next-cursor" : null };
+  },
+  decide: async ({ user, proposalId, decision, reason }) => {
+    const proposal = healthProposals.find((item) => item.id === proposalId);
+    if (!proposal || proposal.status !== "open" || user.sub !== proposal.ownerSub) throw new Error("Fixture proposal is unavailable");
+    proposal.status = decision === "accept" ? "accepted" : "rejected";
+    healthDecisions.push({ proposalId, decision, reason });
+    const currentHealth = decision === "accept" ? proposal.proposedHealth : proposal.currentHealth;
+    if (decision === "accept") {
+      healthEventTime = new Date(Math.max(Date.now(), healthEventTime.getTime() + 1));
+      const event = { id: randomUUID(), type: "barrier.health_changed", orgId: user.orgId,
+        entityId: randomUUID(), barrierId: proposal.barrierId, simulated: true, classification: "CONFIDENTIAL" };
+      const position = { createdAt: healthEventTime.toISOString(), id: event.id };
+      healthEvents.push({ position, event });
+    }
+    return { healthProposalId: proposal.id, status: proposal.status, barrierId: proposal.barrierId, health: currentHealth };
+  },
+  listNotifications: async (_user, _cursor, limit) => ({ items: [], limit, nextCursor: null }),
+  latestEventPosition: async () => ({ createdAt: healthEventTime.toISOString(), id: healthEvents.at(-1)?.position.id ?? emptyEventId }),
+  listEvents: async (_user, after, limit) => healthEvents.filter(({ position }) => !after
+    || position.createdAt > after.createdAt || (position.createdAt === after.createdAt && position.id > after.id)).slice(0, limit),
+};
+function resetHealthFixture() {
+  healthProposals = seedHealthProposals();
+  healthDecisions = [];
+  healthEvents = [];
+  healthEventTime = new Date();
+}
 const store = {
   createTransaction: async (transaction) => { transactions.set(transaction.stateHash, transaction); },
   consumeTransaction: async (key) => { const value = transactions.get(key); transactions.delete(key); return value; },
@@ -68,7 +113,16 @@ const auth = new BffAuthService({
     },
   },
 });
-const app = buildApp({ auth, baseUrl, simulator });
+const risk = {
+  listBowties: async () => [],
+  getBowtie: async () => { throw new Error("Unused browser fixture route"); },
+  getRisk: async () => { throw new Error("Unused browser fixture route"); },
+  explain: async () => { throw new Error("Unused browser fixture route"); },
+  getEvidence: async () => { throw new Error("Unused browser fixture route"); },
+  riskEventsAfter: async () => [],
+  processHealthChanges: async () => 0,
+};
+const app = buildApp({ auth, baseUrl, simulator, health, risk });
 await registerReference(app, fileURLToPath(new URL("reference/", import.meta.resolve("@fieldloop/contracts"))));
 await registerSpa(app, fileURLToPath(new URL("../../web/dist/", import.meta.url)));
 await app.ready();
@@ -79,9 +133,19 @@ const server = createServer({ key: await readFile(join(directory, "key.pem")), c
   try {
     const url = new URL(request.url, baseUrl);
     if (url.pathname === "/test/reset") {
-      resetSimulationFixture();
+      resetSimulationFixture(); resetHealthFixture();
       sessions.clear(); transactions.clear(); authorizations.clear(); codes.clear(); now = Date.now(); active = true; unavailable = false;
       response.end("reset"); return;
+    }
+    if (url.pathname === "/test/health-state") {
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ decisions: healthDecisions, eventCount: healthEvents.length })); return;
+    }
+    if (url.pathname === "/test/health-owner") {
+      const ownerSub = url.searchParams.get("sub");
+      if (!ownerSub) { response.writeHead(400); response.end("Missing owner"); return; }
+      healthProposals.forEach((proposal) => { proposal.ownerSub = ownerSub; });
+      response.end("updated"); return;
     }
     if (url.pathname === "/test/status") { response.setHeader("content-type", "application/json"); response.end(JSON.stringify({ sessions: sessions.size })); return; }
     if (url.pathname === "/test/revoke") { active = false; now += 61_000; response.end("revoked"); return; }

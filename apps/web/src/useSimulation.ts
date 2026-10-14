@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { api, SessionError } from "./api-client";
 import { applySimulationEvent, simulationKey, type SimulationRun } from "./simulation-events";
+import { applyRiskRecalculatedEvent } from "./risk-events";
+import { invalidateHealthProposalQueries } from "./health-proposals";
 
 export function useSimulation(): UseQueryResult<SimulationRun | null, SessionError> {
   return useQuery({ queryKey: simulationKey, queryFn: async ({ signal }) => {
@@ -17,7 +19,11 @@ export function useSimulationEvents() {
   useEffect(() => {
     const stream = new EventSource("/api/v1/events");
     stream.onopen = () => setConnected(true);
-    stream.onerror = () => { setConnected(false); void client.invalidateQueries({ queryKey: simulationKey }); };
+    stream.onerror = () => {
+      setConnected(false);
+      void client.invalidateQueries({ queryKey: simulationKey });
+      void client.invalidateQueries({ queryKey: ["bowtie"] });
+    };
     let queue = Promise.resolve();
     const receive = (event: MessageEvent<string>) => {
       // Serialise cache resets with later ticks; discard older revisions received in flight.
@@ -28,6 +34,18 @@ export function useSimulationEvents() {
     };
     stream.addEventListener("simulation.state", receive);
     stream.addEventListener("simulation.reset", receive);
+    stream.addEventListener("risk.recalculated", (event: MessageEvent<string>) => {
+      try {
+        const payload: unknown = JSON.parse(event.data);
+        if (!applyRiskRecalculatedEvent(client, payload)) void client.invalidateQueries({ queryKey: ["bowtie"] });
+      } catch {
+        void client.invalidateQueries({ queryKey: ["bowtie"] });
+      }
+      setConnected(true);
+    });
+    const refreshHealthProposals: EventListener = (event) => { void invalidateHealthProposalQueries(client, event.type); };
+    stream.addEventListener("health_proposal.created", refreshHealthProposals);
+    stream.addEventListener("barrier.health_changed", refreshHealthProposals);
     return () => { stream.close(); };
   }, [client]);
   return connected;

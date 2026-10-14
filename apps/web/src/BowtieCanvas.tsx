@@ -86,7 +86,7 @@ export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
         <ul>{bowtie.threats.map((threat) => <li key={threat.id}>{monoNumericText(threat.name)}</li>)}</ul>
         <h3>{t("barriers")}</h3>
         <ul>{bowtie.barriers.map((barrier) => <li key={barrier.id}>
-          <strong>{monoNumericText(barrier.name)}</strong> · {t("barrierType")}: {t(barrier.type)} · {t(barrier.side)} · {t(barrier.health)}
+          <strong>{monoNumericText(barrier.name)}</strong> · {t("barrierTypeLabel")}: {t(barrier.type)} · {t(barrier.side)} · {t(barrier.health)}
           {barrier.degradationFactors.length === 0
             ? <> · {t("noDegradationFactors")}</>
             : barrier.degradationFactors.map((factor) => <span key={factor.id}> · {t("degradationFactor")}: {monoNumericText(factor.description)}
@@ -115,7 +115,7 @@ function BarrierCard({ barrier }: { barrier: BowtieView["barriers"][number] }) {
       <strong>{monoNumericText(barrier.name)}</strong>
       <HealthBadge health={barrier.health as BarrierHealth} label={t(barrier.health)} />
     </div>
-    <p className="bowtie-barrier-type">{t("barrierType")}: {t(barrier.type)}</p>
+    <p className="bowtie-barrier-type">{t("barrierTypeLabel")}: {t(barrier.type)}</p>
     <section className="bowtie-degradation" aria-label={t("degradationFactors")}>
       <h3>{t("degradationFactors")}</h3>
       {barrier.degradationFactors.length === 0

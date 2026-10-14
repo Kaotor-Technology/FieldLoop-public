@@ -41,6 +41,21 @@ export function registerHealthRoutes(app: FastifyInstance, health?: HealthServic
       });
     }
 
+    routes.get("/api/v1/health-proposals", async (request, reply) => {
+      const query = request.query as Record<string, unknown>;
+      const status = query["status"];
+      const cursor = query["cursor"];
+      const rawLimit = query["limit"];
+      const limit = rawLimit === undefined ? 50 : typeof rawLimit === "string" && /^\d{1,3}$/.test(rawLimit) ? Number(rawLimit) : Number.NaN;
+      if (status !== "open" || (cursor !== undefined && (typeof cursor !== "string" || cursor.length < 1 || cursor.length > 512))
+        || !Number.isInteger(limit) || limit < 1 || limit > 200
+        || Object.keys(query).some((key) => !["status", "cursor", "limit"].includes(key))) {
+        throw new HealthServiceError(400, "validation_failed");
+      }
+      const page = await service().listProposals(currentUser(request), typeof cursor === "string" ? cursor : undefined, limit);
+      return reply.header("cache-control", "private, no-store").send(page);
+    });
+
     routes.get("/api/v1/notifications", async (request, reply) => {
       const query = request.query as Record<string, unknown>;
       const cursor = query["cursor"];

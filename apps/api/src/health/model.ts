@@ -24,6 +24,21 @@ export interface NotificationPage {
   limit: number;
   nextCursor: string | null;
 }
+export interface HealthProposalItem {
+  id: string;
+  barrierId: string;
+  barrierName: string | null;
+  currentHealth: string | null;
+  proposedHealth: string;
+  sourceReason: string | null;
+  simulated: boolean;
+  createdAt: string;
+}
+export interface HealthProposalPage {
+  items: HealthProposalItem[];
+  limit: number;
+  nextCursor: string | null;
+}
 export interface EventPosition {
   createdAt: string;
   id: string;
@@ -41,6 +56,7 @@ export interface HealthServicePort {
     reason: string;
     idempotencyKey: string;
   }): Promise<HealthDecisionResult>;
+  listProposals(user: CurrentUser, cursor: string | undefined, limit: number): Promise<HealthProposalPage>;
   listNotifications(user: CurrentUser, cursor: string | undefined, limit: number): Promise<NotificationPage>;
   latestEventPosition(user: CurrentUser): Promise<EventPosition | null>;
   listEvents(user: CurrentUser, after: EventPosition | null, limit: number): Promise<StoredHealthEvent[]>;

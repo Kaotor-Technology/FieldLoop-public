@@ -30,6 +30,10 @@ tags:
     description: Internal token verification keys; contains no user data.
   - name: Simulation
     description: Deterministic, sandboxed Scenario player.
+  - name: Risk
+    description: Organisation-calibrated Bowtie risk scores, snapshots and explanations.
+  - name: Evidence
+    description: Organisation-scoped source Evidence metadata.
   - name: Health
     description: Barrier Health decisions and in-app notifications.
 paths:
@@ -616,12 +620,11 @@ paths:
     get:
       operationId: streamEvents
       summary: Stream live domain and simulation events
-      description: SSE emits scoped health and notification events with simulation snapshots. Last-Event-ID resumes the
-        event cursor. Simulation reset invalidates all client caches. The stream is limited to a session validation
-        window; reconnect reauthenticates.
+      description: SSE emits scoped Health, notification, simulation, and Risk events. Risk events carry a persisted RiskSnapshot and the controlled-standard calibration provenance used to calculate it. Last-Event-ID resumes the event cursor; reconnect reauthenticates.
       tags:
       - Health
       - Simulation
+      - Risk
       parameters:
       - name: Last-Event-ID
         in: header
@@ -632,9 +635,7 @@ paths:
           maxLength: 512
       responses:
         '200':
-          description: Event stream for barrier.health_changed, health_proposal.created, evidence.created,
-            notification.delivered,
-            simulation.state and simulation.reset.
+          description: Event stream for barrier.health_changed, health_proposal.created, evidence.created, notification.delivered, simulation.state, simulation.reset and risk.recalculated.
           content:
             text/event-stream:
               schema:
@@ -651,6 +652,136 @@ paths:
           $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /v1/bowties:
+    get:
+      operationId: listBowties
+      summary: List Bowties visible to the current Organisation
+      description: Returns Bowtie canvas entry points scoped to the signed-in Organisation and clearance.
+      tags: [Risk]
+      responses:
+        '200':
+          description: Bowties in the current Organisation.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/BowtieSummary' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/bowties/{bowtieId}:
+    get:
+      operationId: getBowtieCanvas
+      summary: Read a Bowtie canvas
+      description: Returns the scoped Threat, Barrier, path and Consequence data used by the three-column canvas.
+      tags: [Risk]
+      parameters:
+        - name: bowtieId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Bowtie canvas data.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BowtieCanvas' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/bowties/{bowtieId}/risk:
+    get:
+      operationId: getBowtieRisk
+      summary: Read the current Bowtie Risk Score
+      description: Calculates with the approved Organisation Risk Matrix, persists a full RiskSnapshot and its controlled-standard reference/version when inputs change, and returns risk_matrix_unconfigured until the matrix, severity criteria and standard provenance have Technical Authority approval.
+      tags: [Risk]
+      parameters:
+        - name: bowtieId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Current persisted RiskSnapshot.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RiskSnapshotEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/bowties/{bowtieId}/risk/explain:
+    get:
+      operationId: explainBowtieRisk
+      summary: Explain the change from the previous RiskSnapshot
+      description: Compares the current and previous persisted inputs, orders changed Barriers by calculated consequence-frequency impact and links available source Evidence. With no prior snapshot it explicitly reports no change.
+      tags: [Risk]
+      parameters:
+        - name: bowtieId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Risk score comparison and ranked causes.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RiskExplain' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/evidence/{evidenceId}:
+    get:
+      operationId: getEvidenceSummary
+      summary: Read source Evidence metadata
+      description: Returns metadata for a source Evidence record when it belongs to the current Organisation and is within the caller's clearance.
+      tags: [Evidence]
+      parameters:
+        - name: evidenceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Evidence metadata without blob contents or storage credentials.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceSummary' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/health-proposals:
+    get:
+      operationId: listHealthProposals
+      summary: List the signed-in Barrier Owner's open Health Proposals
+      description: Returns current open proposals owned by the signed-in user within Organisation and clearance scope, newest first.
+      tags: [Health]
+      parameters:
+      - name: status
+        in: query
+        required: true
+        schema: { type: string, const: open }
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Current user's open Health Proposals in reverse chronological order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthProposalPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /v1/health-proposals/{healthProposalId}:accept:
     post:
       operationId: acceptHealthProposal
@@ -1068,6 +1199,29 @@ components:
         barrierId: { type: string, format: uuid }
         health: { type: string, enum: [healthy, degraded, failed, unverified] }
       required: [healthProposalId, status, barrierId, health]
+    HealthProposal:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        barrierId: { type: string, format: uuid }
+        barrierName: { type: [string, 'null'] }
+        currentHealth: { type: [string, 'null'], enum: [healthy, degraded, failed, unverified, null] }
+        proposedHealth: { type: string, enum: [healthy, degraded, failed, unverified] }
+        sourceReason: { type: [string, 'null'] }
+        simulated: { type: boolean }
+        createdAt: { type: string, format: date-time }
+      required: [id, barrierId, barrierName, currentHealth, proposedHealth, sourceReason, simulated, createdAt]
+    HealthProposalPage:
+      allOf:
+      - $ref: '#/components/schemas/CursorPage'
+      - type: object
+        properties:
+          items:
+            type: array
+            items: { $ref: '#/components/schemas/HealthProposal' }
+          limit: { type: integer, minimum: 1, maximum: 200 }
+        required: [items, limit]
     Notification:
       type: object
       additionalProperties: false
@@ -1106,6 +1260,222 @@ components:
         csrfToken: { type: string }
         authTime: { type: string, format: date-time }
 
+    BowtieSummary:
+      type: object
+      additionalProperties: false
+      required: [id, hazard, topEvent, domain, status, simulated, classification]
+      properties:
+        id: { type: string, format: uuid }
+        hazard: { type: string }
+        topEvent: { type: string }
+        domain: { type: [string, 'null'] }
+        status: { type: [string, 'null'] }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+    BowtieCanvas:
+      type: object
+      additionalProperties: false
+      required: [id, hazard, topEvent, domain, status, simulated, classification, severityCriteria, threats, barriers, consequences, paths]
+      properties:
+        id: { type: string, format: uuid }
+        hazard: { type: string }
+        topEvent: { type: string }
+        domain: { type: [string, 'null'] }
+        status: { type: [string, 'null'] }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+        severityCriteria:
+          oneOf:
+            - { $ref: '#/components/schemas/RiskSeverityCriteria' }
+            - { type: 'null' }
+        threats:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, frequencyPerYear]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              frequencyPerYear: { type: number, minimum: 0 }
+        barriers:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, type, side, health, pfdBand, degradationFactors]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              type: { type: string, enum: [technical, organisational, human] }
+              side: { type: string, enum: [preventive, mitigative] }
+              health: { type: string, enum: [healthy, degraded, failed, unverified] }
+              pfdBand: { type: number, exclusiveMinimum: 0, maximum: 1 }
+              degradationFactors: { type: array, items: { type: string } }
+        consequences:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, severity]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              severity: { type: object, additionalProperties: { type: integer, minimum: 1, maximum: 5 } }
+        paths:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, side, targetId, barrierIds]
+            properties:
+              id: { type: string }
+              side: { type: string, enum: [preventive, mitigative] }
+              targetId: { type: string, format: uuid }
+              barrierIds: { type: array, items: { type: string, format: uuid } }
+    RiskSnapshotEnvelope:
+      type: object
+      additionalProperties: false
+      required: [id, createdAt, trigger, calibration, snapshot]
+      properties:
+        id: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        trigger: { type: string }
+        calibration: { $ref: '#/components/schemas/RiskCalibration' }
+        snapshot: { $ref: '#/components/schemas/RiskSnapshot' }
+    RiskCalibration:
+      type: object
+      additionalProperties: false
+      required: [standardRef, standardVersion, approvedBy, approvedAt]
+      properties:
+        standardRef: { type: string, minLength: 1 }
+        standardVersion: { type: string, minLength: 1 }
+        approvedBy: { type: string, minLength: 1 }
+        approvedAt: { type: string, format: date-time }
+    RiskSnapshot:
+      type: object
+      additionalProperties: false
+      required: [bowtieId, topEventFrequencyPerYear, threats, consequences, worstConsequenceId, cell]
+      properties:
+        bowtieId: { type: string, format: uuid }
+        topEventFrequencyPerYear: { type: number, minimum: 0 }
+        threats: { type: array, items: { $ref: '#/components/schemas/RiskThreatResult' } }
+        consequences: { type: array, items: { $ref: '#/components/schemas/RiskConsequenceResult' } }
+        worstConsequenceId: { type: string, format: uuid }
+        cell: { $ref: '#/components/schemas/RiskCell' }
+    RiskThreatResult:
+      type: object
+      additionalProperties: false
+      required: [threatId, frequencyPerYear, path]
+      properties:
+        threatId: { type: string, format: uuid }
+        frequencyPerYear: { type: number, minimum: 0 }
+        path: { $ref: '#/components/schemas/RiskPathResult' }
+    RiskConsequenceResult:
+      type: object
+      additionalProperties: false
+      required: [consequenceId, frequencyPerYear, severityBand, path, cell]
+      properties:
+        consequenceId: { type: string, format: uuid }
+        frequencyPerYear: { type: number, minimum: 0 }
+        severityBand: { type: integer, enum: [1, 2, 3, 4, 5] }
+        path: { $ref: '#/components/schemas/RiskPathResult' }
+        cell: { $ref: '#/components/schemas/RiskCell' }
+    RiskPathResult:
+      type: object
+      additionalProperties: false
+      required: [pathId, targetId, pfd, barriers]
+      properties:
+        pathId: { type: string, minLength: 1 }
+        targetId: { type: string, format: uuid }
+        pfd: { type: number, minimum: 0, maximum: 1 }
+        barriers: { type: array, items: { $ref: '#/components/schemas/RiskBarrierCredit' } }
+    RiskBarrierCredit:
+      type: object
+      additionalProperties: false
+      required: [barrierId, health, effectivePfd, credited]
+      properties:
+        barrierId: { type: string, format: uuid }
+        health: { type: string, enum: [healthy, degraded, failed, unverified] }
+        effectivePfd: { type: number, minimum: 0, maximum: 1 }
+        credited: { type: boolean }
+    RiskCell:
+      type: object
+      additionalProperties: false
+      required: [frequencyBand, severityBand, zone, rank]
+      properties:
+        frequencyBand: { type: integer, enum: [1, 2, 3, 4, 5] }
+        severityBand: { type: integer, enum: [1, 2, 3, 4, 5] }
+        zone: { type: string, enum: [green, amber, red] }
+        rank: { type: integer, minimum: 1, maximum: 25 }
+    RiskSeverityCriteria:
+      type: object
+      additionalProperties: false
+      required: [people, environment, financial, serviceContinuity, reputation, legalRegulatory]
+      properties:
+        people: { type: array, minItems: 5, maxItems: 5, items: { type: string, minLength: 1 } }
+        environment: { type: array, minItems: 5, maxItems: 5, items: { type: string, minLength: 1 } }
+        financial: { type: array, minItems: 5, maxItems: 5, items: { type: string, minLength: 1 } }
+        serviceContinuity: { type: array, minItems: 5, maxItems: 5, items: { type: string, minLength: 1 } }
+        reputation: { type: array, minItems: 5, maxItems: 5, items: { type: string, minLength: 1 } }
+        legalRegulatory: { type: array, minItems: 5, maxItems: 5, items: { type: string, minLength: 1 } }
+    RiskExplain:
+      type: object
+      additionalProperties: false
+      required: [bowtieId, hasPrevious, summary, previous, current, changes, riskInputChanges]
+      properties:
+        bowtieId: { type: string, format: uuid }
+        hasPrevious: { type: boolean }
+        summary: { type: string }
+        previous: { oneOf: [{ $ref: '#/components/schemas/RiskSnapshotEnvelope' }, { type: 'null' }] }
+        current: { $ref: '#/components/schemas/RiskSnapshotEnvelope' }
+        changes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [barrierId, beforeHealth, afterHealth, reason, sourceEvidenceId, sourceEvidenceHref, topEventFrequencyDeltaPerYear, consequenceFrequencyDeltasPerYear, impact]
+            properties:
+              barrierId: { type: string, format: uuid }
+              beforeHealth: { type: string }
+              afterHealth: { type: string }
+              reason: { type: string }
+              sourceEvidenceId: { oneOf: [{ type: string, format: uuid }, { type: 'null' }] }
+              sourceEvidenceHref: { oneOf: [{ type: string }, { type: 'null' }] }
+              topEventFrequencyDeltaPerYear: { type: number }
+              consequenceFrequencyDeltasPerYear:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [consequenceId, delta]
+                  properties:
+                    consequenceId: { type: string, format: uuid }
+                    delta: { type: number }
+              impact: { type: number, minimum: 0 }
+        riskInputChanges:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [path, beforeValue, afterValue]
+            properties:
+              path: { type: string, minLength: 1 }
+              beforeValue: { oneOf: [{ type: string }, { type: 'null' }] }
+              afterValue: { oneOf: [{ type: string }, { type: 'null' }] }
+    EvidenceSummary:
+      type: object
+      additionalProperties: false
+      required: [id, barrierId, kind, source, observedAt, simulated, classification]
+      properties:
+        id: { type: string, format: uuid }
+        barrierId: { type: string, format: uuid }
+        kind: { type: string }
+        source: { type: string }
+        observedAt: { type: string, format: date-time }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+
     Jwks:
       type: object
       required: [keys]
@@ -1140,6 +1510,10 @@ components:
         - rate_limited
         - internal_error
         - service_unavailable
+        - risk_matrix_unconfigured
+        - risk_matrix_invalid
+        - risk_service_unavailable
+        - risk_input_invalid
 
     Problem:
       type: object

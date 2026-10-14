@@ -79,6 +79,24 @@ try {
   const healthBefore = await snapshot();
   const cpBarrierBefore = (await sql`SELECT id, health FROM app.barrier WHERE org_id = ${orgId} AND code = 'cathodic-protection'`.execute(database)).rows[0];
   assert.ok(cpBarrierBefore, "the seeded DL-01 CP Barrier must exist");
+  // FL-33 happy path: the synthetic CP Evidence from 2025-10-13 is past its 12-month interval.
+  await sql`UPDATE app.barrier SET evidence_interval = NULL WHERE org_id = ${orgId} AND id <> ${cpBarrierBefore.id}::uuid`.execute(database);
+  await sql`UPDATE app.barrier SET health = 'healthy', evidence_interval = INTERVAL '12 months'
+    WHERE org_id = ${orgId} AND id = ${cpBarrierBefore.id}::uuid`.execute(database);
+  const cpLatestEvidence = (await sql`SELECT observed_at FROM app.evidence WHERE org_id = ${orgId}
+    AND barrier_id = ${cpBarrierBefore.id}::uuid AND simulated = true AND simulation_retired_at IS NULL
+    ORDER BY observed_at DESC, id DESC LIMIT 1`.execute(database)).rows[0];
+  assert.equal(cpLatestEvidence?.observed_at.toISOString(), "2025-10-13T00:00:00.000Z");
+  assert.deepEqual(await store.ageEvidence(new Date("2026-10-14T00:00:00.000Z")), { changed: 1, notified: 0 },
+    "CP Evidence older than its seeded 12-month Performance Standard becomes Unverified");
+  assert.equal((await sql`SELECT health FROM app.barrier WHERE id = ${cpBarrierBefore.id}::uuid`.execute(database)).rows[0].health, "unverified");
+  assert.deepEqual((await sql`SELECT from_health AS "fromHealth", to_health AS "toHealth", actor FROM app.health_change
+    WHERE org_id = ${orgId} AND barrier_id = ${cpBarrierBefore.id}::uuid ORDER BY created_at DESC, id DESC LIMIT 1`.execute(database)).rows[0],
+    { fromHealth: "healthy", toHealth: "unverified", actor: "ageing" });
+  assert.ok((await sql`SELECT id FROM app.signal_event_outbox WHERE org_id = ${orgId}
+    AND event->>'type' = 'barrier.health_changed' AND event->>'barrierId' = ${cpBarrierBefore.id} LIMIT 1`.execute(database)).rows[0],
+    "Evidence ageing emits barrier.health_changed for the CP Barrier");
+  await sql`UPDATE app.barrier SET health = 'healthy' WHERE org_id = ${orgId} AND id = ${cpBarrierBefore.id}::uuid`.execute(database);
   const otherHealthBefore = (await sql`SELECT id, health FROM app.barrier WHERE org_id = ${otherOrg} ORDER BY id`.execute(database)).rows;
   await assert.rejects(sql`SELECT access_token FROM app.user_session LIMIT 1`.execute(application), /permission denied/);
   await assert.rejects(sql`UPDATE app.audit_event SET action = 'forged' WHERE false`.execute(application), /permission denied/);
@@ -207,8 +225,8 @@ try {
   assert.equal(await store.detectSilence(new Date("2027-01-31T03:00:00.001Z")), 2);
   assert.equal(await store.detectSilence(new Date("2027-01-31T03:00:00.002Z")), 0);
   assert.equal((await sql`SELECT health FROM app.barrier WHERE org_id = ${orgId} AND code = 'cathodic-protection'`.execute(database)).rows[0].health, "failed");
-  assert.equal(await count("health_change"), 5); assert.equal(await count("audit_event"), 5);
-  assert.equal(await count("audit_event", sql`AND prev_hash IS NOT NULL`), 4);
+  assert.equal(await count("health_change"), 6); assert.equal(await count("audit_event"), 6);
+  assert.equal(await count("audit_event", sql`AND prev_hash IS NOT NULL`), 5);
   assert.equal(await count("health_change", sql`AND classification = 'HIGHLY_RESTRICTED'`), 2);
   assert.equal((await sql`SELECT count(*)::int AS count FROM app.health_proposal WHERE org_id = ${otherOrg}`.execute(database)).rows[0].count, 0);
   assert.deepEqual((await sql`SELECT id, health FROM app.barrier WHERE org_id = ${otherOrg} ORDER BY id`.execute(database)).rows, otherHealthBefore);
