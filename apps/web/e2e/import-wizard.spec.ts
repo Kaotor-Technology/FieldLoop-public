@@ -51,6 +51,24 @@ test("completes four steps, resumes after reload and commits linked Evidence",as
   await page.keyboard.press("Escape");
   await expect(page.getByRole("button",{name:"Import KML points"})).toBeFocused();
 });
+test("rejects invalid tolerance before sending a mapping request",async({page})=>{
+  await upload(page);
+  const dialog=page.getByRole("dialog");
+  await dialog.getByRole("button",{name:"Next",exact:true}).click();
+  await dialog.getByLabel("Linear Asset").selectOption(assetId);
+  let mappingRequests=0;
+  page.on("request",request=>{if(new URL(request.url()).pathname.endsWith("/mapping")) mappingRequests++;});
+  const tolerance=dialog.getByLabel("Snap tolerance (metres)");
+  await tolerance.fill("-1");
+  await dialog.getByRole("button",{name:"Next",exact:true}).click();
+  await expect(tolerance).toHaveAttribute("aria-invalid","true");
+  await expect(dialog.getByRole("alert")).toContainText("Check this value");
+  expect(mappingRequests).toBe(0);
+  await tolerance.fill("50");
+  await dialog.getByRole("button",{name:"Next",exact:true}).click();
+  await expect(dialog.getByLabel("Import target")).toBeVisible();
+  expect(mappingRequests).toBe(1);
+});
 for(const theme of ["light","dark"] as const) for(const width of [390,1280]) {
   test(`wizard passes axe in ${theme} at ${width}`,async({page})=>{
     await page.setViewportSize({width,height:900});await page.emulateMedia({reducedMotion:"reduce"});

@@ -18,6 +18,8 @@
 .import-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-space-3); }
 .import-wizard .mono { overflow-wrap: anywhere; }
 .import-wizard input, .import-wizard select, .import-map figcaption { font-family: var(--type-mono-md-font-family), monospace; }
+.import-fields { border: 0; padding: 0; margin: 0; }
+.import-field { display: grid; gap: var(--spacing-space-2); }
 
 @theme inline {
   --color-field-canvas: var(--canvas);
