@@ -23,7 +23,9 @@ $$ LANGUAGE sql STABLE STRICT SET timezone = 'UTC';
 -- Lock order rule: take domain row locks first and call this function last in the transaction,
 -- so the Organisation lock never waits on a domain lock held by another audit writer. The
 -- function joins the caller's transaction and never commits; it needs READ COMMITTED so the
--- predecessor read after the lock sees every committed append.
+-- predecessor read after the lock sees every committed append. p_org_id and p_actor are trusted
+-- inputs: the calling service takes them from its verified session or internal token, because the
+-- database cannot authenticate them. Only the roles granted EXECUTE below may call this function.
 CREATE FUNCTION append_audit_event(
     p_org_id text, p_actor text, p_action text, p_entity text,
     p_before_hash text, p_after_hash text, p_simulated boolean, p_classification text,
