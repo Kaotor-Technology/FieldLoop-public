@@ -14,6 +14,9 @@ PROVIDER_ENDPOINT = re.compile(
     r"aiplatform\.googleapis\.com|generativelanguage\.googleapis\.com|api\.(openai|anthropic)\.com"
 )
 EMBEDDING_ADAPTER = "packages/adapters/python/src/fieldloop_adapters/embeddings.py"
+# Re-exports data types only (Content, Part, HttpOptions); generation methods stay rejected.
+ADK_TYPES_ADAPTER = "packages/adapters/python/src/fieldloop_adapters/adk_types.py"
+PROVIDER_IMPORT_ALLOWED = {EMBEDDING_ADAPTER, ADK_TYPES_ADAPTER}
 
 
 def check_python_boundary(path: str, source: str) -> list[str]:
@@ -30,9 +33,13 @@ def check_python_boundary(path: str, source: str) -> list[str]:
             modules = [node.module or ""] + [
                 f"{node.module}.{alias.name}" for alias in node.names
             ]
-        if isinstance(node, (ast.Import, ast.ImportFrom)) and path != EMBEDDING_ADAPTER and any(
+        imports_provider = any(
             module == provider or module.startswith(provider + ".")
             for module in modules for provider in PROVIDER_MODULES
+        )
+        if (
+            isinstance(node, (ast.Import, ast.ImportFrom))
+            and path not in PROVIDER_IMPORT_ALLOWED and imports_provider
         ):
             errors.append(f"{path}:{node.lineno}: Provider SDK belongs in adapters (GR-1)")
         if isinstance(node, ast.Attribute) and node.attr in GENERATION_METHODS:

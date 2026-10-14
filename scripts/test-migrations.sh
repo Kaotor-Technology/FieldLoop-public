@@ -85,6 +85,8 @@ CREATE ROLE "fl-v2-simulator-dev@example-project.iam" LOGIN;
 CREATE ROLE "fl-v2-simulator-demo@example-project.iam" LOGIN;
 CREATE ROLE "fl-v2-guardrail-dev@example-project.iam" LOGIN;
 CREATE ROLE "fl-v2-guardrail-demo@example-project.iam" LOGIN;
+CREATE ROLE "fl-v2-assistant-dev@example-project.iam" LOGIN;
+CREATE ROLE "fl-v2-assistant-demo@example-project.iam" LOGIN;
 CREATE DATABASE fieldloop_dev;
 CREATE DATABASE fieldloop_demo;
 SQL
@@ -96,6 +98,8 @@ run_psql_database fieldloop_dev < db/test/simulator_roles.sql
 run_psql_database fieldloop_demo < db/test/simulator_roles.sql
 run_psql_database fieldloop_dev < db/test/guardrail_roles.sql
 run_psql_database fieldloop_demo < db/test/guardrail_roles.sql
+run_psql_database fieldloop_dev < db/test/assistant_roles.sql
+run_psql_database fieldloop_demo < db/test/assistant_roles.sql
 run_psql_database fieldloop_dev < db/test/action_requests.sql
 run_psql_database fieldloop_demo < db/test/action_requests.sql
 run_psql_database fieldloop_dev < db/test/audit_append_roles.sql

@@ -108,7 +108,16 @@ export interface EnvelopeCrypto {
   decryptWithKey(ciphertext: Buffer, wrappedDataKey: Buffer, additionalData?: string): Promise<string>;
 }
 
+export interface InternalTokenClaims {
+  sub: string;
+  roles: string[];
+  clearance: string;
+  orgId: string;
+}
+
 export interface InternalTokenService {
   sign(user: AuthUser): Promise<string>;
+  /** Verifies a token this service minted; used to let the assistant read as the user. */
+  verify?(token: string): Promise<InternalTokenClaims>;
   jwks(): Promise<{ keys: Record<string, unknown>[] }>;
 }

@@ -9,7 +9,29 @@ import type { AuthDatabase } from "../auth/postgres-store.js";
 export type MapBoundingBox = readonly [west: number, south: number, east: number, north: number];
 export type { MapFeature, MapFeatureCollection, MapLayerName } from "@fieldloop/map";
 
+export interface AssetRecord {
+  id: string;
+  type: string;
+  name: string;
+  code: string | null;
+  label: string | null;
+  domainPack: string | null;
+  simulated: boolean;
+  classification: string;
+  geometry: unknown;
+}
+
+export interface AssetLookup {
+  assetId: string;
+  orgId: string;
+  clearance: string;
+  allowSeededDemoGeometry: boolean;
+}
+
 export interface MapLayerStore {
+  /** One Asset by UUID or asset code, scoped to the caller's Organisation and clearance. */
+  getAsset(input: AssetLookup): Promise<AssetRecord | null>;
+
   getLayer(input: {
     layer: MapLayerName;
     bbox: MapBoundingBox;
@@ -25,6 +47,10 @@ const DEMO_ROLES = new Set(["fieldloop.viewer", "fieldloop.operator", "fieldloop
 const MAX_FEATURES = 50_000;
 
 export class UnavailableMapLayerStore implements MapLayerStore {
+  async getAsset(): Promise<AssetRecord | null> {
+    throw new MapServiceError("service_unavailable", 503, "Asset data is unavailable");
+  }
+
   async getLayer(): Promise<MapFeatureCollection> {
     throw new MapServiceError("service_unavailable", 503, "Map data is unavailable");
   }
@@ -32,6 +58,19 @@ export class UnavailableMapLayerStore implements MapLayerStore {
 
 export class PostgresMapLayerStore implements MapLayerStore {
   constructor(private readonly db: Kysely<AuthDatabase>) {}
+
+  async getAsset(input: AssetLookup): Promise<AssetRecord | null> {
+    const result = await bindPostgisQuery<AssetRow>(ASSET_BY_ID_SQL, [
+      input.orgId, input.assetId, classificationsThrough(input.clearance), input.allowSeededDemoGeometry,
+    ]).execute(this.db);
+    const row = result.rows[0];
+    if (!row) return null;
+    return {
+      id: row.id, type: row.type, name: row.name, code: row.code, label: row.label,
+      domainPack: row.domain_pack, simulated: row.simulated, classification: row.classification,
+      geometry: row.geometry,
+    };
+  }
 
   async getLayer(input: {
     layer: MapLayerName;
@@ -374,6 +413,30 @@ export function registerMapLayerRoutes(app: FastifyInstance, store: MapLayerStor
     return reply.header("cache-control", "private, no-store").send({ mapsApiKey });
   });
 
+  app.get("/api/v1/assets/:assetId", async (request, reply) => {
+    const user = request.fieldLoopCurrentUser;
+    const problem = (status: number, code: string, title: string) => reply.code(status)
+      .type("application/problem+json")
+      .send({ type: "about:blank", title, status, code, traceId: request.id });
+    if (!user) return problem(401, "unauthenticated", "Authentication required");
+    const { assetId } = request.params as { assetId: string };
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(assetId)) {
+      return problem(400, "validation_failed", "Asset identifier is invalid");
+    }
+    try {
+      const asset = await store.getAsset({
+        assetId, orgId: user.orgId, clearance: user.clearance,
+        allowSeededDemoGeometry: user.roles.some((role) => DEMO_ROLES.has(role)),
+      });
+      if (!asset) return problem(404, "not_found", "Asset was not found");
+      return reply.header("cache-control", "private, no-store").send(asset);
+    } catch (error) {
+      if (error instanceof MapServiceError) return problem(error.statusCode, error.code, error.message);
+      request.log.error({ err: error }, "Asset query failed");
+      return problem(503, "service_unavailable", "Asset data is unavailable");
+    }
+  });
+
   app.get("/api/v1/map/layers/:layer", async (request, reply) => {
     const user = request.fieldLoopCurrentUser;
     if (!user) {
@@ -498,6 +561,32 @@ function featureLimitForZoom(zoom: number): number {
   if (zoom < 9) return 10_000;
   return MAX_FEATURES;
 }
+
+interface AssetRow {
+  id: string;
+  type: string;
+  name: string;
+  code: string | null;
+  label: string | null;
+  domain_pack: string | null;
+  simulated: boolean;
+  classification: string;
+  geometry: unknown;
+}
+
+// Same visibility rule as the asset layer (Organisation, clearance, seeded demo geometry).
+export const ASSET_BY_ID_SQL = `
+SELECT a.id::text AS id, a.type, a.domain_pack, a.simulated, a.classification,
+       COALESCE(a.attributes->>'name', a.attributes->>'asset_code', a.id::text) AS name,
+       a.attributes->>'asset_code' AS code, a.attributes->>'label' AS label,
+       ST_AsGeoJSON(a.geom)::jsonb AS geometry
+FROM app.asset a
+WHERE a.org_id = $1 AND (a.id::text = lower($2) OR a.attributes->>'asset_code' = $2)
+  AND (a.classification = ANY($3::text[]) OR
+    ($4::boolean AND a.simulated IS TRUE AND a.created_by IN ('seed:dl-01', 'seed:bangkok')))
+ORDER BY (a.id::text = lower($2)) DESC, a.id
+LIMIT 1
+`;
 
 export const ASSET_LAYER_SQL = `
 WITH visible_asset AS (
