@@ -1,18 +1,11 @@
 import { createHash, randomUUID } from "node:crypto";
 import { sql, type Kysely } from "kysely";
+import type { ImportMapping } from "@fieldloop/contracts";
 import type { CurrentUser } from "../auth/service.js";
 import { ImportError, parseUpload, type KmlPoint } from "./parser.js";
 
 const CLASSIFICATION_ORDER = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"];
-export interface ImportMapping {
-  assetId: string;
-  toleranceMetres: number;
-  nameField: string;
-  descriptionField: string;
-  categoryField: string;
-  target: "evidence" | "facility";
-  barrierId: string | null;
-}
+export type { ImportMapping } from "@fieldloop/contracts";
 export interface PreviewPoint extends KmlPoint {
   id: string;
   distanceMetres: number | null;

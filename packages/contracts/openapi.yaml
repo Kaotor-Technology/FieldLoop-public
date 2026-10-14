@@ -1321,10 +1321,13 @@ components:
           maximum: 1000
         nameField:
           type: string
+          maxLength: 200
         descriptionField:
           type: string
+          maxLength: 200
         categoryField:
           type: string
+          maxLength: 200
         target:
           type: string
           enum:

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { importMappingRequestSchema, type components } from "@fieldloop/contracts";
 import { ImportError, MAX_UPLOAD_BYTES } from "./parser.js";
-import type { ImportMapping, ImportPort } from "./store.js";
+import type { ImportPort } from "./store.js";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const keyPattern = /^[A-Za-z0-9._:-]{16,128}$/;
@@ -8,7 +9,7 @@ export function registerImportRoutes(app: FastifyInstance, imports?: ImportPort)
   app.register(async (routes) => {
     routes.setErrorHandler((error: unknown, request, reply) => {
       const status = error instanceof ImportError ? error.status : (error as { statusCode?: number })?.statusCode ?? 503;
-      const code = error instanceof ImportError ? error.code : status < 500 ? "validation_failed" : "service_unavailable";
+      const code = problemCode(error, status);
       if (status >= 500) request.log.error({ errorType: error instanceof Error ? error.name : "unknown" },"Import request failed");
       return reply.code(status).type("application/problem+json").send({ type:"about:blank",title:"Import request could not be completed",status,code,traceId:request.id });
     });
@@ -32,16 +33,9 @@ export function registerImportRoutes(app: FastifyInstance, imports?: ImportPort)
     });
     routes.get("/api/v1/imports/:importId/preview", async (request) => service().preview(currentUser(request),id(request.params)));
     routes.put("/api/v1/imports/:importId/mapping", async (request) => {
-      const body = object(request.body), mapping = object(body["mapping"]);
-      const version = body["version"];
-      if (!Number.isInteger(version) || Number(version) < 1 || Object.keys(body).some((key) => !["version","mapping"].includes(key))
-        || Object.keys(mapping).some((key) => !["assetId","toleranceMetres","nameField","descriptionField","categoryField","target","barrierId"].includes(key))
-        || typeof mapping["assetId"] !== "string" || !uuid.test(mapping["assetId"])
-        || typeof mapping["toleranceMetres"] !== "number" || !Number.isFinite(mapping["toleranceMetres"]) || mapping["toleranceMetres"] < 0 || mapping["toleranceMetres"] > 1000
-        || !["nameField","descriptionField","categoryField"].every((key) => typeof mapping[key] === "string" && mapping[key].length <= 200)
-        || (mapping["target"] !== "evidence" && mapping["target"] !== "facility")
-        || (mapping["barrierId"] !== null && (typeof mapping["barrierId"] !== "string" || !uuid.test(mapping["barrierId"])))) throw new ImportError(400,"validation_failed");
-      return service().map(currentUser(request),id(request.params),Number(version),mapping as unknown as ImportMapping);
+      const parsed = importMappingRequestSchema.safeParse(request.body);
+      if (!parsed.success) throw new ImportError(400,"validation_failed");
+      return service().map(currentUser(request),id(request.params),parsed.data.version,parsed.data.mapping);
     });
     for (const command of ["commit","rollback"] as const) {
       routes.post(`/api/v1/imports/:importId([0-9a-fA-F-]{36})::${command}`, async (request) => {
@@ -66,4 +60,18 @@ function currentUser(request: FastifyRequest) {
   const user = request.fieldLoopCurrentUser;
   if (!user) throw new ImportError(401,"unauthenticated");
   return user;
+}
+
+function problemCode(error: unknown, status: number): components["schemas"]["ErrorCode"] {
+  const internalCode = error instanceof ImportError ? error.code : undefined;
+  if (status === 401) return "unauthenticated";
+  if (status === 403) return "forbidden";
+  if (status === 404) return "not_found";
+  if (status === 409) return internalCode === "idempotency_key_reused" ? internalCode : "conflict";
+  if (status === 413) return "payload_too_large";
+  if (status === 405) return "method_not_allowed";
+  if (status === 429) return "rate_limited";
+  if (status === 400) return "validation_failed";
+  if (status === 503) return "service_unavailable";
+  return status >= 500 ? "internal_error" : "validation_failed";
 }

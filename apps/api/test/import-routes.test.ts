@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { AuthError, type AuthServicePort, type CurrentUser } from "../src/auth/service.js";
+import { ImportError } from "../src/imports/parser.js";
 import type { ImportPort } from "../src/imports/store.js";
 
 const apps:ReturnType<typeof buildApp>[]=[];
@@ -44,5 +45,22 @@ it("rejects array-valued format and target enums before calling persistence",asy
   expect(upload.statusCode).toBe(400);
   const mapped=await app.inject({method:"PUT",url:`/api/v1/imports/${id}/mapping`,headers,payload:{version:1,mapping:{assetId:id,toleranceMetres:50,nameField:"name",descriptionField:"",categoryField:"folder",target:["facility"],barrierId:null}}});
   expect(mapped.statusCode).toBe(400);
+  const missingBarrier=await app.inject({method:"PUT",url:`/api/v1/imports/${id}/mapping`,headers,payload:{version:1,mapping:{assetId:id,toleranceMetres:50,nameField:"name",descriptionField:"",categoryField:"folder",target:"evidence",barrierId:null}}});
+  expect(missingBarrier.statusCode).toBe(400);expect(missingBarrier.json().code).toBe("validation_failed");
+  const longField=await app.inject({method:"PUT",url:`/api/v1/imports/${id}/mapping`,headers,payload:{version:1,mapping:{assetId:id,toleranceMetres:50,nameField:"x".repeat(201),descriptionField:"",categoryField:"folder",target:"facility",barrierId:null}}});
+  expect(longField.statusCode).toBe(400);
   expect(imports.create).not.toHaveBeenCalled();expect(imports.map).not.toHaveBeenCalled();
+});
+
+it("maps internal import errors to canonical RFC Problem codes",async()=>{
+  const {app,imports,headers}=fixture(),id="00000000-0000-4000-8000-000000000100";
+  vi.mocked(imports.create).mockRejectedValueOnce(new ImportError(400,"invalid_kml"));
+  const invalid=await app.inject({method:"POST",url:"/api/v1/imports",headers,payload:{format:"kml",contentBase64:"c3ludGhldGlj"}});
+  expect(invalid.statusCode).toBe(400);expect(invalid.json().code).toBe("validation_failed");
+  vi.mocked(imports.create).mockRejectedValueOnce(new ImportError(413,"upload_too_large"));
+  const oversized=await app.inject({method:"POST",url:"/api/v1/imports",headers,payload:{format:"kml",contentBase64:"c3ludGhldGlj"}});
+  expect(oversized.statusCode).toBe(413);expect(oversized.json().code).toBe("payload_too_large");
+  vi.mocked(imports.command).mockRejectedValueOnce(new ImportError(409,"rollback_conflict"));
+  const conflict=await app.inject({method:"POST",url:`/api/v1/imports/${id}:rollback`,headers,payload:{version:1}});
+  expect(conflict.statusCode).toBe(409);expect(conflict.json().code).toBe("conflict");
 });
