@@ -20,6 +20,8 @@ servers:
 security:
   - sessionCookie: []
 tags:
+  - name: Imports
+    description: Safe point import workflow.
   - name: Auth
     description: OIDC sign-in, sign-out and session reauthentication.
   - name: Session
@@ -861,6 +863,277 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/imports:
+    post:
+      operationId: createImport
+      summary: Upload bounded base64 KML or compressed KML for safe parsing
+      description: Upload bounded base64 KML or compressed KML for safe parsing.
+        Synthetic/simulated demo records only; imports are scoped to their
+        uploader and Organisation.
+      tags:
+        - Imports
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - format
+                - contentBase64
+              properties:
+                format:
+                  type: string
+                  enum:
+                    - kml
+                    - kmz
+                contentBase64:
+                  type: string
+                  maxLength: 2796204
+      responses:
+        "200":
+          description: Import state or available targets.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          description: Upload limit exceeded.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/imports/options:
+    get:
+      operationId: getImportOptions
+      summary: List eligible simulated linear Assets and linked Barriers
+      description: List eligible simulated linear Assets and linked Barriers.
+        Synthetic/simulated demo records only; imports are scoped to their
+        uploader and Organisation.
+      tags:
+        - Imports
+      parameters: []
+      responses:
+        "200":
+          description: Import state or available targets.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportOptions"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/imports/{importId}/preview:
+    get:
+      operationId: getImportPreview
+      summary: Resume an import with persisted preview and mapping
+      description: Resume an import with persisted preview and mapping.
+        Synthetic/simulated demo records only; imports are scoped to their
+        uploader and Organisation.
+      tags:
+        - Imports
+      parameters:
+        - name: importId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Import state or available targets.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/imports/{importId}/mapping:
+    put:
+      operationId: mapImport
+      summary: Map attributes and calculate distance, Chainage and validation flags
+      description: Map attributes and calculate distance, Chainage and validation
+        flags. Synthetic/simulated demo records only; imports are scoped to their
+        uploader and Organisation.
+      tags:
+        - Imports
+      parameters:
+        - name: importId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - version
+                - mapping
+              properties:
+                version:
+                  type: integer
+                  minimum: 1
+                mapping:
+                  $ref: "#/components/schemas/ImportMapping"
+      responses:
+        "200":
+          description: Import state or available targets.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/imports/{importId}:commit:
+    post:
+      operationId: commitImport
+      summary: Commit an import batch without changing Barrier Health
+      description: Commit an import batch without changing Barrier Health.
+        Synthetic/simulated demo records only; imports are scoped to their
+        uploader and Organisation.
+      tags:
+        - Imports
+      parameters:
+        - name: importId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - version
+              properties:
+                version:
+                  type: integer
+                  minimum: 1
+      responses:
+        "200":
+          description: Import state or available targets.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/imports/{importId}:rollback:
+    post:
+      operationId: rollbackImport
+      summary: Roll back records created by one import batch
+      description: Roll back records created by one import batch. Synthetic/simulated
+        demo records only; imports are scoped to their uploader and Organisation.
+      tags:
+        - Imports
+      parameters:
+        - name: importId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - version
+              properties:
+                version:
+                  type: integer
+                  minimum: 1
+      responses:
+        "200":
+          description: Import state or available targets.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
 components:
   securitySchemes:
     sessionCookie:
@@ -919,6 +1192,158 @@ components:
         minimum: 0
 
   schemas:
+    ImportMapping:
+      type: object
+      additionalProperties: false
+      required:
+        - assetId
+        - toleranceMetres
+        - nameField
+        - descriptionField
+        - categoryField
+        - target
+        - barrierId
+      properties:
+        assetId:
+          type: string
+          format: uuid
+        toleranceMetres:
+          type: number
+          minimum: 0
+          maximum: 1000
+        nameField:
+          type: string
+        descriptionField:
+          type: string
+        categoryField:
+          type: string
+        target:
+          type: string
+          enum:
+            - evidence
+            - facility
+        barrierId:
+          type:
+            - string
+            - "null"
+          format: uuid
+    ImportPoint:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - longitude
+        - latitude
+        - attributes
+        - distanceMetres
+        - chainageMetres
+        - flags
+      properties:
+        id:
+          type: string
+          format: uuid
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+        distanceMetres:
+          type:
+            - number
+            - "null"
+        chainageMetres:
+          type:
+            - number
+            - "null"
+        flags:
+          type: array
+          items:
+            type: string
+    ImportPreview:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - status
+        - version
+        - classification
+        - fileHash
+        - createdAt
+        - mapping
+        - points
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - preview
+            - mapped
+            - committed
+            - rolled_back
+        version:
+          type: integer
+          minimum: 1
+        classification:
+          type: string
+        fileHash:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        mapping:
+          anyOf:
+            - $ref: "#/components/schemas/ImportMapping"
+            - type: "null"
+        points:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/ImportPoint"
+    ImportOptions:
+      type: object
+      additionalProperties: false
+      required:
+        - assets
+        - barriers
+      properties:
+        assets:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - id
+              - name
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+        barriers:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - id
+              - name
+              - assetId
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              assetId:
+                type: string
     MapConfig:
       type: object
       required: [mapsApiKey]
