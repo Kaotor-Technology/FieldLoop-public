@@ -32,6 +32,8 @@ tags:
     description: Deterministic, sandboxed Scenario player.
   - name: Health
     description: Barrier Health decisions and in-app notifications.
+  - name: Guardrail
+    description: Internal service-to-service OpenAI-compatible model gateway and Tier 1 content scan.
 paths:
   /auth/login:
     get:
@@ -230,6 +232,91 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Jwks" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /guardrail/v1/chat/completions:
+    post:
+      servers:
+        - url: https://guardrail-{environment}-822853914340.asia-southeast1.run.app
+          description: Private Cloud Run Guardrail service; requests require a Google-signed identity token.
+          variables:
+            environment:
+              default: demo
+              enum: [dev, demo]
+      operationId: createGuardrailChatCompletion
+      summary: Scan, route and proxy an OpenAI-compatible chat completion
+      description: Uses the registered AI System's enforce-mode Tier 1 policies. Model output is scanned before any JSON or buffered SSE response is returned.
+      tags: [Guardrail]
+      security:
+        - serviceIdentity: []
+      parameters:
+        - name: X-FieldLoop-Classification
+          in: header
+          required: false
+          description: Caller classification; defaults to INTERNAL and is raised when SDP detects more sensitive data.
+          schema: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GuardrailChatCompletionRequest" }
+      responses:
+        "200":
+          description: OpenAI-compatible completion. Streaming requests receive a buffered SSE response after output scanning.
+          headers:
+            X-FieldLoop-Policy-Id: { schema: { type: string, format: uuid } }
+            X-FieldLoop-Intercept-Id: { schema: { type: string, format: uuid } }
+            X-FieldLoop-Classification: { schema: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GuardrailChatCompletionResponse" }
+            text/event-stream:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /guardrail/v1/content:scan:
+    post:
+      servers:
+        - url: https://guardrail-{environment}-822853914340.asia-southeast1.run.app
+          description: Private Cloud Run Guardrail service; requests require a Google-signed identity token.
+          variables:
+            environment:
+              default: demo
+              enum: [dev, demo]
+      operationId: scanGuardrailContent
+      summary: Scan retrieved or uploaded text before it enters an AI prompt
+      description: Detects prompt injection and raises classification when Sensitive Data Protection finds restricted content.
+      tags: [Guardrail]
+      security:
+        - serviceIdentity: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: X-FieldLoop-Classification
+          in: header
+          required: false
+          description: Caller classification; defaults to INTERNAL.
+          schema: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GuardrailContentScanRequest" }
+      responses:
+        "200":
+          description: Content scan outcome and detected classification.
+          headers:
+            X-FieldLoop-Policy-Id: { schema: { type: string, format: uuid } }
+            X-FieldLoop-Intercept-Id: { schema: { type: string, format: uuid } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GuardrailContentScanResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/scenarios:
     get:
@@ -755,6 +842,11 @@ paths:
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 components:
   securitySchemes:
+    serviceIdentity:
+      type: http
+      scheme: bearer
+      bearerFormat: Google-signed Cloud Run identity token
+      description: Service-to-service identity verified by Cloud Run invoker IAM.
     sessionCookie:
       type: apiKey
       in: cookie
@@ -811,6 +903,62 @@ components:
         minimum: 0
 
   schemas:
+    GuardrailChatCompletionRequest:
+      type: object
+      required: [aiSystem, messages]
+      properties:
+        aiSystem: { type: string, minLength: 1, maxLength: 128 }
+        model: { type: string, enum: [flash, pro], description: Logical route class; the caller never selects a model ID or provider. }
+        stream: { type: boolean, description: Streaming is buffered until Tier 1 output checks complete. }
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 128
+          items:
+            type: object
+            required: [role]
+            properties:
+              role: { type: string, enum: [system, developer, user, assistant, tool] }
+              content: { type: [string, "null"] }
+            additionalProperties: true
+      additionalProperties: true
+
+    GuardrailChatCompletionResponse:
+      type: object
+      required: [choices]
+      properties:
+        id: { type: string }
+        object: { type: string, const: chat.completion }
+        model: { type: string }
+        choices:
+          type: array
+          items:
+            type: object
+            properties:
+              index: { type: integer }
+              message: { type: object, additionalProperties: true }
+            additionalProperties: true
+      additionalProperties: true
+
+    GuardrailContentScanRequest:
+      type: object
+      required: [aiSystem, content]
+      properties:
+        aiSystem: { type: string, minLength: 1, maxLength: 128 }
+        content: { type: string, maxLength: 250000 }
+      additionalProperties: false
+
+    GuardrailContentScanResult:
+      type: object
+      required: [decision, content, classification, policyId]
+      properties:
+        decision: { type: string, enum: [allow, reroute] }
+        content: { type: string }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+        policyId: { type: string, format: uuid }
+        reason: { type: string }
+      additionalProperties: false
+
     MapConfig:
       type: object
       required: [mapsApiKey]
@@ -1186,6 +1334,7 @@ components:
         - rate_limited
         - internal_error
         - service_unavailable
+        - guardrail_blocked
 
     Problem:
       type: object
