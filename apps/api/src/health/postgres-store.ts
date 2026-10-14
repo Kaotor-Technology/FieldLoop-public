@@ -3,7 +3,7 @@ import { sql, type Kysely, type Transaction } from "kysely";
 import { appendAuditEvent, appendWorkerEvent } from "@fieldloop/adapters";
 import { isWorkerEvent, type WorkerEvent } from "@fieldloop/contracts";
 import type { CurrentUser } from "../auth/service.js";
-import { HealthServiceError, type EventPosition, type HealthDecision, type HealthDecisionResult, type NotificationItem, type NotificationPage, type HealthServicePort, type StoredHealthEvent } from "./model.js";
+import { HealthServiceError, type EventPosition, type HealthDecision, type HealthDecisionResult, type HealthProposalItem, type HealthProposalPage, type NotificationItem, type NotificationPage, type HealthServicePort, type StoredHealthEvent } from "./model.js";
 
 type Database = Record<string, never>;
 type Connection = Kysely<Database> | Transaction<Database>;
@@ -20,10 +20,45 @@ interface NotificationRow {
   id: string; subject_type: NotificationItem["subjectType"]; subject_id: string; barrier_id: string | null;
   channel: string; status: string; created_at: string; simulated: boolean; classification: string;
 }
+interface HealthProposalRow {
+  id: string; barrier_id: string; barrier_name: string | null; current_health: string | null;
+  proposed_health: string; source_reason: string | null; simulated: boolean; created_at: string;
+}
 interface StoredEventRow { id: string; created_at: string; event: unknown; }
 
 export class PostgresHealthStore implements HealthServicePort {
   constructor(private readonly db: Kysely<Database>) {}
+
+  async listProposals(user: CurrentUser, cursor: string | undefined, limit: number): Promise<HealthProposalPage> {
+    const userId = await this.userId(user);
+    if (!userId) return { items: [], limit, nextCursor: null };
+    const position = cursor ? decodeCursor(cursor) : null;
+    const after = position
+      ? sql`AND (p.created_at, p.id) < (${position.createdAt}::timestamptz, ${position.id}::uuid)`
+      : sql``;
+    const clearanceRank = classificationRank(user.clearance);
+    const rows = (await sql<HealthProposalRow>`SELECT p.id::text, p.barrier_id::text,
+        b.code AS barrier_name, b.health AS current_health, p.proposed_health,
+        p.reason AS source_reason, p.simulated, p.created_at::text AS created_at
+      FROM app.current_health_proposal p
+      JOIN app.barrier b ON b.org_id = p.org_id AND b.id = p.barrier_id AND b.simulated = p.simulated
+      JOIN app.app_user u ON u.org_id = p.org_id AND u.id = b.owner_id
+      WHERE p.org_id = ${user.orgId} AND u.id = ${userId}::uuid AND u.keycloak_sub = ${user.sub}
+        AND p.status = 'open'
+        AND array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], COALESCE(p.classification, 'INTERNAL')) <= ${clearanceRank + 1}
+        AND array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], COALESCE(b.classification, 'INTERNAL')) <= ${clearanceRank + 1}
+        ${after}
+      ORDER BY p.created_at DESC, p.id DESC LIMIT ${limit + 1}`.execute(this.db)).rows;
+    const hasMore = rows.length > limit;
+    const pageRows = rows.slice(0, limit);
+    const items = pageRows.map((row): HealthProposalItem => ({
+      id: row.id, barrierId: row.barrier_id, barrierName: row.barrier_name, currentHealth: row.current_health,
+      proposedHealth: row.proposed_health, sourceReason: row.source_reason,
+      simulated: row.simulated, createdAt: new Date(row.created_at).toISOString(),
+    }));
+    const last = pageRows.at(-1);
+    return { items, limit, nextCursor: hasMore && last ? encodeCursor({ createdAt: last.created_at, id: last.id }) : null };
+  }
 
   async decide(input: {
     user: CurrentUser; proposalId: string; decision: HealthDecision; reason: string; idempotencyKey: string;

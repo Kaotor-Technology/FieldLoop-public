@@ -17,6 +17,7 @@ function fixture() {
   };
   const health: HealthServicePort = {
     decide: vi.fn().mockResolvedValue({ healthProposalId: randomUUID(), status: "accepted", barrierId: randomUUID(), health: "degraded" }),
+    listProposals: vi.fn(async (_user, _cursor, limit) => ({ items: [], limit, nextCursor: null })),
     listNotifications: vi.fn(async (_user, _cursor, limit) => ({ items: [], limit, nextCursor: null })),
     latestEventPosition: vi.fn().mockResolvedValue({ createdAt: "2026-10-13 00:00:00+00", id: "00000000-0000-0000-0000-000000000000" }),
     listEvents: vi.fn().mockResolvedValue([]),
@@ -60,6 +61,18 @@ it("returns validated, scoped notification pages", async () => {
   expect(response.json()).toEqual({ items: [], limit: 25, nextCursor: null });
   expect(health.listNotifications).toHaveBeenCalledWith(user, "opaque-cursor", 25);
   expect((await app.inject({ method: "GET", url: "/api/v1/notifications?limit=201", headers })).statusCode).toBe(400);
+});
+
+it("returns validated, owner-scoped open Health Proposal pages", async () => {
+  const { app, user, health, headers } = fixture();
+  const response = await app.inject({ method: "GET", url: "/api/v1/health-proposals?status=open&cursor=opaque-cursor&limit=25", headers });
+  expect(response.statusCode).toBe(200);
+  expect(response.headers["cache-control"]).toBe("private, no-store");
+  expect(response.json()).toEqual({ items: [], limit: 25, nextCursor: null });
+  expect(health.listProposals).toHaveBeenCalledWith(user, "opaque-cursor", 25);
+  expect((await app.inject({ method: "GET", url: "/api/v1/health-proposals?status=accepted", headers })).statusCode).toBe(400);
+  expect((await app.inject({ method: "GET", url: "/api/v1/health-proposals?status=open&limit=201", headers })).statusCode).toBe(400);
+  expect((await app.inject({ method: "GET", url: "/api/v1/health-proposals?status=open", headers: {} })).statusCode).toBe(401);
 });
 
 it("streams health events and resumes with the returned cursor", async () => {
