@@ -100,5 +100,5 @@ test("Bowtie canvas displays a pending notice when Organisation calibration is u
   await expect(page.getByRole("heading", { name: "Risk calibration needs Technical Authority approval" })).toBeVisible();
   await expect(page.getByText("Organisation Risk Score")).toHaveCount(0);
   await page.getByRole("button", { name: "Explain score" }).click();
-  await expect(page.getByText(/controlled standard reference and version/)).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Explain score" }).getByText(/controlled standard reference and version/)).toBeVisible();
 });
