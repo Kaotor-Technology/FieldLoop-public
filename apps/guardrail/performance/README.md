@@ -7,7 +7,9 @@ latency Guardrail adds around the managed Tier 1 detector reaches 50 ms at p95
 in milliseconds with 0.1 ms precision; `detector` spans the whole Model Armor
 adapter call); the detector duration
 (Model Armor + SDP) is reported as `tier1_detector_latency` and the full request
-as `http_req_duration`, without thresholds. It also checks that requests succeed and return
+as `http_req_duration`, without thresholds. Only successful (200) scans feed
+`guardrail_added_latency`; fail-closed responses such as detector timeouts count
+against `http_req_failed` (< 1%) and `checks` instead. It also checks that requests succeed and return
 the same benign synthetic content. Each iteration uses a new idempotency key and
 creates normal Intercept and Evidence records.
 
