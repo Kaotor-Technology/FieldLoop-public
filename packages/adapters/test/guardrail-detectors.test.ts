@@ -27,8 +27,12 @@ it("returns SDP classifications and safe de-identified text", async () => {
     invocationResult: "SUCCESS",
     filterMatchState: "MATCH_FOUND",
     filterResults: { sdpFilterResult: {
-      inspectResult: { findings: [{ infoType: { name: "EMAIL_ADDRESS" }, likelihood: "LIKELY" }] },
-      deidentifyResult: { data: { text: "Contact [EMAIL_ADDRESS]" } },
+      deidentifyResult: {
+        executionState: "EXECUTION_SUCCESS",
+        matchState: "MATCH_FOUND",
+        data: { text: "Contact [EMAIL_ADDRESS]" },
+        infoTypes: ["EMAIL_ADDRESS"],
+      },
     } },
   } }), { status: 200 }));
   const adapter = new GoogleModelArmorAdapter({

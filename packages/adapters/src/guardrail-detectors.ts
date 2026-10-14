@@ -193,6 +193,10 @@ function findInfoTypes(value: unknown): string[] {
     }
     const record = asRecord(node);
     if (!record) return;
+    const infoTypes = record["infoTypes"];
+    if (Array.isArray(infoTypes)) {
+      for (const infoType of infoTypes) if (typeof infoType === "string") found.add(infoType);
+    }
     const infoType = record["infoType"];
     if (typeof infoType === "string") found.add(infoType);
     else {
