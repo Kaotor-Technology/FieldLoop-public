@@ -5,6 +5,8 @@ export async function createGoogleCloudSqlPool(input: {
   instanceConnectionName: string;
   database: string;
   user: string;
+  maxConnections?: number;
+  applicationName?: string;
 }, connector = new Connector()): Promise<{ pool: Pool; close: () => Promise<void> }> {
   try {
     const clientOptions = await connector.getOptions({
@@ -18,10 +20,10 @@ export async function createGoogleCloudSqlPool(input: {
       ...clientOptions,
       user: input.user,
       database: input.database,
-      max: 10,
+      max: input.maxConnections ?? 10,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
-      application_name: "fieldloop-web-api",
+      application_name: input.applicationName ?? "fieldloop-web-api",
     });
     return {
       pool,

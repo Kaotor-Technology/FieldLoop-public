@@ -83,6 +83,8 @@ CREATE ROLE "fl-v2-web-api-dev@example-project.iam" LOGIN;
 CREATE ROLE "fl-v2-web-api-demo@example-project.iam" LOGIN;
 CREATE ROLE "fl-v2-simulator-dev@example-project.iam" LOGIN;
 CREATE ROLE "fl-v2-simulator-demo@example-project.iam" LOGIN;
+CREATE ROLE "fl-v2-guardrail-dev@example-project.iam" LOGIN;
+CREATE ROLE "fl-v2-guardrail-demo@example-project.iam" LOGIN;
 CREATE DATABASE fieldloop_dev;
 CREATE DATABASE fieldloop_demo;
 SQL
@@ -92,6 +94,8 @@ run_psql_database fieldloop_dev < db/test/bff_auth_roles.sql
 run_psql_database fieldloop_demo < db/test/bff_auth_roles.sql
 run_psql_database fieldloop_dev < db/test/simulator_roles.sql
 run_psql_database fieldloop_demo < db/test/simulator_roles.sql
+run_psql_database fieldloop_dev < db/test/guardrail_roles.sql
+run_psql_database fieldloop_demo < db/test/guardrail_roles.sql
 
 # Cloud SQL shape: the extensions already exist and the migrating role is not a superuser.
 echo "==> dbmate up as a non-superuser with pre-installed extensions"

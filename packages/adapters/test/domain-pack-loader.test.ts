@@ -24,17 +24,17 @@ async function fixture(change: (pack: Record<string, unknown>, agent: Record<str
 
 describe("Domain Pack loading (FL-78 / D10 / D11)", () => {
   it("loads both demo packs deterministically with bounded agents and proposal-only rules", async () => {
-    const packs = await loadDomainPacks(root, tools);
+    const packs = await loadDomainPacks(root, tools, ["pipeline-integrity", "flood-water"]);
     expect(packs.map(({ content }) => content.id)).toEqual(["flood-water", "pipeline-integrity"]);
     expect(packs.flatMap(({ agents }) => agents.map(({ id }) => id)).sort()).toEqual([
       "code-standard", "flood-situation", "inspection-data-prep", "integrity-orchestrator", "pipeline-integrity", "regulatory", "report-generator",
     ]);
     expect(packs.flatMap(({ content }) => content.signalRules).every(({ effect }) => effect.kind === "health_proposal")).toBe(true);
-    expect(await loadDomainPacks(root, tools)).toEqual(packs);
+    expect(await loadDomainPacks(root, tools, ["pipeline-integrity", "flood-water"])).toEqual(packs);
   });
 
   it("matches each pack's golden catalog and simulation rule outcomes", async () => {
-    for (const { content, agents } of await loadDomainPacks(root, tools)) {
+    for (const { content, agents } of await loadDomainPacks(root, tools, ["pipeline-integrity", "flood-water"])) {
       const golden: unknown = JSON.parse(await readFile(new URL(`${content.id}/golden.json`, root), "utf8"));
       expect({
         label: content.label,
@@ -55,7 +55,7 @@ describe("Domain Pack loading (FL-78 / D10 / D11)", () => {
   it("keeps categorical flood rules aligned with the shared Signal fixture", async () => {
     const fixtures = JSON.parse(await readFile(new URL("../../contracts/test/fixtures/signal-cases.json", import.meta.url), "utf8")) as Array<{ name: string; signal: Signal }>;
     const pump = fixtures.find(({ name }) => name === "pump power lost");
-    const floodPack = (await loadDomainPacks(root, tools)).find(({ content }) => content.id === "flood-water");
+    const floodPack = (await loadDomainPacks(root, tools, ["pipeline-integrity", "flood-water"])).find(({ content }) => content.id === "flood-water");
     const rule = floodPack?.content.signalRules.find(({ id }) => id === "pump-power-lost");
     if (!pump || !rule || rule.condition.kind !== "signal") throw new Error("pump Signal fixture or pack rule is missing");
     expect({

@@ -15,6 +15,9 @@
 !apps/*/tsconfig.build.json
 !apps/*/src/
 !apps/*/src/**
+!apps/guardrail/performance/
+!apps/guardrail/performance/tier1-content-scan.js
+!apps/guardrail/performance/run-in-vpc.mjs
 !apps/web/index.html
 !apps/web/vite.config.ts
 !apps/web/nginx.conf
@@ -45,6 +48,8 @@
 !db/seed/dl-01/
 !db/seed/legal-corpus/
 !data/
+!data/scenarios/
+!data/scenarios/**
 !data/corpus/
 !data/corpus/legal/
 !data/corpus/legal/**
@@ -55,8 +60,12 @@
 !DESIGN.md
 !packages/contracts/openapi.yaml
 !packages/contracts/signal.v1.schema.json
+!packages/contracts/registered-signal-rule.v1.schema.json
+!packages/contracts/worker-event.v1.schema.json
+!packages/contracts/signal-worker.v1.openapi.json
 !packages/contracts/domain-pack.v1.schema.json
 !packages/contracts/agent-definition.v1.schema.json
+!packages/contracts/gen-ai-safety.v1.schema.json
 !domain-packs/
 !domain-packs/**
 !packages/contracts/scripts/

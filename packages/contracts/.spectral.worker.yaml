@@ -1,0 +1,10 @@
+extends: [spectral:oas]
+functions: [shared-problem]
+rules:
+  operation-description: error
+  fieldloop-worker-problem:
+    description: Internal errors use the canonical RFC 9457 Problem.
+    severity: error
+    given: $.paths.*.*.responses[?(@property >= '400')].content['application/problem+json'].schema
+    then:
+      function: shared-problem

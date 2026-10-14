@@ -1,6 +1,6 @@
 import type { Pool, PoolClient } from "pg";
 
-export interface AuditEventInput {
+export interface AtomicAuditEventInput {
   orgId: string;
   actor: string;
   action: string;
@@ -24,13 +24,13 @@ export interface AuditEventReceipt {
  * must not BEGIN/COMMIT/ROLLBACK, change those settings, or perform external effects.
  * Any mutation/append failure rolls back both; the receipt is returned only after COMMIT.
  */
-export async function appendAuditEvent(
+export async function appendAuditEventAtomically(
   pool: Pool,
-  input: AuditEventInput,
+  input: AtomicAuditEventInput,
   mutate?: (transaction: Pick<PoolClient, "query">) => Promise<void>,
 ): Promise<AuditEventReceipt> {
   // Own the scalar metadata before validation and any asynchronous work.
-  const snapshot: AuditEventInput = {
+  const snapshot: AtomicAuditEventInput = {
     orgId: input.orgId,
     actor: input.actor,
     action: input.action,

@@ -1,0 +1,158 @@
+# SIMULATION: authored observations for synthetic DL-01; no field commands.
+# Seed is required on RunCreate, not stored in the Scenario contract.
+schemaVersion: scenario.v1
+id: cp-rectifier-failure
+name: 'Demo A: CP rectifier failure, Evidence ageing and encroachment'
+version: 1.0.0
+startsAt: '2026-10-12T00:00:00Z'
+durationSeconds: 172800
+classification: HIGHLY_RESTRICTED
+simulated: true
+events:
+- id: rectifier-baseline
+  atSeconds: 0
+  source: mock-historian
+  target:
+    kind: barrier
+    id: cathodic-protection
+  tag: DL-01.rectifier.output
+  value: 12
+  unit: A
+  payload:
+    assetCode: DL-01
+    barrierId: cathodic-protection
+- id: cp-survey-current
+  atSeconds: 0
+  source: mock-cmms
+  target:
+    kind: barrier
+    id: cathodic-protection
+  tag: DL-01.cathodic-protection.work_order.overdue
+  value: 0
+  unit: boolean
+  payload:
+    assetCode: DL-01
+    workOrderId: SYN-CMMS-001
+    barrierId: cathodic-protection
+    kind: preventive
+    status: open
+    title: Synthetic cathodic protection survey
+    dueAt: '2026-10-13T00:00:00Z'
+    label: SYNTHETIC
+- id: rectifier-failure
+  atSeconds: 600
+  source: mock-historian
+  target:
+    kind: barrier
+    id: cathodic-protection
+  tag: DL-01.rectifier.output
+  value: 0
+  unit: A
+  payload:
+    assetCode: DL-01
+    barrierId: cathodic-protection
+- id: encroachment-excavation
+  atSeconds: 1200
+  source: mock-patrol
+  target:
+    kind: barrier
+    id: right-of-way-patrol
+  tag: DL-01.encroachment.detected
+  value: 1
+  unit: boolean
+  payload:
+    assetCode: DL-01
+    findingId: SYN-PATROL-001
+    kind: encroachment
+    severity: high
+    status: open
+    summary: Synthetic excavation equipment inside the right-of-way
+    foundAt: '2026-10-11T02:15:00Z'
+    gps:
+      latitude: 18.385671
+      longitude: 99.404394
+      accuracyM: 5.0
+    label: SYNTHETIC
+- id: encroachment-fence
+  atSeconds: 1800
+  source: mock-patrol
+  target:
+    kind: barrier
+    id: right-of-way-patrol
+  tag: DL-01.encroachment.detected
+  value: 1
+  unit: boolean
+  payload:
+    assetCode: DL-01
+    findingId: SYN-PATROL-004
+    kind: encroachment
+    severity: medium
+    status: open
+    summary: Synthetic fence construction at the right-of-way edge
+    foundAt: '2026-10-11T06:20:00Z'
+    gps:
+      latitude: 19.168712
+      longitude: 99.853037
+      accuracyM: 5.0
+    label: SYNTHETIC
+- id: cp-survey-overdue
+  atSeconds: 86401
+  source: mock-cmms
+  target:
+    kind: barrier
+    id: cathodic-protection
+  tag: DL-01.cathodic-protection.work_order.overdue
+  value: 1
+  unit: boolean
+  payload:
+    assetCode: DL-01
+    workOrderId: SYN-CMMS-001
+    barrierId: cathodic-protection
+    kind: preventive
+    status: open
+    title: Synthetic cathodic protection survey
+    dueAt: '2026-10-13T00:00:00Z'
+    label: SYNTHETIC
+- id: rectifier-outage-over-24h
+  atSeconds: 87001
+  source: mock-historian
+  target:
+    kind: barrier
+    id: cathodic-protection
+  tag: DL-01.rectifier.output
+  value: 0
+  unit: A
+  payload:
+    assetCode: DL-01
+    barrierId: cathodic-protection
+- id: rectifier-still-failed
+  atSeconds: 172800
+  source: mock-historian
+  target:
+    kind: barrier
+    id: cathodic-protection
+  tag: DL-01.rectifier.output
+  value: 0
+  unit: A
+  payload:
+    assetCode: DL-01
+    barrierId: cathodic-protection
+bookmarks:
+- id: start
+  name: Baseline
+  atSeconds: 0
+- id: rectifier-failure
+  name: Rectifier output zero
+  atSeconds: 600
+- id: encroachment
+  name: Two encroachment findings
+  atSeconds: 1800
+- id: cp-evidence-overdue
+  name: CP Evidence past its 12-month interval
+  atSeconds: 86401
+- id: outage-over-24h
+  name: Rectifier outage longer than 24 hours
+  atSeconds: 87001
+- id: complete
+  name: Complete
+  atSeconds: 172800

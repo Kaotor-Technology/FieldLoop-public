@@ -1,0 +1,502 @@
+version: 1.0.0
+label: SIMULATION
+simulated: true
+classification: CONFIDENTIAL
+parameterBasis: Authored PRD 6.1-C scenario; PFD values are AS-4 illustrative demo defaults. Threat
+  frequencies and conditional probabilities are unknown and intentionally not seeded. All Barriers
+  are Unverified until human-reviewed Evidence exists.
+aiSystem:
+  id: demo-uc-1
+  name: UC-1 integrity assistant line-up (SIMULATION)
+  useCase: UC-1
+  modelTier: private
+  dataClasses:
+    - PUBLIC
+    - INTERNAL
+    - CONFIDENTIAL
+    - HIGHLY_RESTRICTED
+  tools:
+    - search_knowledge
+    - get_document
+    - get_asset
+    - get_barriers
+    - get_bowtie_risk
+    - extract_geo_references
+    - create_draft
+    - create_action_request
+    - get_action_requests
+    - spatial_query
+  riskClass: high
+  modelRoutes:
+    - tier: private
+      enabled: true
+      boundary: private-in-country-no-retention
+      modelClass: flash
+    - tier: private
+      enabled: true
+      boundary: private-in-country-no-retention
+      modelClass: pro
+    - tier: public-saas
+      enabled: false
+      boundary: public-provider
+      modelClass: flash
+  agentPack: pipeline-integrity
+  agentIds:
+    - integrity-orchestrator
+    - code-standard
+    - regulatory
+    - inspection-data-prep
+    - pipeline-integrity
+    - report-generator
+policies:
+  - id: injection-detector
+    barrierId: injection-detector
+    tier: tier-1
+    mode: enforce
+    failMode: fail-closed
+    kind: injection
+    detector: model-armor
+    settings:
+      scan: input-and-retrieved-content
+      onDetection: block
+      retrievedContentIsData: true
+  - id: restricted-data-routing
+    barrierId: classification-routing
+    tier: tier-1
+    mode: enforce
+    failMode: fail-closed
+    kind: classification-routing
+    detector: sensitive-data-protection
+    settings:
+      routes:
+        - classification: PUBLIC
+          allowedModelTiers:
+            - private
+        - classification: INTERNAL
+          allowedModelTiers:
+            - private
+        - classification: CONFIDENTIAL
+          allowedModelTiers:
+            - private
+        - classification: HIGHLY_RESTRICTED
+          allowedModelTiers:
+            - private
+      onDisallowedTier: reroute
+      onNoAllowedTier: block
+      publicSaasEnabled: false
+  - id: output-dlp
+    barrierId: output-dlp
+    tier: tier-1
+    mode: enforce
+    failMode: fail-closed
+    kind: output-dlp
+    detector: sensitive-data-protection
+    settings:
+      scan: output
+      onDetection: redact
+      onUnsafeRedaction: block
+  - id: system-of-record-tool-block
+    barrierId: tool-call-policy
+    tier: tier-1
+    mode: enforce
+    failMode: fail-closed
+    kind: tool-call
+    detector: tool-target-policy
+    settings:
+      allowedTools:
+        - search_knowledge
+        - get_document
+        - get_asset
+        - get_barriers
+        - get_bowtie_risk
+        - extract_geo_references
+        - create_draft
+        - create_action_request
+        - get_action_requests
+        - spatial_query
+      blockedTargets:
+        - SCADA
+        - CMMS
+        - GIS
+        - asset-database
+      onSystemOfRecordWrite: block
+      onUnknownTool: block
+      preparationTool: create_action_request
+      preparationActionLevel: L1
+      approvalRequired: true
+bowtie:
+  id: uc-1-bowtie-c
+  hazard: An LLM with access to Highly Restricted documents
+  topEvent: Restricted content or unsafe advice leaves the AI System
+  domain: gen_ai
+  status: draft
+  independenceGroup:
+    id: shared-guardrail-runtime
+    cause: Shared Guardrail gateway and Tier 1 detector availability (SIMULATION)
+    barrierIds:
+      - injection-detector
+      - tool-allowlist
+      - classification-routing
+      - dlp-redaction
+      - tool-call-policy
+      - output-dlp
+  threats:
+    - id: indirect-prompt-injection
+      name: Indirect prompt injection in an uploaded contractor PDF
+      categoryCode: prompt-injection
+    - id: restricted-data-in-external-app
+      name: User pastes restricted data into an external-model app
+      categoryCode: restricted-data
+    - id: hallucinated-engineering-clause
+      name: Hallucinated clause in an engineering answer
+      categoryCode: hallucinated-advice
+    - id: agent-asset-database-write
+      name: Agent tries to write to an asset database
+      categoryCode: unsafe-tool-write
+  consequences:
+    - id: restricted-asset-data-disclosure
+      name: Disclosure of restricted Asset data
+      severity:
+        dimension: legalRegulatory
+        value: 5
+    - id: wrong-engineering-decision
+      name: Wrong engineering decision
+      severity:
+        dimension: people
+        value: 4
+  barriers:
+    - id: injection-detector
+      name: Injection detector (Tier 1)
+      type: technical
+      side: preventive
+      pfdBand: 0.01
+      health: unverified
+      performanceStandard: Model Armor must scan input and retrieved content; a finding, timeout or error
+        blocks. Evaluation results and Intercepts are required Evidence.
+      implementation: tier-1-configured
+      triad:
+        effective:
+          pass: true
+          justification: Model Armor must scan input and retrieved content; a finding, timeout or error
+            blocks. Evaluation results and Intercepts are required Evidence.
+        independent:
+          pass: true
+          justification: Shared gateway failure dependencies are credited only through the declared
+            Independence Group; procedural reviews are separate human processes.
+        auditable:
+          pass: true
+          justification: Requires retained evaluation, Intercept or human review records. This seed supplies
+            no operational Evidence.
+      degradationFactors:
+        - id: detector-drift
+          description: Detector drift
+          controls:
+            - id: monthly-red-team-eval
+              description: Monthly red-team evaluation
+    - id: retrieved-text-as-data
+      name: Retrieved text treated as data
+      type: organisational
+      side: preventive
+      pfdBand: 0.1
+      health: unverified
+      performanceStandard: Retrieved text is never promoted into instructions; verify with agent misuse evaluation.
+      implementation: procedural
+      triad:
+        effective:
+          pass: true
+          justification: Retrieved text is never promoted into instructions; verify with agent misuse evaluation.
+        independent:
+          pass: true
+          justification: Shared gateway failure dependencies are credited only through the declared
+            Independence Group; procedural reviews are separate human processes.
+        auditable:
+          pass: true
+          justification: Requires retained evaluation, Intercept or human review records. This seed supplies
+            no operational Evidence.
+      degradationFactors: []
+    - id: tool-allowlist
+      name: Tool allowlist
+      type: technical
+      side: preventive
+      pfdBand: 0.01
+      health: unverified
+      performanceStandard: Only registered read and Draft preparation tools may run after a Guardrail check.
+      implementation: tier-1-configured
+      triad:
+        effective:
+          pass: true
+          justification: Only registered read and Draft preparation tools may run after a Guardrail check.
+        independent:
+          pass: true
+          justification: Shared gateway failure dependencies are credited only through the declared
+            Independence Group; procedural reviews are separate human processes.
+        auditable:
+          pass: true
+          justification: Requires retained evaluation, Intercept or human review records. This seed supplies
+            no operational Evidence.
+      degradationFactors: []
+    - id: classification-routing
+      name: Classification routing to private tier (Tier 1)
+      type: technical
+      side: preventive
+      pfdBand: 0.01
+      health: unverified
+      performanceStandard: Confidential and Highly Restricted content only routes to a private in-country
+        tier without retention or training; missing eligible route blocks.
+      implementation: tier-1-configured
+      triad:
+        effective:
+          pass: true
+          justification: Confidential and Highly Restricted content only routes to a private in-country tier
+            without retention or training; missing eligible route blocks.
+        independent:
+          pass: true
+          justification: Shared gateway failure dependencies are credited only through the declared
+            Independence Group; procedural reviews are separate human processes.
+        auditable:
+          pass: true
+          justification: Requires retained evaluation, Intercept or human review records. This seed supplies
+            no operational Evidence.
+      degradationFactors:
+        - id: unlabelled-document-types
+          description: New document types unlabelled
+          controls:
+            - id: labelling-sla
+              description: Labelling SLA
+    - id: dlp-redaction
+      name: DLP redaction
+      type: technical
+      side: preventive
+      pfdBand: 0.01
+      health: unverified
+      performanceStandard: Sensitive prompt content must be redacted before any disallowed disclosure;
+        failed or unsafe redaction blocks.
+      implementation: tier-1-configured
+      triad:
+        effective:
+          pass: true
+          justification: Sensitive prompt content must be redacted before any disallowed disclosure; failed or
+            unsafe redaction blocks.
+        independent:
+          pass: true
+          justification: Shared gateway failure dependencies are credited only through the declared
+            Independence Group; procedural reviews are separate human processes.
+        auditable:
+          pass: true
+          justification: Requires retained evaluation, Intercept or human review records. This seed supplies
+            no operational Evidence.
+      degradationFactors: []
+    - id: grounding-check
+      name: Grounding check (Tier 2)
+      type: technical
+      side: preventive
+      pfdBand: 0.01
+      health: unverified
+      performanceStandard: Deferred beyond the demo slice. Grounding must be evaluated against cited
+        retrieved sources before crediting this Barrier.
+      implementation: deferred-tier-2
+      triad:
+        effective:
+          pass: true
+          justification: Deferred beyond the demo slice. Grounding must be evaluated against cited retrieved
+            sources before crediting this Barrier.
+        independent:
+          pass: true
+          justification: Shared gateway failure dependencies are credited only through the declared
+            Independence Group; procedural reviews are separate human processes.
+        auditable:
+          pass: true
+          justification: Requires retained evaluation, Intercept or human review records. This seed supplies
+            no operational Evidence.
+      degradationFactors:
+        - id: missing-current-edition
+          description: Library missing current edition
+          controls:
+            - id: revision-guard
+              description: Revision guard
+    - id: citation-requirement
+      name: Citation requirement
+      type: organisational
+      side: preventive
+      pfdBand: 0.1
+      health: unverified
+      performanceStandard: Every engineering or legal claim cites a current source; unlicensed standards
+        are reference-only and marked not verified against source text.
+      implementation: procedural
+      triad:
+        effective:
+          pass: true
+          justification: Every engineering or legal claim cites a current source; unlicensed standards are
+            reference-only and marked not verified against source text.
+        independent:
+          pass: true
+          justification: Shared gateway failure dependencies are credited only through the declared
+            Independence Group; procedural reviews are separate human processes.
+        auditable:
+          pass: true
+          justification: Requires retained evaluation, Intercept or human review records. This seed supplies
+            no operational Evidence.
+      degradationFactors: []
+    - id: human-approval
+      name: Human approval
+      type: human
+      side: preventive
+      pfdBand: 0.1
+      health: unverified
+      performanceStandard: An independent human reviews engineering Drafts; agents cannot approve and no
+        engineering decision is executed automatically.
+      implementation: human-review
+      triad:
+        effective:
+          pass: true
+          justification: An independent human reviews engineering Drafts; agents cannot approve and no
+            engineering decision is executed automatically.
+        independent:
+          pass: true
+          justification: Shared gateway failure dependencies are credited only through the declared
+            Independence Group; procedural reviews are separate human processes.
+        auditable:
+          pass: true
+          justification: Requires retained evaluation, Intercept or human review records. This seed supplies
+            no operational Evidence.
+      degradationFactors: []
+    - id: tool-call-policy
+      name: "Tool-call policy: block system-of-record targets (Tier 1)"
+      type: technical
+      side: preventive
+      pfdBand: 0.01
+      health: unverified
+      performanceStandard: Block direct writes to SCADA, CMMS, GIS and asset databases. Prepare an L1
+        Action Request for human review instead.
+      implementation: tier-1-configured
+      triad:
+        effective:
+          pass: true
+          justification: Block direct writes to SCADA, CMMS, GIS and asset databases. Prepare an L1 Action
+            Request for human review instead.
+        independent:
+          pass: true
+          justification: Shared gateway failure dependencies are credited only through the declared
+            Independence Group; procedural reviews are separate human processes.
+        auditable:
+          pass: true
+          justification: Requires retained evaluation, Intercept or human review records. This seed supplies
+            no operational Evidence.
+      degradationFactors: []
+    - id: output-dlp
+      name: Output DLP
+      type: technical
+      side: mitigative
+      pfdBand: 0.01
+      health: unverified
+      performanceStandard: Scan output before release; redact sensitive findings, block if safe redaction
+        is unavailable, and record the policy Intercept.
+      implementation: tier-1-configured
+      triad:
+        effective:
+          pass: true
+          justification: Scan output before release; redact sensitive findings, block if safe redaction is
+            unavailable, and record the policy Intercept.
+        independent:
+          pass: true
+          justification: Shared gateway failure dependencies are credited only through the declared
+            Independence Group; procedural reviews are separate human processes.
+        auditable:
+          pass: true
+          justification: Requires retained evaluation, Intercept or human review records. This seed supplies
+            no operational Evidence.
+      degradationFactors: []
+    - id: approver-review
+      name: Approver review
+      type: human
+      side: mitigative
+      pfdBand: 0.1
+      health: unverified
+      performanceStandard: An independent authorised human reviews Drafts before consequential actions;
+        approvals remain gated by the BFF workflow.
+      implementation: human-review
+      triad:
+        effective:
+          pass: true
+          justification: An independent authorised human reviews Drafts before consequential actions;
+            approvals remain gated by the BFF workflow.
+        independent:
+          pass: true
+          justification: Shared gateway failure dependencies are credited only through the declared
+            Independence Group; procedural reviews are separate human processes.
+        auditable:
+          pass: true
+          justification: Requires retained evaluation, Intercept or human review records. This seed supplies
+            no operational Evidence.
+      degradationFactors: []
+    - id: incident-playbook-key-rotation
+      name: Incident playbook & key rotation
+      type: organisational
+      side: mitigative
+      pfdBand: 0.1
+      health: unverified
+      performanceStandard: A human follows the reviewed incident playbook and rotates affected keys; no
+        automated field commands.
+      implementation: procedural
+      triad:
+        effective:
+          pass: true
+          justification: A human follows the reviewed incident playbook and rotates affected keys; no
+            automated field commands.
+        independent:
+          pass: true
+          justification: Shared gateway failure dependencies are credited only through the declared
+            Independence Group; procedural reviews are separate human processes.
+        auditable:
+          pass: true
+          justification: Requires retained evaluation, Intercept or human review records. This seed supplies
+            no operational Evidence.
+      degradationFactors: []
+  paths:
+    - id: indirect-prompt-injection-path
+      side: preventive
+      targetId: indirect-prompt-injection
+      barrierIds:
+        - injection-detector
+        - retrieved-text-as-data
+        - tool-allowlist
+    - id: restricted-data-in-external-app-path
+      side: preventive
+      targetId: restricted-data-in-external-app
+      barrierIds:
+        - classification-routing
+        - dlp-redaction
+    - id: hallucinated-engineering-clause-path
+      side: preventive
+      targetId: hallucinated-engineering-clause
+      barrierIds:
+        - grounding-check
+        - citation-requirement
+        - human-approval
+    - id: agent-asset-database-write-path
+      side: preventive
+      targetId: agent-asset-database-write
+      barrierIds:
+        - tool-call-policy
+    - id: restricted-asset-data-disclosure-path
+      side: mitigative
+      targetId: restricted-asset-data-disclosure
+      barrierIds:
+        - output-dlp
+        - approver-review
+        - incident-playbook-key-rotation
+    - id: wrong-engineering-decision-path
+      side: mitigative
+      targetId: wrong-engineering-decision
+      barrierIds:
+        - output-dlp
+        - approver-review
+        - incident-playbook-key-rotation
+  crossDomainLinks:
+    - fromConsequenceId: restricted-asset-data-disclosure
+      targetPack: cyber-ot
+      targetBowtieCode: bowtie-b
+      targetThreatCode: phishing-pivot
+      resolution: template-only
+      reason: PRD 6.1-C reference retained; Bowtie B is outside the demo slice and no target Threat is
+        seeded. Resolve and cycle-check when the Cyber/OT pack is implemented.

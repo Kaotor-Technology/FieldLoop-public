@@ -1,45 +1,42 @@
 import { SimulationBanner } from "./SimulationBanner";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useLayoutEffect } from "react";
 import { Outlet } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { SessionGate } from "./SessionGate";
 import { AccountSwitcher } from "./AccountSwitcher";
 import { usePreferences } from "./preferences";
+import type { CurrentUser } from "./api-client";
 
 const SimulationControls = lazy(() => import("./SimulationControls").then(({ SimulationControls }) => ({ default: SimulationControls })));
 
 export function App() {
+  return <SessionGate>{(user) => <SignedInWorkspace user={user} />}</SessionGate>;
+}
+
+function SignedInWorkspace({ user }: { user: CurrentUser }) {
   const { t, i18n } = useTranslation();
   const { language, nightShift, toggleLanguage, toggleNightShift } = usePreferences();
-  useEffect(() => {
+  useLayoutEffect(() => {
+    usePreferences.getState().loadUserLanguage(user.orgId, user.sub);
+  }, [user.orgId, user.sub]);
+  useLayoutEffect(() => {
     document.documentElement.lang = language;
     document.documentElement.dataset["theme"] = nightShift ? "dark" : "light";
     void i18n.changeLanguage(language);
   }, [language, nightShift, i18n]);
 
-  return <SessionGate>{(user) => <>
+  return <div className="app-shell">
     <a className="skip-link" href="#main-content">{t("skip")}</a>
     <header className="top-bar">
-      <a href="/map" className="wordmark" aria-label="FieldLoop">Field<span>Loop</span></a>
+      <a href="/map" className="wordmark" aria-label="FieldLoop-v2">FieldLoop-<span>v2</span></a>
       <div className="preferences">
-        <button onClick={toggleLanguage} lang={language === "en" ? "th" : "en"}>{language === "en" ? "ภาษาไทย" : "English"}</button>
+        <AccountSwitcher user={user} />
+        <button type="button" onClick={toggleLanguage} lang={language === "en" ? "th" : "en"} aria-label={t(language === "en" ? "languageThai" : "languageEnglish")}>{t("languageToggle")}</button>
         <button onClick={toggleNightShift} aria-pressed={nightShift}>{t("nightShift")}</button>
       </div>
     </header>
     <SimulationBanner />
-    <div className="console-layout">
-      <Outlet />
-      <aside className="identity-panel" aria-label={t("identity")}>
-        <h2>{t("identity")}</h2>
-        <dl>
-          <dt>{t("persona")}</dt><dd lang="en">{user.persona}</dd>
-          <dt>{t("roles")}</dt><dd className="mono">{user.roles.join(", ")}</dd>
-          <dt>{t("subject")}</dt><dd className="mono">{user.sub}</dd>
-          <dt>{t("authTime")}</dt><dd className="mono"><time dateTime={user.authTime}>{new Date(user.authTime).toLocaleString(language === "en" ? "en-GB" : "th-TH", { timeZone: "Asia/Bangkok" })}</time></dd>
-        </dl>
-        <AccountSwitcher user={user} />
-      </aside>
-    </div>
+    <Outlet />
     <Suspense fallback={<p className="simulation-controls" role="status">{t("simulationLoading")}</p>}><SimulationControls user={user} /></Suspense>
-  </>}</SessionGate>;
+  </div>;
 }

@@ -16,7 +16,7 @@ function fixture() {
 }
 
 function writer() {
-  const append = (adapters as Record<string, unknown>)["appendAuditEvent"];
+  const append = (adapters as Record<string, unknown>)["appendAuditEventAtomically"];
   expect(typeof append, "shared audit writer is exported").toBe("function");
   return append as (pool: Pool, event: typeof input) => Promise<{ id: string; prevHash: string | null; hash: string }>;
 }
@@ -25,7 +25,7 @@ describe("shared audit writer", () => {
   it("rolls back when the domain mutation fails without appending audit", async () => {
     const f = fixture();
     const failure = new Error("synthetic domain mutation failed");
-    await expect(adapters.appendAuditEvent(f.pool, input as adapters.AuditEventInput, async (transaction) => {
+    await expect(adapters.appendAuditEventAtomically(f.pool, input as adapters.AtomicAuditEventInput, async (transaction) => {
       await transaction.query("UPDATE synthetic_domain SET value = $1", [2]);
       throw failure;
     })).rejects.toBe(failure);
@@ -43,7 +43,7 @@ describe("shared audit writer", () => {
       if (sql.includes("INSERT INTO app.audit_event")) throw failure;
       return { rows: [] };
     });
-    await expect(adapters.appendAuditEvent(f.pool, input as adapters.AuditEventInput, async (transaction) => {
+    await expect(adapters.appendAuditEventAtomically(f.pool, input as adapters.AtomicAuditEventInput, async (transaction) => {
       await transaction.query("UPDATE synthetic_domain SET value = $1", [2]);
     })).rejects.toBe(failure);
     expect(f.calls[3]?.sql).toBe("UPDATE synthetic_domain SET value = $1");
@@ -55,7 +55,7 @@ describe("shared audit writer", () => {
   it("does not run a domain mutation when metadata is rejected", async () => {
     const f = fixture();
     let mutated = false;
-    await expect(adapters.appendAuditEvent(f.pool, { ...input, actor: "" } as adapters.AuditEventInput, async () => {
+    await expect(adapters.appendAuditEventAtomically(f.pool, { ...input, actor: "" } as adapters.AtomicAuditEventInput, async () => {
       mutated = true;
     })).rejects.toThrow("Invalid audit metadata");
     expect(mutated).toBe(false);
@@ -71,7 +71,7 @@ describe("shared audit writer", () => {
       if (sql === "COMMIT") throw failure;
       return { rows: sql.includes("INSERT INTO") ? [{ id: "event-1", prev_hash: null, hash: "c".repeat(64) }] : [] };
     });
-    await expect(adapters.appendAuditEvent(f.pool, input as adapters.AuditEventInput, async () => {
+    await expect(adapters.appendAuditEventAtomically(f.pool, input as adapters.AtomicAuditEventInput, async () => {
       mutations++;
     })).rejects.toBe(failure);
     expect(mutations).toBe(1);
@@ -81,7 +81,7 @@ describe("shared audit writer", () => {
 
   it("pairs a domain mutation with audit on the same transaction client", async () => {
     const f = fixture();
-    await expect(adapters.appendAuditEvent(f.pool, input as adapters.AuditEventInput, async (transaction) => {
+    await expect(adapters.appendAuditEventAtomically(f.pool, input as adapters.AtomicAuditEventInput, async (transaction) => {
       await transaction.query("INSERT INTO synthetic_domain (id) VALUES ($1)", ["synthetic-1"]);
     })).resolves.toEqual({ id: "event-1", prevHash: "b".repeat(64), hash: "c".repeat(64) });
     expect(f.connect).toHaveBeenCalledOnce();

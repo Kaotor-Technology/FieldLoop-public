@@ -1,0 +1,44 @@
+{
+  "rainRate": {
+    "schemaVersion": "signal.v1",
+    "id": "00000000-0000-4000-8000-000000000147",
+    "orgId": "worker-fixture",
+    "source": "mock-hydro",
+    "tag": "rain.rate",
+    "value": 60,
+    "unit": "mm/h",
+    "observedAt": "2026-10-12T06:00:00Z",
+    "simulated": true,
+    "classification": "CONFIDENTIAL",
+    "simulationRunId": "00000000-0000-4000-8000-000000000149",
+    "payload": { "assetCode": "S-R1", "zone": "Z3", "kind": "rain", "label": "SIMULATION" }
+  },
+  "rainAccumulation": {
+    "schemaVersion": "signal.v1",
+    "id": "00000000-0000-4000-8000-000000000150",
+    "orgId": "worker-fixture",
+    "source": "mock-hydro",
+    "tag": "rain.accumulation.24h",
+    "value": 101,
+    "unit": "mm",
+    "observedAt": "2026-10-12T06:01:00Z",
+    "simulated": true,
+    "classification": "CONFIDENTIAL",
+    "simulationRunId": "00000000-0000-4000-8000-000000000149",
+    "payload": { "assetCode": "S-R1", "zone": "Z3", "kind": "rain", "windowSeconds": 86400, "label": "SIMULATION" }
+  },
+  "pump": {
+    "schemaVersion": "signal.v1",
+    "id": "00000000-0000-4000-8000-000000000148",
+    "orgId": "worker-fixture",
+    "source": "mock-pumps",
+    "tag": "pump.power",
+    "value": "lost",
+    "unit": "state",
+    "observedAt": "2026-10-12T06:20:00Z",
+    "simulated": true,
+    "classification": "CONFIDENTIAL",
+    "simulationRunId": "00000000-0000-4000-8000-000000000149",
+    "payload": { "assetCode": "P-3", "facilityType": "pump", "zone": "Z3", "operatingState": "stopped", "label": "SIMULATION" }
+  }
+}

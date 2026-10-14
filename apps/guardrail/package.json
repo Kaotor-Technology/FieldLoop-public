@@ -14,11 +14,17 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "fastify": "5.12.5"
+    "@fieldloop/adapters": "workspace:*",
+    "@fieldloop/contracts": "workspace:*",
+    "fastify": "5.12.5",
+    "jose": "6.2.12",
+    "kysely": "0.29.6",
+    "pg": "8.23.1"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",
     "@types/node": "22.20.5",
+    "@types/pg": "8.23.1",
     "typescript": "5.9.3",
     "vitest": "3.2.7"
   }

@@ -1,57 +1,15 @@
 import i18next from "i18next";
 import { initReactI18next } from "react-i18next";
+import en from "./locales/en.json";
+import th from "./locales/th.json";
 
 void i18next.use(initReactI18next).init({
-  lng: "en", fallbackLng: "en", initAsync: false,
+  lng: "en",
+  fallbackLng: "en",
+  supportedLngs: ["en", "th"],
+  initAsync: false,
   interpolation: { escapeValue: false },
-  resources: {
-    en: { translation: {
-      simulationWorkspace: "Simulation workspace", scenarioPlayer: "Scenario player", scenario: "Scenario", seed: "Seed", speed: "Speed", bookmark: "Bookmark",
-      chooseScenario: "Choose a Scenario", chooseBookmark: "Choose a bookmark", createRun: "Create run",
-      play: "Play", pause: "Pause", step: "Step", jumpBookmark: "Jump to bookmark", resetSimulation: "Reset simulation",
-      scenarioProgress: "Scenario progress", simulationLoading: "Loading simulation", simulationWorking: "Working",
-      simulationFailed: "Simulation could not be updated. Check your access and connection, then try again.",
-      noScenarios: "No Scenarios are available.", simulationReadOnly: "Only an Operator or Manager can control this run.",
-      liveClock: "Live server clock", clockReconnecting: "Reconnecting to server clock",
-      simulationState: { ready: "Ready", playing: "Playing", paused: "Paused", finished: "Finished" },
-      loading: "Checking your session", redirecting: "Opening Kaotor SSO",
-      unavailable: "Sign-in is temporarily unavailable", retry: "Try again",
-      unavailableDetail: "Your session could not be checked. Try again when the connection is available.",
-      map: "Geo Command Map", mapPending: "Map layers are being prepared.",
-      mapDetail: "Your session is ready. Asset and Barrier layers will appear here when they are available.",
-      workspace: "SYNTHETIC · Demo workspace", simulatedData: "Simulated data",
-      identity: "Signed-in identity", subject: "Subject", roles: "Roles", persona: "Persona", authTime: "Signed in at",
-      switchAccount: "Change demo account", switchDetail: "Sign out of Kaotor SSO, then sign in with the demo account for the role you need.",
-      viewer: "Viewer", viewerDetail: "Executive · District Officer",
-      operator: "Operator", operatorDetail: "Integrity Engineer · Control-room Operator",
-      manager: "Manager", managerDetail: "Technical Authority · Incident Commander · AI Governance Lead",
-      confirmSwitch: "Sign out and change account", signingOut: "Signing out", cancel: "Cancel",
-      logoutFailed: "Sign-out could not be completed. Try again.", nightShift: "Night shift", skip: "Skip to main content",
-    } },
-    th: { translation: {
-      simulationWorkspace: "พื้นที่จำลอง", scenarioPlayer: "เครื่องเล่น Scenario", scenario: "Scenario", seed: "ค่า seed", speed: "ความเร็ว", bookmark: "จุดคั่นเวลา",
-      chooseScenario: "เลือก Scenario", chooseBookmark: "เลือกจุดคั่นเวลา", createRun: "สร้างรอบจำลอง",
-      play: "เล่น", pause: "หยุดชั่วคราว", step: "เดินหน้าหนึ่งขั้น", jumpBookmark: "ไปยังจุดคั่นเวลา", resetSimulation: "รีเซ็ตการจำลอง",
-      scenarioProgress: "ความคืบหน้าของ Scenario", simulationLoading: "กำลังโหลดการจำลอง", simulationWorking: "กำลังดำเนินการ",
-      simulationFailed: "อัปเดตการจำลองไม่สำเร็จ ตรวจสอบสิทธิ์และการเชื่อมต่อแล้วลองอีกครั้ง",
-      noScenarios: "ยังไม่มี Scenario ที่ใช้งานได้", simulationReadOnly: "เฉพาะผู้ปฏิบัติงานหรือผู้มีอำนาจอนุมัติที่ควบคุมรอบนี้ได้",
-      liveClock: "เวลาจากเซิร์ฟเวอร์", clockReconnecting: "กำลังเชื่อมต่อเวลาจากเซิร์ฟเวอร์อีกครั้ง",
-      simulationState: { ready: "พร้อม", playing: "กำลังเล่น", paused: "หยุดชั่วคราว", finished: "จบแล้ว" },
-      loading: "กำลังตรวจสอบเซสชัน", redirecting: "กำลังเปิด Kaotor SSO",
-      unavailable: "ไม่สามารถเข้าสู่ระบบได้ชั่วคราว", retry: "ลองอีกครั้ง",
-      unavailableDetail: "ตรวจสอบเซสชันไม่ได้ โปรดลองอีกครั้งเมื่อเชื่อมต่อได้",
-      map: "แผนที่บัญชาการเชิงพื้นที่", mapPending: "กำลังเตรียมชั้นข้อมูลแผนที่",
-      mapDetail: "เซสชันพร้อมใช้งาน ชั้นข้อมูลสินทรัพย์และ Barrier จะแสดงที่นี่เมื่อพร้อม",
-      workspace: "SYNTHETIC · พื้นที่สาธิต", simulatedData: "ข้อมูลจำลอง",
-      identity: "ข้อมูลผู้เข้าสู่ระบบ", subject: "รหัสผู้ใช้", roles: "สิทธิ์", persona: "บทบาทในการสาธิต", authTime: "เข้าสู่ระบบเมื่อ",
-      switchAccount: "เปลี่ยนบัญชีสาธิต", switchDetail: "ออกจาก Kaotor SSO แล้วเข้าสู่ระบบด้วยบัญชีสาธิตที่มีสิทธิ์ตรงกับบทบาทที่ต้องการ",
-      viewer: "ผู้ดูข้อมูล", viewerDetail: "ผู้บริหาร · เจ้าหน้าที่เขต",
-      operator: "ผู้ปฏิบัติงาน", operatorDetail: "วิศวกรความสมบูรณ์ของสินทรัพย์ · เจ้าหน้าที่ห้องควบคุม",
-      manager: "ผู้มีอำนาจอนุมัติ", managerDetail: "ผู้มีอำนาจทางเทคนิค · ผู้บัญชาการเหตุการณ์ · ผู้นำกำกับดูแล AI",
-      confirmSwitch: "ออกจากระบบและเปลี่ยนบัญชี", signingOut: "กำลังออกจากระบบ", cancel: "ยกเลิก",
-      logoutFailed: "ออกจากระบบไม่สำเร็จ โปรดลองอีกครั้ง", nightShift: "โหมดกะกลางคืน", skip: "ข้ามไปเนื้อหาหลัก",
-    } },
-  },
+  resources: { en: { translation: en }, th: { translation: th } },
 });
 
 export default i18next;

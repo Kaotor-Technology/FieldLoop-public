@@ -83,7 +83,7 @@ try {
     await pool.query(migration.split('-- migrate:down')[0]);
   }
   // Import the public production export, not a copy, after fixture setup.
-  const { appendAuditEvent } = await import('../packages/adapters/dist/index.js');
+  const { appendAuditEventAtomically } = await import('../packages/adapters/dist/index.js');
   await pool.query("CREATE TABLE app.synthetic_audit_domain (id text PRIMARY KEY, org_id text NOT NULL, simulated boolean NOT NULL, classification text NOT NULL, value integer NOT NULL); INSERT INTO app.synthetic_audit_domain VALUES ('synthetic-1','synthetic-atomic-org',true,'INTERNAL',0)");
   const input = { orgId: 'synthetic-atomic-org', actor: 'synthetic-user', action: 'synthetic.updated', entity: 'synthetic:1', beforeHash: null, afterHash: 'a'.repeat(64), simulated: true, classification: 'INTERNAL' };
   const mutate = async (transaction) => {
@@ -93,25 +93,25 @@ try {
     assert.equal((await pool.query('SELECT value FROM app.synthetic_audit_domain')).rows[0].value, value);
     assert.equal((await pool.query('SELECT count(*)::int AS n FROM app.audit_event WHERE org_id = $1', [input.orgId])).rows[0].n, count);
   }
-  const first = await appendAuditEvent(pool, input, mutate);
+  const first = await appendAuditEventAtomically(pool, input, mutate);
   assert.equal(first.prevHash, null);
   await state(1, 1);
   console.log('PASS domain mutation and audit commit together');
   const failure = new Error('synthetic domain failure');
-  await assert.rejects(appendAuditEvent(pool, input, async (transaction) => { await mutate(transaction); throw failure; }), error => error === failure);
+  await assert.rejects(appendAuditEventAtomically(pool, input, async (transaction) => { await mutate(transaction); throw failure; }), error => error === failure);
   await state(1, 1);
   console.log('PASS domain failure rolls back mutation with no audit');
   // Fixture-only rejection; does not alter production migration or privileges.
   await pool.query("ALTER TABLE app.audit_event ADD CONSTRAINT synthetic_audit_reject CHECK (action <> 'synthetic.reject')");
-  await assert.rejects(appendAuditEvent(pool, { ...input, action: 'synthetic.reject' }, mutate), error => error.code === '23514' && error.constraint === 'synthetic_audit_reject');
+  await assert.rejects(appendAuditEventAtomically(pool, { ...input, action: 'synthetic.reject' }, mutate), error => error.code === '23514' && error.constraint === 'synthetic_audit_reject');
   await state(1, 1);
   console.log('PASS audit failure rolls back domain mutation');
-  const second = await appendAuditEvent(pool, input, mutate);
+  const second = await appendAuditEventAtomically(pool, input, mutate);
   assert.equal(second.prevHash, first.hash);
   await state(2, 2);
   console.log('PASS predecessor includes committed append only');
   // Atomic mutation coverage; same-row locking alone cannot prove advisory-lock sensitivity.
-  const receipts = await Promise.all(Array.from({ length: 16 }, () => appendAuditEvent(pool, input, mutate)));
+  const receipts = await Promise.all(Array.from({ length: 16 }, () => appendAuditEventAtomically(pool, input, mutate)));
   assert.equal(new Set(receipts.map(receipt => receipt.id)).size, 16);
   await state(18, 18);
   const client = await pool.connect();
@@ -126,7 +126,7 @@ try {
   console.log('PASS 16 concurrent same-client mutations form one 18-row committed chain');
   // Separate Organisation, audit-only calls: no domain row lock can serialize these.
   const auditOnlyInput = { ...input, orgId: 'synthetic-audit-only-org' };
-  const auditOnly = await Promise.all(Array.from({ length: 32 }, () => appendAuditEvent(pool, auditOnlyInput)));
+  const auditOnly = await Promise.all(Array.from({ length: 32 }, () => appendAuditEventAtomically(pool, auditOnlyInput)));
   assert.equal(new Set(auditOnly.map(receipt => receipt.id)).size, 32);
   const auditClient = await pool.connect();
   try {
