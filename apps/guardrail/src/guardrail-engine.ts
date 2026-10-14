@@ -31,13 +31,19 @@ interface ContentScanInput {
   classification: GuardrailClassification;
   clearance: GuardrailClassification;
   idempotencyKey: string;
-  /** Filled with per-stage durations (ms) for Server-Timing and latency diagnosis. */
-  timings?: ContentScanTimings;
 }
 
-export type ContentScanTimings = Partial<Record<"load" | "idempotency" | "detector" | "persist", number>>;
+/** Stages of a content scan, in order; each duration is reported in Server-Timing (ms, 0.1 precision). */
+export const CONTENT_SCAN_STAGES = ["load", "idempotency", "detector", "persist"] as const;
+export type ContentScanStage = (typeof CONTENT_SCAN_STAGES)[number];
+export type ContentScanTimings = Partial<Record<ContentScanStage, number>>;
 
-type Settled<T> = { ok: true; value: T } | { ok: false; error: unknown };
+export interface ContentScanOutcome {
+  result: GuardrailHttpResult;
+  timings: ContentScanTimings;
+}
+
+type TimedContentScanInput = ContentScanInput & { timings: ContentScanTimings };
 
 export class GuardrailEngine {
   constructor(private readonly dependencies: GuardrailDependencies) {}
@@ -47,21 +53,19 @@ export class GuardrailEngine {
     return unavailable(message);
   }
 
-  async scanContent(input: ContentScanInput): Promise<GuardrailHttpResult> {
-    const timings = input.timings ?? {};
-    // The detector needs only the content, so it runs while policies and the idempotency record load.
-    // Content above the caller's clearance is blocked without being sent to the detector.
-    const startedAt = performance.now();
-    const pendingScan = classificationRank(input.classification) <= classificationRank(input.clearance)
-      ? settle(this.dependencies.scanner.scanUserPrompt(input.content)).then((settled) => {
-        timings.detector = elapsedMs(startedAt);
-        return settled;
-      })
-      : null;
+  async scanContent(input: ContentScanInput): Promise<ContentScanOutcome> {
+    const timings: ContentScanTimings = {};
+    const result = await this.scanContentStages({ ...input, timings });
+    return { result, timings };
+  }
 
+  // Content reaches the detector only after the AI System loads, the request is not a replay
+  // and the request classification is within the caller's clearance.
+  private async scanContentStages(input: TimedContentScanInput): Promise<GuardrailHttpResult> {
+    const { timings } = input;
     const loadStartedAt = performance.now();
     const loaded = await this.load(input.aiSystem);
-    timings.load = elapsedMs(loadStartedAt);
+    timings.load = durationMs(loadStartedAt);
     if ("result" in loaded) return loaded.result;
     const { system } = loaded;
     const injection = findPolicy(system, "injection");
@@ -74,7 +78,7 @@ export class GuardrailEngine {
     const idempotencyStartedAt = performance.now();
     try { previous = await this.dependencies.store.getContentScan(system.orgId, idempotencyKeyHash); }
     catch (error) { return this.unavailable(error, "Content scan idempotency record is unavailable"); }
-    finally { timings.idempotency = elapsedMs(idempotencyStartedAt); }
+    finally { timings.idempotency = durationMs(idempotencyStartedAt); }
     if (previous) {
       if (previous.requestHash !== requestHash) return idempotencyConflict();
       if (classificationRank(previous.classification) > classificationRank(input.clearance)) {
@@ -83,16 +87,20 @@ export class GuardrailEngine {
       return contentScanResult(previous, input.content);
     }
 
-    if (!pendingScan) {
+    if (classificationRank(input.classification) > classificationRank(input.clearance)) {
       const reason = "Request classification exceeds the caller's clearance";
       return await this.persistContentScan(system, input, idempotencyKeyHash, requestHash, [{
         system, policy: routing, decision: "block", reason, classification: input.classification, latencyMs: 0,
       }], { statusCode: 403, decision: "block", classification: input.classification, reason, policyId: routing.id }, 0);
     }
 
-    const settledScan = await pendingScan;
-    if (!settledScan.ok) {
-      this.dependencies.logError?.(settledScan.error, "Tier 1 detector unavailable");
+    const startedAt = performance.now();
+    let scan: Tier1ScanResult;
+    try {
+      scan = await this.dependencies.scanner.scanUserPrompt(input.content);
+    } catch (error) {
+      timings.detector = durationMs(startedAt);
+      this.dependencies.logError?.(error, "Tier 1 detector unavailable");
       return await this.persistContentScan(system, input, idempotencyKeyHash, requestHash, [{
         system, policy: injection, decision: "block", reason: "Tier 1 detector unavailable",
         classification: input.classification, latencyMs: elapsedMs(startedAt),
@@ -101,7 +109,7 @@ export class GuardrailEngine {
         reason: "Tier 1 detector unavailable", policyId: injection.id,
       }, 0);
     }
-    const scan: Tier1ScanResult = settledScan.value;
+    timings.detector = durationMs(startedAt);
 
     const classification = raiseClassification(input.classification, scan.classification);
     const detectedInjection = scan.action === "block";
@@ -331,7 +339,7 @@ export class GuardrailEngine {
 
   private async persistContentScan(
     system: GuardrailSystem,
-    input: ContentScanInput,
+    input: TimedContentScanInput,
     idempotencyKeyHash: string,
     requestHash: string,
     records: RecordInterceptInput[],
@@ -348,7 +356,7 @@ export class GuardrailEngine {
       if (error instanceof IdempotencyKeyReusedError) return idempotencyConflict();
       return this.unavailable(error, "Content scan and Evidence could not be recorded");
     } finally {
-      if (input.timings) input.timings.persist = elapsedMs(persistStartedAt);
+      input.timings.persist = durationMs(persistStartedAt);
     }
   }
 
@@ -525,12 +533,8 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
-async function settle<T>(promise: Promise<T>): Promise<Settled<T>> {
-  try {
-    return { ok: true, value: await promise };
-  } catch (error) {
-    return { ok: false, error };
-  }
+function durationMs(startedAt: number): number {
+  return Math.max(0, Math.round((performance.now() - startedAt) * 10) / 10);
 }
 
 function elapsedMs(startedAt: number): number {

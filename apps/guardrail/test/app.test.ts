@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GuardrailClassification, Tier1ScanResult } from "@fieldloop/adapters";
 import { buildApp } from "../src/app.js";
 import { InternalUserTokenVerifierUnavailableError, InvalidInternalUserTokenError } from "../src/internal-user-token.js";
+import { UnknownGuardrailSystemError } from "../src/postgres-store.js";
 import type { GuardrailDependencies, GuardrailPolicy, GuardrailSystem, RecordContentScanInput, StoredContentScan } from "../src/model.js";
 
 const apps: ReturnType<typeof buildApp>[] = [];
@@ -75,27 +76,29 @@ describe("Guardrail gateway", () => {
     }));
   });
 
-  it("starts the Tier 1 scan while the AI System is still loading and reports stage timings", async () => {
+  it("reports each content-scan stage in Server-Timing", async () => {
     const dependencies = createDependencies();
-    const loadSystem = dependencies.store.loadSystem;
-    let releaseLoad: () => void = () => undefined;
-    const loadGate = new Promise<void>((resolve) => { releaseLoad = resolve; });
-    dependencies.store.loadSystem = vi.fn(async (...args: Parameters<typeof loadSystem>) => {
-      await loadGate;
-      return loadSystem(...args);
-    });
     const app = createApp(dependencies);
-    const pending = app.inject({
-      method: "POST", url: "/guardrail/v1/content:scan", headers: { "idempotency-key": "content-scan-parallel-0001" },
+    const response = await app.inject({
+      method: "POST", url: "/guardrail/v1/content:scan", headers: { "idempotency-key": "content-scan-timing-0001" },
       payload: { aiSystem: "demo-uc-1", content: "SYNTHETIC routine document" },
     });
 
-    await vi.waitFor(() => expect(dependencies.scanner.scanUserPrompt).toHaveBeenCalledOnce());
-    releaseLoad();
-    const response = await pending;
-
     expect(response.statusCode).toBe(200);
-    expect(response.headers["server-timing"]).toMatch(/^load;dur=\d+, idempotency;dur=\d+, detector;dur=\d+, persist;dur=\d+$/);
+    expect(response.headers["server-timing"]).toMatch(/^load;dur=[\d.]+, idempotency;dur=[\d.]+, detector;dur=[\d.]+, persist;dur=[\d.]+$/);
+  });
+
+  it("does not send content to the detector for an unknown AI System", async () => {
+    const dependencies = createDependencies();
+    dependencies.store.loadSystem = vi.fn(async () => { throw new UnknownGuardrailSystemError(); });
+    const app = createApp(dependencies);
+    const response = await app.inject({
+      method: "POST", url: "/guardrail/v1/content:scan", headers: { "idempotency-key": "content-scan-unknown-0001" },
+      payload: { aiSystem: "not-registered", content: "SYNTHETIC routine document" },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(dependencies.scanner.scanUserPrompt).not.toHaveBeenCalled();
   });
 
   it("does not send content above the caller's clearance to the detector", async () => {
@@ -189,7 +192,7 @@ describe("Guardrail gateway", () => {
     expect(first.statusCode).toBe(403);
     expect(replay.statusCode).toBe(403);
     expect(replay.headers["x-fieldloop-intercept-id"]).toBe(first.headers["x-fieldloop-intercept-id"]);
-    // The detector starts before the idempotency lookup, so a replay may scan again; only the first result is recorded and returned.
+    expect(dependencies.scanner.scanUserPrompt).toHaveBeenCalledOnce();
     expect(dependencies.store.recordContentScan).toHaveBeenCalledOnce();
     expect(reused.statusCode).toBe(409);
     expect(reused.json().error.code).toBe("idempotency_key_reused");
