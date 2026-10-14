@@ -21,7 +21,7 @@ ALTER TABLE geo_reference
     ADD CONSTRAINT geo_reference_target_pair_check
         CHECK (num_nonnulls(target_type, target_id) IN (0, 2)),
     ADD CONSTRAINT geo_reference_status_check
-        CHECK (status IS NULL OR status IN ('draft', 'confirmed', 'rejected')),
+        CHECK (status IS NULL OR status IN ('draft', 'confirmed', 'rejected', 'imported', 'reviewed')),
     ADD CONSTRAINT geo_reference_kind_check
         CHECK (kind IN ('point', 'chainage', 'area', 'asset'));
 
