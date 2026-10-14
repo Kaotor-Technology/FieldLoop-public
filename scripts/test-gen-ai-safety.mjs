@@ -4,6 +4,7 @@ import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
+import { isRiskSeverity } from "../packages/contracts/dist/index.js";
 import { sql } from "kysely";
 import { loadDemoDomainPacks, registerDomainPackRecords, domainPackRecordId } from "../apps/api/dist/domain-packs.js";
 
@@ -53,6 +54,11 @@ export async function testGenAiSafetyRecords(database, application, packs) {
     assert.equal(row.config.bowtieId, first.find(({ kind }) => kind === "bowtie").id);
     assert.equal(row.side, row.config.kind === "output-dlp" ? "mitigative" : "preventive");
   }
+  for (const row of first.filter(({ kind }) => kind === "consequence")) {
+    assert.equal(isRiskSeverity(row.value.severity), true, "persisted Consequence conforms to shared RiskSeverity");
+  }
+  assert.deepEqual(first.find(({ kind, value }) => kind === "consequence" && value.name === "Disclosure of restricted Asset data").value.severity,
+    { legalRegulatory: 5 });
   assert.deepEqual(first.filter(({ kind }) => kind === "consequence").map(({ value }) => Object.values(value.severity)[0]).sort(), [4, 5]);
   assert.ok(first.filter(({ kind }) => kind === "threat").every(({ value }) => value.frequency_per_year === null));
   assert.ok(first.filter(({ kind }) => kind === "consequence").every(({ value }) => value.p_conditional === null));
@@ -81,6 +87,64 @@ export async function testGenAiSafetyRecords(database, application, packs) {
   const healthAfter = (await sql`SELECT id, health FROM app.barrier WHERE org_id NOT IN (${orgId}, 'other-gen-ai-safety-test') ORDER BY id`.execute(database)).rows;
   assert.deepEqual(healthAfter, existingHealth, "pre-existing Health stays unchanged");
   assert.deepEqual(await unrelatedCounts(), before, "no fabricated Evidence, Intercepts, Health changes, Actions, approvals or unresolved Cross-Domain rows");
+  const bowtieId = domainPackRecordId(orgId, pack.content.id, "bowtie", safety.bowtie.id);
+  await sql`UPDATE app.bowtie SET status = 'approved', hazard = 'Human-reviewed hazard (SIMULATION)'
+    WHERE id = ${bowtieId}::uuid`.execute(database);
+  const reviewed = await snapshot(orgId);
+  await registerDomainPackRecords(application, orgId, [updated]);
+  assert.deepEqual(await snapshot(orgId), reviewed, "identical seed must not overwrite reviewed definitions or local overrides");
+  const equivalent = structuredClone(updated);
+  equivalent.aiSafety = Object.fromEntries(Object.entries(equivalent.aiSafety).reverse());
+  equivalent.content = Object.fromEntries(Object.entries(equivalent.content).reverse());
+  await registerDomainPackRecords(application, orgId, [equivalent]);
+  assert.deepEqual(await snapshot(orgId), reviewed, "object-key ordering does not change seed identity");
+  const edits = [
+    (value) => { value.aiSafety.bowtie.hazard = "Changed hazard (SIMULATION)"; },
+    (value) => { value.aiSafety.bowtie.barriers[0].performanceStandard = "Changed standard (SIMULATION)"; },
+    (value) => { value.aiSafety.bowtie.paths[0].barrierIds.reverse(); },
+    (value) => { value.aiSafety.policies[0].id = "renamed-injection-policy"; },
+    (value) => { value.content.version = "1.0.2"; value.aiSafety.version = "1.0.2"; },
+  ];
+  for (const edit of edits) {
+    const changed = structuredClone(updated);
+    edit(changed);
+    await assert.rejects(registerDomainPackRecords(application, orgId, [changed]), /reviewed Bowtie/);
+    assert.deepEqual(await snapshot(orgId), reviewed, "reviewed reload rejection rolls back every catalog table");
+  }
+  for (const status of ["in_review", "rejected", "superseded"]) {
+    await sql`UPDATE app.bowtie SET status = ${status} WHERE id = ${bowtieId}::uuid`.execute(database);
+    const protectedState = await snapshot(orgId);
+    const changed = structuredClone(updated);
+    changed.aiSafety.bowtie.hazard = "Changed reviewed-state hazard (SIMULATION)";
+    await assert.rejects(registerDomainPackRecords(application, orgId, [changed]), /reviewed Bowtie/);
+    assert.deepEqual(await snapshot(orgId), protectedState, `seed preserves ${status} definitions`);
+  }
+  await sql`UPDATE app.bowtie SET status = 'approved' WHERE id = ${bowtieId}::uuid`.execute(database);
+  // A concurrent human review must win over a seed that began before its commit.
+  await sql`UPDATE app.bowtie SET status = 'draft' WHERE id = ${bowtieId}::uuid`.execute(database);
+  const concurrent = structuredClone(updated);
+  concurrent.aiSafety.bowtie.hazard = "Concurrent seed edit (SIMULATION)";
+  let seedWork;
+  let settled = false;
+  await database.transaction().execute(async (humanReview) => {
+    await sql`UPDATE app.bowtie SET status = 'approved' WHERE id = ${bowtieId}::uuid`.execute(humanReview);
+    seedWork = registerDomainPackRecords(application, orgId, [concurrent]);
+    void seedWork.then(() => { settled = true; }, () => { settled = true; });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(settled, false, "seed waits for the concurrent reviewed Bowtie row");
+  });
+  await assert.rejects(seedWork, /reviewed Bowtie/);
+  assert.deepEqual(await snapshot(orgId), reviewed, "seed cannot overwrite a concurrently reviewed definition");
+  const policyIdForProof = domainPackRecordId(orgId, pack.content.id, "guardrail_policy", policyMappings[0].config.id);
+  const policyConfig = (await sql`SELECT config FROM app.guardrail_policy
+    WHERE id = ${policyIdForProof}::uuid`.execute(database)).rows[0].config;
+  await sql`UPDATE app.guardrail_policy SET config = config - 'seedDefinitionHash'
+    WHERE id = ${policyIdForProof}::uuid`.execute(database);
+  const legacyReviewed = await snapshot(orgId);
+  await assert.rejects(registerDomainPackRecords(application, orgId, [updated]), /reviewed Bowtie/);
+  assert.deepEqual(await snapshot(orgId), legacyReviewed, "missing legacy proof is never silently adopted");
+  await sql`UPDATE app.guardrail_policy SET config = ${JSON.stringify(policyConfig)}::jsonb
+    WHERE id = ${policyIdForProof}::uuid`.execute(database);
   const times = [];
   for (let index = 0; index < 25; index++) {
     const start = performance.now();
@@ -109,5 +173,8 @@ export async function testGenAiSafetyRecords(database, application, packs) {
       assert.doesNotMatch(failed.stdout, /Server listening/);
     }
   } finally { await rm(invalidRoot, { recursive: true, force: true }); }
-  console.log("Gen AI Safety PostGIS acceptance passed: UC-1, 4 policies, full Bowtie C, mappings, labels, idempotency, upgrade, preserved Health, Organisation isolation and rollback.");
+  const parentPlan = await sql`EXPLAIN (ANALYZE, BUFFERS) SELECT status, version FROM app.bowtie
+    WHERE id = ${bowtieId}::uuid AND org_id = ${orgId} FOR UPDATE`.execute(application);
+  console.log(parentPlan.rows.map((row) => row["QUERY PLAN"]).join("\n"));
+  console.log("Gen AI Safety PostGIS acceptance passed: UC-1, 4 policies, full Bowtie C, mappings, labels, idempotency, upgrade, preserved Health/reviewed definitions, concurrent human review, shared severity, Organisation isolation and rollback.");
 }

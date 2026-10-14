@@ -21,6 +21,10 @@ export async function registerDomainPackRecords<Database>(database: Kysely<Datab
   await database.transaction().execute(async (transaction) => {
     for (const pack of packs) {
       const { content } = pack;
+      if (pack.aiSafety) {
+        await registerGenAiSafetyRecords(transaction, orgId, pack);
+        continue;
+      }
       for (const category of content.threatCategories) {
         const id = domainPackRecordId(orgId, content.id, "threat_category", category.code);
         await sql`INSERT INTO app.threat_category (id, org_id, pack, code, simulated, classification, created_by)
@@ -41,7 +45,6 @@ export async function registerDomainPackRecords<Database>(database: Kysely<Datab
             target_barrier_selector = EXCLUDED.target_barrier_selector, spatial_geom = EXCLUDED.spatial_geom,
             classification = EXCLUDED.classification, simulated = EXCLUDED.simulated`.execute(transaction);
       }
-      await registerGenAiSafetyRecords(transaction, orgId, pack);
     }
   });
 }
