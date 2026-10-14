@@ -417,7 +417,7 @@ export function GeoCommandMap() {
             </fieldset>
           </details>
         </div>
-        <div className="map-legend" aria-label={t(showRainLegend ? "mapLegend" : "mapLegendBase")}>
+        <div className="map-legend" role="group" aria-label={t(showRainLegend ? "mapLegend" : "mapLegendBase")}>
           <div className="legend-group">
             <h2>{t("barrierHealthLabel")}</h2>
             <span className="legend-health"><i className="health-failed" aria-hidden="true">{SYMBOLS.failed}</i>{t("barrierHealth.failed")}</span>
