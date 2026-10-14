@@ -75,12 +75,17 @@ def test_reads_use_the_internal_user_token_and_validate_identifiers() -> None:
         asyncio.run(tool(ctx, "get_bowtie_risk")("../../admin"))
 
 
-def test_get_asset_matches_a_feature_and_reports_missing() -> None:
-    platform = Platform({"features": [{"properties": {"code": "DL-01"}, "id": 1}]})
+def test_get_asset_reads_the_by_id_endpoint_and_reports_missing() -> None:
+    platform = Platform({"id": "a1", "code": "DL-01", "name": "SYNTHETIC pipeline"})
     ctx = context(platform=platform)
     get_asset = tool(ctx, "get_asset")
-    assert asyncio.run(get_asset("DL-01"))["asset"] is not None
-    assert asyncio.run(get_asset("DL-99"))["error"] == "asset_not_found"
+    assert asyncio.run(get_asset("DL-01"))["asset"]["code"] == "DL-01"
+    assert platform.calls == [("/api/v1/assets/DL-01", "tok")]
+    missing = context(platform=Platform({"error": "platform_404"}))
+    assert asyncio.run(tool(missing, "get_asset")("DL-99")) == {
+        "asset": None, "error": "asset_not_found"}
+    with pytest.raises(ValueError, match="unsupported"):
+        asyncio.run(get_asset("../../v1/me"))
 
 
 def test_create_draft_records_the_session_and_user_and_never_approves() -> None:

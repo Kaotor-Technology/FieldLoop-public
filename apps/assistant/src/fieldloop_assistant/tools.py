@@ -15,8 +15,6 @@ from typing import Any, Literal, Protocol
 import httpx
 
 Kind = Literal["read", "propose"]
-# Default viewport for get_asset: Thailand (assumption; the asset layer needs a bounded bbox).
-DEFAULT_BBOX = (97.0, 5.5, 106.0, 21.0)
 UUID_RE = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 
 
@@ -175,17 +173,13 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
             asset_id: The Asset identifier.
         """
         wanted = _text(asset_id, "asset_id", 128)
-        west, south, east, north = DEFAULT_BBOX
-        collection = await ctx.platform.get(
-            "/api/v1/map/layers/assets", ctx.user_token,
-            {"bbox": f"{west},{south},{east},{north}", "zoom": "10"},
-        )
-        features = collection.get("features", []) if isinstance(collection, dict) else []
-        for feature in features:
-            props = feature.get("properties", {}) if isinstance(feature, dict) else {}
-            if wanted in (str(props.get("id")), str(props.get("assetId")), str(props.get("code"))):
-                return {"asset": feature}
-        return {"asset": None, "error": "asset_not_found"}
+        if not re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", wanted):
+            raise ToolInputError("asset_id contains unsupported characters")
+        asset = await ctx.platform.get(f"/api/v1/assets/{wanted}", ctx.user_token)
+        if isinstance(asset, dict) and "id" in asset:
+            return {"asset": asset}
+        error = asset.get("error") if isinstance(asset, dict) else None
+        return {"asset": None, "error": "asset_not_found" if error == "platform_404" else error}
 
     async def get_barriers(bowtie_id: str) -> dict[str, Any]:
         """Read the Barriers and Barrier Health of a Bowtie.
