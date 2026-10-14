@@ -65,7 +65,7 @@ export class GuardrailEngine {
     const { timings } = input;
     const loadStartedAt = performance.now();
     const loaded = await this.load(input.aiSystem);
-    timings.load = durationMs(loadStartedAt);
+    timings.load = elapsedMs(loadStartedAt, 1);
     if ("result" in loaded) return loaded.result;
     const { system } = loaded;
     const injection = findPolicy(system, "injection");
@@ -78,7 +78,7 @@ export class GuardrailEngine {
     const idempotencyStartedAt = performance.now();
     try { previous = await this.dependencies.store.getContentScan(system.orgId, idempotencyKeyHash); }
     catch (error) { return this.unavailable(error, "Content scan idempotency record is unavailable"); }
-    finally { timings.idempotency = durationMs(idempotencyStartedAt); }
+    finally { timings.idempotency = elapsedMs(idempotencyStartedAt, 1); }
     if (previous) {
       if (previous.requestHash !== requestHash) return idempotencyConflict();
       if (classificationRank(previous.classification) > classificationRank(input.clearance)) {
@@ -99,7 +99,7 @@ export class GuardrailEngine {
     try {
       scan = await this.dependencies.scanner.scanUserPrompt(input.content);
     } catch (error) {
-      timings.detector = durationMs(startedAt);
+      timings.detector = elapsedMs(startedAt, 1);
       this.dependencies.logError?.(error, "Tier 1 detector unavailable");
       return await this.persistContentScan(system, input, idempotencyKeyHash, requestHash, [{
         system, policy: injection, decision: "block", reason: "Tier 1 detector unavailable",
@@ -109,7 +109,7 @@ export class GuardrailEngine {
         reason: "Tier 1 detector unavailable", policyId: injection.id,
       }, 0);
     }
-    timings.detector = durationMs(startedAt);
+    timings.detector = elapsedMs(startedAt, 1);
 
     const classification = raiseClassification(input.classification, scan.classification);
     const detectedInjection = scan.action === "block";
@@ -356,7 +356,7 @@ export class GuardrailEngine {
       if (error instanceof IdempotencyKeyReusedError) return idempotencyConflict();
       return this.unavailable(error, "Content scan and Evidence could not be recorded");
     } finally {
-      input.timings.persist = durationMs(persistStartedAt);
+      input.timings.persist = elapsedMs(persistStartedAt, 1);
     }
   }
 
@@ -533,12 +533,11 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
-function durationMs(startedAt: number): number {
-  return Math.max(0, Math.round((performance.now() - startedAt) * 10) / 10);
-}
 
-function elapsedMs(startedAt: number): number {
-  return Math.max(0, Math.min(2_147_483_647, Math.round(performance.now() - startedAt)));
+/** Milliseconds since startedAt, rounded to `decimals` places and clamped to the Intercept latency column range. */
+function elapsedMs(startedAt: number, decimals = 0): number {
+  const scale = 10 ** decimals;
+  return Math.max(0, Math.min(2_147_483_647, Math.round((performance.now() - startedAt) * scale) / scale));
 }
 
 function sha256(value: string): string {

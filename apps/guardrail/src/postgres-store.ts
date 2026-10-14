@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { lockWorkerEventOutbox, WORKER_EVENT_OUTBOX_COLUMNS, workerEventOutboxRow } from "@fieldloop/adapters";
+import { insertWorkerEventOutbox, lockWorkerEventOutbox, workerEventOutboxRow } from "@fieldloop/adapters";
 import type { WorkerEvent } from "@fieldloop/contracts";
 import { sql, type Kysely } from "kysely";
 import { classificationRank, IdempotencyKeyReusedError, isClassification, type GuardrailPolicy, type GuardrailStore, type GuardrailSystem, type ModelRoute, type RecordContentScanInput, type RecordInterceptInput, type StoredContentScan } from "./model.js";
@@ -168,8 +168,7 @@ function interceptRecordInserts(rows: ReturnType<typeof interceptRecordRows>[]) 
         (id, org_id, barrier_id, kind, source, observed_at, simulated, classification, created_by, created_at)
       VALUES ${sql.join(rows.map((row) => row.evidence))}
     ), outbox AS (
-      INSERT INTO app.signal_event_outbox ${WORKER_EVENT_OUTBOX_COLUMNS}
-      VALUES ${sql.join(rows.map((row) => row.outbox))}
+      ${insertWorkerEventOutbox(rows.map((row) => row.outbox))}
     )`;
 }
 

@@ -41,15 +41,17 @@ export async function lockWorkerEventOutbox<Database>(connection: PostgresConnec
   await sql`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify([orgId, "worker_event_outbox"])}, 0))`.execute(connection);
 }
 
-/** Column list and one VALUES row for app.signal_event_outbox, for callers that batch outbox inserts. */
-export const WORKER_EVENT_OUTBOX_COLUMNS = sql`(id, org_id, event, simulated, classification, created_by, created_at)`;
-
 export function workerEventOutboxRow(event: WorkerEvent, createdBy: string): RawBuilder<unknown> {
   return sql`(${event.id}::uuid, ${event.orgId}, ${JSON.stringify(event)}::jsonb, ${event.simulated}, ${event.classification}, ${createdBy}, clock_timestamp())`;
 }
 
+/** INSERT for one or more outbox rows; usable as a statement or inside a data-modifying CTE. The caller holds the outbox lock. */
+export function insertWorkerEventOutbox(rows: readonly RawBuilder<unknown>[]): RawBuilder<unknown> {
+  return sql`INSERT INTO app.signal_event_outbox (id, org_id, event, simulated, classification, created_by, created_at)
+    VALUES ${sql.join(rows)}`;
+}
+
 export async function appendWorkerEvent<Database>(connection: PostgresConnection<Database>, event: WorkerEvent, createdBy: string): Promise<void> {
   await lockWorkerEventOutbox(connection, event.orgId);
-  await sql`INSERT INTO app.signal_event_outbox ${WORKER_EVENT_OUTBOX_COLUMNS}
-    VALUES ${workerEventOutboxRow(event, createdBy)}`.execute(connection);
+  await insertWorkerEventOutbox([workerEventOutboxRow(event, createdBy)]).execute(connection);
 }
