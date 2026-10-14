@@ -15,6 +15,9 @@
 !apps/*/tsconfig.build.json
 !apps/*/src/
 !apps/*/src/**
+!apps/guardrail/performance/
+!apps/guardrail/performance/tier1-content-scan.js
+!apps/guardrail/performance/run-in-vpc.mjs
 !apps/web/index.html
 !apps/web/vite.config.ts
 !apps/web/nginx.conf

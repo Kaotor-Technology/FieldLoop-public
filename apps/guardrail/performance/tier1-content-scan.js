@@ -37,6 +37,11 @@ export default function () {
     },
   );
 
+  // Print the first few problem+json bodies so a failed run says why; they carry no tokens.
+  if (response.status !== 200 && __ITER < 3) {
+    console.warn(`content:scan returned ${response.status}: ${String(response.body).slice(0, 500)}`);
+  }
+
   check(response, {
     "content scan returns 200": (result) => result.status === 200,
     "content scan returns the supplied content": (result) => {
