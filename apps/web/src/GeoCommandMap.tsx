@@ -9,8 +9,11 @@ import type { FillStyleExtensionProps, PathStyleExtensionProps } from "@deck.gl/
 import { GoogleMapsOverlay } from "@deck.gl/google-maps";
 import type { MapFeature, MapFeatureCollection, MapLayerName, MapViewport } from "@fieldloop/map";
 import { Skeleton, type BarrierHealth } from "@fieldloop/ui";
+import { Tabs } from "@fieldloop/ui";
 import { HealthProposalReview } from "./HealthProposalReview";
 import { GeoReferenceReview } from "./GeoReferenceReview";
+import { AgentChat } from "./AgentChat";
+import { buildAgentContextChips, removeAgentContextSearch } from "./agent-chat-context";
 import { applyBarrierHealthToMapCache, decideHealthProposal, getHealthProposalPage, healthProposalsQueryKey } from "./health-proposals";
 import { useCurrentSession } from "./SessionGate";
 import { getMapConfig, getMapLayer } from "./map-api";
@@ -60,6 +63,12 @@ export function GeoCommandMap() {
   const { t } = useTranslation();
   const search = useSearch({ from: "/map" });
   const navigate = useNavigate({ from: "/map" });
+  const domain: "all" | "pipeline-integrity" | "flood-water" = search["domain"] === "pipeline-integrity" || search["domain"] === "flood-water" ? search["domain"] : "all";
+  const setDomain = (nextDomain: "all" | "pipeline-integrity" | "flood-water") => {
+    void navigate({ search: (previous) => nextDomain === "all"
+      ? Object.fromEntries(Object.entries(previous).filter(([key]) => key !== "domain"))
+      : { ...previous, domain: nextDomain }, replace: true });
+  };
   const mapElement = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
   const overlay = useRef<GoogleMapsOverlay | null>(null);
@@ -70,8 +79,8 @@ export function GeoCommandMap() {
   const [bounds, setBounds] = useState<ViewportBounds | null>(null);
   const [activeLayers, setActiveLayers] = useState<MapLayerName[]>(LAYERS);
   const [rainOverlayVisible, setRainOverlayVisible] = useState(true);
-  const [domain, setDomain] = useState<"all" | "pipeline-integrity" | "flood-water">("all");
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
+  const [contextTab, setContextTab] = useState("overview");
   const [query, setQuery] = useState("");
   const [mapLoadFailed, setMapLoadFailed] = useState(false);
   const [mapRetry, setMapRetry] = useState(0);
@@ -199,6 +208,18 @@ export function GeoCommandMap() {
     }
     return [...options.values()].sort((left, right) => left.name.localeCompare(right.name));
   }, [collections]);
+  const agentContext = useMemo(() => buildAgentContextChips(search, t), [search, t]);
+
+  useEffect(() => {
+    const selectedId = typeof search["agentFeatureId"] === "string" ? search["agentFeatureId"] : undefined;
+    if (!selectedId) {
+      if (selectedFeature) setSelectedFeature(null);
+      return;
+    }
+    const restored = visibleFeatures.find((feature) => feature.id === selectedId);
+    if (restored && selectedFeature?.id !== restored.id) setSelectedFeature(restored);
+    else if (!restored && selectedFeature?.id !== selectedId) setSelectedFeature(null);
+  }, [search, visibleFeatures, selectedFeature?.id]);
 
   useEffect(() => {
     if (!overlay.current) return;
@@ -244,7 +265,7 @@ export function GeoCommandMap() {
         getLineColor: (feature) => tokenColor(riskBandVisualStyle(feature.properties.riskBand).lineToken, 220),
         getFillColor: (feature) => tokenColor(riskBandVisualStyle(feature.properties.riskBand).fillToken, 100),
         getPointRadius: assetPointRadius,
-        onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
+        onClick: ({ object }) => selectMapFeature(object, chooseFeature),
       }));
       const alarpAssets = filtered.features.filter((feature) => riskBandVisualStyle(feature.properties.riskBand).patterned);
       if (alarpAssets.length > 0) {
@@ -276,7 +297,7 @@ export function GeoCommandMap() {
         lineWidthMinPixels: lineWidth,
         getLineColor: tokenColor("--color-warning", 210),
         getFillColor: tokenColor("--color-warning", 42),
-        onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
+        onClick: ({ object }) => selectMapFeature(object, chooseFeature),
       }));
     }
     if (activeLayers.includes("barriers") && barriers) {
@@ -291,7 +312,7 @@ export function GeoCommandMap() {
         getPointRadius: barrierHitRadius,
         getFillColor: [0, 0, 0, 0],
         stroked: false,
-        onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
+        onClick: ({ object }) => selectMapFeature(object, chooseFeature),
       }));
       layers.push(new IconLayer<MapFeature>({
         id: "barrier-health-markers",
@@ -304,7 +325,7 @@ export function GeoCommandMap() {
         getSize: barrierMarkerSize,
         sizeUnits: "pixels",
         getColor: (feature) => healthColor(feature.properties.health),
-        onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
+        onClick: ({ object }) => selectMapFeature(object, chooseFeature),
       }));
     }
     if (activeLayers.includes("geo-references") && geoReferences) {
@@ -318,7 +339,7 @@ export function GeoCommandMap() {
         getRadius: barrierHitRadius,
         getFillColor: [0, 0, 0, 0],
         stroked: false,
-        onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
+        onClick: ({ object }) => selectMapFeature(object, chooseFeature),
       }));
       layers.push(new ScatterplotLayer<MapFeature>({
         id: "geo-reference-markers",
@@ -331,7 +352,7 @@ export function GeoCommandMap() {
         getLineColor: tokenColor("--color-neutral-900", 255),
         lineWidthMinPixels: lineWidth,
         stroked: true,
-        onClick: ({ object }) => selectMapFeature(object, setSelectedFeature),
+        onClick: ({ object }) => selectMapFeature(object, chooseFeature),
       }));
     }
     baseLayers.current = layers;
@@ -393,6 +414,18 @@ export function GeoCommandMap() {
 
   const chooseFeature = (feature: MapFeature) => {
     setSelectedFeature(feature);
+    void navigate({ search: (previous) => {
+      const context: Record<string, unknown> = {
+        agentFeatureId: feature.id,
+        agentFeatureName: feature.properties.name,
+        agentFeatureKind: feature.properties.featureKind,
+        agentChainageFrom: feature.properties.chainageFrom,
+        agentChainageTo: feature.properties.chainageTo,
+      };
+      const retained = Object.fromEntries(Object.entries(previous).filter(([key]) => !(key in context)));
+      const selected = Object.fromEntries(Object.entries(context).filter(([, value]) => value !== null && value !== undefined && value !== ""));
+      return { ...retained, ...selected };
+    }, replace: true });
     const position = pointPosition(feature);
     const center = { lat: position[1], lng: position[0] };
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
@@ -495,47 +528,50 @@ export function GeoCommandMap() {
         </div>
         {selectedFeature?.properties.code && <code className="context-code">{selectedFeature.properties.code}</code>}
       </header>
-      <div className="context-tabs">
-        <span className="context-tab-active">{t("overview")}</span>
-      </div>
-      <div className="context-body" tabIndex={0}>
-        <MapOverviewSummary summary={contextSummary} geoTargetAssets={geoTargetAssets} />
-        {selectedFeature ? <FeatureOverview feature={selectedFeature} /> : <p className="context-hint">{t("selectMapFeature")}</p>}
-        <section className="feature-list-section" aria-labelledby="bowtie-shortcuts-title">
-          <div className="section-heading"><h3 id="bowtie-shortcuts-title">{t("bowtieShortcuts")}</h3></div>
-          <ul className="feature-list">{BOWTIE_LINKS.map((bowtie) => <li key={bowtie.id}>
-            <button type="button" className="feature-list-item" onClick={() => {
-              void navigate({ to: "/bowtie/$bowtieId", params: { bowtieId: bowtie.id }, search });
-            }}>
-              <span className="feature-symbol" aria-hidden="true">B</span>
-              <span className="feature-list-copy"><strong>{t("bowtieCode", { code: bowtie.code })}</strong><span>{t(bowtie.story)}</span></span>
-            </button>
-          </li>)}</ul>
-        </section>
-        <section className="feature-list-section" aria-labelledby="visible-features-title">
-          <div className="section-heading"><h3 id="visible-features-title">{t("visibleFeatures")}</h3><span className="mono">{features.length}</span></div>
-          {layerState.showSkeleton && <div className="map-feature-skeletons" aria-hidden="true">
-            <Skeleton variant="row" />
-            <Skeleton variant="row" />
-            <Skeleton variant="row" />
-          </div>}
-          {layerState.isLoading && !layerState.hasError && <p className="map-feature-loading" role="status">{t("mapLoading")}</p>}
-          {features.length === 0 && !layerState.showSkeleton ? <p className="empty-note">{bounds ? t("noFeaturesInView") : t("mapLoading")}</p> : null}
-          {features.length > 0 ? <ul className="feature-list">
-            {features.slice(0, 150).map((feature) => <li key={`${feature.properties.featureKind}-${feature.id}`}>
-              <button type="button" className="feature-list-item" onClick={() => chooseFeature(feature)}>
-                <FeatureSymbol feature={feature} />
-                <span className="feature-list-copy"><strong>{feature.properties.name ? <span lang="en">{feature.properties.name}</span> : t("unnamedFeature")}</strong><span>{t(`featureKinds.${feature.properties.featureKind}`, { defaultValue: t("asset") })} · {feature.properties.health ? t(`barrierHealth.${feature.properties.health}`) : feature.properties.riskBand ? t(feature.properties.riskBand) : t(`classifications.${feature.properties.classification}`, { defaultValue: feature.properties.classification ?? t("unknown") })}</span>
-                  {feature.properties.featureKind === "segment" && (feature.properties.chainageFrom !== null || feature.properties.chainageTo !== null) &&
-                    <span className="feature-list-chainage mono">{t("chainage")}: {feature.properties.chainageFrom ?? "?"}–{feature.properties.chainageTo ?? "?"} m</span>}
-                </span>
-                {feature.properties.simulated && <span className="sim-tag" lang="en" aria-label={t("healthProposalSimulationLabel")}>SIM</span>}
+      <Tabs label={t("contextPanelTabs")} value={contextTab} onValueChange={setContextTab} items={[
+        { value: "overview", label: t("overview"), content: <div className="context-body" tabIndex={0}>
+          <MapOverviewSummary summary={contextSummary} geoTargetAssets={geoTargetAssets} />
+          {selectedFeature ? <FeatureOverview feature={selectedFeature} /> : <p className="context-hint">{t("selectMapFeature")}</p>}
+          <section className="feature-list-section" aria-labelledby="bowtie-shortcuts-title">
+            <div className="section-heading"><h3 id="bowtie-shortcuts-title">{t("bowtieShortcuts")}</h3></div>
+            <ul className="feature-list">{BOWTIE_LINKS.map((bowtie) => <li key={bowtie.id}>
+              <button type="button" className="feature-list-item" onClick={() => {
+                void navigate({ to: "/bowtie/$bowtieId", params: { bowtieId: bowtie.id }, search });
+              }}>
+                <span className="feature-symbol" aria-hidden="true">B</span>
+                <span className="feature-list-copy"><strong>{t("bowtieCode", { code: bowtie.code })}</strong><span>{t(bowtie.story)}</span></span>
               </button>
-            </li>)}
-          </ul> : null}
-          {features.length > 150 && <p className="empty-note">{t("featureListLimit", { count: 150 })}</p>}
-        </section>
-      </div>
+            </li>)}</ul>
+          </section>
+          <section className="feature-list-section" aria-labelledby="visible-features-title">
+            <div className="section-heading"><h3 id="visible-features-title">{t("visibleFeatures")}</h3><span className="mono">{features.length}</span></div>
+            {layerState.showSkeleton && <div className="map-feature-skeletons" aria-hidden="true">
+              <Skeleton variant="row" /><Skeleton variant="row" /><Skeleton variant="row" />
+            </div>}
+            {layerState.isLoading && !layerState.hasError && <p className="map-feature-loading" role="status">{t("mapLoading")}</p>}
+            {features.length === 0 && !layerState.showSkeleton ? <p className="empty-note">{bounds ? t("noFeaturesInView") : t("mapLoading")}</p> : null}
+            {features.length > 0 ? <ul className="feature-list">
+              {features.slice(0, 150).map((feature) => <li key={`${feature.properties.featureKind}-${feature.id}`}>
+                <button type="button" className="feature-list-item" onClick={() => chooseFeature(feature)}>
+                  <FeatureSymbol feature={feature} />
+                  <span className="feature-list-copy"><strong>{feature.properties.name ? <span lang="en">{feature.properties.name}</span> : t("unnamedFeature")}</strong><span>{t(`featureKinds.${feature.properties.featureKind}`, { defaultValue: t("asset") })} · {feature.properties.health ? t(`barrierHealth.${feature.properties.health}`) : feature.properties.riskBand ? t(feature.properties.riskBand) : t(`classifications.${feature.properties.classification}`, { defaultValue: feature.properties.classification ?? t("unknown") })}</span>
+                    {feature.properties.featureKind === "segment" && (feature.properties.chainageFrom !== null || feature.properties.chainageTo !== null) &&
+                      <span className="feature-list-chainage mono">{t("chainage")}: {feature.properties.chainageFrom ?? "?"}–{feature.properties.chainageTo ?? "?"} m</span>}
+                  </span>
+                  {feature.properties.simulated && <span className="sim-tag" lang="en" aria-label={t("healthProposalSimulationLabel")}>SIM</span>}
+                </button>
+              </li>)}
+            </ul> : null}
+            {features.length > 150 && <p className="empty-note">{t("featureListLimit", { count: 150 })}</p>}
+          </section>
+        </div> },
+        { value: "agent", label: t("agentTab"), content: <div className="context-agent-panel">
+          <AgentChat variant="docked" contextChips={agentContext} workspaceSearch={search} agentId={domain === "flood-water" ? "flood-situation" : "integrity-orchestrator"} onRemoveContext={(chip) => {
+            if (chip.key === "feature") setSelectedFeature(null);
+            void navigate({ search: (previous) => removeAgentContextSearch(previous, chip), replace: true });
+          }} />
+        </div> },
+      ]} />
       <footer className="context-footer">
         <span>{t("visibleDataScope")}</span>
         <span>{features[0] ? t(`classifications.${features[0].properties.classification}`, { defaultValue: features[0].properties.classification ?? t("unknown") }) : t("noFeatures")}</span>

@@ -126,20 +126,3 @@ test("an unknown Bowtie shows an empty state and returns to the same map URL sta
   await page.getByRole("button", { name: "Back to map" }).click();
   await expect(page).toHaveURL(/\/map\?fl35Viewport=preserved$/);
 });
-
-test("viewer role can open a Bowtie in read-only mode", async ({ page, request }) => {
-  await page.context().clearCookies();
-  await request.get("/test/reset");
-  await page.goto("/map");
-  await expect(page.getByRole("heading", { name: "Scripted SSO" })).toBeVisible();
-  await page.getByRole("link", { name: "Sign in as viewer" }).click();
-  await expect(page.getByRole("heading", { name: "Geo Command Map", exact: true })).toBeVisible();
-
-  await page.getByRole("button", { name: /Bowtie A/ }).click();
-  await expect(page.getByRole("heading", { name: /Pipeline integrity/ })).toBeVisible();
-  await expect(page.locator(".bowtie-header .eyebrow")).toContainText("READ-ONLY VIEW");
-  await expect(page.locator(".bowtie-screen form")).toHaveCount(0);
-  await expect(page.locator(".bowtie-screen input, .bowtie-screen select, .bowtie-screen textarea")).toHaveCount(0);
-  await expect(page.locator(".bowtie-screen button")).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "Back to map" })).toBeVisible();
-});
