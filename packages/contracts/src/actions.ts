@@ -9,4 +9,4 @@ const check = ajv.compile<ToolCallCheck>({ $ref: `${actionSchema.$id}#/$defs/Too
 export function isActionRequestCreate(value: unknown): value is ActionRequestCreate { return create(value); }
 export function isToolCallCheck(value: unknown): value is ToolCallCheck { return check(value); }
 export { actionSchema };
-export type { ActionLevel, ActionType, ActionTarget, ActionClassification, ActionRequestCreate, ActionRequest, ToolCallCheck, ToolCallDecision } from "./generated/actions.js";
+export type { ActionLevel, ActionType, ActionTarget, ActionClassification, ActionRequestCreate, ActionRequest, ActionRequester, ToolCallCheck, ToolCallDecision } from "./generated/actions.js";

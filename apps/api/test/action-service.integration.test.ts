@@ -34,20 +34,23 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
     const results = await Promise.all(Array.from({ length: 5 }, () => store.create(user, body, idempotencyKey)));
     expect(new Set(results.map(x => x.id)).size).toBe(1);
     const action = results[0]; if (!action) throw new Error("Missing Action Request");
-    expect(action).toMatchObject({ ...body, requestedBy: user.sub, orgId: user.orgId, status: "open" });
+    expect(action).toMatchObject({ ...body, requestedBy: user.sub, requester: { kind: "person" }, orgId: user.orgId, status: "open" });
     const hash = await pool.query("SELECT app.payload_sha256($1::jsonb) AS hash", [JSON.stringify(body.payload)]);
     expect(action.payloadHash).toBe(hash.rows[0].hash);
     expect((await store.create(user, { ...body, payload: { details: { a: 1, b: 2 }, title: "Synthetic maintenance" } }, idempotencyKey)).id).toBe(action.id);
     await expect(store.create(user, { ...body, payload: { title: "Changed" } }, idempotencyKey)).rejects.toThrow("idempotency_key_reused");
   });
   it("allows only registered reads, converts L1, holds L2 and records Intercepts/Evidence", async () => {
-    const { user, check } = await fixture();
+    const { user, check, systemId } = await fixture();
     const read = await store.check(user, { aiSystem: check.aiSystem, tool: "get_asset", target: "fieldloop", simulated: true, classification: "INTERNAL" }, key());
     expect(read.decision).toBe("allow");
     const converted = await store.check(user, check, key()); expect(converted.decision).toBe("convert_l1");
     expect(converted.actionRequest?.status).toBe("open"); expect(converted.heldRequestId).toBeUndefined();
+    // PRD AX-1: a converted tool call names the assistant, on behalf of the session user.
+    expect(converted.actionRequest).toMatchObject({ requestedBy: user.sub, requester: { kind: "assistant", aiSystemId: systemId } });
     const held = await store.check(user, { ...check, actionType: "emergency_communication", actionLevel: "l2", target: "stakeholders" }, key());
     expect(held.decision).toBe("hold_l2"); expect(held.heldRequestId).toBeTruthy();
+    expect(held.actionRequest?.requester).toEqual({ kind: "assistant", aiSystemId: systemId });
     const row = (await pool.query("SELECT * FROM app.held_request WHERE id=$1", [held.heldRequestId])).rows[0];
     expect(row.status).toBe("held"); expect(row.payload).toEqual(check.payload); expect(row.payload_hash).toBe(held.actionRequest?.payloadHash);
     expect(Number((await pool.query("SELECT count(*) FROM app.evidence WHERE org_id=$1 AND kind='guardrail.intercept'", [user.orgId])).rows[0].count)).toBe(3);

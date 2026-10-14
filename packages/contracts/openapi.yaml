@@ -1289,6 +1289,28 @@ components:
           type: string
           minLength: 1
           maxLength: 128
+    ActionRequester:
+      description: Who requested the action (PRD AX-1). An assistant acts on behalf of
+        requestedBy.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - kind
+          properties:
+            kind:
+              const: person
+        - type: object
+          additionalProperties: false
+          required:
+            - kind
+            - aiSystemId
+          properties:
+            kind:
+              const: assistant
+            aiSystemId:
+              type: string
+              format: uuid
     ActionRequest:
       type: object
       additionalProperties: false
@@ -1303,6 +1325,7 @@ components:
         - rationale
         - citations
         - requestedBy
+        - requester
         - status
         - expiresAt
         - simulated
@@ -1355,6 +1378,8 @@ components:
           type: string
           minLength: 1
           maxLength: 512
+        requester:
+          $ref: "#/components/schemas/ActionRequester"
         status:
           type: string
           enum:

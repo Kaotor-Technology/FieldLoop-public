@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { sql, type Kysely, type Transaction } from "kysely";
-import { isActionRequestCreate, isToolCallCheck, type ActionClassification, type ActionLevel, type ActionRequest, type ActionRequestCreate, type ActionType, type ToolCallCheck, type ToolCallDecision } from "@fieldloop/contracts";
+import { isActionRequestCreate, isToolCallCheck, type ActionClassification, type ActionLevel, type ActionRequest, type ActionRequestCreate, type ActionRequester, type ActionType, type ToolCallCheck, type ToolCallDecision } from "@fieldloop/contracts";
 import { ActionError, effectiveCeiling, evaluateToolCall, levelRank, targetMatches } from "./action-policy.js";
 import { appendAuditEvent, appendWorkerEvent } from "./postgres-domain-events.js";
 
@@ -16,6 +16,7 @@ export interface ActionServicePort {
 interface ActionRow {
   id: string; org_id: string; action_type: ActionType; action_level: ActionLevel; target: ActionRequest["target"];
   payload: ActionRequest["payload"]; payload_hash: string; rationale: string; citations: string[]; requested_by: string;
+  requester_kind: ActionRequester["kind"]; requester_ai_system_id: string | null;
   status: ActionRequest["status"]; expires_at: Date; simulated: boolean; classification: ActionClassification;
   simulation_run_id: string | null;
 }
@@ -46,7 +47,7 @@ export class PostgresActionStore implements ActionServicePort {
         if (!previous.action_request_id) throw new Error("Action creation has no record");
         return readAction(trx, user, previous.action_request_id);
       }
-      const action = await insertAction(trx, user, body, policy.slaSeconds);
+      const action = await insertAction(trx, user, body, policy.slaSeconds, { kind: "person" });
       await remember(trx, user, "create", body, key, {}, action.id);
       return action;
     });
@@ -105,7 +106,7 @@ export class PostgresActionStore implements ActionServicePort {
       if (result.decision === "convert_l1" || result.decision === "hold_l2") {
         const actionInput = actionBody({ ...body, classification });
         if (!isActionRequestCreate(actionInput)) throw new ActionError(400, "action_metadata_required");
-        action = await insertAction(trx, user, actionInput, policy?.slaSeconds ?? 900);
+        action = await insertAction(trx, user, actionInput, policy?.slaSeconds ?? 900, { kind: "assistant", aiSystemId: registry.id });
       }
       await sql`INSERT INTO app.intercept (id, org_id, policy_id, ai_system_id, decision, reason, latency_ms, simulated, classification, created_by)
         VALUES (${interceptId}::uuid, ${user.orgId}, ${registry.policy_id}::uuid, ${registry.id}::uuid,
@@ -185,19 +186,24 @@ async function readAction(trx: Tx, user: ActionIdentity, id: string): Promise<Ac
 function toAction(row: ActionRow): ActionRequest {
   return { id: row.id, orgId: row.org_id, actionType: row.action_type, actionLevel: row.action_level, target: row.target,
     payload: row.payload, payloadHash: row.payload_hash, rationale: row.rationale, citations: row.citations,
-    requestedBy: row.requested_by, status: row.status, expiresAt: row.expires_at.toISOString(), simulated: row.simulated,
+    requestedBy: row.requested_by,
+    requester: row.requester_kind === "assistant" && row.requester_ai_system_id
+      ? { kind: "assistant", aiSystemId: row.requester_ai_system_id } : { kind: "person" },
+    status: row.status, expiresAt: row.expires_at.toISOString(), simulated: row.simulated,
     classification: row.classification, ...(row.simulation_run_id ? { simulationRunId: row.simulation_run_id } : {}) };
 }
-async function insertAction(trx: Tx, user: ActionIdentity, body: ActionRequestCreate, slaSeconds: number): Promise<ActionRequest> {
+async function insertAction(trx: Tx, user: ActionIdentity, body: ActionRequestCreate, slaSeconds: number, requester: ActionRequester): Promise<ActionRequest> {
   const now = (await sql<{ now: Date }>`SELECT clock_timestamp() AS now`.execute(trx)).rows[0]?.now;
   if (!now) throw new Error("Database clock unavailable");
   const maxExpiry = now.getTime() + slaSeconds * 1000;
   const expiresAt = body.expiresAt ? new Date(body.expiresAt) : new Date(maxExpiry);
   if (expiresAt.getTime() <= now.getTime() || expiresAt.getTime() > maxExpiry) throw new ActionError(400, "invalid_expiry");
   const row = (await sql<ActionRow>`INSERT INTO app.action_request
-    (org_id, action_type, action_level, target, payload, rationale, citations, requested_by, status, expires_at, simulated, classification, created_by, simulation_run_id, created_at)
+    (org_id, action_type, action_level, target, payload, rationale, citations, requested_by, requester_kind, requester_ai_system_id,
+      status, expires_at, simulated, classification, created_by, simulation_run_id, created_at)
     VALUES (${user.orgId}, ${body.actionType}, ${body.actionLevel}, ${body.target}, ${JSON.stringify(body.payload)}::jsonb,
-      ${body.rationale}, ${JSON.stringify(body.citations)}::jsonb, ${user.sub}, 'open', ${expiresAt}::timestamptz,
+      ${body.rationale}, ${JSON.stringify(body.citations)}::jsonb, ${user.sub}, ${requester.kind},
+      ${requester.kind === "assistant" ? requester.aiSystemId : null}::uuid, 'open', ${expiresAt}::timestamptz,
       ${body.simulated}, ${body.classification}, ${user.sub}, ${body.simulationRunId ?? null}::uuid, ${now}::timestamptz) RETURNING *`.execute(trx)).rows[0];
   if (!row) throw new Error("Action Request was not inserted");
   const action = toAction(row);

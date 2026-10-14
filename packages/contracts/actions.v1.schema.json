@@ -176,6 +176,40 @@
         }
       }
     },
+    "ActionRequester": {
+      "description": "Who requested the action (PRD AX-1). An assistant acts on behalf of requestedBy.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "const": "person"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "aiSystemId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "assistant"
+            },
+            "aiSystemId": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        }
+      ]
+    },
     "ActionRequest": {
       "type": "object",
       "additionalProperties": false,
@@ -190,6 +224,7 @@
         "rationale",
         "citations",
         "requestedBy",
+        "requester",
         "status",
         "expiresAt",
         "simulated",
@@ -257,6 +292,9 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 512
+        },
+        "requester": {
+          "$ref": "#/$defs/ActionRequester"
         },
         "status": {
           "type": "string",

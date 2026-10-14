@@ -9,7 +9,7 @@ describe("Action contracts", () => {
   });
   it("rejects L3 and caller-controlled hashes, status, identity or Organisation", () => {
     expect(isActionRequestCreate({ ...input, actionLevel: "l3" })).toBe(false);
-    for (const key of ["payloadHash", "status", "requestedBy", "orgId"]) expect(isActionRequestCreate({ ...input, [key]: "spoofed" })).toBe(false);
+    for (const key of ["payloadHash", "status", "requestedBy", "requester", "orgId"]) expect(isActionRequestCreate({ ...input, [key]: "spoofed" })).toBe(false);
     expect(isToolCallCheck({ ...input, aiSystem: "demo-uc-1", tool: "create_action_request", actionLevel: "l3" })).toBe(false);
   });
   it("requires meaningful rationale and citations", () => {

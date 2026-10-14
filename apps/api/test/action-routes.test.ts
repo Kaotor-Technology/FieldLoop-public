@@ -14,7 +14,7 @@ function fixture() {
     logout: async () => new URL("https://example.test"), backchannelLogout: async () => {}, jwks: async () => ({ keys: [] }),
   };
   const body = { actionType: "system_of_record", actionLevel: "l1", target: "cmms", payload: { title: "Synthetic work order" }, rationale: "Prepare for human entry", citations: ["synthetic:procedure"], simulated: true, classification: "INTERNAL" };
-  const action = { ...body, id: randomUUID(), orgId: user.orgId, requestedBy: user.sub, status: "open", payloadHash: "a".repeat(64), expiresAt: new Date(Date.now()+900_000).toISOString() };
+  const action = { ...body, id: randomUUID(), orgId: user.orgId, requestedBy: user.sub, requester: { kind: "person" }, status: "open", payloadHash: "a".repeat(64), expiresAt: new Date(Date.now()+900_000).toISOString() };
   const actions: ActionServicePort = { create: vi.fn().mockResolvedValue(action), get: vi.fn().mockResolvedValue(action), check: vi.fn(), expire: vi.fn() };
   const app = buildApp({ auth, actions }); apps.push(app);
   const headers = { cookie: "fl_session=valid", "x-csrf-token": user.csrfToken, "idempotency-key": "synthetic-create-key" };
