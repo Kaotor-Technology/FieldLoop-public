@@ -5,13 +5,15 @@ and fails when p95 reaches 50 ms. It also checks that requests succeed and retur
 the same benign synthetic content. Each iteration uses a new idempotency key and
 creates normal Intercept and Evidence records.
 
-Run it from an approved runner inside the project VPC, with permission to invoke
-the private Guardrail service. Set `GUARDRAIL_URL` to the demo service origin,
-`GUARDRAIL_ID_TOKEN` to a Google-signed identity token whose audience is that
-origin, `GUARDRAIL_INTERNAL_USER_TOKEN` to a five-minute RS256 token minted by
-`web-api` for a synthetic demo user, and `GUARDRAIL_AI_SYSTEM` to the registered
-demo AI System code. Keep both tokens in the approved runner's secret store; do
-not put them in source control or browser storage.
+Run it from the selected self-hosted GitHub Actions runner outside GCP, using the
+pinned container below. The runner and container need an established private
+route and private DNS path to the internal Guardrail service, plus permission to
+invoke it. Set `GUARDRAIL_URL` to the branch-matched dev service origin used for
+the run, `GUARDRAIL_ID_TOKEN` to a Google-signed identity token whose audience is
+that origin, `GUARDRAIL_INTERNAL_USER_TOKEN` to a five-minute RS256 token minted
+server-side by `web-api` for a synthetic demo user, and `GUARDRAIL_AI_SYSTEM` to
+the registered demo AI System code. Keep both tokens in an approved secret store
+accessible to the runner; do not put them in source control or browser storage.
 
 ```sh
 docker run --rm \
@@ -26,12 +28,12 @@ docker run --rm \
   run /scripts/tier1-content-scan.js
 ```
 
-The container pins k6 v2.3.0 by image digest. Run it on the
-approved runner so the container uses that host's network route to the private
-service. Export the four required `GUARDRAIL_*` variables and, optionally, the
-two `K6_*` variables from the runner's approved secret/configuration store
-before starting Docker. Do not pass token values as command-line arguments or
-write them into the repository.
+The container pins k6 v2.3.0 by image digest. Verify that the runner's Docker
+network can use the private route and resolve the private Guardrail hostname
+before starting the measurement. Export the four required `GUARDRAIL_*`
+variables and, optionally, the two `K6_*` variables from the runner's approved
+secret/configuration store. Do not pass token values as command-line arguments
+or write them into the repository.
 
 The default run sends 100 requests with one virtual user. Set `K6_VUS` and
 `K6_ITERATIONS` to run a different load. This endpoint measurement includes
