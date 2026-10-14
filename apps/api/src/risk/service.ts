@@ -273,10 +273,9 @@ export class PostgresRiskService implements RiskApiPort {
     const currentSnapshot = latest.snapshot_json as RiskSnapshot;
     const changes: RiskChange[] = [];
     const healthChange = latest.health_change_id
-      ? await this.db.withSchema("app").selectFrom("health_change").select(["reason", "actor"])
+      ? await this.db.withSchema("app").selectFrom("health_change").select(["barrier_id", "reason", "actor"])
         .where("org_id", "=", user.orgId).where("id", "=", latest.health_change_id).executeTakeFirst()
       : undefined;
-    const changeReason = healthChange?.reason ? String(healthChange.reason) : null;
     for (const barrierId of [...currentById.keys()].sort()) {
       const before = previousById.get(barrierId);
       const after = currentById.get(barrierId);
@@ -295,9 +294,14 @@ export class PostgresRiskService implements RiskApiPort {
       const impact = calculateRiskChangeImpact(consequenceFrequencyDeltasPerYear.map((item) => item.delta));
       const evidenceId = currentStored.evidenceByBarrier[barrierId] ?? null;
       const evidenceExpired = after.evidenceExpired && !before.evidenceExpired;
+      const barrierHealthChange = healthChange && String(healthChange.barrier_id) === barrierId ? healthChange : undefined;
+      const changeReason = barrierHealthChange?.reason ? String(barrierHealthChange.reason) : null;
+      const reason = barrierHealthChange?.actor === "ageing" || evidenceExpired
+        ? "Evidence older than interval"
+        : changeReason ?? "Barrier risk input changed.";
       changes.push({
         barrierId, beforeHealth: before.health, afterHealth: after.health,
-        reason: changeReason ?? (evidenceExpired ? "Evidence is older than the configured interval." : "Barrier risk input changed."),
+        reason,
         sourceEvidenceId: evidenceId,
         sourceEvidenceHref: evidenceId ? `/api/v1/evidence/${evidenceId}` : null,
         topEventFrequencyDeltaPerYear: currentSnapshot.topEventFrequencyPerYear - beforeCounterfactual.topEventFrequencyPerYear,
@@ -656,8 +660,8 @@ function numberValue(value: unknown): number {
 }
 
 function parseIntervalSeconds(value: string): number {
-  const match = /^(?:(\d+) years? )?(?:(\d+) mons? )?(?:(\d+) days? )?(?:(\d+):(\d+):(\d+(?:\.\d+)?))?$/.exec(value.trim());
-  if (!match) throw new RiskServiceError(503, "risk_input_invalid");
+  const match = /^(?:(\d+) years?(?: |$))?(?:(\d+) mons?(?: |$))?(?:(\d+) days?(?: |$))?(?:(\d+):(\d+):(\d+(?:\.\d+)?))?$/.exec(value.trim());
+  if (!match || match.slice(1).every((part) => part === undefined)) throw new RiskServiceError(503, "risk_input_invalid");
   return Number(match[1] ?? 0) * 365.25 * 86400 + Number(match[2] ?? 0) * 30.4375 * 86400 + Number(match[3] ?? 0) * 86400
     + Number(match[4] ?? 0) * 3600 + Number(match[5] ?? 0) * 60 + Number(match[6] ?? 0);
 }

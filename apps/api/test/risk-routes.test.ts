@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { AuthError, type AuthServicePort, type CurrentUser } from "../src/auth/service.js";
-import { RiskServiceError, type RiskApiPort } from "../src/risk/service.js";
+import { RiskServiceError, type RiskApiPort, type RiskExplain } from "../src/risk/service.js";
 
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
@@ -50,6 +50,41 @@ describe("risk API routes", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual([]);
     expect(testFixture.receivedOrgId).toBe("synthetic-org");
+  });
+
+  it("returns the explain-score response from the session Organisation", async () => {
+    const bowtieId = "19b46b91-1cec-4502-96da-7d6ec03af16e";
+    const explanation: RiskExplain = {
+      bowtieId, hasPrevious: false, summary: "No prior snapshot is available; no change is reported.", previous: null,
+      current: {
+        id: "39b46b91-1cec-4502-96da-7d6ec03af16e", createdAt: "2026-10-13T00:00:00.000Z", trigger: "initial",
+        calibration: { standardRef: "SYNTHETIC-ORG-RISK-STD", standardVersion: "2026.1", approvedBy: "synthetic-authority", approvedAt: "2026-10-13T00:00:00.000Z" },
+        snapshot: {
+          bowtieId, topEventFrequencyPerYear: 0, threats: [], consequences: [],
+          worstConsequenceId: "29b46b91-1cec-4502-96da-7d6ec03af16e",
+          cell: { frequencyBand: 1, severityBand: 1, zone: "green", rank: 1 },
+        },
+      },
+      changes: [], riskInputChanges: [],
+    };
+    let receivedOrgId = "";
+    let receivedBowtieId = "";
+    const { app, headers } = fixture({
+      explain: async (user, requestedBowtieId) => {
+        receivedOrgId = user.orgId;
+        receivedBowtieId = requestedBowtieId;
+        return explanation;
+      },
+    });
+
+    const url = `/api/v1/bowties/${bowtieId}/risk/explain`;
+    expect((await app.inject({ method: "GET", url })).statusCode).toBe(401);
+    const response = await app.inject({ method: "GET", url, headers });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(explanation);
+    expect(receivedOrgId).toBe("synthetic-org");
+    expect(receivedBowtieId).toBe(bowtieId);
   });
 
   it("returns a typed fail-closed problem when the Organisation has no approved calibration", async () => {

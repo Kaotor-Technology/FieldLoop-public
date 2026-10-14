@@ -2,6 +2,8 @@ import { QueryClient } from "@tanstack/react-query";
 import { expect, it } from "vitest";
 import { applySimulationEvent, simulationKey, type SimulationRun } from "../src/simulation-events";
 import { useSimulationDraft } from "../src/simulation-draft";
+import { selectSimulatedRainCell } from "../src/map-view";
+import type { MapFeature } from "@fieldloop/map";
 
 const run: SimulationRun = { id: "11111111-1111-4111-8111-111111111111", revision: 2, orgId: "test-org", scenarioId: "player-test", scenarioName: "Player verification fixture", seed: 42, speed: 1, clock: "2026-10-13T00:00:00Z", elapsedSeconds: 0, durationSeconds: 120, state: "ready", nextEventIndex: 0, eventCount: 3, simulated: true, classification: "INTERNAL", bookmarks: [] };
 it("a reset invalidates every server cache and clears transient bookmark selection", async () => {
@@ -21,4 +23,29 @@ it("ignores an old stream tick delivered after a confirmed reset", async () => {
   await applySimulationEvent(client, "simulation.state", run);
   expect(client.getQueryData(simulationKey)).toEqual(reset);
   await expect(applySimulationEvent(client, "simulation.state", { ...run, simulated: false })).rejects.toThrow("Invalid simulation event");
+});
+
+it("projects the Scenario rain overlay from successive simulation.state events", async () => {
+  const client = new QueryClient();
+  const zone: MapFeature = {
+    type: "Feature",
+    id: "zone-z3",
+    geometry: { type: "Polygon", coordinates: [[[100, 13], [101, 13], [101, 14], [100, 13]]] },
+    properties: {
+      name: "Demo drainage zone Z3 (SIMULATION)", code: "Z3", featureKind: "area", classification: "CONFIDENTIAL",
+      simulated: true, label: "SIMULATION", health: null, riskBand: null, chainageFrom: null, chainageTo: null,
+      evidenceObservedAt: null, domainPack: "flood-water",
+    },
+  };
+  const storm: SimulationRun = {
+    ...run, scenarioId: "bangkok-storm", scenarioName: "Bangkok storm", durationSeconds: 259_200, state: "playing",
+    nextEventIndex: 3, eventCount: 13, classification: "CONFIDENTIAL",
+  };
+
+  await applySimulationEvent(client, "simulation.state", storm);
+  expect(selectSimulatedRainCell(client.getQueryData(simulationKey), [zone])?.rateMillimetersPerHour).toBe(72);
+
+  const rainEnded = { ...storm, revision: storm.revision + 1, elapsedSeconds: 7_200, nextEventIndex: 8 };
+  await applySimulationEvent(client, "simulation.state", rainEnded);
+  expect(selectSimulatedRainCell(client.getQueryData(simulationKey), [zone])).toBeNull();
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { RiskMatrix } from "@fieldloop/contracts";
 import type { Pool } from "pg";
 import { createRiskDatabase } from "../src/risk/database.js";
@@ -49,14 +49,17 @@ interface FakeHealthChange {
   fromHealth: string | null;
   toHealth: string;
   reason: string;
+  actor?: string;
 }
 
 function fixture(approved = true, healthChanges: FakeHealthChange[] = [], standardRef = "ORG-RISK-STD", standardVersion = "2026.1") {
   const snapshots: Record<string, unknown>[] = [];
   let nextId = 1;
   let health = "healthy";
+  let mitigativeHealth = "healthy";
   let threatFrequency = 0.1;
   let evidenceId: string | null = null;
+  let evidenceObservedAt = new Date("2026-10-13T00:00:00Z");
   let evidenceInterval: string | null = null;
   let currentStandardVersion = standardVersion;
   const paths = [
@@ -71,7 +74,7 @@ function fixture(approved = true, healthChanges: FakeHealthChange[] = [], standa
       if (starts("SELECT hc.id, hc.org_id, hc.barrier_id")) return { rows: healthChanges
         .filter((change) => !snapshots.some((snapshot) => snapshot.health_change_id === change.id))
         .map((change) => ({
-          id: change.id, org_id: user.orgId, barrier_id: change.barrierId, actor: "synthetic-reviewer",
+          id: change.id, org_id: user.orgId, barrier_id: change.barrierId, actor: change.actor ?? "synthetic-reviewer",
           from_health: change.fromHealth, to_health: change.toHealth, created_at: new Date(change.createdAt),
           simulated: false, classification: "PUBLIC",
         })) };
@@ -84,9 +87,9 @@ function fixture(approved = true, healthChanges: FakeHealthChange[] = [], standa
       if (starts("SELECT id, frequency_per_year, classification FROM app.threat")) return { rows: [{ id: ids.threat, name: "Synthetic threat", frequency_per_year: threatFrequency, classification: "PUBLIC" }] };
       if (starts("SELECT id, severity, p_conditional, classification FROM app.consequence")) return { rows: [{ id: ids.consequence, name: "Synthetic consequence", severity: { people: 3, environment: 2, financial: 2 }, p_conditional: 1, classification: "PUBLIC" }] };
       if (starts("SELECT id, classification FROM app.independence_group")) return { rows: [] };
-      if (starts("SELECT bp.id AS path_row_id")) return { rows: paths.map((path) => ({ ...path, health: path.barrier_id === ids.preventiveBarrier ? health : "healthy" })) };
+      if (starts("SELECT bp.id AS path_row_id")) return { rows: paths.map((path) => ({ ...path, health: path.barrier_id === ids.preventiveBarrier ? health : mitigativeHealth })) };
       if (has("SELECT DISTINCT ON (barrier_id)")) return { rows: evidenceId ? [{
-        id: evidenceId, barrier_id: ids.preventiveBarrier, observed_at: new Date("2026-10-13T00:00:00Z"), classification: "PUBLIC",
+        id: evidenceId, barrier_id: ids.preventiveBarrier, observed_at: new Date(evidenceObservedAt), classification: "PUBLIC",
       }] : [] };
       if (starts("SELECT id, created_at, trigger, snapshot_json, input_json, health_change_id, classification")) {
         return { rows: snapshots.slice().sort(byNewest).slice(0, 2) };
@@ -126,9 +129,9 @@ function fixture(approved = true, healthChanges: FakeHealthChange[] = [], standa
         snapshots.push(row);
         return { rows: [row] };
       }
-      if (starts("SELECT reason, actor FROM app.health_change")) {
+      if (starts("SELECT barrier_id, reason, actor FROM app.health_change")) {
         const change = healthChanges.find((item) => item.id === values[1]);
-        return { rows: change ? [{ reason: change.reason, actor: "synthetic-reviewer" }] : [] };
+        return { rows: change ? [{ barrier_id: change.barrierId, reason: change.reason, actor: change.actor ?? "synthetic-reviewer" }] : [] };
       }
       if (has("FROM app.health_change")) return { rows: [] };
       throw new Error(`Unexpected SQL in RiskService test: ${sql}`);
@@ -146,8 +149,12 @@ function fixture(approved = true, healthChanges: FakeHealthChange[] = [], standa
   return {
     service: new PostgresRiskService(createRiskDatabase(pool)), snapshots,
     set health(value: string) { health = value; },
+    setMitigativeHealth(value: string) { mitigativeHealth = value; },
     setThreatFrequency(value: number) { threatFrequency = value; },
-    setEvidence(id: string | null, interval: string | null) { evidenceId = id; evidenceInterval = interval; },
+    setEvidence(id: string | null, interval: string | null, observedAt?: string) {
+      evidenceId = id; evidenceInterval = interval;
+      if (observedAt) evidenceObservedAt = new Date(observedAt);
+    },
     setStandardVersion(value: string) { currentStandardVersion = value; },
     setBarrierClassification(value: string) { for (const path of paths) path.barrier_classification = value; },
   };
@@ -183,6 +190,84 @@ describe("PostgresRiskService", () => {
     expect(explanation.changes[0]?.impact).toBeGreaterThan(0);
   });
 
+  it("reports the no-change state when there is no previous snapshot", async () => {
+    const { service } = fixture();
+
+    const explanation = await service.explain(user, ids.bowtie);
+
+    expect(explanation).toMatchObject({
+      hasPrevious: false, previous: null,
+      summary: "No prior snapshot is available; no change is reported.", changes: [], riskInputChanges: [],
+    });
+  });
+
+  it("explains an Evidence-ageing transition with its source Evidence", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2025-10-14T00:00:00Z"));
+      const evidenceId = "40000000-0000-4000-8000-000000000001";
+      const change: FakeHealthChange = {
+        id: "40000000-0000-4000-8000-000000000002", barrierId: ids.preventiveBarrier,
+        createdAt: "2026-10-14T00:00:00.000Z", fromHealth: "healthy", toHealth: "unverified",
+        reason: "Latest Evidence is older than the Barrier evidence interval", actor: "ageing",
+      };
+      const testFixture = fixture(true, [change]);
+      testFixture.setEvidence(evidenceId, "365 days", "2025-10-13T00:00:00.000Z");
+      const previous = await testFixture.service.getRisk(user, ids.bowtie);
+
+      vi.setSystemTime(new Date(change.createdAt));
+      testFixture.health = "unverified";
+      expect(await testFixture.service.processHealthChanges()).toBe(1);
+
+      const explanation = await testFixture.service.explain(user, ids.bowtie);
+
+      expect(explanation.previous?.id).toBe(previous.id);
+      expect(explanation.changes).toMatchObject([{
+        barrierId: ids.preventiveBarrier, beforeHealth: "healthy", afterHealth: "unverified",
+        reason: "Evidence older than interval", sourceEvidenceId: evidenceId,
+        sourceEvidenceHref: `/api/v1/evidence/${evidenceId}`,
+      }]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("attributes a Health Change reason only to the Barrier it changed", async () => {
+    const change: FakeHealthChange = {
+      id: "40000000-0000-4000-8000-000000000003", barrierId: ids.preventiveBarrier,
+      createdAt: "2026-10-14T00:00:00.000Z", fromHealth: "healthy", toHealth: "unverified",
+      reason: "Latest Evidence is older than the Barrier evidence interval", actor: "ageing",
+    };
+    const testFixture = fixture(true, [change]);
+    await testFixture.service.getRisk(user, ids.bowtie);
+    testFixture.health = "unverified";
+    testFixture.setMitigativeHealth("failed");
+    expect(await testFixture.service.processHealthChanges()).toBe(1);
+
+    const explanation = await testFixture.service.explain(user, ids.bowtie);
+    const reasons = new Map(explanation.changes.map((item) => [item.barrierId, item.reason]));
+
+    expect(reasons.get(ids.preventiveBarrier)).toBe("Evidence older than interval");
+    expect(reasons.get(ids.mitigativeBarrier)).toBe("Barrier risk input changed.");
+  });
+
+  it("lists simultaneous Barrier changes in descending impact order", async () => {
+    const testFixture = fixture();
+    await testFixture.service.getRisk(user, ids.bowtie);
+    testFixture.health = "degraded";
+    testFixture.setMitigativeHealth("failed");
+
+    const explanation = await testFixture.service.explain(user, ids.bowtie);
+    const impacts = explanation.changes.map((change) => change.impact);
+
+    expect(explanation.changes.map((change) => change.barrierId)).toHaveLength(2);
+    expect(impacts.every((impact) => impact > 0)).toBe(true);
+    expect(impacts).toEqual([...impacts].sort((left, right) => right - left));
+    expect(new Set(explanation.changes.map((change) => change.barrierId))).toEqual(
+      new Set([ids.preventiveBarrier, ids.mitigativeBarrier]),
+    );
+  });
+
   it("attributes a score change to changed non-Barrier risk inputs", async () => {
     const testFixture = fixture();
     await testFixture.service.getRisk(user, ids.bowtie);
@@ -208,7 +293,7 @@ describe("PostgresRiskService", () => {
       path: `evidenceByBarrier/${ids.preventiveBarrier}`, beforeValue: null, afterValue: evidenceId,
     });
     expect(explanation.changes.find((change) => change.barrierId === ids.preventiveBarrier)).toMatchObject({
-      reason: "Evidence is older than the configured interval.", sourceEvidenceId: evidenceId,
+      reason: "Evidence older than interval", sourceEvidenceId: evidenceId,
     });
   });
 
