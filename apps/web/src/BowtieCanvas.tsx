@@ -28,17 +28,6 @@ export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
 
     <div className="bowtie-canvas-viewport" role="region" aria-label={t("bowtieCanvas")}>
       <div className="bowtie-canvas">
-        <section className="bowtie-column" aria-labelledby="bowtie-left-heading">
-          <h2 id="bowtie-left-heading">{t("threats")}</h2>
-          <ul className="bowtie-entity-list">
-            {bowtie.threats.map((threat) => <li key={threat.id}>{monoNumericText(threat.name)}</li>)}
-          </ul>
-          <h2>{t("preventiveBarriers")}</h2>
-          <ul className="bowtie-barrier-list">
-            {preventive.map((barrier) => <li key={barrier.id}><BarrierCard barrier={barrier} /></li>)}
-          </ul>
-        </section>
-
         <section className="bowtie-column bowtie-centre-column" aria-labelledby="bowtie-centre-heading">
           <h2 id="bowtie-centre-heading">{t("hazard")}</h2>
           <p className="bowtie-hazard">{monoNumericText(bowtie.hazard)}</p>
@@ -50,7 +39,18 @@ export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
           </dl>
         </section>
 
-        <section className="bowtie-column" aria-labelledby="bowtie-right-heading">
+        <section className="bowtie-column bowtie-left-column" aria-labelledby="bowtie-left-heading">
+          <h2 id="bowtie-left-heading">{t("threats")}</h2>
+          <ul className="bowtie-entity-list">
+            {bowtie.threats.map((threat) => <li key={threat.id}>{monoNumericText(threat.name)}</li>)}
+          </ul>
+          <h2>{t("preventiveBarriers")}</h2>
+          <ul className="bowtie-barrier-list">
+            {preventive.map((barrier) => <li key={barrier.id}><BarrierCard barrier={barrier} /></li>)}
+          </ul>
+        </section>
+
+        <section className="bowtie-column bowtie-right-column" aria-labelledby="bowtie-right-heading">
           <h2 id="bowtie-right-heading">{t("mitigativeBarriers")}</h2>
           <ul className="bowtie-barrier-list">
             {mitigative.map((barrier) => <li key={barrier.id}><BarrierCard barrier={barrier} /></li>)}

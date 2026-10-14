@@ -278,8 +278,10 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 .bowtie-canvas-viewport { min-height: 0; overflow: auto; }
 .bowtie-canvas { display: grid; grid-template-columns: minmax(0, 1fr) var(--spacing-bowtie-top-event-width) minmax(0, 1fr); align-items: start; gap: var(--spacing-space-3); min-height: 100%; }
 .bowtie-column { display: grid; align-content: start; gap: var(--spacing-space-3); min-width: 0; padding: var(--spacing-space-4); background: var(--surface); border: var(--spacing-border-hairline) solid var(--outline); border-radius: var(--rounded-lg); }
+.bowtie-left-column { grid-column: 1; grid-row: 1; }
+.bowtie-centre-column { grid-column: 2; grid-row: 1; align-self: start; }
+.bowtie-right-column { grid-column: 3; grid-row: 1; }
 .bowtie-column > h2 { padding-bottom: var(--spacing-space-2); border-bottom: var(--spacing-border-hairline) solid var(--outline); }
-.bowtie-centre-column { align-self: center; }
 .bowtie-hazard, .bowtie-top-event { padding: var(--spacing-space-3); border-radius: var(--rounded-md); }
 .bowtie-hazard { background: var(--canvas); }
 .bowtie-top-event { color: var(--on-action); background: var(--action); font-weight: var(--type-label-lg-font-weight); }
@@ -312,6 +314,7 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
   .bowtie-screen { grid-template-rows: auto auto auto auto; height: auto; overflow: visible; padding-inline: var(--spacing-page-margin-mobile); }
   .bowtie-canvas-viewport { overflow: visible; }
   .bowtie-canvas { grid-template-columns: minmax(0, 1fr); }
+  .bowtie-canvas > .bowtie-column { grid-column: 1; grid-row: auto; }
 }
 @media (max-width: 599px) {
   .bowtie-header { grid-template-columns: minmax(0, 1fr) auto; align-items: start; }

@@ -15,6 +15,7 @@ for (const colorScheme of ["light", "dark"] as const) {
       if (colorScheme === "dark") await page.getByRole("button", { name: "Night shift" }).click();
       await page.getByRole("button", { name: /Bowtie A/ }).click();
       await expect(page.getByRole("heading", { name: /Pipeline integrity/ })).toBeVisible();
+      await expect(page.locator(".bowtie-top-event")).toBeInViewport();
 
       const layout = await page.locator(".bowtie-canvas").evaluate((element) => ({
         columns: getComputedStyle(element).gridTemplateColumns.split(" ").length,
@@ -27,6 +28,9 @@ for (const colorScheme of ["light", "dark"] as const) {
 
       const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
       expect(axe.violations).toEqual([]);
+      if (colorScheme === "light" && width === 1280) {
+        await page.screenshot({ path: "e2e/evidence/bowtie-canvas.png", fullPage: true });
+      }
     });
   }
 }
