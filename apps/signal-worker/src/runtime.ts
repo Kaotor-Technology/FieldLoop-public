@@ -1,6 +1,6 @@
 import { Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
-import { createGoogleCloudSqlPool, createGooglePubSubTransport, GoogleServiceIdentityVerifier } from "@fieldloop/adapters";
+import { PostgresActionStore, createGoogleCloudSqlPool, createGooglePubSubTransport, GoogleServiceIdentityVerifier } from "@fieldloop/adapters";
 import type { WorkerRuntime } from "./model.js";
 import { PostgresWorkerStore, type SourceInterval } from "./postgres-store.js";
 
@@ -48,7 +48,8 @@ export async function createWorkerRuntime(env: NodeJS.ProcessEnv = process.env):
   try {
     const store = new PostgresWorkerStore(db, orgId, intervals as Record<string, SourceInterval>, calendarTimeZone);
     await store.initialize();
-    return { store, identity: new GoogleServiceIdentityVerifier(), audience, pushEmail, schedulerEmail,
+    const actions = new PostgresActionStore(db);
+    return { expireActions: () => actions.expire(orgId, env["SIMULATED"] === "true"), store, identity: new GoogleServiceIdentityVerifier(), audience, pushEmail, schedulerEmail,
       subscription, orgId, environment, simulatedOnly: env["SIMULATED"] === "true", close,
       publish: async (event) => {
         await pubsub.transport.publish(topic, Buffer.from(JSON.stringify(event)), {
