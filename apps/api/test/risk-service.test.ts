@@ -129,9 +129,9 @@ function fixture(approved = true, healthChanges: FakeHealthChange[] = [], standa
         snapshots.push(row);
         return { rows: [row] };
       }
-      if (starts("SELECT reason, actor FROM app.health_change")) {
+      if (starts("SELECT barrier_id, reason, actor FROM app.health_change")) {
         const change = healthChanges.find((item) => item.id === values[1]);
-        return { rows: change ? [{ reason: change.reason, actor: change.actor ?? "synthetic-reviewer" }] : [] };
+        return { rows: change ? [{ barrier_id: change.barrierId, reason: change.reason, actor: change.actor ?? "synthetic-reviewer" }] : [] };
       }
       if (has("FROM app.health_change")) return { rows: [] };
       throw new Error(`Unexpected SQL in RiskService test: ${sql}`);
@@ -230,6 +230,25 @@ describe("PostgresRiskService", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("attributes a Health Change reason only to the Barrier it changed", async () => {
+    const change: FakeHealthChange = {
+      id: "40000000-0000-4000-8000-000000000003", barrierId: ids.preventiveBarrier,
+      createdAt: "2026-10-14T00:00:00.000Z", fromHealth: "healthy", toHealth: "unverified",
+      reason: "Latest Evidence is older than the Barrier evidence interval", actor: "ageing",
+    };
+    const testFixture = fixture(true, [change]);
+    await testFixture.service.getRisk(user, ids.bowtie);
+    testFixture.health = "unverified";
+    testFixture.setMitigativeHealth("failed");
+    expect(await testFixture.service.processHealthChanges()).toBe(1);
+
+    const explanation = await testFixture.service.explain(user, ids.bowtie);
+    const reasons = new Map(explanation.changes.map((item) => [item.barrierId, item.reason]));
+
+    expect(reasons.get(ids.preventiveBarrier)).toBe("Evidence older than interval");
+    expect(reasons.get(ids.mitigativeBarrier)).toBe("Barrier risk input changed.");
   });
 
   it("lists simultaneous Barrier changes in descending impact order", async () => {
