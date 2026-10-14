@@ -1,0 +1,277 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReferenceCatalogBundle",
+  "description": "Local reviewed bibliographic snapshot only; not Controlled Documents or citation authorization. FL-88 owns tools and rendering. No standard body content. Contract changes require explicit identity review.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "catalog",
+    "observations"
+  ],
+  "properties": {
+    "catalog": {
+      "$ref": "#/$defs/catalog"
+    },
+    "observations": {
+      "$ref": "#/$defs/observations"
+    }
+  },
+  "$defs": {
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publisher",
+        "standard",
+        "title",
+        "edition",
+        "sourceUrl",
+        "observedHeading",
+        "classification",
+        "contentState",
+        "clause",
+        "editionCurrency",
+        "status",
+        "verificationLabel"
+      ],
+      "properties": {
+        "publisher": {
+          "type": "string",
+          "minLength": 1
+        },
+        "standard": {
+          "type": "string",
+          "minLength": 1
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "edition": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceUrl": {
+          "type": "string",
+          "minLength": 1
+        },
+        "observedHeading": {
+          "type": "string",
+          "minLength": 1
+        },
+        "classification": {
+          "const": "PUBLIC"
+        },
+        "contentState": {
+          "const": "metadata_only"
+        },
+        "clause": {
+          "const": null
+        },
+        "editionCurrency": {
+          "const": "not_assessed"
+        },
+        "status": {
+          "const": "draft"
+        },
+        "verificationLabel": {
+          "const": "not verified against source text"
+        }
+      },
+      "anyOf": [
+        {
+          "properties": {
+            "publisher": {
+              "const": "ASME"
+            },
+            "standard": {
+              "const": "ASME B31.8"
+            },
+            "title": {
+              "const": "Gas Transmission and Distribution Piping Systems"
+            },
+            "edition": {
+              "const": "2025"
+            },
+            "sourceUrl": {
+              "const": "https://www.asme.org/codes-standards/find-codes-standards/b31-8-gas-transmission-distribution-piping-systems"
+            },
+            "observedHeading": {
+              "const": "B31.8 - 2025"
+            }
+          }
+        },
+        {
+          "properties": {
+            "publisher": {
+              "const": "ASME"
+            },
+            "standard": {
+              "const": "ASME B31.8S"
+            },
+            "title": {
+              "const": "Managing System Integrity of Gas Pipelines"
+            },
+            "edition": {
+              "const": "2025"
+            },
+            "sourceUrl": {
+              "const": "https://www.asme.org/codes-standards/find-codes-standards/b31-8s-managing-system-integrity-gas-pipelines"
+            },
+            "observedHeading": {
+              "const": "B31.8S - 2025"
+            }
+          }
+        },
+        {
+          "properties": {
+            "publisher": {
+              "const": "API"
+            },
+            "standard": {
+              "const": "API RP 1160"
+            },
+            "title": {
+              "const": "Managing System Integrity for Hazardous Liquid Pipelines"
+            },
+            "edition": {
+              "const": "3rd Edition"
+            },
+            "sourceUrl": {
+              "const": "https://www.api.org/products-and-services/standards/important-standards-announcements/recommended-practice-1160"
+            },
+            "observedHeading": {
+              "const": "API Recommended Practice 1160, 3rd Edition"
+            }
+          }
+        }
+      ]
+    },
+    "catalog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "scope",
+        "acceptance",
+        "records"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "type": "integer",
+          "const": 1,
+          "description": "Loader additionally requires an exact JSON integer representation; 1.0 and true are rejected, despite JSON Schema numeric equivalence."
+        },
+        "scope": {
+          "const": "local_public_bibliographic_fixture_only"
+        },
+        "acceptance": {
+          "const": "not_assessed"
+        },
+        "records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/record"
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publisher",
+        "standard",
+        "title",
+        "edition",
+        "sourceUrl",
+        "observedHeading"
+      ],
+      "properties": {
+        "publisher": {
+          "type": "string"
+        },
+        "standard": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "edition": {
+          "type": "string"
+        },
+        "sourceUrl": {
+          "type": "string"
+        },
+        "observedHeading": {
+          "type": "string"
+        }
+      },
+      "enum": [
+        {
+          "publisher": "ASME",
+          "standard": "ASME B31.8",
+          "title": "Gas Transmission and Distribution Piping Systems",
+          "edition": "2025",
+          "sourceUrl": "https://www.asme.org/codes-standards/find-codes-standards/b31-8-gas-transmission-distribution-piping-systems",
+          "observedHeading": "B31.8 - 2025"
+        },
+        {
+          "publisher": "ASME",
+          "standard": "ASME B31.8S",
+          "title": "Managing System Integrity of Gas Pipelines",
+          "edition": "2025",
+          "sourceUrl": "https://www.asme.org/codes-standards/find-codes-standards/b31-8s-managing-system-integrity-gas-pipelines",
+          "observedHeading": "B31.8S - 2025"
+        },
+        {
+          "publisher": "API",
+          "standard": "API RP 1160",
+          "title": "Managing System Integrity for Hazardous Liquid Pipelines",
+          "edition": "3rd Edition",
+          "sourceUrl": "https://www.api.org/products-and-services/standards/important-standards-announcements/recommended-practice-1160",
+          "observedHeading": "API Recommended Practice 1160, 3rd Edition"
+        }
+      ]
+    },
+    "observations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "observedDateUtc",
+        "observations",
+        "limits"
+      ],
+      "properties": {
+        "method": {
+          "const": "Read public official publisher pages using web_extract; retain only bibliographic observations, not standards content"
+        },
+        "observedDateUtc": {
+          "const": "2026-10-14"
+        },
+        "observations": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/observation"
+          }
+        },
+        "limits": {
+          "const": [
+            "The API official announcement verifies the third-edition identity, not that it remains the newest edition. The linked current API store page exposed no edition metadata in this read.",
+            "ASME headings display 2025, but unresolved template text on the B31.8 page is not reaffirmation or legal-currency evidence.",
+            "No clauses or source text were inspected. Clause remains null; no ingestion licence, human approval, legal, relevance or runtime acceptance is asserted.",
+            "This manually retained bibliographic snapshot is locally hashable, not a signed or immutable publisher attestation. No raw source-page hash is asserted."
+          ]
+        }
+      }
+    }
+  },
+  "$comment": "Independent reviewed identity oracle, public publisher metadata checked 2026-10-14. Do not regenerate these pins from catalog/observations; new observations require explicit review. API announcement is not latest/applicability evidence; no clauses or source text reviewed."
+}

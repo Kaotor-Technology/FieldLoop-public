@@ -1,0 +1,36 @@
+{
+  "method": "Read public official publisher pages using web_extract; retain only bibliographic observations, not standards content",
+  "observedDateUtc": "2026-10-14",
+  "observations": [
+    {
+      "publisher": "ASME",
+      "standard": "ASME B31.8",
+      "title": "Gas Transmission and Distribution Piping Systems",
+      "edition": "2025",
+      "sourceUrl": "https://www.asme.org/codes-standards/find-codes-standards/b31-8-gas-transmission-distribution-piping-systems",
+      "observedHeading": "B31.8 - 2025"
+    },
+    {
+      "publisher": "ASME",
+      "standard": "ASME B31.8S",
+      "title": "Managing System Integrity of Gas Pipelines",
+      "edition": "2025",
+      "sourceUrl": "https://www.asme.org/codes-standards/find-codes-standards/b31-8s-managing-system-integrity-gas-pipelines",
+      "observedHeading": "B31.8S - 2025"
+    },
+    {
+      "publisher": "API",
+      "standard": "API RP 1160",
+      "title": "Managing System Integrity for Hazardous Liquid Pipelines",
+      "edition": "3rd Edition",
+      "sourceUrl": "https://www.api.org/products-and-services/standards/important-standards-announcements/recommended-practice-1160",
+      "observedHeading": "API Recommended Practice 1160, 3rd Edition"
+    }
+  ],
+  "limits": [
+    "The API official announcement verifies the third-edition identity, not that it remains the newest edition. The linked current API store page exposed no edition metadata in this read.",
+    "ASME headings display 2025, but unresolved template text on the B31.8 page is not reaffirmation or legal-currency evidence.",
+    "No clauses or source text were inspected. Clause remains null; no ingestion licence, human approval, legal, relevance or runtime acceptance is asserted.",
+    "This manually retained bibliographic snapshot is locally hashable, not a signed or immutable publisher attestation. No raw source-page hash is asserted."
+  ]
+}
