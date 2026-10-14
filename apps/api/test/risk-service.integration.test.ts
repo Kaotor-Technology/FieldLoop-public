@@ -108,7 +108,7 @@ integration("PostgresRiskService against migrated PostgreSQL", () => {
       .rejects.toMatchObject({ status: 409, code: "risk_matrix_unconfigured" });
   });
 
-  it("persists and emits Health-change Risk snapshots for complete simulated demo seeds", async () => {
+  it("persists and emits Health-change Risk snapshots for complete simulated demo seeds within five seconds", async () => {
     const fixture = await createFixture({ approved: false, simulated: true, demoSeed: true });
     const user = reviewer(fixture.orgId, fixture.classification);
     const initial = await service.getRisk(user, fixture.bowtieId);
@@ -122,6 +122,7 @@ integration("PostgresRiskService against migrated PostgreSQL", () => {
       [healthChangeId, fixture.orgId, fixture.barrierId, fixture.classification],
     );
 
+    const startedAt = Date.now();
     expect(await service.processHealthChanges()).toBe(1);
     const snapshots = await pool.query<{ health_change_id: string; trigger: string; calibration: unknown }>(
       `SELECT health_change_id, trigger, input_json->'calibration' AS calibration FROM app.risk_snapshot
@@ -134,6 +135,7 @@ integration("PostgresRiskService against migrated PostgreSQL", () => {
     const events = await service.riskEventsAfter(user, { createdAt: new Date(0).toISOString(), id: "00000000-0000-0000-0000-000000000000" });
     expect(events).toHaveLength(2);
     expect(events[1]).toMatchObject({ bowtieId: fixture.bowtieId, trigger: "health_change", calibration: initial.calibration });
+    expect(Date.now() - startedAt).toBeLessThan(5_000);
   }, 20_000);
 
   it("rejects an approved calibration without its controlled standard reference and version", async () => {
