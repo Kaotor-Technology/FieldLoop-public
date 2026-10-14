@@ -33,9 +33,13 @@ def check_python_boundary(path: str, source: str) -> list[str]:
             modules = [node.module or ""] + [
                 f"{node.module}.{alias.name}" for alias in node.names
             ]
-        if isinstance(node, (ast.Import, ast.ImportFrom)) and path not in PROVIDER_IMPORT_ALLOWED and any(
+        imports_provider = any(
             module == provider or module.startswith(provider + ".")
             for module in modules for provider in PROVIDER_MODULES
+        )
+        if (
+            isinstance(node, (ast.Import, ast.ImportFrom))
+            and path not in PROVIDER_IMPORT_ALLOWED and imports_provider
         ):
             errors.append(f"{path}:{node.lineno}: Provider SDK belongs in adapters (GR-1)")
         if isinstance(node, ast.Attribute) and node.attr in GENERATION_METHODS:
