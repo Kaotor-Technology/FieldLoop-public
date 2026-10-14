@@ -3,7 +3,9 @@
 This k6 probe measures `POST /guardrail/v1/content:scan` and fails when the
 latency Guardrail adds around the managed Tier 1 detector reaches 50 ms at p95
 (PRD GR-8, ADR-0005 amendment). Added latency is the request duration minus the
-`detector` stage from the `Server-Timing` header; the detector duration
+`detector` stage from the `Server-Timing` header (Guardrail reports each stage
+in milliseconds with 0.1 ms precision; `detector` spans the whole Model Armor
+adapter call); the detector duration
 (Model Armor + SDP) is reported as `tier1_detector_latency` and the full request
 as `http_req_duration`, without thresholds. It also checks that requests succeed and return
 the same benign synthetic content. Each iteration uses a new idempotency key and
@@ -42,8 +44,7 @@ or write them into the repository.
 The default run sends 100 requests with one virtual user. Set `K6_VUS` and
 `K6_ITERATIONS` to run a different load. This endpoint measurement includes
 Cloud Run ingress, Cloud SQL persistence, Model Armor and client network time; it
-is not an isolated in-process detector benchmark. No live latency result is
-claimed until the probe runs against a deployed service.
+is not an isolated in-process detector benchmark. Recorded runs and their results are in `docs/contexts/FL-86.md`.
 
 ## In-VPC Cloud Run Job
 
