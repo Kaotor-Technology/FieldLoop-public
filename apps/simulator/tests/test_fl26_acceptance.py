@@ -149,3 +149,40 @@ def test_actual_catalog_missing_run_seed_is_http_400_without_state(client, filen
     assert corrected.status_code == 200
     assert corrected.json()["seed"] == 75
     assert corrected.json()["scenarioId"] == scenario.id
+
+
+@pytest.mark.parametrize("speed", [1, 60])
+def test_actual_catalog_rectifier_zero_and_cp_overdue_boundaries(speed):
+    scenario = load_scenario(CATALOG / "cp-rectifier-failure.yaml")
+    player, tx, transport, now = harness(scenario, speed=speed)
+    anchor = now[0]
+    command(player, tx, "play")
+    for simulated_seconds in [599, 600, 86400, 86401]:
+        # Poll one wall-clock microsecond past each sample: accumulated float
+        # clock arithmetic at 60x can fall just below an exact event boundary.
+        # The before samples remain well before the next scheduled event.
+        now[0] = anchor + timedelta(
+            microseconds=math.ceil(simulated_seconds * 1_000_000 / speed) + 1
+        )
+        asyncio.run(player.read(tx))
+        emitted = signals(transport)
+        outputs = [s for s in emitted if s["tag"] == "DL-01.rectifier.output"]
+        assert outputs[-1]["value"] == (12 if simulated_seconds < 600 else 0)
+        assert outputs[-1]["unit"] == "A"
+        assert outputs[-1]["payload"]["target"] == {
+            "kind": "barrier", "id": "cathodic-protection"
+        }
+        overdue = [
+            s for s in emitted
+            if s["tag"] == "DL-01.cathodic-protection.work_order.overdue"
+        ]
+        assert overdue[-1]["value"] == (0 if simulated_seconds <= 86400 else 1)
+        assert overdue[-1]["payload"]["workOrderId"] == "SYN-CMMS-001"
+        due = datetime.fromisoformat(overdue[-1]["payload"]["dueAt"].replace("Z", "+00:00"))
+        observed = datetime.fromisoformat(overdue[-1]["observedAt"].replace("Z", "+00:00"))
+        if simulated_seconds > 86400:
+            assert observed > due
+        for signal in (outputs[-1], overdue[-1]):
+            assert signal["simulated"] is True
+            assert signal["payload"]["sandbox"] is True
+            assert signal["payload"]["label"] == "SIMULATION"
