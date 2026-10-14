@@ -6,6 +6,7 @@ const bowtieId = "50000000-0000-4000-8000-000000000001";
 const threatId = "50000000-0000-4000-8000-000000000002";
 const consequenceId = "50000000-0000-4000-8000-000000000003";
 const barrierId = "50000000-0000-4000-8000-000000000004";
+const evidenceId = "50000000-0000-4000-8000-000000000007";
 const snapshot = {
   bowtieId, topEventFrequencyPerYear: 0.002,
   threats: [],
@@ -26,17 +27,21 @@ const previous = {
   calibration: { ...current.calibration, standardVersion: "2026.0" }, snapshot: { ...snapshot, topEventFrequencyPerYear: 0.001 },
 };
 
-async function mockRiskApi(page: Page, configured: boolean) {
+async function mockRiskApi(page: Page, configured: boolean, hasPrevious = true) {
+  const explanation = hasPrevious ? {
+    bowtieId, hasPrevious: true, summary: "Risk changed after the listed Barrier and risk input changes.", previous, current,
+    riskInputChanges: [{ path: `riskInput/threats/${threatId}/frequencyPerYear`, beforeValue: "0.01", afterValue: "0.02" }],
+    changes: [{
+      barrierId, beforeHealth: "healthy", afterHealth: "degraded", reason: "Health accepted by a reviewer.",
+      sourceEvidenceId: evidenceId, sourceEvidenceHref: `/api/v1/evidence/${evidenceId}`, topEventFrequencyDeltaPerYear: 0.001,
+      consequenceFrequencyDeltasPerYear: [{ consequenceId, delta: 0.0001 }], impact: 0.0001,
+    }],
+  } : {
+    bowtieId, hasPrevious: false, summary: "No prior snapshot is available; no change is reported.",
+    previous: null, current, changes: [], riskInputChanges: [],
+  };
   await page.route(`**/api/v1/bowties/${bowtieId}/risk/explain`, (route) => configured
-    ? route.fulfill({ json: {
-      bowtieId, hasPrevious: true, summary: "Risk changed after the listed Barrier and risk input changes.", previous, current,
-      riskInputChanges: [{ path: `riskInput/threats/${threatId}/frequencyPerYear`, beforeValue: "0.01", afterValue: "0.02" }],
-      changes: [{
-        barrierId, beforeHealth: "healthy", afterHealth: "degraded", reason: "Health accepted by a reviewer.",
-        sourceEvidenceId: null, sourceEvidenceHref: null, topEventFrequencyDeltaPerYear: 0.001,
-        consequenceFrequencyDeltasPerYear: [{ consequenceId, delta: 0.0001 }], impact: 0.0001,
-      }],
-    } })
+    ? route.fulfill({ json: explanation })
     : route.fulfill({ status: 409, contentType: "application/problem+json", body: JSON.stringify({ status: 409, code: "risk_matrix_unconfigured", title: "Organisation Risk Matrix is not approved" }) }));
   await page.route(`**/api/v1/bowties/${bowtieId}/risk`, (route) => configured
     ? route.fulfill({ json: current })
@@ -80,12 +85,28 @@ test("Bowtie canvas shows Organisation severity dimensions and explains changed 
   await expect(page.getByRole("heading", { name: "Explain score" })).toBeVisible();
   await expect(page.getByText("Health accepted by a reviewer.")).toBeVisible();
   await expect(page.getByText(/Healthy → Degraded/)).toBeVisible();
+  await expect(page.locator(".snapshot-comparison strong.mono")).toHaveText(["1.000e-3", "2.000e-3"]);
+  await expect(page.getByRole("link", { name: /Open source Evidence/ }))
+    .toHaveAttribute("href", `/api/v1/evidence/${evidenceId}`);
   await expect(page.getByText(`riskInput/threats/${threatId}/frequencyPerYear`)).toBeVisible();
   await expect(page.getByText("0.01 → 0.02")).toBeVisible();
   await expect(page.getByText("SYNTHETIC-ORG-RISK-STD").first()).toBeVisible();
   await expect(page.getByText("2026.1", { exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
+});
+
+test("explain drawer reports no change before a previous Risk Snapshot exists", async ({ page }) => {
+  await mockRiskApi(page, true, false);
+  await page.goto("/map");
+  await page.getByRole("link", { name: "Sign in as viewer" }).click();
+  await page.getByRole("link", { name: /Synthetic flood barrier failure/ }).click();
+  await page.getByRole("button", { name: "Explain score" }).click();
+
+  const drawer = page.getByRole("complementary", { name: "Explain score" });
+  await expect(drawer.getByText("No prior snapshot exists. No change is reported.")).toBeVisible();
+  await expect(drawer.locator(".snapshot-comparison")).toHaveCount(0);
+  await expect(drawer.locator(".risk-change-list")).toHaveCount(0);
 });
 
 test("Bowtie canvas displays a pending notice when Organisation calibration is unconfigured", async ({ page }) => {
