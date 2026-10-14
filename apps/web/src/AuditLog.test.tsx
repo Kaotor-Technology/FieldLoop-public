@@ -30,6 +30,11 @@ describe("Audit log view", () => {
     expect(markup).toContain('id="main-content"');
   });
 
+  it("makes the horizontally scrollable table reachable by keyboard", () => {
+    const markup = render();
+    expect(markup).toContain('class="audit-table-wrap" role="region" aria-label="Audit events, newest first" tabindex="0"');
+  });
+
   it("labels simulated events and marks the start of a chain", () => {
     const markup = render({ events: [event({ simulated: true, prevHash: null, beforeHash: null })] });
     expect(markup).toContain(">SIMULATION<");

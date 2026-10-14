@@ -30,7 +30,9 @@ export function AuditPage() {
     <h1>{t("auditLog")}</h1>
     <p className="audit-error" role="alert">{t("auditNotAvailable")}</p>
   </main>;
+  // Keyed by the URL filter so browser back and forward reset the form fields with it.
   return <AuditLog
+    key={`${filter.entityType ?? ""}|${filter.entityId ?? ""}`}
     events={pages.data?.pages.flatMap((page) => page.items) ?? []}
     filter={filter}
     isLoading={pages.isPending}

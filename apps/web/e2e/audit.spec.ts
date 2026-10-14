@@ -36,6 +36,13 @@ test("an operator reads, filters and pages the audit log through the BFF", async
   await page.getByRole("button", { name: "Clear filter" }).click();
   await expect(table.getByRole("row")).toHaveCount(4);
 
+  // Browser back returns to the filtered URL and the form follows it.
+  await page.goBack();
+  await expect(page).toHaveURL(/\/audit\?entityType=health_proposal$/);
+  await expect(page.getByLabel("Entity type")).toHaveValue("health_proposal");
+  await page.goForward();
+  await expect(page.getByLabel("Entity type")).toHaveValue("");
+
   await table.getByText("Show hashes").first().click();
   await expect(table.getByText("Event hash").first()).toBeVisible();
   await expect(table.getByText("a".repeat(64)).first()).toBeVisible();

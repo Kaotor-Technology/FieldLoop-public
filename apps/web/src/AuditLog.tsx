@@ -64,7 +64,7 @@ export function AuditLog({ events, filter, isLoading = false, hasError = false, 
     {hasError && <p className="audit-error" role="alert">{t("auditLoadFailed")}</p>}
     {!isLoading && !hasError && events.length === 0 && <p className="audit-status" role="status">{filtered ? t("auditEmptyFiltered") : t("auditEmpty")}</p>}
 
-    {events.length > 0 && <div className="audit-table-wrap">
+    {events.length > 0 && <div className="audit-table-wrap" role="region" aria-label={t("auditTableCaption")} tabIndex={0}>
       <table className="audit-table">
         <caption className="audit-caption">{t("auditTableCaption")}</caption>
         <thead>
