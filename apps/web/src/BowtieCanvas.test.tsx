@@ -61,8 +61,10 @@ describe("Bowtie canvas", () => {
     const sharedBowtie = { ...bowtie, barriers: [...bowtie.barriers, sharedBarrier] };
 
     const markup = renderToStaticMarkup(<BowtieCanvas bowtie={sharedBowtie} onBack={() => undefined} />);
+    const textEquivalentBarriers = markup.match(/<h3>Barriers<\/h3><ul>([\s\S]*?)<\/ul>/)?.[1] ?? "";
 
     expect(markup.match(/class="bowtie-barrier-card"/g) ?? []).toHaveLength(new Set(bowtie.barriers.map(({ id }) => id)).size);
+    expect(textEquivalentBarriers.match(/<li>/g) ?? []).toHaveLength(new Set(bowtie.barriers.map(({ id }) => id)).size);
     for (const pathName of sharedBarrier.pathNames) expect(markup.replaceAll("&amp;", "&")).toContain(pathName);
   });
 });

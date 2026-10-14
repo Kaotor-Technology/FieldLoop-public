@@ -91,7 +91,7 @@ export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
         <h3>{t("threats")}</h3>
         <ul>{bowtie.threats.map((threat) => <li key={threat.id}>{monoNumericText(threat.name)}</li>)}</ul>
         <h3>{t("barriers")}</h3>
-        <ul>{bowtie.barriers.map((barrier) => <li key={barrier.id}>
+        <ul>{barriers.map((barrier) => <li key={barrier.id}>
           <strong>{monoNumericText(barrier.name)}</strong> · {t("barrierTypeLabel")}: {t(barrier.type)} · {t(barrier.side)} · {t(barrier.health)}
           {barrier.pathNames.length > 0 && <> · {t("pathMembership")}: {monoNumericText(barrier.pathNames.join(", "))}</>}
           {barrier.degradationFactors.length === 0
