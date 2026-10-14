@@ -18,6 +18,7 @@ try {
 }
 const app = buildApp({
   auth: authRuntime.auth,
+  ...(authRuntime.actions ? { actions: authRuntime.actions } : {}),
   mapLayers: authRuntime.mapLayers,
   ...(authRuntime.health ? { health: authRuntime.health } : {}),
   ...(authRuntime.risk ? { risk: authRuntime.risk } : {}),

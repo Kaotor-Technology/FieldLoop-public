@@ -153,7 +153,9 @@ export class PostgresHealthStore implements HealthServicePort {
       LEFT JOIN app.health_change hc ON hc.org_id = n.org_id AND hc.id = n.health_change_id
       LEFT JOIN app.evidence e ON e.org_id = n.org_id AND e.id = n.evidence_id
       WHERE n.org_id = ${user.orgId} AND n.channel = 'in_app' AND n.simulation_retired_at IS NULL
-        AND n.recipient_ref IN (${userId}, ${`sandbox:${userId}`})
+        AND (n.recipient_ref IN (${userId}, ${`sandbox:${userId}`})
+          OR (${user.roles.includes("fieldloop.manager")} AND n.recipient_ref = CASE
+            WHEN n.simulated THEN 'sandbox:ai-governance' ELSE 'role:fieldloop.manager' END))
         AND array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], n.classification) <= ${classificationRank(user.clearance) + 1}
         AND (n.evidence_id IS NULL OR EXISTS (
           SELECT 1 FROM app.evidence current_evidence
