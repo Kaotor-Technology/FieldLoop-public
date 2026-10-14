@@ -9,6 +9,7 @@ describe("Bowtie canvas", () => {
     const markup = renderToStaticMarkup(<BowtieCanvas bowtie={bowtie} onBack={() => undefined} />);
 
     expect(markup).toContain('aria-label="Bowtie canvas"');
+    expect(markup).toContain('id="main-content"');
     expect(markup.match(/class="bowtie-column/g)).toHaveLength(3);
     expect(markup).toContain("Threats");
     expect(markup).toContain("Preventive Barriers");
@@ -30,5 +31,16 @@ describe("Bowtie canvas", () => {
     expect(markup).toContain("Validation Triad");
     expect(markup).toContain("Independence Groups");
     expect(markup).toContain("Text equivalent of the Bowtie canvas");
+    expect(markup).toContain("Domain:");
+    expect(markup).toContain("Classification:");
+    expect(markup).toContain("Type: Technical");
+  });
+
+  it("includes Independence Group barrier membership in the text equivalent", () => {
+    const bowtie = listBowties().find(({ code }) => code === "C");
+    if (!bowtie) throw new Error("Bowtie C fixture is required");
+    const markup = renderToStaticMarkup(<BowtieCanvas bowtie={bowtie} onBack={() => undefined} />);
+
+    expect(markup).toContain("Shared by Barriers:");
   });
 });

@@ -11,7 +11,7 @@ export function BowtieEntry() {
   const bowtie = getBowtie(bowtieId);
 
   if (!bowtie) {
-    return <main className="bowtie-screen" aria-labelledby="bowtie-title">
+    return <main id="main-content" className="bowtie-screen" tabIndex={-1} aria-labelledby="bowtie-title">
       <button type="button" className="bowtie-back-button" onClick={() => { void navigate(mapReturnLocation(search)); }}>{t("backToMap")}</button>
       <h1 id="bowtie-title">{t("bowtieUnavailable")}</h1>
       <p>{t("bowtieUnavailableDetail")}</p>

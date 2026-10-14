@@ -16,7 +16,7 @@ export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
   const preventive = bowtie.barriers.filter((barrier) => barrier.side === "preventive");
   const mitigative = bowtie.barriers.filter((barrier) => barrier.side === "mitigative");
 
-  return <main className="bowtie-screen" aria-labelledby="bowtie-title">
+  return <main id="main-content" className="bowtie-screen" tabIndex={-1} aria-labelledby="bowtie-title">
     <header className="bowtie-header">
       <button type="button" className="bowtie-back-button" onClick={onBack}>{t("backToMap")}</button>
       <div>
@@ -76,16 +76,22 @@ export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
     <details className="bowtie-text-equivalent">
       <summary>{t("textEquivalent")}</summary>
       <div>
+        <p><strong>{t("bowtieCode", { code: bowtie.code })} · {t("readOnlyView")}:</strong> {monoNumericText(bowtie.title)}</p>
+        <p><strong>{t("provenance")}:</strong> {bowtie.provenance}</p>
         <p><strong>{t("hazard")}:</strong> {monoNumericText(bowtie.hazard)}</p>
         <p><strong>{t("topEvent")}:</strong> {monoNumericText(bowtie.topEvent)}</p>
+        <p><strong>{t("domain")}:</strong> {monoNumericText(bowtie.domain)}</p>
+        <p><strong>{t("classification")}:</strong> {monoNumericText(bowtie.classification)}</p>
         <h3>{t("threats")}</h3>
         <ul>{bowtie.threats.map((threat) => <li key={threat.id}>{monoNumericText(threat.name)}</li>)}</ul>
         <h3>{t("barriers")}</h3>
         <ul>{bowtie.barriers.map((barrier) => <li key={barrier.id}>
-          <strong>{monoNumericText(barrier.name)}</strong> · {t(barrier.side)} · {t(barrier.health)}
-          {barrier.degradationFactors.map((factor) => <span key={factor.id}> · {t("degradationFactor")}: {monoNumericText(factor.description)}
-            {factor.controls.length > 0 && <> · {t("degradationControl")}: {monoNumericText(factor.controls.join(", "))}</>}
-          </span>)}
+          <strong>{monoNumericText(barrier.name)}</strong> · {t("barrierType")}: {t(barrier.type)} · {t(barrier.side)} · {t(barrier.health)}
+          {barrier.degradationFactors.length === 0
+            ? <> · {t("noDegradationFactors")}</>
+            : barrier.degradationFactors.map((factor) => <span key={factor.id}> · {t("degradationFactor")}: {monoNumericText(factor.description)}
+              {factor.controls.length > 0 && <> · {t("degradationControl")}: {monoNumericText(factor.controls.join(", "))}</>}
+            </span>)}
           <TriadText barrier={barrier} />
         </li>)}</ul>
         <h3>{t("consequences")}</h3>
@@ -93,7 +99,10 @@ export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
         <h3>{t("independenceGroups")}</h3>
         {bowtie.independenceGroups.length === 0
           ? <p>{t("noIndependenceGroups")}</p>
-          : <ul>{bowtie.independenceGroups.map((group) => <li key={group.id}>{monoNumericText(group.cause)}</li>)}</ul>}
+          : <ul>{bowtie.independenceGroups.map((group) => <li key={group.id}>
+            {monoNumericText(group.cause)}
+            {group.barrierIds.length > 0 && <span> · {t("sharedByBarriers")}: {monoNumericText(group.barrierIds.map((id) => findBarrierName(bowtie, id)).join(", "))}</span>}
+          </li>)}</ul>}
       </div>
     </details>
   </main>;
