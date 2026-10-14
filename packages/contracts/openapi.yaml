@@ -40,7 +40,133 @@ tags:
     description: Barrier Health decisions and in-app notifications.
   - name: Guardrail
     description: Internal service-to-service OpenAI-compatible model gateway and Tier 1 content scan.
+  - name: Actions
+    description: Exact payload proposals and human action ceilings.
 paths:
+  /v1/action-requests:
+    post:
+      operationId: createActionRequest
+      summary: Prepare a proposed human action
+      description: Stores the exact L1/L2 payload with database-generated SHA-256,
+        rationale, citations, session identity and bounded SLA. L0 recommendations
+        have no record. Never executes the payload. Replays return the current
+        record.
+      tags:
+        - Actions
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequestCreate"
+      responses:
+        "201":
+          description: Action Request created or idempotently replayed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionRequest"
+        "400": &a1
+          $ref: "#/components/responses/BadRequest"
+        "401": &a2
+          $ref: "#/components/responses/Unauthenticated"
+        "403": &a3
+          $ref: "#/components/responses/Forbidden"
+        "409": &a4
+          $ref: "#/components/responses/Conflict"
+        "503": &a5
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/action-requests/{actionRequestId}:
+    get:
+      operationId: getActionRequest
+      summary: Read an Action Request
+      description: Returns an Organisation and clearance scoped current Action
+        Request; an expired request is rejected and escalated. Retired simulation
+        records are unavailable.
+      tags:
+        - Actions
+      parameters:
+        - name: actionRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Exact stored payload and generated hash.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionRequest"
+        "400": *a1
+        "401": *a2
+        "403": *a3
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409": *a4
+        "503": *a5
+  /guardrail/v1/tool-calls:check:
+    post:
+      servers:
+        - url: https://guardrail-{environment}-822853914340.asia-southeast1.run.app
+          description: Private Guardrail; Google service identity and verified internal
+            user token required.
+          variables:
+            environment:
+              default: demo
+              enum:
+                - dev
+                - demo
+      operationId: checkToolCall
+      summary: Check a registered tool call against Action Level ceilings
+      description: Uses registered AI System tools and target policy. Returns allow
+        for reads/recommendations, convert_l1 with an Action Request, hold_l2 with
+        an exact-payload Held Request, or block. Never invokes a tool or writes a
+        target system. Above-ceiling and unknown tools are blocked; policy/storage
+        failures fail closed.
+      tags:
+        - Guardrail
+      security:
+        - serviceIdentity: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: X-FieldLoop-Internal-User-Token
+          in: header
+          required: true
+          description: Five-minute server-to-server RS256 user token.
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 8192
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ToolCallCheck"
+      responses:
+        "200":
+          description: Persisted decision and any proposed/held records. A block is a
+            successful check and forbids tool execution.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ToolCallDecision"
+        "400": *a1
+        "401":
+          $ref: "#/components/responses/GuardrailUnauthenticated"
+        "403":
+          $ref: "#/components/responses/GuardrailForbidden"
+        "409": *a4
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "503": *a5
   /auth/login:
     get:
       operationId: startLogin
@@ -1455,6 +1581,270 @@ components:
                 type: string
               assetId:
                 type: string
+
+    # BEGIN generated action schemas
+    ActionLevel:
+      type: string
+      enum:
+        - l0
+        - l1
+        - l2
+    ActionType:
+      type: string
+      enum:
+        - internal_record
+        - system_of_record
+        - field_command
+        - engineering_approval
+        - emergency_communication
+        - external_submission
+    ActionClassification:
+      type: string
+      enum:
+        - PUBLIC
+        - INTERNAL
+        - CONFIDENTIAL
+        - HIGHLY_RESTRICTED
+    ActionTarget:
+      type: string
+      enum:
+        - fieldloop
+        - cmms
+        - integrity-database
+        - gis
+        - asset-register
+        - siem
+        - historian
+        - scada
+        - ot
+        - engineering-authority
+        - stakeholders
+        - regulator
+        - external-party
+    ActionRequestCreate:
+      type: object
+      additionalProperties: false
+      required:
+        - actionType
+        - actionLevel
+        - target
+        - payload
+        - rationale
+        - citations
+        - simulated
+        - classification
+      properties:
+        actionType:
+          $ref: "#/components/schemas/ActionType"
+        actionLevel:
+          $ref: "#/components/schemas/ActionLevel"
+        target:
+          $ref: "#/components/schemas/ActionTarget"
+        payload:
+          type: object
+          additionalProperties: true
+        rationale:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+        citations:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 2048
+            pattern: \S
+        simulated:
+          type: boolean
+        classification:
+          $ref: "#/components/schemas/ActionClassification"
+        expiresAt:
+          type: string
+          format: date-time
+        simulationRunId:
+          type: string
+          format: uuid
+    ToolCallCheck:
+      type: object
+      additionalProperties: false
+      required:
+        - aiSystem
+        - tool
+        - target
+        - simulated
+        - classification
+      properties:
+        actionType:
+          $ref: "#/components/schemas/ActionType"
+        actionLevel:
+          $ref: "#/components/schemas/ActionLevel"
+        target:
+          $ref: "#/components/schemas/ActionTarget"
+        payload:
+          type: object
+          additionalProperties: true
+        rationale:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+        citations:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 2048
+            pattern: \S
+        simulated:
+          type: boolean
+        classification:
+          $ref: "#/components/schemas/ActionClassification"
+        expiresAt:
+          type: string
+          format: date-time
+        simulationRunId:
+          type: string
+          format: uuid
+        aiSystem:
+          type: string
+          minLength: 1
+          maxLength: 128
+        tool:
+          type: string
+          minLength: 1
+          maxLength: 128
+    ActionRequester:
+      description: Who requested the action (PRD AX-1). An assistant acts on behalf of
+        requestedBy.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - kind
+          properties:
+            kind:
+              const: person
+        - type: object
+          additionalProperties: false
+          required:
+            - kind
+            - aiSystemId
+          properties:
+            kind:
+              const: assistant
+            aiSystemId:
+              type: string
+              format: uuid
+    ActionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - orgId
+        - actionType
+        - actionLevel
+        - target
+        - payload
+        - payloadHash
+        - rationale
+        - citations
+        - requestedBy
+        - requester
+        - status
+        - expiresAt
+        - simulated
+        - classification
+      properties:
+        actionType:
+          $ref: "#/components/schemas/ActionType"
+        actionLevel:
+          $ref: "#/components/schemas/ActionLevel"
+        target:
+          $ref: "#/components/schemas/ActionTarget"
+        payload:
+          type: object
+          additionalProperties: true
+        rationale:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+        citations:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 2048
+            pattern: \S
+        simulated:
+          type: boolean
+        classification:
+          $ref: "#/components/schemas/ActionClassification"
+        expiresAt:
+          type: string
+          format: date-time
+        simulationRunId:
+          type: string
+          format: uuid
+        id:
+          type: string
+          format: uuid
+        orgId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        payloadHash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        requestedBy:
+          type: string
+          minLength: 1
+          maxLength: 512
+        requester:
+          $ref: "#/components/schemas/ActionRequester"
+        status:
+          type: string
+          enum:
+            - open
+            - in_review
+            - approved
+            - rejected
+            - superseded
+            - executed
+    ToolCallDecision:
+      type: object
+      additionalProperties: false
+      required:
+        - decision
+        - reason
+      properties:
+        decision:
+          type: string
+          enum:
+            - allow
+            - convert_l1
+            - hold_l2
+            - block
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        ceiling:
+          $ref: "#/components/schemas/ActionLevel"
+        actionRequest:
+          $ref: "#/components/schemas/ActionRequest"
+        heldRequestId:
+          type: string
+          format: uuid
+    # END generated action schemas
+
     GuardrailChatCompletionRequest:
       type: object
       required: [aiSystem, messages]

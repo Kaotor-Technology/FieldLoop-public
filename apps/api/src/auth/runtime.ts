@@ -1,4 +1,4 @@
-import { GoogleCloudKmsEnvelopeKeyService, GoogleCloudSecretReader, type LoadedDomainPack } from "@fieldloop/adapters";
+import { PostgresActionStore, type ActionServicePort, GoogleCloudKmsEnvelopeKeyService, GoogleCloudSecretReader, type LoadedDomainPack } from "@fieldloop/adapters";
 import { registerDomainPackRecords } from "../domain-packs.js";
 import { AuthError, BffAuthService, type AuthServicePort } from "./service.js";
 import { KmsEnvelopeCrypto } from "./envelope-crypto.js";
@@ -32,6 +32,7 @@ export async function createProductionAuthRuntime(): Promise<{
   auth: AuthServicePort;
   mapLayers: MapLayerStore;
   health?: HealthServicePort;
+  actions?: ActionServicePort;
   close: () => Promise<void>;
   registerPacks?: (packs: LoadedDomainPack[]) => Promise<void>;
   risk?: PostgresRiskService;
@@ -62,6 +63,7 @@ export async function createProductionAuthRuntime(): Promise<{
   if (!database) return { auth: new UnavailableAuthService(), mapLayers: new UnavailableMapLayerStore(), close: async () => {} };
   const runtime = {
     mapLayers: new PostgresMapLayerStore(database.db),
+    actions: new PostgresActionStore(database.db as unknown as Kysely<Record<string, never>>),
     health: new PostgresHealthStore(database.db as unknown as Kysely<Record<string, never>>),
     imports: new PostgresImportStore(database.db as unknown as Kysely<Record<string, never>>),
     risk: new PostgresRiskService(createRiskDatabase(database.pool)),

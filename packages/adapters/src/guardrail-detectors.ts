@@ -107,7 +107,11 @@ function parseSanitizationResult(payload: unknown): Tier1ScanResult {
     throw new Error("Model Armor did not complete every Tier 1 filter");
   }
 
-  const filters = result["filterResults"];
+  const filters = asRecord(result["filterResults"]);
+  if (!filters || Object.keys(filters).length === 0
+    || (result["filterMatchState"] !== "MATCH_FOUND" && result["filterMatchState"] !== "NO_MATCH_FOUND")) {
+    throw new Error("Model Armor returned an incomplete Tier 1 result");
+  }
   const injectionMatch = hasNamedMatch(filters, /prompt|jailbreak/i);
   const sdpResult = findNamedValue(filters, /sdp/i);
   const findings = findInfoTypes(sdpResult);
