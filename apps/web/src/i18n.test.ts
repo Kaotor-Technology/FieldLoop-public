@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createInstance } from "i18next";
+import type { BarrierType, RiskBarrier, RiskSeverity, RiskZone } from "@fieldloop/contracts";
 import type { MapFeatureProperties } from "@fieldloop/map";
 import i18n from "./i18n";
 
@@ -16,10 +17,20 @@ describe("demo localisation", () => {
     const featureKinds = {
       area: true, linear: true, segment: true, facility: true, barrier: true, consequence: true,
     } satisfies Record<NonNullable<MapFeatureProperties["featureKind"]>, boolean>;
+    const barrierTypes = { technical: true, organisational: true, human: true } satisfies Record<BarrierType, boolean>;
+    const barrierHealth = { healthy: true, degraded: true, failed: true, unverified: true } satisfies Record<RiskBarrier["health"], boolean>;
+    const riskZones = { red: true, amber: true, green: true } satisfies Record<RiskZone, boolean>;
+    const severityDimensions = {
+      people: true, environment: true, financial: true, serviceContinuity: true, reputation: true, legalRegulatory: true,
+    } satisfies Record<keyof RiskSeverity, boolean>;
     const keys = [
       ...["ready", "playing", "paused", "finished"].map((value) => `simulationState.${value}`),
       ...Object.keys(featureKinds).map((value) => `featureKinds.${value}`),
       ...["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"].map((value) => `classifications.${value}`),
+      ...Object.keys(barrierTypes).map((value) => `barrierType.${value}`),
+      ...Object.keys(barrierHealth).map((value) => `barrierHealth.${value}`),
+      ...Object.keys(riskZones).map((value) => `riskZone.${value}`),
+      ...Object.keys(severityDimensions).map((value) => `severityDimension.${value}`),
       ...["healthy", "degraded", "failed", "unverified"],
       ...["healthy", "degraded", "failed", "unverified"].map((value) => `healthProposalHealth.${value}`),
       "intolerable", "alarp", "acceptable", "assets", "barriers", "consequences", "viewer", "operator", "manager",

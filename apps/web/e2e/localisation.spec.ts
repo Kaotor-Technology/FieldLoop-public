@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { expectThaiTypography } from "./thai-typography";
 
 test.beforeEach(async ({ request, page }) => {
   await request.get("/test/reset");
@@ -81,12 +82,7 @@ for (const colorScheme of ["light", "dark"] as const) for (const width of [390, 
     await page.locator(".account-switcher > summary").click();
     await expect(page.locator("html")).toHaveAttribute("lang", "th");
     expect((await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze()).violations).toEqual([]);
-    const typography = await page.locator("h1").evaluate((element) => {
-      const style = getComputedStyle(element);
-      return { lineHeight: parseFloat(style.lineHeight) / parseFloat(style.fontSize), spacing: style.letterSpacing };
-    });
-    expect(typography.lineHeight).toBeGreaterThanOrEqual(1.5);
-    expect(typography.spacing).toBe("normal");
+    await expectThaiTypography(page);
     await page.setViewportSize({ width: 640, height: 450 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(640);
     await page.setViewportSize({ width: 320, height: 900 });
@@ -94,7 +90,7 @@ for (const colorScheme of ["light", "dark"] as const) for (const width of [390, 
     if (width === 1280) {
       await page.setViewportSize({ width, height: 900 });
       await page.locator(".account-switcher > summary").click();
-      await page.screenshot({ path: `test-results/fl-94-thai-${colorScheme}.png`, fullPage: true });
+      await page.screenshot({ path: `e2e/evidence/fl-94-thai-${colorScheme}.png`, fullPage: true });
     }
   });
 }

@@ -446,7 +446,7 @@ export function GeoCommandMap() {
 
     <aside className="context-panel" aria-label={t("contextPanel")}>
       <header className="context-header">
-        <div><p className="eyebrow">{t("mapSelection")}</p><h2>{selectedFeature?.properties.name ?? t("overview")}</h2>
+        <div><p className="eyebrow">{t("mapSelection")}</p><h2>{selectedFeature?.properties.name ? <span lang="en">{selectedFeature.properties.name}</span> : t("overview")}</h2>
           {selectedFeature?.properties.chainageFrom !== null && selectedFeature?.properties.chainageFrom !== undefined &&
             <p className="context-chainage mono">{t("chainage")} {formatChainage(selectedFeature.properties.chainageFrom)}–{formatChainage(selectedFeature.properties.chainageTo ?? selectedFeature.properties.chainageFrom)} m</p>}
         </div>
@@ -475,7 +475,7 @@ export function GeoCommandMap() {
             {features.slice(0, 150).map((feature) => <li key={`${feature.properties.featureKind}-${feature.id}`}>
               <button type="button" className="feature-list-item" onClick={() => chooseFeature(feature)}>
                 <FeatureSymbol feature={feature} />
-                <span className="feature-list-copy"><strong>{feature.properties.name ?? t("unnamedFeature")}</strong><span>{t(`featureKinds.${feature.properties.featureKind}`, { defaultValue: t("asset") })} · {feature.properties.health ? t(feature.properties.health) : feature.properties.riskBand ? t(feature.properties.riskBand) : t(`classifications.${feature.properties.classification}`, { defaultValue: feature.properties.classification ?? t("unknown") })}</span>
+                <span className="feature-list-copy"><strong>{feature.properties.name ? <span lang="en">{feature.properties.name}</span> : t("unnamedFeature")}</strong><span>{t(`featureKinds.${feature.properties.featureKind}`, { defaultValue: t("asset") })} · {feature.properties.health ? t(feature.properties.health) : feature.properties.riskBand ? t(feature.properties.riskBand) : t(`classifications.${feature.properties.classification}`, { defaultValue: feature.properties.classification ?? t("unknown") })}</span>
                   {feature.properties.featureKind === "segment" && (feature.properties.chainageFrom !== null || feature.properties.chainageTo !== null) &&
                     <span className="feature-list-chainage mono">{t("chainage")}: {feature.properties.chainageFrom ?? "?"}–{feature.properties.chainageTo ?? "?"} m</span>}
                 </span>
@@ -569,7 +569,7 @@ function FeatureOverview({ feature }: { feature: MapFeature }) {
     <div><dt>{t("featureType")}</dt><dd>{t(`featureKinds.${feature.properties.featureKind}`, { defaultValue: t("asset") })}</dd></div>
     {feature.properties.chainageFrom !== null && feature.properties.chainageFrom !== undefined && <div><dt>{t("chainage")}</dt><dd className="mono">{formatChainage(feature.properties.chainageFrom)}–{formatChainage(feature.properties.chainageTo ?? feature.properties.chainageFrom)} m</dd></div>}
     <div><dt>{t("classification")}</dt><dd>{t(`classifications.${feature.properties.classification}`, { defaultValue: feature.properties.classification ?? t("unknown") })}</dd></div>
-    {typeof feature.properties.simulated === "boolean" && <div><dt>{t("provenance")}</dt><dd>{feature.properties.simulated ? t("simulationLabel") : feature.properties.label ?? t("publicBaseMap")}</dd></div>}
+    {typeof feature.properties.simulated === "boolean" && <div><dt>{t("provenance")}</dt><dd>{feature.properties.simulated ? t("simulationLabel") : feature.properties.label ? <span lang="en">{feature.properties.label}</span> : t("publicBaseMap")}</dd></div>}
     {health && <div><dt>{t("barrierHealthLabel")}</dt><dd><HealthBadge health={health} /></dd></div>}
     {feature.properties.riskBand && <div><dt>{t("riskBand")}</dt><dd>{t(feature.properties.riskBand)}</dd></div>}
     {feature.properties.evidenceObservedAt && <div><dt>{t("latestEvidence")}</dt><dd><time className="mono" dateTime={feature.properties.evidenceObservedAt}>{new Date(feature.properties.evidenceObservedAt).toLocaleDateString(i18n.language === "th" ? "th-TH" : "en-GB", { timeZone: "Asia/Bangkok" })}</time></dd></div>}

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { expectThaiTypography } from "./thai-typography";
 
 test.beforeEach(async ({ page, request }) => {
   await request.get("/test/reset");
@@ -31,6 +32,14 @@ for (const colorScheme of ["light", "dark"] as const) {
       if (colorScheme === "light" && width === 1280) {
         await page.screenshot({ path: "e2e/evidence/bowtie-canvas.png", fullPage: true });
       }
+      await page.getByRole("button", { name: "ภาษาไทย", exact: true }).click();
+      await expect(page.locator("#bowtie-title")).toHaveAttribute("lang", "en");
+      await expectThaiTypography(page);
+      const thaiAxe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+      expect(thaiAxe.violations).toEqual([]);
+      if (colorScheme === "light" && width === 1280) {
+        await page.screenshot({ path: "e2e/evidence/bowtie-canvas-thai.png", fullPage: true });
+      }
     });
   }
 }
@@ -41,6 +50,7 @@ test("Thai layout reflows at 320px and the keyboard can return to the map", asyn
   await page.keyboard.press("Enter");
   await expect(page.locator(".bowtie-screen")).toBeVisible();
   await page.getByRole("button", { name: "ภาษาไทย", exact: true }).click();
+  await expect(page.locator("#bowtie-title")).toHaveAttribute("lang", "en");
 
   const reflow = await page.locator(".bowtie-screen").evaluate((element) => ({
     fontSize: Number.parseFloat(getComputedStyle(element).fontSize),

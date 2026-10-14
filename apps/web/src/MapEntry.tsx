@@ -22,8 +22,8 @@ export function MapEntry() {
       {bowties.isError ? <p role="alert">{t("bowtiesUnavailable")}</p> : null}
       {bowties.data?.length ? <ul>{bowties.data.map((bowtie) => <li key={bowtie.id}>
         <Link to="/bowties/$bowtieId" params={{ bowtieId: bowtie.id }}>
-          <strong>{bowtie.topEvent}</strong>
-          <span>{bowtie.hazard}</span>
+          <strong lang="en">{bowtie.topEvent}</strong>
+          <span lang="en">{bowtie.hazard}</span>
           <span className="mono">{bowtie.id}</span>
           <span className="simulation-label">{bowtie.simulated ? t("simulationTag") : t("syntheticData")}</span>
         </Link>

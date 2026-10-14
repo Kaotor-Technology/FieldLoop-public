@@ -46,8 +46,8 @@ export function BowtieCanvasPage() {
     {data ? <>
       <header className="bowtie-heading">
         <p className="eyebrow">{data.simulated ? t("simulatedData") : t("syntheticData")}</p>
-        <h1>{data.topEvent}</h1>
-        <p>{data.hazard}</p>
+        <h1 lang="en">{data.topEvent}</h1>
+        <p lang="en">{data.hazard}</p>
         <span className="mono">{data.id}</span>
       </header>
       {risk.isError && errorCode(risk.error) === "risk_matrix_unconfigured" ? <section className="risk-calibration-notice" role="status">
@@ -69,7 +69,7 @@ export function BowtieCanvasPage() {
           {data.threats.map((threat) => {
             const path = data.paths.find((item) => item.side === "preventive" && item.targetId === threat.id);
             return <article className="bowtie-path" key={threat.id}>
-              <h3>{threat.name}</h3>
+              <h3 lang="en">{threat.name}</h3>
               <p className="mono">{t("frequencyPerYear", { value: threat.frequencyPerYear.toExponential(3) })}</p>
               <p className="mono">{threat.id}</p>
               {path?.barrierIds.map((barrierId) => {
@@ -94,12 +94,12 @@ export function BowtieCanvasPage() {
             const path = data.paths.find((item) => item.side === "mitigative" && item.targetId === consequence.id);
             const riskResult = risk.data?.snapshot.consequences.find((item) => item.consequenceId === consequence.id);
             return <article className="bowtie-path" key={consequence.id}>
-              <h3>{consequence.name}</h3>
+              <h3 lang="en">{consequence.name}</h3>
               <p className="mono">{consequence.id}</p>
               <ul className="severity-list">
                 {Object.entries(consequence.severity).map(([dimension, band]) => {
                   const definition = data.severityCriteria?.[dimension as keyof NonNullable<BowtieCanvas["severityCriteria"]>]?.[band - 1];
-                  return <li key={dimension}><span>{t(`severityDimension.${dimension}`, { defaultValue: dimension })}</span><span className="mono">{band}</span>{definition ? <span>{definition}</span> : null}</li>;
+                  return <li key={dimension}><span>{t(`severityDimension.${dimension}`, { defaultValue: dimension })}</span><span className="mono">{band}</span>{definition ? <span lang="en">{definition}</span> : null}</li>;
                 })}
               </ul>
               {riskResult ? <p className="consequence-risk"><span className={`risk-zone risk-zone-${riskResult.cell.zone}`}>{t(`riskZone.${riskResult.cell.zone}`)}</span> <span className="mono">{riskResult.frequencyPerYear.toExponential(3)} / {t("year")}</span></p> : null}
@@ -128,7 +128,7 @@ export function BowtieCanvasPage() {
 function BarrierCell({ barrier, t }: { barrier: BowtieCanvas["barriers"][number]; t: ReturnType<typeof useTranslation>["t"] }) {
   const typeLabel = t(`barrierType.${barrier.type}`);
   return <div className="barrier-cell">
-    <div className="barrier-cell-heading"><strong>{barrier.name}</strong><HealthBadge health={barrier.health} label={t(`barrierHealth.${barrier.health}`)} /></div>
+    <div className="barrier-cell-heading"><strong lang="en">{barrier.name}</strong><HealthBadge health={barrier.health} label={t(`barrierHealth.${barrier.health}`)} /></div>
     <p className="mono">{barrier.id}</p>
     <p>{typeLabel} · {t("pfdBand")} <span className="mono">{barrier.pfdBand.toExponential(2)}</span></p>
     {barrier.degradationFactors.map((factor) => <p className="degradation-factor" key={factor}>{t("degradationFactor")}: {factor}</p>)}
@@ -137,7 +137,7 @@ function BarrierCell({ barrier, t }: { barrier: BowtieCanvas["barriers"][number]
 
 function ExplanationPanel({ explanation, t }: { explanation: RiskExplain; t: ReturnType<typeof useTranslation>["t"] }) {
   return <>
-    <p>{explanation.summary}</p>
+    <p lang="en">{explanation.summary}</p>
     {explanation.hasPrevious && explanation.previous ? <div className="snapshot-comparison">
       <div>
         <span>{t("previousSnapshot")}</span><strong className="mono">{explanation.previous.snapshot.topEventFrequencyPerYear.toExponential(3)}</strong>
@@ -156,7 +156,7 @@ function ExplanationPanel({ explanation, t }: { explanation: RiskExplain; t: Ret
       <h3>{t("barrierChange")}</h3>
       <p className="mono">{change.barrierId}</p>
       <p>{t("healthChange", { before: t(`barrierHealth.${change.beforeHealth}`), after: t(`barrierHealth.${change.afterHealth}`) })}</p>
-      <p>{change.reason}</p>
+      <p lang="en">{change.reason}</p>
       <dl>
         <dt>{t("topEventFrequencyDelta")}</dt><dd className="mono">{change.topEventFrequencyDeltaPerYear.toExponential(3)} / {t("year")}</dd>
         <dt>{t("impactOrder")}</dt><dd className="mono">{change.impact.toExponential(3)}</dd>
