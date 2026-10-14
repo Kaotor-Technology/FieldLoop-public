@@ -275,6 +275,9 @@ paths:
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /guardrail/v1/content:scan:
     post:
@@ -317,6 +320,9 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/scenarios:
     get:
@@ -1335,6 +1341,8 @@ components:
         - internal_error
         - service_unavailable
         - guardrail_blocked
+        - payload_too_large
+        - unsupported_media_type
 
     Problem:
       type: object
@@ -1406,6 +1414,18 @@ components:
   responses:
     BadRequest:
       description: The request is malformed or fails validation (`validation_failed`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    PayloadTooLarge:
+      description: The request body exceeds the Guardrail request size limit (`payload_too_large`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    UnsupportedMediaType:
+      description: The request uses an unsupported content type (`unsupported_media_type`).
       content:
         application/problem+json:
           schema:

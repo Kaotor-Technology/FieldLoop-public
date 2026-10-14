@@ -9,9 +9,32 @@ export function buildApp(dependencies: GuardrailDependencies) {
   const app = Fastify({ logger: true, bodyLimit: 1_048_576 });
   const engine = new GuardrailEngine(dependencies);
 
+  app.setErrorHandler((error, _request, reply) => {
+    const errorRecord = error !== null && typeof error === "object" ? error as Record<string, unknown> : null;
+    const reportedStatus = errorRecord?.["statusCode"];
+    const statusCode = typeof reportedStatus === "number" && reportedStatus >= 400 && reportedStatus <= 599
+      ? reportedStatus
+      : 500;
+    const code = statusCode === 413 ? "payload_too_large"
+      : statusCode === 415 ? "unsupported_media_type"
+        : statusCode < 500 ? "validation_failed"
+          : "internal_error";
+    const reportedMessage = errorRecord?.["message"];
+    const message = statusCode >= 500 ? "Guardrail request could not be processed"
+      : typeof reportedMessage === "string" ? reportedMessage : "Request could not be parsed";
+    if (statusCode >= 500) reply.log.error({ err: error }, "Guardrail request failed");
+    return reply.code(statusCode).type("application/problem+json")
+      .send(errorBody(code, message, statusCode, code));
+  });
+  app.setNotFoundHandler((_request, reply) => reply.code(404).type("application/problem+json")
+    .send(errorBody("not_found", "Guardrail route not found", 404, "not_found")));
+
   app.get("/health", async () => ({ status: "ok" }));
 
   app.post(CONTENT_SCAN_PATH, async (request, reply) => {
+    if (!isJsonMediaType(request.headers["content-type"])) {
+      return reply.code(415).type("application/problem+json").send(errorBody("unsupported_media_type", "Content-Type must be application/json", 415, "unsupported_media_type"));
+    }
     const body = parseContentScan(request.body);
     if (!body) return reply.code(400).type("application/problem+json").send(errorBody("validation_failed", "Expected aiSystem and text content", 400, "invalid_request"));
     const idempotencyKey = request.headers["idempotency-key"];
@@ -25,6 +48,9 @@ export function buildApp(dependencies: GuardrailDependencies) {
   });
 
   app.post(OPENAI_CHAT_COMPLETIONS_PATH, async (request, reply) => {
+    if (!isJsonMediaType(request.headers["content-type"])) {
+      return reply.code(415).type("application/problem+json").send(errorBody("unsupported_media_type", "Content-Type must be application/json", 415, "unsupported_media_type"));
+    }
     const body = parseChatCompletion(request.body);
     if (!body) return reply.code(400).type("application/problem+json").send(errorBody("validation_failed", "Expected aiSystem and text chat messages", 400, "invalid_request"));
     const classification = requestClassification(request.headers["x-fieldloop-classification"]);
@@ -75,6 +101,10 @@ function requestClassification(value: string | string[] | undefined): GuardrailC
   return value;
 }
 
+function isJsonMediaType(value: string | string[] | undefined): boolean {
+  return typeof value === "string" && /^application\/json(?:\s*;|$)/i.test(value);
+}
+
 function sendResult(reply: FastifyReply, result: GuardrailHttpResult, requestedClassification: GuardrailClassification, stream = false) {
   if (result.policyId) reply.header("x-fieldloop-policy-id", result.policyId);
   if (result.interceptId) reply.header("x-fieldloop-intercept-id", result.interceptId);
@@ -116,7 +146,9 @@ function toServerSentEvents(value: unknown): string {
 }
 
 function errorBody(code: string, message: string, status: number, errorCode: string): Record<string, unknown> {
-  const title = status === 400 ? "Invalid Guardrail request" : status === 409 ? "Idempotency key conflict" : "Guardrail request failed";
+  const title = status === 400 ? "Invalid Guardrail request" : status === 409 ? "Idempotency key conflict"
+    : status === 413 ? "Guardrail request is too large" : status === 415 ? "Unsupported request media type"
+      : status >= 500 ? "Guardrail unavailable" : "Guardrail request failed";
   return {
     type: `urn:fieldloop:problem:${code}`,
     title,

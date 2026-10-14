@@ -46,6 +46,43 @@ describe("Guardrail gateway", () => {
     expect(dependencies.store.loadSystem).not.toHaveBeenCalled();
   });
 
+  it("returns RFC 9457 problems for malformed JSON and oversized bodies", async () => {
+    const app = createApp(createDependencies());
+    const malformed = await app.inject({
+      method: "POST", url: "/guardrail/v1/chat/completions",
+      headers: { "content-type": "application/json" }, payload: "{",
+    });
+    const oversized = await app.inject({
+      method: "POST", url: "/guardrail/v1/chat/completions",
+      headers: { "content-type": "application/json" }, payload: `{"padding":"${"x".repeat(1_048_577)}"}`,
+    });
+    const unsupportedMediaType = await app.inject({
+      method: "POST", url: "/guardrail/v1/chat/completions",
+      headers: { "content-type": "text/plain" }, payload: "not JSON",
+    });
+    const unsupportedParserMediaType = await app.inject({
+      method: "POST", url: "/guardrail/v1/chat/completions",
+      headers: { "content-type": "application/xml" }, payload: "<request/>",
+    });
+    const missingRoute = await app.inject({ method: "GET", url: "/guardrail/v1/missing" });
+
+    expect(malformed.statusCode).toBe(400);
+    expect(malformed.headers["content-type"]).toContain("application/problem+json");
+    expect(malformed.json()).toMatchObject({ status: 400, code: "validation_failed" });
+    expect(oversized.statusCode).toBe(413);
+    expect(oversized.headers["content-type"]).toContain("application/problem+json");
+    expect(oversized.json()).toMatchObject({ status: 413, code: "payload_too_large" });
+    expect(unsupportedMediaType.statusCode).toBe(415);
+    expect(unsupportedMediaType.headers["content-type"]).toContain("application/problem+json");
+    expect(unsupportedMediaType.json()).toMatchObject({ status: 415, code: "unsupported_media_type" });
+    expect(unsupportedParserMediaType.statusCode).toBe(415);
+    expect(unsupportedParserMediaType.headers["content-type"]).toContain("application/problem+json");
+    expect(unsupportedParserMediaType.json()).toMatchObject({ status: 415, code: "unsupported_media_type" });
+    expect(missingRoute.statusCode).toBe(404);
+    expect(missingRoute.headers["content-type"]).toContain("application/problem+json");
+    expect(missingRoute.json()).toMatchObject({ status: 404, code: "not_found" });
+  });
+
   it("rejects provider model IDs and message roles outside the contract", async () => {
     const dependencies = createDependencies();
     const app = createApp(dependencies);
