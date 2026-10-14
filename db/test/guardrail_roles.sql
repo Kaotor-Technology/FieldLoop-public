@@ -32,14 +32,18 @@ BEGIN
         OR NOT has_table_privilege(own_runtime_role, 'app.evidence', 'INSERT')
         OR NOT has_table_privilege(own_runtime_role, 'app.signal_event_outbox', 'INSERT')
         OR NOT has_table_privilege(own_runtime_role, 'app.guardrail_content_request', 'SELECT')
-        OR NOT has_table_privilege(own_runtime_role, 'app.guardrail_content_request', 'INSERT') THEN
+        OR NOT has_table_privilege(own_runtime_role, 'app.guardrail_content_request', 'INSERT')
+        OR NOT has_table_privilege(own_runtime_role, 'app.simulation_run', 'SELECT')
+        OR NOT has_table_privilege(own_runtime_role, 'app.simulation_workspace', 'SELECT') THEN
         RAISE EXCEPTION 'Guardrail runtime role is missing an approved database privilege';
     END IF;
     IF has_table_privilege(own_runtime_role, 'app.intercept', 'SELECT')
         OR has_table_privilege(own_runtime_role, 'app.evidence', 'SELECT')
         OR has_table_privilege(own_runtime_role, 'app.signal_event_outbox', 'SELECT')
         OR has_table_privilege(own_runtime_role, 'app.guardrail_content_request', 'UPDATE')
-        OR has_table_privilege(own_runtime_role, 'app.guardrail_content_request', 'DELETE') THEN
+        OR has_table_privilege(own_runtime_role, 'app.guardrail_content_request', 'DELETE')
+        OR has_table_privilege(own_runtime_role, 'app.simulation_workspace', 'UPDATE')
+        OR has_table_privilege(own_runtime_role, 'app.simulation_run', 'INSERT') THEN
         RAISE EXCEPTION 'Guardrail runtime role has an unapproved database privilege';
     END IF;
 END $$;
