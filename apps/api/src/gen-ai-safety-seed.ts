@@ -39,15 +39,15 @@ export async function registerGenAiSafetyRecords<Database>(database: Kysely<Data
     VALUES (${bowtieId}::uuid, ${orgId}, ${bowtie.hazard}, ${bowtie.topEvent}, ${bowtie.domain}, ${bowtie.status},
       ${safety.version}, ${safety.simulated}, ${safety.classification}, 'domain-pack-loader')
     ON CONFLICT (id) DO NOTHING`.execute(database);
-  const existing = (await sql<{ status: string | null; version: string | null }>`
-    SELECT status, version FROM app.bowtie WHERE id = ${bowtieId}::uuid AND org_id = ${orgId} FOR UPDATE`.execute(database)).rows[0];
+  const existing = (await sql<{ status: string | null }>`
+    SELECT status FROM app.bowtie WHERE id = ${bowtieId}::uuid AND org_id = ${orgId} FOR UPDATE`.execute(database)).rows[0];
   if (!existing) throw new Error("Gen AI Safety Bowtie registration lost its Organisation-scoped parent");
   if (existing.status !== "draft") {
     const proofs = (await sql<{ id: string; seed_definition_hash: string | null }>`SELECT id,
       config->>'seedDefinitionHash' AS seed_definition_hash FROM app.guardrail_policy
       WHERE org_id = ${orgId} AND ai_system_id = ${aiSystemId}::uuid AND config->>'bowtieId' = ${bowtieId}`.execute(database)).rows;
     const expected = new Set(policies.map((policy) => id("guardrail_policy", policy.id)));
-    if (existing.version !== safety.version || proofs.length !== expected.size
+    if (proofs.length !== expected.size
         || proofs.some((proof) => !expected.has(proof.id) || proof.seed_definition_hash !== seedDefinitionHash)) {
       throw new Error(`Gen AI Safety seed cannot change reviewed Bowtie ${bowtie.id}; use the human review workflow`);
     }

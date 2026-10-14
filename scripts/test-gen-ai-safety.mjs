@@ -88,9 +88,10 @@ export async function testGenAiSafetyRecords(database, application, packs) {
   assert.deepEqual(healthAfter, existingHealth, "pre-existing Health stays unchanged");
   assert.deepEqual(await unrelatedCounts(), before, "no fabricated Evidence, Intercepts, Health changes, Actions, approvals or unresolved Cross-Domain rows");
   const bowtieId = domainPackRecordId(orgId, pack.content.id, "bowtie", safety.bowtie.id);
-  await sql`UPDATE app.bowtie SET status = 'approved', hazard = 'Human-reviewed hazard (SIMULATION)'
+  await sql`UPDATE app.bowtie SET status = 'approved', version = '2.0.0', hazard = 'Human-reviewed hazard (SIMULATION)'
     WHERE id = ${bowtieId}::uuid`.execute(database);
   const reviewed = await snapshot(orgId);
+  assert.equal(reviewed.find(({ kind }) => kind === "bowtie").value.version, "2.0.0");
   await registerDomainPackRecords(application, orgId, [updated]);
   assert.deepEqual(await snapshot(orgId), reviewed, "identical seed must not overwrite reviewed definitions or local overrides");
   const equivalent = structuredClone(updated);
@@ -173,7 +174,7 @@ export async function testGenAiSafetyRecords(database, application, packs) {
       assert.doesNotMatch(failed.stdout, /Server listening/);
     }
   } finally { await rm(invalidRoot, { recursive: true, force: true }); }
-  const parentPlan = await sql`EXPLAIN (ANALYZE, BUFFERS) SELECT status, version FROM app.bowtie
+  const parentPlan = await sql`EXPLAIN (ANALYZE, BUFFERS) SELECT status FROM app.bowtie
     WHERE id = ${bowtieId}::uuid AND org_id = ${orgId} FOR UPDATE`.execute(application);
   console.log(parentPlan.rows.map((row) => row["QUERY PLAN"]).join("\n"));
   console.log("Gen AI Safety PostGIS acceptance passed: UC-1, 4 policies, full Bowtie C, mappings, labels, idempotency, upgrade, preserved Health/reviewed definitions, concurrent human review, shared severity, Organisation isolation and rollback.");
