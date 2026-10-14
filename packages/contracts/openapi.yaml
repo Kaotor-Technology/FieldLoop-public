@@ -651,6 +651,29 @@ paths:
           $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /v1/health-proposals:
+    get:
+      operationId: listHealthProposals
+      summary: List the signed-in Barrier Owner's open Health Proposals
+      description: Returns current open proposals owned by the signed-in user within Organisation and clearance scope, newest first.
+      tags: [Health]
+      parameters:
+      - name: status
+        in: query
+        required: true
+        schema: { type: string, const: open }
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Current user's open Health Proposals in reverse chronological order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthProposalPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /v1/health-proposals/{healthProposalId}:accept:
     post:
       operationId: acceptHealthProposal
@@ -1068,6 +1091,29 @@ components:
         barrierId: { type: string, format: uuid }
         health: { type: string, enum: [healthy, degraded, failed, unverified] }
       required: [healthProposalId, status, barrierId, health]
+    HealthProposal:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        barrierId: { type: string, format: uuid }
+        barrierName: { type: [string, 'null'] }
+        currentHealth: { type: [string, 'null'], enum: [healthy, degraded, failed, unverified, null] }
+        proposedHealth: { type: string, enum: [healthy, degraded, failed, unverified] }
+        sourceReason: { type: [string, 'null'] }
+        simulated: { type: boolean }
+        createdAt: { type: string, format: date-time }
+      required: [id, barrierId, barrierName, currentHealth, proposedHealth, sourceReason, simulated, createdAt]
+    HealthProposalPage:
+      allOf:
+      - $ref: '#/components/schemas/CursorPage'
+      - type: object
+        properties:
+          items:
+            type: array
+            items: { $ref: '#/components/schemas/HealthProposal' }
+          limit: { type: integer, minimum: 1, maximum: 200 }
+        required: [items, limit]
     Notification:
       type: object
       additionalProperties: false
