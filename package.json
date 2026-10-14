@@ -25,11 +25,12 @@
     "db:seed:bangkok": "node db/seed/bangkok/seed.mjs",
     "db:migrate": "dbmate --migrations-table public.schema_migrations up",
     "test:migrations": "bash scripts/test-migrations.sh",
+    "test:risk-service": "bash scripts/test-risk-service.sh",
     "test:seed": "bash scripts/test-seed.sh",
     "test:seed:legal": "node scripts/test-legal-seed.mjs",
     "test:seed:bangkok": "bash scripts/test-bangkok-seed.sh",
     "test:signals": "pnpm exec turbo run build --filter=@fieldloop/signal-worker... --filter=@fieldloop/api... && node scripts/test-signal-worker.mjs",
-    "test:domain-packs": "pnpm exec turbo run build --filter=@fieldloop/api... && bash scripts/test-domain-packs.sh"
+    "test:domain-packs": "pnpm exec turbo run build --filter=@fieldloop/api... --filter=@fieldloop/guardrail... && bash scripts/test-domain-packs.sh"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",

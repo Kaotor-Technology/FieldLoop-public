@@ -6,6 +6,8 @@ import { UnavailableAuthService } from "./auth/runtime.js";
 import type { AuthServicePort } from "./auth/service.js";
 import { registerMapLayerRoutes, UnavailableMapLayerStore, type MapLayerStore } from "./map/layers.js";
 import type { LoadedDomainPack } from "@fieldloop/adapters";
+import { registerRiskRoutes } from "./risk/routes.js";
+import type { RiskApiPort } from "./risk/service.js";
 import { registerHealthRoutes } from "./health/routes.js";
 import type { HealthServicePort } from "./health/model.js";
 import { registerLiveEventRoute } from "./live-events.js";
@@ -23,6 +25,7 @@ export function buildApp(options: {
   mapLayers?: MapLayerStore;
   mapsApiKey?: string;
   simulator?: SimulationPort;
+  risk?: RiskApiPort;
   health?: HealthServicePort;
   domainPacks?: LoadedDomainPack[];
 } = {}) {
@@ -36,8 +39,9 @@ export function buildApp(options: {
   registerAuthRoutes(app, auth, options.baseUrl ?? process.env["FIELDLOOP_BASE_URL"]);
   registerMapLayerRoutes(app, options.mapLayers ?? new UnavailableMapLayerStore(), options.mapsApiKey ?? process.env["FIELDLOOP_MAPS_API_KEY"]);
   registerSimulationRoutes(app, options.simulator);
+  registerRiskRoutes(app, options.risk);
   registerHealthRoutes(app, options.health);
-  registerLiveEventRoute(app, options.simulator, options.health);
+  registerLiveEventRoute(app, options.simulator, options.health, options.risk);
   return app;
 }
 

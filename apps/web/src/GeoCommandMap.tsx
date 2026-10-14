@@ -10,7 +10,7 @@ import { GoogleMapsOverlay } from "@deck.gl/google-maps";
 import type { MapFeature, MapFeatureCollection, MapLayerName, MapViewport } from "@fieldloop/map";
 import type { BarrierHealth } from "@fieldloop/ui";
 import { HealthProposalReview } from "./HealthProposalReview";
-import { decideHealthProposal, getHealthProposalPage, healthProposalsQueryKey } from "./health-proposals";
+import { applyBarrierHealthToMapCache, decideHealthProposal, getHealthProposalPage, healthProposalsQueryKey } from "./health-proposals";
 import { useCurrentSession } from "./SessionGate";
 import { getMapConfig, getMapLayer } from "./map-api";
 import {
@@ -379,7 +379,7 @@ export function GeoCommandMap() {
         </div>
         <div className="map-legend" aria-label={t("mapLegend")}>
           <div className="legend-group">
-            <h2>{t("barrierHealth")}</h2>
+            <h2>{t("barrierHealthLabel")}</h2>
             <span className="legend-health"><i className="health-failed" aria-hidden="true">{SYMBOLS.failed}</i>{t("failed")}</span>
             <span className="legend-health"><i className="health-degraded" aria-hidden="true">{SYMBOLS.degraded}</i>{t("degraded")}</span>
             <span className="legend-health"><i className="health-unverified" aria-hidden="true">{SYMBOLS.unverified}</i>{t("unverified")}</span>
@@ -467,11 +467,9 @@ function MapOverviewSummary({ summary }: { summary: VisibleFeatureSummary }) {
   const canDecide = Boolean(session.data?.roles.some((role) => role === "fieldloop.operator" || role === "fieldloop.manager"));
   const submitDecision = async (input: { proposalId: string; decision: "accept" | "reject"; reason: string; idempotencyKey: string }) => {
     if (!session.data) throw new Error("Session is unavailable");
-    await decideHealthProposal({ ...input, csrfToken: session.data.csrfToken });
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: healthProposalsQueryKey }),
-      queryClient.invalidateQueries({ queryKey: ["map-layer", "barriers"] }),
-    ]);
+    const result = await decideHealthProposal({ ...input, csrfToken: session.data.csrfToken });
+    await applyBarrierHealthToMapCache(queryClient, result.barrierId, result.health);
+    await queryClient.invalidateQueries({ queryKey: healthProposalsQueryKey });
   };
   return <div className="context-overview-summary">
     <section className="context-summary-section" aria-labelledby="risk-summary-title">
@@ -520,7 +518,7 @@ function FeatureOverview({ feature }: { feature: MapFeature }) {
     {feature.properties.chainageFrom !== null && feature.properties.chainageFrom !== undefined && <div><dt>{t("chainage")}</dt><dd className="mono">{formatChainage(feature.properties.chainageFrom)}–{formatChainage(feature.properties.chainageTo ?? feature.properties.chainageFrom)} m</dd></div>}
     <div><dt>{t("classification")}</dt><dd>{feature.properties.classification ?? t("unknown")}</dd></div>
     {typeof feature.properties.simulated === "boolean" && <div><dt>{t("provenance")}</dt><dd>{feature.properties.simulated ? t("simulationLabel") : feature.properties.label ?? t("publicBaseMap")}</dd></div>}
-    {health && <div><dt>{t("barrierHealth")}</dt><dd><HealthBadge health={health} /></dd></div>}
+    {health && <div><dt>{t("barrierHealthLabel")}</dt><dd><HealthBadge health={health} /></dd></div>}
     {feature.properties.riskBand && <div><dt>{t("riskBand")}</dt><dd>{feature.properties.riskBand}</dd></div>}
     {feature.properties.evidenceObservedAt && <div><dt>{t("latestEvidence")}</dt><dd><time className="mono" dateTime={feature.properties.evidenceObservedAt}>{new Date(feature.properties.evidenceObservedAt).toLocaleDateString(i18n.language === "th" ? "th-TH" : "en-GB", { timeZone: "Asia/Bangkok" })}</time></dd></div>}
   </dl>;

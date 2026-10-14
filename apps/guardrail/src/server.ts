@@ -2,10 +2,12 @@ import { GoogleModelArmorAdapter, GoogleVertexChatCompletionsAdapter, createGoog
 import { Kysely, PostgresDialect } from "kysely";
 import { buildApp } from "./app.js";
 import { PostgresGuardrailStore } from "./postgres-store.js";
+import { loadGuardrailPolicies } from "./policies.js";
 
 type Database = Record<string, never>;
 
 const port = readPort(process.env["PORT"] ?? "8080");
+const aiSafety = await loadGuardrailPolicies();
 const projectId = requiredEnv("GOOGLE_CLOUD_PROJECT");
 const location = process.env["FIELDLOOP_VERTEX_LOCATION"] ?? "asia-southeast1";
 const environment = requiredEnv("FIELDLOOP_ENV");
@@ -46,6 +48,8 @@ const app = buildApp({
     pro: requiredEnv("FIELDLOOP_VERTEX_MODEL_PRO"),
   },
 });
+app.log.info({ aiSystem: aiSafety.aiSystem.id, policies: aiSafety.policies.map(({ id }) => id),
+  mode: "enforce", failMode: "fail-closed" }, "Guardrail policy configuration loaded");
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.once(signal, () => {

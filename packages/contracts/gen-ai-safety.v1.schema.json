@@ -1,0 +1,867 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fieldloop.kaotor.com/schemas/gen-ai-safety.v1.json",
+  "title": "GenAiSafetyPack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "label",
+    "simulated",
+    "classification",
+    "parameterBasis",
+    "aiSystem",
+    "policies",
+    "bowtie"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "label": {
+      "const": "SIMULATION"
+    },
+    "simulated": {
+      "const": true
+    },
+    "classification": {
+      "const": "CONFIDENTIAL"
+    },
+    "parameterBasis": {
+      "type": "string",
+      "minLength": 1
+    },
+    "aiSystem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name",
+        "useCase",
+        "modelTier",
+        "dataClasses",
+        "tools",
+        "riskClass",
+        "modelRoutes",
+        "agentPack",
+        "agentIds"
+      ],
+      "properties": {
+        "id": {
+          "const": "demo-uc-1"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "useCase": {
+          "const": "UC-1"
+        },
+        "modelTier": {
+          "const": "private"
+        },
+        "dataClasses": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "PUBLIC",
+              "INTERNAL",
+              "CONFIDENTIAL",
+              "HIGHLY_RESTRICTED"
+            ]
+          }
+        },
+        "tools": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "uniqueItems": true
+        },
+        "riskClass": {
+          "const": "high"
+        },
+        "modelRoutes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tier",
+              "enabled",
+              "boundary",
+              "modelClass"
+            ],
+            "properties": {
+              "tier": {
+                "enum": [
+                  "private",
+                  "public-saas"
+                ]
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "boundary": {
+                "enum": [
+                  "private-in-country-no-retention",
+                  "public-provider"
+                ]
+              },
+              "modelClass": {
+                "enum": [
+                  "flash",
+                  "pro"
+                ]
+              }
+            }
+          }
+        },
+        "agentPack": {
+          "const": "pipeline-integrity"
+        },
+        "agentIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "policies": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "barrierId",
+              "tier",
+              "mode",
+              "failMode",
+              "kind",
+              "detector",
+              "settings"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "barrierId": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "tier": {
+                "const": "tier-1"
+              },
+              "mode": {
+                "const": "enforce"
+              },
+              "failMode": {
+                "const": "fail-closed"
+              },
+              "kind": {
+                "const": "injection"
+              },
+              "detector": {
+                "const": "model-armor"
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "scan",
+                  "onDetection",
+                  "retrievedContentIsData"
+                ],
+                "properties": {
+                  "scan": {
+                    "enum": [
+                      "input-and-retrieved-content"
+                    ]
+                  },
+                  "onDetection": {
+                    "const": "block"
+                  },
+                  "retrievedContentIsData": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "barrierId",
+              "tier",
+              "mode",
+              "failMode",
+              "kind",
+              "detector",
+              "settings"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "barrierId": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "tier": {
+                "const": "tier-1"
+              },
+              "mode": {
+                "const": "enforce"
+              },
+              "failMode": {
+                "const": "fail-closed"
+              },
+              "kind": {
+                "const": "classification-routing"
+              },
+              "detector": {
+                "const": "sensitive-data-protection"
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "routes",
+                  "onDisallowedTier",
+                  "onNoAllowedTier",
+                  "publicSaasEnabled"
+                ],
+                "properties": {
+                  "routes": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "classification",
+                        "allowedModelTiers"
+                      ],
+                      "properties": {
+                        "classification": {
+                          "enum": [
+                            "PUBLIC",
+                            "INTERNAL",
+                            "CONFIDENTIAL",
+                            "HIGHLY_RESTRICTED"
+                          ]
+                        },
+                        "allowedModelTiers": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "enum": [
+                              "private",
+                              "public-saas"
+                            ]
+                          },
+                          "uniqueItems": true
+                        }
+                      }
+                    }
+                  },
+                  "onDisallowedTier": {
+                    "const": "reroute"
+                  },
+                  "onNoAllowedTier": {
+                    "const": "block"
+                  },
+                  "publicSaasEnabled": {
+                    "const": false
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "barrierId",
+              "tier",
+              "mode",
+              "failMode",
+              "kind",
+              "detector",
+              "settings"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "barrierId": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "tier": {
+                "const": "tier-1"
+              },
+              "mode": {
+                "const": "enforce"
+              },
+              "failMode": {
+                "const": "fail-closed"
+              },
+              "kind": {
+                "const": "output-dlp"
+              },
+              "detector": {
+                "const": "sensitive-data-protection"
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "scan",
+                  "onDetection",
+                  "onUnsafeRedaction"
+                ],
+                "properties": {
+                  "scan": {
+                    "const": "output"
+                  },
+                  "onDetection": {
+                    "const": "redact"
+                  },
+                  "onUnsafeRedaction": {
+                    "const": "block"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "barrierId",
+              "tier",
+              "mode",
+              "failMode",
+              "kind",
+              "detector",
+              "settings"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "barrierId": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "tier": {
+                "const": "tier-1"
+              },
+              "mode": {
+                "const": "enforce"
+              },
+              "failMode": {
+                "const": "fail-closed"
+              },
+              "kind": {
+                "const": "tool-call"
+              },
+              "detector": {
+                "const": "tool-target-policy"
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "allowedTools",
+                  "blockedTargets",
+                  "onSystemOfRecordWrite",
+                  "onUnknownTool",
+                  "preparationTool",
+                  "preparationActionLevel",
+                  "approvalRequired"
+                ],
+                "properties": {
+                  "allowedTools": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9_]*$"
+                    },
+                    "uniqueItems": true
+                  },
+                  "blockedTargets": {
+                    "type": "array",
+                    "minItems": 4,
+                    "uniqueItems": true,
+                    "items": {
+                      "enum": [
+                        "SCADA",
+                        "CMMS",
+                        "GIS",
+                        "asset-database"
+                      ]
+                    }
+                  },
+                  "onSystemOfRecordWrite": {
+                    "const": "block"
+                  },
+                  "onUnknownTool": {
+                    "const": "block"
+                  },
+                  "preparationTool": {
+                    "const": "create_action_request"
+                  },
+                  "preparationActionLevel": {
+                    "const": "L1"
+                  },
+                  "approvalRequired": {
+                    "const": true
+                  }
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "bowtie": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "hazard",
+        "topEvent",
+        "domain",
+        "status",
+        "independenceGroup",
+        "threats",
+        "consequences",
+        "barriers",
+        "paths",
+        "crossDomainLinks"
+      ],
+      "properties": {
+        "id": {
+          "const": "uc-1-bowtie-c"
+        },
+        "hazard": {
+          "type": "string",
+          "minLength": 1
+        },
+        "topEvent": {
+          "type": "string",
+          "minLength": 1
+        },
+        "domain": {
+          "const": "gen_ai"
+        },
+        "status": {
+          "const": "draft"
+        },
+        "independenceGroup": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "cause",
+            "barrierIds"
+          ],
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]*$"
+            },
+            "cause": {
+              "type": "string",
+              "minLength": 1
+            },
+            "barrierIds": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "uniqueItems": true
+            }
+          }
+        },
+        "threats": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "name",
+              "categoryCode"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "categoryCode": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              }
+            }
+          }
+        },
+        "consequences": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "name",
+              "severity"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "severity": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "dimension",
+                  "value"
+                ],
+                "properties": {
+                  "dimension": {
+                    "enum": [
+                      "legalRegulatory",
+                      "people"
+                    ]
+                  },
+                  "value": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  }
+                }
+              }
+            }
+          }
+        },
+        "barriers": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "name",
+              "type",
+              "side",
+              "health",
+              "pfdBand",
+              "performanceStandard",
+              "triad",
+              "implementation",
+              "degradationFactors"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "enum": [
+                  "technical",
+                  "human",
+                  "organisational"
+                ]
+              },
+              "side": {
+                "enum": [
+                  "preventive",
+                  "mitigative"
+                ]
+              },
+              "health": {
+                "const": "unverified"
+              },
+              "pfdBand": {
+                "type": "number",
+                "enum": [
+                  0.01,
+                  0.1
+                ]
+              },
+              "performanceStandard": {
+                "type": "string",
+                "minLength": 1
+              },
+              "triad": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "effective",
+                  "independent",
+                  "auditable"
+                ],
+                "properties": {
+                  "effective": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "pass",
+                      "justification"
+                    ],
+                    "properties": {
+                      "pass": {
+                        "const": true
+                      },
+                      "justification": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  "independent": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "pass",
+                      "justification"
+                    ],
+                    "properties": {
+                      "pass": {
+                        "const": true
+                      },
+                      "justification": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  },
+                  "auditable": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "pass",
+                      "justification"
+                    ],
+                    "properties": {
+                      "pass": {
+                        "const": true
+                      },
+                      "justification": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    }
+                  }
+                }
+              },
+              "implementation": {
+                "enum": [
+                  "tier-1-configured",
+                  "deferred-tier-2",
+                  "human-review",
+                  "procedural"
+                ]
+              },
+              "degradationFactors": {
+                "type": "array",
+                "minItems": 0,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "id",
+                    "description",
+                    "controls"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9-]*$"
+                    },
+                    "description": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "controls": {
+                      "type": "array",
+                      "minItems": 1,
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "id",
+                          "description"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9-]*$"
+                          },
+                          "description": {
+                            "type": "string",
+                            "minLength": 1
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "human",
+                        "organisational"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "pfdBand": {
+                      "type": "number",
+                      "const": 0.1
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "paths": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "side",
+              "targetId",
+              "barrierIds"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "side": {
+                "enum": [
+                  "preventive",
+                  "mitigative"
+                ]
+              },
+              "targetId": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "barrierIds": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*$"
+                },
+                "uniqueItems": true
+              }
+            }
+          }
+        },
+        "crossDomainLinks": {
+          "type": "array",
+          "minItems": 0,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "fromConsequenceId",
+              "targetPack",
+              "targetBowtieCode",
+              "targetThreatCode",
+              "resolution",
+              "reason"
+            ],
+            "properties": {
+              "fromConsequenceId": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "targetPack": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "targetBowtieCode": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "targetThreatCode": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]*$"
+              },
+              "resolution": {
+                "const": "template-only"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

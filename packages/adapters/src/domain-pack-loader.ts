@@ -2,11 +2,12 @@ import { readFile, readdir, realpath } from "node:fs/promises";
 import { isAbsolute, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseDocument } from "yaml";
-import { parseAgentDefinition, parseDomainPack, type AgentDefinition, type DomainPack } from "@fieldloop/contracts";
+import { parseAgentDefinition, parseDomainPack, parseGenAiSafetyPack, type GenAiSafetyPack, type AgentDefinition, type DomainPack } from "@fieldloop/contracts";
 
 export interface LoadedDomainPack {
   content: DomainPack;
   agents: AgentDefinition[];
+  aiSafety?: GenAiSafetyPack;
 }
 
 async function readYaml(file: string, directory: string): Promise<unknown> {
@@ -46,6 +47,72 @@ function validateContent(content: DomainPack, file: string) {
   }
 }
 
+function validateAiSafety(safety: GenAiSafetyPack, content: DomainPack, file: string, tools: ReadonlySet<string>) {
+  const reject = (reason: string): never => { throw new Error(`${file}: ${reason}`); };
+  if (safety.version !== content.version || safety.label !== content.label
+      || safety.classification !== content.classification) reject("AI Safety metadata must match its pack");
+  const { aiSystem, bowtie, policies } = safety;
+  for (const tool of aiSystem.tools) if (!tools.has(tool)) reject(`unknown tool ${tool}`);
+  for (const [kind, items] of [
+    ["policy", policies], ["Barrier", bowtie.barriers], ["Threat", bowtie.threats],
+    ["Consequence", bowtie.consequences], ["path", bowtie.paths],
+  ] as const) requireUnique(items.map(({ id }) => id), file, kind);
+  requireUnique(policies.map(({ kind }) => kind), file, "policy kind");
+  requireUnique(policies.map(({ barrierId }) => barrierId), file, "policy Barrier mapping");
+  const barriers = new Map(bowtie.barriers.map((barrier) => [barrier.id, barrier]));
+  const categories = new Set(content.threatCategories.map(({ code }) => code));
+  for (const threat of bowtie.threats) if (!categories.has(threat.categoryCode)) reject(`unknown Threat Category ${threat.categoryCode}`);
+  for (const policy of policies) {
+    const barrier = barriers.get(policy.barrierId);
+    if (!barrier || barrier.type !== "technical" || barrier.implementation !== "tier-1-configured") {
+      reject(`policy ${policy.id} must map to a configured Technical Barrier`);
+    }
+    if (barrier?.side !== (policy.kind === "output-dlp" ? "mitigative" : "preventive")) reject(`policy ${policy.id} has the wrong Barrier side`);
+    if (policy.kind === "classification-routing") {
+      requireUnique(policy.settings.routes.map(({ classification }) => classification), file, "classification route");
+      if (policy.settings.routes.length !== aiSystem.dataClasses.length) reject("classification routing must cover every data class");
+      for (const route of policy.settings.routes) {
+        if (!aiSystem.dataClasses.includes(route.classification)) reject("unknown data class route");
+        for (const tier of route.allowedModelTiers) {
+          if (!aiSystem.modelRoutes.some((model) => model.tier === tier && model.enabled)) reject(`no enabled model tier ${tier}`);
+          if (tier !== "private") reject("demo routing must remain inside the private boundary");
+        }
+      }
+    }
+    if (policy.kind === "tool-call" && (policy.settings.allowedTools.length !== aiSystem.tools.length
+        || aiSystem.tools.some((tool) => !policy.settings.allowedTools.includes(tool)))) reject("tool policy must match the AI System allowlist");
+  }
+  if (!aiSystem.modelRoutes.some((route) => route.tier === aiSystem.modelTier && route.enabled)
+      || aiSystem.modelRoutes.some((route) => route.tier === "public-saas" && route.enabled
+        || route.tier === "private" && route.boundary !== "private-in-country-no-retention")) reject("invalid model boundary or default tier");
+  const usedBarriers = new Set<string>();
+  const targets = new Set<string>();
+  for (const path of bowtie.paths) {
+    const collection = path.side === "preventive" ? bowtie.threats : bowtie.consequences;
+    if (!collection.some(({ id }) => id === path.targetId)) reject(`unknown path target ${path.targetId}`);
+    const targetKey = `${path.side}:${path.targetId}`;
+    if (targets.has(targetKey)) reject(`Duplicate path target ${path.targetId}`);
+    targets.add(targetKey);
+    for (const id of path.barrierIds) {
+      if (barriers.get(id)?.side !== path.side) reject(`unknown or incompatible path Barrier ${id}`);
+      usedBarriers.add(id);
+    }
+  }
+  if (usedBarriers.size !== barriers.size || targets.size !== bowtie.threats.length + bowtie.consequences.length) reject("Bowtie paths must cover every Threat, Consequence and Barrier");
+  for (const id of bowtie.independenceGroup.barrierIds) {
+    if (barriers.get(id)?.implementation !== "tier-1-configured") reject(`invalid Independence Group Barrier ${id}`);
+  }
+  if (bowtie.barriers.some((barrier) => barrier.implementation === "tier-1-configured"
+      && !bowtie.independenceGroup.barrierIds.includes(barrier.id))) reject("shared gateway Barriers require their Independence Group");
+  for (const barrier of bowtie.barriers) {
+    requireUnique(barrier.degradationFactors.map(({ id }) => id), file, "Degradation Factor");
+    for (const factor of barrier.degradationFactors) requireUnique(factor.controls.map(({ id }) => id), file, "Degradation Control");
+  }
+  for (const link of bowtie.crossDomainLinks) {
+    if (!bowtie.consequences.some(({ id }) => id === link.fromConsequenceId) || link.targetPack === content.id) reject("invalid Cross-Domain template reference");
+  }
+}
+
 /** Validate the complete catalog before exposing it to any runtime or database. */
 export async function loadDomainPacks(root: URL | string, toolRegistry: ReadonlySet<string>, requiredPacks: readonly string[] = []): Promise<LoadedDomainPack[]> {
   const rootPath = await realpath(typeof root === "string" ? root : fileURLToPath(root));
@@ -76,13 +143,28 @@ export async function loadDomainPacks(root: URL | string, toolRegistry: Readonly
       sources.set(agent.id, path);
       agents.push(agent);
     }
-    packs.push({ content, agents });
+    const aiSafety = content.aiSafetyFile
+      ? parseGenAiSafetyPack(await readYaml(join(directory, content.aiSafetyFile), directory), join(directory, content.aiSafetyFile))
+      : undefined;
+    if (aiSafety) validateAiSafety(aiSafety, content, join(directory, content.aiSafetyFile ?? "ai-safety.yaml"), toolRegistry);
+    packs.push({ content, agents, ...(aiSafety ? { aiSafety } : {}) });
   }
   if (!packs.length) throw new Error(`${rootPath}: no Domain Packs found`);
   for (const id of requiredPacks) {
     if (!packs.some(({ content }) => content.id === id)) throw new Error(`${rootPath}/${id}/pack.yaml: required pack missing`);
   }
   const agents = new Map(packs.flatMap((pack) => pack.agents.map((agent) => [agent.id, agent] as const)));
+  for (const pack of packs) {
+    if (!pack.aiSafety) continue;
+    const { aiSystem } = pack.aiSafety;
+    const source = `${rootPath}/${pack.content.id}/${pack.content.aiSafetyFile}`;
+    const lineUp = packs.find(({ content }) => content.id === aiSystem.agentPack)?.agents;
+    if (!lineUp || lineUp.length !== aiSystem.agentIds.length || lineUp.some((agent) =>
+      !aiSystem.agentIds.includes(agent.id) || agent.aiSystemId !== aiSystem.id || agent.useCase !== aiSystem.useCase
+      || agent.allowedTools.some((tool) => !aiSystem.tools.includes(tool)))) {
+      throw new Error(`${source}: AI System line-up or tool vocabulary does not match its Agent pack`);
+    }
+  }
   const visited = new Set<string>();
   const visiting = new Set<string>();
   function visit(agent: AgentDefinition) {
