@@ -28,6 +28,23 @@ for (const colorScheme of ["light", "dark"] as const) {
 
       const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
       expect(axe.violations).toEqual([]);
+      if (colorScheme === "light" && width === 390) {
+        const summaries = page.locator(".bowtie-screen summary");
+        const summaryCount = await summaries.count();
+        await page.getByRole("button", { name: "Back to map" }).focus();
+        for (let index = 0; index < summaryCount; index += 1) {
+          await page.keyboard.press("Tab");
+          await expect(summaries.nth(index)).toBeFocused();
+          if (index === 0) {
+            await page.keyboard.press("Enter");
+            await expect(page.locator(".bowtie-triad").first()).toHaveAttribute("open", "");
+          }
+          if (index === summaryCount - 1) {
+            await page.keyboard.press("Enter");
+            await expect(page.locator(".bowtie-text-equivalent")).toHaveAttribute("open", "");
+          }
+        }
+      }
       if (colorScheme === "light" && width === 1280) {
         await page.screenshot({ path: "e2e/evidence/bowtie-canvas.png", fullPage: true });
       }
