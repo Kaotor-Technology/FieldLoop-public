@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createInstance } from "i18next";
 import type { BarrierType, RiskBarrier, RiskSeverity, RiskZone } from "@fieldloop/contracts";
 import type { MapFeatureProperties } from "@fieldloop/map";
-import type { TriadDimension } from "./bowtie-data";
+import type { BowtieView, TriadDimension } from "./bowtie-data";
 import i18n from "./i18n";
 
 afterEach(async () => { await i18n.changeLanguage("en"); });
@@ -18,7 +18,9 @@ describe("demo localisation", () => {
     const featureKinds = {
       area: true, linear: true, segment: true, facility: true, barrier: true, consequence: true,
     } satisfies Record<NonNullable<MapFeatureProperties["featureKind"]>, boolean>;
+    const bowtieStories = ["bowtieStoryA", "bowtieStoryC", "bowtieStoryD"] as const;
     const barrierTypes = { technical: true, organisational: true, human: true } satisfies Record<BarrierType, boolean>;
+    const barrierSides = { preventive: true, mitigative: true } satisfies Record<BowtieView["barriers"][number]["side"], boolean>;
     const triadDimensions = { effective: true, independent: true, auditable: true } satisfies Record<TriadDimension, boolean>;
     const barrierHealth = { healthy: true, degraded: true, failed: true, unverified: true } satisfies Record<RiskBarrier["health"], boolean>;
     const riskZones = { red: true, amber: true, green: true } satisfies Record<RiskZone, boolean>;
@@ -31,12 +33,14 @@ describe("demo localisation", () => {
       ...["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"].map((value) => `classifications.${value}`),
       ...Object.keys(barrierTypes).map((value) => `barrierType.${value}`),
       ...Object.keys(barrierTypes),
+      ...Object.keys(barrierSides),
       ...Object.keys(triadDimensions),
       ...Object.keys(barrierHealth).map((value) => `barrierHealth.${value}`),
       ...Object.keys(riskZones).map((value) => `riskZone.${value}`),
       ...Object.keys(severityDimensions).map((value) => `severityDimension.${value}`),
       ...["healthy", "degraded", "failed", "unverified"],
       ...["healthy", "degraded", "failed", "unverified"].map((value) => `healthProposalHealth.${value}`),
+      ...bowtieStories,
       "intolerable", "alarp", "acceptable", "assets", "barriers", "consequences", "viewer", "operator", "manager",
       "viewerDetail", "operatorDetail", "managerDetail",
     ];
