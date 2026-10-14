@@ -3,6 +3,9 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+echo "==> Building API workspace dependencies"
+pnpm exec turbo run build --filter=@fieldloop/api...
+
 SUFFIX="$$"
 DB_CONTAINER="fieldloop-risk-integration-${SUFFIX}"
 DB_IMAGE="fieldloop-db-test:pg16"
