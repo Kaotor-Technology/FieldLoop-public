@@ -70,18 +70,23 @@ test("Thai layout reflows at 320px and the keyboard can return to the map", asyn
   await expect(page.locator(".bowtie-screen")).toBeVisible();
   await page.getByRole("button", { name: "ภาษาไทย", exact: true }).click();
 
-  const reflow = await page.locator(".bowtie-screen").evaluate((element) => ({
-    fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
-    lineHeight: Number.parseFloat(getComputedStyle(element).lineHeight),
-    letterSpacing: getComputedStyle(element).letterSpacing,
-    scrollWidth: document.documentElement.scrollWidth,
-    viewportWidth: document.documentElement.clientWidth,
-    canvasWidth: element.querySelector(".bowtie-canvas-viewport")?.scrollWidth ?? 0,
-    canvasViewportWidth: element.querySelector(".bowtie-canvas-viewport")?.clientWidth ?? 0,
-  }));
+  const reflow = await page.locator(".bowtie-screen").evaluate((element) => {
+    const pathMembership = element.querySelector(".bowtie-path-membership");
+    return {
+      fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
+      lineHeight: Number.parseFloat(getComputedStyle(element).lineHeight),
+      letterSpacing: getComputedStyle(element).letterSpacing,
+      scrollWidth: document.documentElement.scrollWidth,
+      viewportWidth: document.documentElement.clientWidth,
+      canvasWidth: element.querySelector(".bowtie-canvas-viewport")?.scrollWidth ?? 0,
+      canvasViewportWidth: element.querySelector(".bowtie-canvas-viewport")?.clientWidth ?? 0,
+      pathMembershipWrap: pathMembership ? getComputedStyle(pathMembership).overflowWrap : "missing",
+    };
+  });
   expect(reflow.fontSize).toBeGreaterThanOrEqual(13);
   expect(reflow.lineHeight / reflow.fontSize).toBeGreaterThanOrEqual(1.5);
   expect(["normal", "0px"]).toContain(reflow.letterSpacing);
+  expect(reflow.pathMembershipWrap).toBe("normal");
   expect(reflow.scrollWidth).toBeLessThanOrEqual(reflow.viewportWidth);
   expect(reflow.canvasWidth).toBeLessThanOrEqual(reflow.canvasViewportWidth);
 
