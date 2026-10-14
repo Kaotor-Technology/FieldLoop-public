@@ -149,6 +149,30 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
     expect(await store.expire(user.orgId,true)).toBe(0);
     await expect(pool.query("UPDATE app.held_request SET status='allowed' WHERE id=$1", [held.heldRequestId])).rejects.toThrow();
   });
+  it("serializes expiry behind a concurrent simulation reset without deadlocking", async () => {
+    const { user,body }=await fixture();
+    const scenarioId=randomUUID(),runId=randomUUID();
+    await pool.query("INSERT INTO app.scenario (id,org_id,file,simulated,classification) VALUES ($1,$2,'synthetic.json',true,'INTERNAL')", [scenarioId,user.orgId]);
+    await pool.query("INSERT INTO app.simulation_run (id,org_id,scenario_id,state,simulated,classification) VALUES ($1,$2,$3,'paused',true,'INTERNAL')", [runId,user.orgId,scenarioId]);
+    await pool.query("SELECT app.capture_simulation_baseline($1)", [user.orgId]);
+    await pool.query("UPDATE app.simulation_workspace SET active_run_id=$1 WHERE org_id=$2", [runId,user.orgId]);
+    const action=await store.create(user,{ ...body,simulationRunId:runId },key());
+    await pool.query("UPDATE app.action_request SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", [action.id]);
+    const resetClient=await pool.connect();
+    let expiration: Promise<number> | undefined;
+    try {
+      await resetClient.query("BEGIN");
+      await resetClient.query("SELECT org_id FROM app.simulation_workspace WHERE org_id=$1 FOR UPDATE", [user.orgId]);
+      expiration=store.expire(user.orgId,true);
+      await new Promise(resolve=>setTimeout(resolve,50));
+      await resetClient.query("SELECT app.restore_simulation_baseline($1)", [user.orgId]);
+      await resetClient.query("COMMIT");
+      expect(await expiration).toBe(0);
+    } finally {
+      await resetClient.query("ROLLBACK"); resetClient.release();
+      if (expiration) await expiration;
+    }
+  });
   it("rolls back proposals, holds and audit if persistence fails", async () => {
     const { user,check } = await fixture();
     // Inject a fixture-specific storage failure after Action insertion, preserving every FK.

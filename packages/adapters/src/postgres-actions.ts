@@ -153,6 +153,8 @@ function authorize(user: ActionIdentity, classification: string, write: boolean)
 }
 async function lockOrganisation(trx: Tx, orgId: string): Promise<void> {
   await sql`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify([orgId, "action_requests"])}, 0))`.execute(trx);
+  // Reset locks the workspace before Action rows. Preserve that order for reads and expiry too.
+  await sql`SELECT org_id FROM app.simulation_workspace WHERE org_id = ${orgId} FOR SHARE`.execute(trx);
 }
 async function lockSimulationScope(trx: Tx, orgId: string, simulated: boolean, runId?: string): Promise<void> {
   const workspace = (await sql<{ active_run_id: string | null }>`SELECT active_run_id FROM app.simulation_workspace WHERE org_id = ${orgId} FOR SHARE`.execute(trx)).rows[0];
