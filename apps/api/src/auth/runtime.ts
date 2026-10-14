@@ -22,6 +22,7 @@ export class UnavailableAuthService implements AuthServicePort {
   async startReauthentication(): Promise<URL> { return this.unavailable(); }
   async completeLogin(): Promise<never> { return this.unavailable(); }
   async getCurrentUser(): Promise<never> { return this.unavailable(); }
+  async getCurrentUserFromInternalToken(): Promise<never> { return this.unavailable(); }
   async issueInternalUserToken(): Promise<never> { return this.unavailable(); }
   async logout(): Promise<URL> { return this.unavailable(); }
   async backchannelLogout(): Promise<never> { return this.unavailable(); }

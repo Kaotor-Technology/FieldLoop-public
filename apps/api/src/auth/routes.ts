@@ -18,6 +18,14 @@ const PUBLIC_ROUTES = new Set([
   "GET /api/internal/assistant/documents/:documentId/geo-source",
   "POST /api/internal/assistant/documents/:documentId/geo-references",
 ]);
+// The only routes that accept the internal user token as a Bearer credential: the reads behind the
+// assistant tools. Everything else ignores the header, so least privilege is explicit, not implied.
+const INTERNAL_TOKEN_READ_ROUTES: ReadonlySet<string> = new Set([
+  "/api/v1/assets/:assetId",
+  "/api/v1/bowties/:bowtieId",
+  "/api/v1/bowties/:bowtieId/risk",
+  "/api/v1/simulation/runs/current",
+]);
 const CONSEQUENTIAL_DECISION =
   /^\/api\/v1\/(?:(?:held-requests|drafts)\/[^/]+:(?:approve|reject)|action-requests\/[^/]+(?:\/approvals|:(?:approve|reject|release|execute)))\/?$/;
 
@@ -33,6 +41,21 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthServicePort, 
   app.addHook("preHandler", async (request, reply) => {
     if (isPublicRoute(request)) return;
     const consequential = isConsequentialDecision(request);
+    const bearer = internalBearerToken(request);
+    // Server-to-server read as the user (assistant tools): only the GET routes the tools use
+    // (an allowlist), never a decision, a stream or a state change (no CSRF secret, no recent auth).
+    // Anywhere else the header is ignored, so a bearer-only request is simply unauthenticated.
+    const bearerReadable = bearer !== undefined && request.method === "GET" && !consequential
+      && INTERNAL_TOKEN_READ_ROUTES.has(request.routeOptions.url ?? "")
+      && auth.getCurrentUserFromInternalToken !== undefined;
+    if (bearerReadable && auth.getCurrentUserFromInternalToken) {
+      try {
+        request.fieldLoopCurrentUser = await auth.getCurrentUserFromInternalToken(bearer);
+      } catch (error) {
+        return sendAuthFailure(request, reply, error, "Internal user token authentication failed");
+      }
+      return;
+    }
     try {
       const currentUser = await auth.getCurrentUser(request.cookies[SESSION_COOKIE], consequential);
       request.fieldLoopCurrentUser = currentUser;
@@ -110,6 +133,13 @@ function isPublicRoute(request: FastifyRequest): boolean {
   if (routePattern === undefined) return true;
   if (PUBLIC_ROUTES.has(`${request.method} ${routePattern}`)) return true;
   return request.method === "GET" && routePattern !== "/api" && !routePattern.startsWith("/api/");
+}
+
+function internalBearerToken(request: FastifyRequest): string | undefined {
+  const header = request.headers["authorization"];
+  if (typeof header !== "string") return undefined;
+  const match = /^Bearer\s+(\S+)$/i.exec(header);
+  return match?.[1];
 }
 
 function isConsequentialDecision(request: FastifyRequest): boolean {

@@ -1,6 +1,6 @@
 import { createPublicKey, randomUUID } from "node:crypto";
-import { exportJWK, importJWK, importPKCS8, SignJWT, type JWK } from "jose";
-import type { AuthUser, InternalTokenService } from "./model.js";
+import { exportJWK, importJWK, importPKCS8, jwtVerify, SignJWT, type JWK } from "jose";
+import type { AuthUser, InternalTokenClaims, InternalTokenService } from "./model.js";
 import type { SecretReader } from "./secrets.js";
 
 export class SecretManagerInternalTokenService implements InternalTokenService {
@@ -29,6 +29,20 @@ export class SecretManagerInternalTokenService implements InternalTokenService {
       .setIssuedAt(issuedAt)
       .setExpirationTime(issuedAt + 300)
       .sign(privateKey);
+  }
+
+  async verify(token: string): Promise<InternalTokenClaims> {
+    const { publicKey } = await this.keyPair();
+    const { payload } = await jwtVerify(token, publicKey, {
+      issuer: this.issuer, audience: this.audience, algorithms: ["RS256"],
+      maxTokenAge: "5m", clockTolerance: 5,
+    });
+    const { sub, roles, clearance, org_id: orgId } = payload as Record<string, unknown>;
+    if (typeof sub !== "string" || sub.length === 0 || typeof orgId !== "string" || orgId.length === 0
+      || typeof clearance !== "string" || !Array.isArray(roles) || !roles.every((r) => typeof r === "string")) {
+      throw new Error("Internal user token claims are invalid");
+    }
+    return { sub, roles: roles as string[], clearance, orgId };
   }
 
   async jwks(): Promise<{ keys: Record<string, unknown>[] }> {

@@ -1,6 +1,6 @@
 import pytest
 
-from scripts.check_ai_boundary import EMBEDDING_ADAPTER, check_python_boundary
+from scripts.check_ai_boundary import ADK_TYPES_ADAPTER, EMBEDDING_ADAPTER, check_python_boundary
 
 
 @pytest.mark.parametrize("source", [
@@ -30,3 +30,16 @@ def test_guardrail_client_and_comments_are_allowed() -> None:
 import httpx
 httpx.post(f'{guardrail_url}/guardrail/v1/chat/completions')
 """) == []
+
+
+def test_adk_types_adapter_may_import_data_types_but_not_generate() -> None:
+    assert check_python_boundary(
+        ADK_TYPES_ADAPTER, "from google.genai.types import Content, Part"
+    ) == []
+    assert check_python_boundary(
+        ADK_TYPES_ADAPTER, "client.models.generate_content(contents='hello')"
+    )
+    # Application code still may not import the SDK, even for types.
+    assert check_python_boundary(
+        "apps/assistant/src/runtime.py", "from google.genai import types"
+    )
