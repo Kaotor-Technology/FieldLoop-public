@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from uuid import uuid4
 
+from fieldloop_adapters import adk_types as types
 from google.adk.agents import LlmAgent
 
 # StreamingMode is not re-exported publicly in google-adk 2.11.0 (mypy attr-defined).
@@ -28,7 +29,6 @@ from google.adk.runners import Runner
 from google.adk.sessions import BaseSessionService
 from google.adk.tools.base_tool import BaseTool
 from google.adk.tools.tool_context import ToolContext as AdkToolContext
-from google.genai import types
 
 from .catalog import AgentCatalog, AgentDefinition
 from .events import StreamEvent
