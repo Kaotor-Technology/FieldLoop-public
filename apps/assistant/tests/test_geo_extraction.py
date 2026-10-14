@@ -98,6 +98,43 @@ def test_validates_thai_place_name_from_exact_excerpt() -> None:
     assert parsed.place_name == "บางกระเจ้า"
 
 
+def test_validates_segment_and_facility_ids_from_table_rows() -> None:
+    source = (
+        "| Record | Code | Location |\n"
+        "| Facility | FAC-17 | Pump House Alpha |\n"
+        "| Segment | SEG-4 | บางกระเจ้า |"
+    )
+    candidates = [
+        {
+            "latitude": None,
+            "longitude": None,
+            "chainageFrom": None,
+            "chainageTo": None,
+            "assetCode": "FAC-17",
+            "placeName": "Pump House Alpha",
+            "sourceSnippet": "| Facility | FAC-17 | Pump House Alpha |",
+            "confidence": 0.8,
+        },
+        {
+            "latitude": None,
+            "longitude": None,
+            "chainageFrom": None,
+            "chainageTo": None,
+            "assetCode": "SEG-4",
+            "placeName": "บางกระเจ้า",
+            "sourceSnippet": "| Segment | SEG-4 | บางกระเจ้า |",
+            "confidence": 0.8,
+        },
+    ]
+
+    parsed = validate_geo_references({"references": candidates}, source)
+
+    assert [(item.asset_code, item.place_name) for item in parsed] == [
+        ("FAC-17", "Pump House Alpha"),
+        ("SEG-4", "บางกระเจ้า"),
+    ]
+
+
 class FakePlatform:
     def __init__(self, text: str) -> None:
         self.text = text
@@ -161,7 +198,7 @@ def test_tool_scans_then_saves_only_grounded_drafts() -> None:
                         "assetCode": None,
                         "placeName": "Ban Klang",
                         "sourceSnippet": "KP 45+200 near Ban Klang",
-                        "confidence": 0.85,
+                        "confidence": 0.2,
                     }
                 ]
             }
@@ -181,6 +218,7 @@ def test_tool_scans_then_saves_only_grounded_drafts() -> None:
         max_chainage = candidate_schema["properties"]["chainageFrom"]["anyOf"][0]["maximum"]
         assert max_chainage == 1_000_000_000
         assert platform.created[0]["chainageFrom"] == 45_200
+        assert platform.created[0]["confidence"] == 0.2
         assert result["replayed"] is False
 
     asyncio.run(exercise())
