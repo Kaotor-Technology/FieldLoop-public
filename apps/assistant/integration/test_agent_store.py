@@ -2,26 +2,14 @@
 
 import asyncio
 import os
-from pathlib import Path
 
-import pytest
 from fieldloop_assistant.trace import PostgresDraftStore, PostgresStore, StepRecord, args_hash
-from psycopg import AsyncConnection, Connection
+from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
-REPO = Path(__file__).resolve().parents[3]
 DSN = os.environ["FIELDLOOP_KNOWLEDGE_TEST_DSN"]
 ORG = "org-agent-store"
-
-
-@pytest.fixture(scope="module", autouse=True)
-def migrated() -> None:
-    with Connection.connect(DSN, autocommit=True) as connection:
-        present = connection.execute("SELECT to_regclass('app.assistant_session')").fetchone()
-        if present and present[0] is None:
-            for migration in sorted((REPO / "db/migrations").glob("*.sql")):
-                connection.execute(migration.read_text().split("-- migrate:down")[0])
 
 
 def run(coro):  # type: ignore[no-untyped-def]

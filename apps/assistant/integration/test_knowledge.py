@@ -18,7 +18,7 @@ from fieldloop_adapters.embeddings import EmbeddingTask
 from fieldloop_assistant.corpus import DocumentSource, load_corpus
 from fieldloop_assistant.indexing import index_document
 from fieldloop_assistant.knowledge import KnowledgeScope, KnowledgeSearch, search_sql
-from psycopg import AsyncConnection, Connection
+from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
@@ -43,13 +43,6 @@ class FakeEmbeddings:
             [(hashlib.sha256(text.encode()).digest()[i % 32] - 127) / 128 for i in range(768)]
             for text in texts
         ]
-
-
-@pytest.fixture(scope="session", autouse=True)
-def migrated_database() -> None:
-    with Connection.connect(DSN, autocommit=True) as connection:
-        for migration in sorted((REPO / "db/migrations").glob("*.sql")):
-            connection.execute(migration.read_text().split("-- migrate:down")[0])
 
 
 def source() -> DocumentSource:
