@@ -1,5 +1,24 @@
 @import "tailwindcss";
 
+.import-wizard, .import-fields { display: grid; gap: var(--spacing-space-4); }
+.import-wizard label { display: grid; gap: var(--spacing-space-2); }
+.import-wizard input, .import-wizard select { min-height: var(--spacing-touch-target); padding: var(--spacing-space-2); color: var(--ink); background: var(--surface); border: var(--spacing-border-hairline) solid var(--outline); max-width: 100%; }
+.import-steps { display: flex; flex-wrap: wrap; gap: var(--spacing-space-3); padding: 0; list-style: none; }
+.import-steps [aria-current] { font-weight: var(--type-label-lg-font-weight); text-decoration: underline; }
+.import-map { margin: 0; max-width: 100%; }
+.import-map svg { width: 60%; max-height: var(--spacing-context-panel-width); background: var(--canvas); }
+.import-grid { fill: none; stroke: var(--outline); stroke-width: 0.2; }
+.import-marker { fill: var(--action); }
+.import-marker-warning { fill: var(--color-warning); stroke: var(--ink); stroke-width: 0.2; }
+:root[data-theme="dark"] .import-marker-warning { fill: var(--color-dark-warning); }
+.import-point-list { overflow: auto; max-height: var(--spacing-context-panel-width); }
+.import-point-list table { width: 100%; text-align: start; border-collapse: collapse; }
+.import-point-list th, .import-point-list td { padding: var(--spacing-space-2); border-bottom: var(--spacing-border-hairline) solid var(--outline); }
+.import-flag { display: block; }
+.import-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-space-3); }
+.import-wizard .mono { overflow-wrap: anywhere; }
+.import-wizard input, .import-wizard select, .import-map figcaption { font-family: var(--type-mono-md-font-family), monospace; }
+
 @theme inline {
   --color-field-canvas: var(--canvas);
   --color-field-surface: var(--surface);
