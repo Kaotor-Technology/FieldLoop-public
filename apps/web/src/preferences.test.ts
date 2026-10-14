@@ -44,9 +44,13 @@ describe("language preference per user", () => {
     vi.spyOn(window.localStorage, "getItem").mockImplementation(() => { throw new Error("Storage blocked"); });
     vi.spyOn(window.localStorage, "setItem").mockImplementation(() => { throw new Error("Storage blocked"); });
     const store = usePreferences.getState();
-    store.loadUserLanguage("synthetic-org", "synthetic-operator");
+    store.loadUserLanguage("blocked-storage-org", "blocked-storage-user");
     store.toggleLanguage();
     expect(usePreferences.getState().language).toBe("th");
-    expect(warning).toHaveBeenCalledTimes(2);
+    store.loadUserLanguage("blocked-storage-org", "blocked-storage-user");
+    expect(usePreferences.getState().language).toBe("th");
+    store.loadUserLanguage("blocked-storage-org", "another-blocked-storage-user");
+    expect(usePreferences.getState().language).toBe("en");
+    expect(warning).toHaveBeenCalledTimes(4);
   });
 });

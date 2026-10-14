@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+const sessionLanguagePreferences = new Map<string, "en" | "th">();
+
 export const usePreferences = create<{
   language: "en" | "th";
   languagePreferenceKey: string | null;
@@ -13,17 +15,22 @@ export const usePreferences = create<{
   nightShift: window.matchMedia("(prefers-color-scheme: dark)").matches,
   loadUserLanguage: (orgId, subject) => {
     const languagePreferenceKey = `fieldloop.language:${JSON.stringify([orgId, subject])}`;
-    let language: "en" | "th" = "en";
+    let language = sessionLanguagePreferences.get(languagePreferenceKey) ?? "en";
     try {
-      if (window.localStorage.getItem(languagePreferenceKey) === "th") language = "th";
+      const storedLanguage = window.localStorage.getItem(languagePreferenceKey);
+      if (storedLanguage === "en" || storedLanguage === "th") {
+        language = storedLanguage;
+        sessionLanguagePreferences.set(languagePreferenceKey, storedLanguage);
+      }
     } catch (error) {
-      console.warn("Language preference storage is unavailable; using English.", error);
+      console.warn("Language preference storage is unavailable; keeping the in-session choice.", error);
     }
     set({ language, languagePreferenceKey });
   },
   toggleLanguage: () => set((state) => {
     const language = state.language === "en" ? "th" : "en";
     if (state.languagePreferenceKey) {
+      sessionLanguagePreferences.set(state.languagePreferenceKey, language);
       try {
         window.localStorage.setItem(state.languagePreferenceKey, language);
       } catch (error) {
