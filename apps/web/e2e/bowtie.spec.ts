@@ -31,11 +31,21 @@ for (const colorScheme of ["light", "dark"] as const) {
       if (colorScheme === "light" && width === 390) {
         const summaries = page.locator(".bowtie-screen summary");
         const summaryCount = await summaries.count();
+        const targetSizes = await page.locator(".bowtie-back-button, .bowtie-screen summary").evaluateAll((elements) => elements.map((element) => {
+          const { width: targetWidth, height: targetHeight } = element.getBoundingClientRect();
+          return { width: targetWidth, height: targetHeight };
+        }));
+        expect(targetSizes.every(({ width: targetWidth, height: targetHeight }) => targetWidth >= 44 && targetHeight >= 44)).toBe(true);
         await page.getByRole("button", { name: "Back to map" }).focus();
         for (let index = 0; index < summaryCount; index += 1) {
           await page.keyboard.press("Tab");
           await expect(summaries.nth(index)).toBeFocused();
           if (index === 0) {
+            const hasVisibleFocus = await summaries.nth(index).evaluate((element) => {
+              const style = getComputedStyle(element);
+              return element.matches(":focus-visible") && style.outlineStyle !== "none" && Number.parseFloat(style.outlineWidth) > 0;
+            });
+            expect(hasVisibleFocus).toBe(true);
             await page.keyboard.press("Enter");
             await expect(page.locator(".bowtie-triad").first()).toHaveAttribute("open", "");
           }
@@ -62,12 +72,15 @@ test("Thai layout reflows at 320px and the keyboard can return to the map", asyn
   const reflow = await page.locator(".bowtie-screen").evaluate((element) => ({
     fontSize: Number.parseFloat(getComputedStyle(element).fontSize),
     lineHeight: Number.parseFloat(getComputedStyle(element).lineHeight),
+    letterSpacing: getComputedStyle(element).letterSpacing,
     scrollWidth: document.documentElement.scrollWidth,
     viewportWidth: document.documentElement.clientWidth,
     canvasWidth: element.querySelector(".bowtie-canvas-viewport")?.scrollWidth ?? 0,
     canvasViewportWidth: element.querySelector(".bowtie-canvas-viewport")?.clientWidth ?? 0,
   }));
+  expect(reflow.fontSize).toBeGreaterThanOrEqual(13);
   expect(reflow.lineHeight / reflow.fontSize).toBeGreaterThanOrEqual(1.5);
+  expect(["normal", "0px"]).toContain(reflow.letterSpacing);
   expect(reflow.scrollWidth).toBeLessThanOrEqual(reflow.viewportWidth);
   expect(reflow.canvasWidth).toBeLessThanOrEqual(reflow.canvasViewportWidth);
 
