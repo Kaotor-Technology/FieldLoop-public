@@ -13,8 +13,14 @@ const TRIAD_DIMENSIONS: readonly TriadDimension[] = ["effective", "independent",
 
 export function BowtieCanvas({ bowtie, onBack }: BowtieCanvasProps) {
   const { t } = useTranslation();
-  const preventive = bowtie.barriers.filter((barrier) => barrier.side === "preventive");
-  const mitigative = bowtie.barriers.filter((barrier) => barrier.side === "mitigative");
+  const seenBarrierIds = new Set<string>();
+  const barriers = bowtie.barriers.filter((barrier) => {
+    if (seenBarrierIds.has(barrier.id)) return false;
+    seenBarrierIds.add(barrier.id);
+    return true;
+  });
+  const preventive = barriers.filter((barrier) => barrier.side === "preventive");
+  const mitigative = barriers.filter((barrier) => barrier.side === "mitigative");
 
   return <main id="main-content" className="bowtie-screen" tabIndex={-1} aria-labelledby="bowtie-title">
     <header className="bowtie-header">

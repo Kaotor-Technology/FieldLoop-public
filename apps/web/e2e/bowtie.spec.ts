@@ -61,3 +61,15 @@ test("Thai layout reflows at 320px and the keyboard can return to the map", asyn
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/map\?fl84Viewport=preserved$/);
 });
+
+test("an unknown Bowtie shows an empty state and returns to the same map URL state", async ({ page }) => {
+  await page.evaluate(() => {
+    window.history.pushState({}, "", "/bowtie/unknown?fl35Viewport=preserved");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+
+  await expect(page.getByRole("heading", { name: "This Bowtie could not be loaded." })).toBeVisible();
+  await expect(page.getByText("This Bowtie is not part of the available synthetic demo set.")).toBeVisible();
+  await page.getByRole("button", { name: "Back to map" }).click();
+  await expect(page).toHaveURL(/\/map\?fl35Viewport=preserved$/);
+});

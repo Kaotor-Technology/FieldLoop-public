@@ -43,4 +43,16 @@ describe("Bowtie canvas", () => {
 
     expect(markup).toContain("Shared by Barriers:");
   });
+
+  it("renders a shared Barrier only once", () => {
+    const bowtie = listBowties().find(({ code }) => code === "A");
+    if (!bowtie) throw new Error("Bowtie A fixture is required");
+    const sharedBarrier = bowtie.barriers[0];
+    if (!sharedBarrier) throw new Error("Bowtie A needs at least one Barrier");
+    const sharedBowtie = { ...bowtie, barriers: [...bowtie.barriers, sharedBarrier] };
+
+    const markup = renderToStaticMarkup(<BowtieCanvas bowtie={sharedBowtie} onBack={() => undefined} />);
+
+    expect(markup.match(/class="bowtie-barrier-card"/g) ?? []).toHaveLength(new Set(bowtie.barriers.map(({ id }) => id)).size);
+  });
 });
