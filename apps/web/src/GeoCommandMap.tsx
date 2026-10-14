@@ -13,11 +13,14 @@ import { HealthProposalReview } from "./HealthProposalReview";
 import { applyBarrierHealthToMapCache, decideHealthProposal, getHealthProposalPage, healthProposalsQueryKey } from "./health-proposals";
 import { useCurrentSession } from "./SessionGate";
 import { getMapConfig, getMapLayer } from "./map-api";
+import { useSimulation } from "./useSimulation";
 import {
   barrierMarkerStatus,
   countVisibleBarrierAlerts,
   filterFeaturesByDomain,
+  rainLayerVisualStyle,
   riskBandVisualStyle,
+  selectSimulatedRainCell,
   searchVisibleFeatures,
   selectBarrierMarkerFeatures,
   selectVisibleFeatures,
@@ -57,11 +60,13 @@ export function GeoCommandMap() {
   const initialViewport = useRef(viewport);
   const [bounds, setBounds] = useState<ViewportBounds | null>(null);
   const [activeLayers, setActiveLayers] = useState<MapLayerName[]>(LAYERS);
+  const [rainOverlayVisible, setRainOverlayVisible] = useState(true);
   const [domain, setDomain] = useState<"all" | "pipeline-integrity" | "flood-water">("all");
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
   const [query, setQuery] = useState("");
   const [mapLoadFailed, setMapLoadFailed] = useState(false);
   const [mapRetry, setMapRetry] = useState(0);
+  const { data: simulationRun } = useSimulation();
   const mapConfig = useQuery({ queryKey: ["map-config"], queryFn: ({ signal }) => getMapConfig(signal), retry: 1 });
   const visibleLayers = useQueries({
     queries: LAYERS.map((layer) => ({
@@ -72,7 +77,8 @@ export function GeoCommandMap() {
         zoom: bounds?.zoom ?? 0,
         signal,
       }),
-      enabled: Boolean(bounds) && activeLayers.includes(layer),
+      enabled: Boolean(bounds) && (activeLayers.includes(layer) ||
+        (layer === "assets" && rainOverlayVisible && domain !== "pipeline-integrity")),
       staleTime: 30_000,
       retry: 1,
     })),
@@ -158,6 +164,9 @@ export function GeoCommandMap() {
     });
     return byLayer;
   }, [visibleLayers]);
+  const rainCell = useMemo(() => selectSimulatedRainCell(simulationRun, collections.get("assets")?.features ?? []),
+    [collections, simulationRun]);
+  const showRainLegend = rainOverlayVisible && domain !== "pipeline-integrity" && rainCell !== null;
   const visibleFeatures = useMemo(() => selectVisibleFeatures(LAYERS.map((layer, index) => ({
     layer, features: visibleLayers[index]?.data?.features ?? [],
   })), activeLayers, domain),
@@ -181,6 +190,24 @@ export function GeoCommandMap() {
     const assets = collections.get("assets");
     const barriers = collections.get("barriers");
     const consequences = collections.get("consequences");
+    if (rainOverlayVisible && domain !== "pipeline-integrity" && rainCell) {
+      const style = rainLayerVisualStyle(rainCell.rateMillimetersPerHour);
+      const lowColor = tokenColor(style.lowToken, 255);
+      const highColor = tokenColor(style.highToken, 255);
+      layers.push(new GeoJsonLayer<MapFeature["properties"]>({
+        id: "simulated-rain-cell",
+        data: { type: "FeatureCollection", features: [rainCell.feature] } as never,
+        pickable: false,
+        stroked: false,
+        filled: true,
+        getFillColor: [
+          Math.round(lowColor[0] + (highColor[0] - lowColor[0]) * style.colorWeight),
+          Math.round(lowColor[1] + (highColor[1] - lowColor[1]) * style.colorWeight),
+          Math.round(lowColor[2] + (highColor[2] - lowColor[2]) * style.colorWeight),
+          Math.round(style.opacity * 255),
+        ],
+      }));
+    }
     if (activeLayers.includes("assets") && assets) {
       const filtered = filterCollection(assets, domain);
       layers.push(new GeoJsonLayer<MapFeature["properties"], PathStyleExtensionProps<MapFeature>>({
@@ -261,7 +288,7 @@ export function GeoCommandMap() {
     }
     baseLayers.current = layers;
     overlay.current.setProps({ layers });
-  }, [activeLayers, collections, domain]);
+  }, [activeLayers, collections, domain, rainCell, rainOverlayVisible]);
 
   useEffect(() => {
     const mapBarriers = collections.get("barriers");
@@ -374,10 +401,14 @@ export function GeoCommandMap() {
                 <input type="checkbox" checked={activeLayers.includes(layer)} onChange={() => setActiveLayers((current) => current.includes(layer) ? current.filter((item) => item !== layer) : [...current, layer])} />
                 <span>{t(layer)}</span>
               </label>)}
+              <label className="layer-option">
+                <input type="checkbox" checked={rainOverlayVisible} onChange={() => setRainOverlayVisible((visible) => !visible)} />
+                <span>{t("simulatedRain")}</span>
+              </label>
             </fieldset>
           </details>
         </div>
-        <div className="map-legend" aria-label={t("mapLegend")}>
+        <div className="map-legend" aria-label={t(showRainLegend ? "mapLegend" : "mapLegendBase")}>
           <div className="legend-group">
             <h2>{t("barrierHealthLabel")}</h2>
             <span className="legend-health"><i className="health-failed" aria-hidden="true">{SYMBOLS.failed}</i>{t("failed")}</span>
@@ -390,6 +421,11 @@ export function GeoCommandMap() {
             <span><i className="legend-risk legend-alarp" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M2 14 14 2M2 8 8 2M8 14l6-6" /></svg></i>{t("alarp")}</span>
             <span><i className="legend-risk legend-acceptable" />{t("acceptable")}</span>
           </div>
+          {showRainLegend && <div className="legend-group legend-rain-group">
+            <h2>{t("rainLegend")}</h2>
+            <span><i className="legend-rain-swatch legend-rain-low" aria-hidden="true" />{t("rainLow")}</span>
+            <span><i className="legend-rain-swatch legend-rain-high" aria-hidden="true" />{t("rainHigh")}</span>
+          </div>}
         </div>
       </div>
       <footer className="timeline-bar">

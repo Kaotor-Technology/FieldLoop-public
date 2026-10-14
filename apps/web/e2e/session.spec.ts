@@ -155,4 +155,13 @@ test("all account and preference controls work by keyboard with visible focus", 
   await expect(page.locator(".layer-control")).toHaveAttribute("open", "");
   await page.keyboard.press("Tab");
   await expect(page.locator(".layer-control input[type=checkbox]").first()).toBeFocused();
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Tab");
+  const rainToggle = page.getByRole("checkbox", { name: "Scenario rain (SIMULATION)" });
+  await expect(rainToggle).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(rainToggle).not.toBeChecked();
+  await page.keyboard.press("Space");
+  await expect(rainToggle).toBeChecked();
 });
