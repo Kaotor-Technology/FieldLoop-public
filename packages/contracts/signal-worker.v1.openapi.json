@@ -156,6 +156,58 @@
           }
         }
       }
+    },
+    "/internal/jobs/sla-expiry": {
+      "post": {
+        "operationId": "expireActionRequests",
+        "summary": "Reject and escalate expired actions",
+        "description": "Pinned Scheduler identity rejects expired Action Requests and linked Held Requests; one durable escalation, in-app notification and audit record is created atomically. Repeated runs have no duplicate effects.",
+        "tags": [
+          "Jobs"
+        ],
+        "responses": {
+          "200": {
+            "description": "Requests rejected and escalated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "rejected"
+                  ],
+                  "properties": {
+                    "rejected": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid service identity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Worker or dependency unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

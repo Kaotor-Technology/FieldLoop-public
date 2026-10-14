@@ -1,0 +1,323 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fieldloop.kaotor.com/schemas/actions.v1.json",
+  "title": "ActionContract",
+  "$defs": {
+    "ActionLevel": {
+      "type": "string",
+      "enum": [
+        "l0",
+        "l1",
+        "l2"
+      ]
+    },
+    "ActionType": {
+      "type": "string",
+      "enum": [
+        "internal_record",
+        "system_of_record",
+        "field_command",
+        "engineering_approval",
+        "emergency_communication",
+        "external_submission"
+      ]
+    },
+    "ActionClassification": {
+      "type": "string",
+      "enum": [
+        "PUBLIC",
+        "INTERNAL",
+        "CONFIDENTIAL",
+        "HIGHLY_RESTRICTED"
+      ]
+    },
+    "ActionTarget": {
+      "type": "string",
+      "enum": [
+        "fieldloop",
+        "cmms",
+        "integrity-database",
+        "gis",
+        "asset-register",
+        "siem",
+        "historian",
+        "scada",
+        "ot",
+        "engineering-authority",
+        "stakeholders",
+        "regulator",
+        "external-party"
+      ]
+    },
+    "ActionRequestCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actionType",
+        "actionLevel",
+        "target",
+        "payload",
+        "rationale",
+        "citations",
+        "simulated",
+        "classification"
+      ],
+      "properties": {
+        "actionType": {
+          "$ref": "#/$defs/ActionType"
+        },
+        "actionLevel": {
+          "$ref": "#/$defs/ActionLevel"
+        },
+        "target": {
+          "$ref": "#/$defs/ActionTarget"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "\\S"
+        },
+        "citations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "pattern": "\\S"
+          }
+        },
+        "simulated": {
+          "type": "boolean"
+        },
+        "classification": {
+          "$ref": "#/$defs/ActionClassification"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "simulationRunId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    "ToolCallCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "aiSystem",
+        "tool",
+        "target",
+        "simulated",
+        "classification"
+      ],
+      "properties": {
+        "actionType": {
+          "$ref": "#/$defs/ActionType"
+        },
+        "actionLevel": {
+          "$ref": "#/$defs/ActionLevel"
+        },
+        "target": {
+          "$ref": "#/$defs/ActionTarget"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "\\S"
+        },
+        "citations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "pattern": "\\S"
+          }
+        },
+        "simulated": {
+          "type": "boolean"
+        },
+        "classification": {
+          "$ref": "#/$defs/ActionClassification"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "simulationRunId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "aiSystem": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "tool": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      }
+    },
+    "ActionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "orgId",
+        "actionType",
+        "actionLevel",
+        "target",
+        "payload",
+        "payloadHash",
+        "rationale",
+        "citations",
+        "requestedBy",
+        "status",
+        "expiresAt",
+        "simulated",
+        "classification"
+      ],
+      "properties": {
+        "actionType": {
+          "$ref": "#/$defs/ActionType"
+        },
+        "actionLevel": {
+          "$ref": "#/$defs/ActionLevel"
+        },
+        "target": {
+          "$ref": "#/$defs/ActionTarget"
+        },
+        "payload": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "\\S"
+        },
+        "citations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048,
+            "pattern": "\\S"
+          }
+        },
+        "simulated": {
+          "type": "boolean"
+        },
+        "classification": {
+          "$ref": "#/$defs/ActionClassification"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "simulationRunId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "orgId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "payloadHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "requestedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "open",
+            "in_review",
+            "approved",
+            "rejected",
+            "superseded",
+            "executed"
+          ]
+        }
+      }
+    },
+    "ToolCallDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "reason"
+      ],
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "convert_l1",
+            "hold_l2",
+            "block"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "ceiling": {
+          "$ref": "#/$defs/ActionLevel"
+        },
+        "actionRequest": {
+          "$ref": "#/$defs/ActionRequest"
+        },
+        "heldRequestId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ActionRequestCreate"
+    },
+    {
+      "$ref": "#/$defs/ToolCallCheck"
+    },
+    {
+      "$ref": "#/$defs/ActionRequest"
+    },
+    {
+      "$ref": "#/$defs/ToolCallDecision"
+    }
+  ]
+}
