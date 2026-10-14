@@ -31,7 +31,13 @@ interface ContentScanInput {
   classification: GuardrailClassification;
   clearance: GuardrailClassification;
   idempotencyKey: string;
+  /** Filled with per-stage durations (ms) for Server-Timing and latency diagnosis. */
+  timings?: ContentScanTimings;
 }
+
+export type ContentScanTimings = Partial<Record<"load" | "idempotency" | "detector" | "persist", number>>;
+
+type Settled<T> = { ok: true; value: T } | { ok: false; error: unknown };
 
 export class GuardrailEngine {
   constructor(private readonly dependencies: GuardrailDependencies) {}
@@ -42,7 +48,20 @@ export class GuardrailEngine {
   }
 
   async scanContent(input: ContentScanInput): Promise<GuardrailHttpResult> {
+    const timings = input.timings ?? {};
+    // The detector needs only the content, so it runs while policies and the idempotency record load.
+    // Content above the caller's clearance is blocked without being sent to the detector.
+    const startedAt = performance.now();
+    const pendingScan = classificationRank(input.classification) <= classificationRank(input.clearance)
+      ? settle(this.dependencies.scanner.scanUserPrompt(input.content)).then((settled) => {
+        timings.detector = elapsedMs(startedAt);
+        return settled;
+      })
+      : null;
+
+    const loadStartedAt = performance.now();
     const loaded = await this.load(input.aiSystem);
+    timings.load = elapsedMs(loadStartedAt);
     if ("result" in loaded) return loaded.result;
     const { system } = loaded;
     const injection = findPolicy(system, "injection");
@@ -52,8 +71,10 @@ export class GuardrailEngine {
     const idempotencyKeyHash = sha256(input.idempotencyKey);
     const requestHash = sha256(JSON.stringify([system.id, input.classification, input.content]));
     let previous: StoredContentScan | null;
+    const idempotencyStartedAt = performance.now();
     try { previous = await this.dependencies.store.getContentScan(system.orgId, idempotencyKeyHash); }
     catch (error) { return this.unavailable(error, "Content scan idempotency record is unavailable"); }
+    finally { timings.idempotency = elapsedMs(idempotencyStartedAt); }
     if (previous) {
       if (previous.requestHash !== requestHash) return idempotencyConflict();
       if (classificationRank(previous.classification) > classificationRank(input.clearance)) {
@@ -62,19 +83,16 @@ export class GuardrailEngine {
       return contentScanResult(previous, input.content);
     }
 
-    if (classificationRank(input.classification) > classificationRank(input.clearance)) {
+    if (!pendingScan) {
       const reason = "Request classification exceeds the caller's clearance";
       return await this.persistContentScan(system, input, idempotencyKeyHash, requestHash, [{
         system, policy: routing, decision: "block", reason, classification: input.classification, latencyMs: 0,
       }], { statusCode: 403, decision: "block", classification: input.classification, reason, policyId: routing.id }, 0);
     }
 
-    const startedAt = performance.now();
-    let scan: Tier1ScanResult;
-    try {
-      scan = await this.dependencies.scanner.scanUserPrompt(input.content);
-    } catch (error) {
-      this.dependencies.logError?.(error, "Tier 1 detector unavailable");
+    const settledScan = await pendingScan;
+    if (!settledScan.ok) {
+      this.dependencies.logError?.(settledScan.error, "Tier 1 detector unavailable");
       return await this.persistContentScan(system, input, idempotencyKeyHash, requestHash, [{
         system, policy: injection, decision: "block", reason: "Tier 1 detector unavailable",
         classification: input.classification, latencyMs: elapsedMs(startedAt),
@@ -83,6 +101,7 @@ export class GuardrailEngine {
         reason: "Tier 1 detector unavailable", policyId: injection.id,
       }, 0);
     }
+    const scan: Tier1ScanResult = settledScan.value;
 
     const classification = raiseClassification(input.classification, scan.classification);
     const detectedInjection = scan.action === "block";
@@ -319,6 +338,7 @@ export class GuardrailEngine {
     result: RecordContentScanInput["result"],
     primaryRecordIndex: number,
   ): Promise<GuardrailHttpResult> {
+    const persistStartedAt = performance.now();
     try {
       const stored = await this.dependencies.store.recordContentScan({
         system, idempotencyKeyHash, requestHash, records, result, primaryRecordIndex,
@@ -327,6 +347,8 @@ export class GuardrailEngine {
     } catch (error) {
       if (error instanceof IdempotencyKeyReusedError) return idempotencyConflict();
       return this.unavailable(error, "Content scan and Evidence could not be recorded");
+    } finally {
+      if (input.timings) input.timings.persist = elapsedMs(persistStartedAt);
     }
   }
 
@@ -501,6 +523,14 @@ function errorBody(code: string, message: string, status: number, errorCode: str
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+async function settle<T>(promise: Promise<T>): Promise<Settled<T>> {
+  try {
+    return { ok: true, value: await promise };
+  } catch (error) {
+    return { ok: false, error };
+  }
 }
 
 function elapsedMs(startedAt: number): number {

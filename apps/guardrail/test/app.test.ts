@@ -75,6 +75,42 @@ describe("Guardrail gateway", () => {
     }));
   });
 
+  it("starts the Tier 1 scan while the AI System is still loading and reports stage timings", async () => {
+    const dependencies = createDependencies();
+    const loadSystem = dependencies.store.loadSystem;
+    let releaseLoad: () => void = () => undefined;
+    const loadGate = new Promise<void>((resolve) => { releaseLoad = resolve; });
+    dependencies.store.loadSystem = vi.fn(async (...args: Parameters<typeof loadSystem>) => {
+      await loadGate;
+      return loadSystem(...args);
+    });
+    const app = createApp(dependencies);
+    const pending = app.inject({
+      method: "POST", url: "/guardrail/v1/content:scan", headers: { "idempotency-key": "content-scan-parallel-0001" },
+      payload: { aiSystem: "demo-uc-1", content: "SYNTHETIC routine document" },
+    });
+
+    await vi.waitFor(() => expect(dependencies.scanner.scanUserPrompt).toHaveBeenCalledOnce());
+    releaseLoad();
+    const response = await pending;
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["server-timing"]).toMatch(/^load;dur=\d+, idempotency;dur=\d+, detector;dur=\d+, persist;dur=\d+$/);
+  });
+
+  it("does not send content above the caller's clearance to the detector", async () => {
+    const dependencies = createDependencies({ clearance: "INTERNAL" });
+    const app = createApp(dependencies);
+    const response = await app.inject({
+      method: "POST", url: "/guardrail/v1/content:scan",
+      headers: { "idempotency-key": "content-scan-clearance-0001", "x-fieldloop-classification": "CONFIDENTIAL" },
+      payload: { aiSystem: "demo-uc-1", content: "SYNTHETIC confidential document" },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(dependencies.scanner.scanUserPrompt).not.toHaveBeenCalled();
+  });
+
   it("requires an Idempotency-Key for content scans", async () => {
     const dependencies = createDependencies();
     const app = createApp(dependencies);
@@ -153,7 +189,7 @@ describe("Guardrail gateway", () => {
     expect(first.statusCode).toBe(403);
     expect(replay.statusCode).toBe(403);
     expect(replay.headers["x-fieldloop-intercept-id"]).toBe(first.headers["x-fieldloop-intercept-id"]);
-    expect(dependencies.scanner.scanUserPrompt).toHaveBeenCalledOnce();
+    // The detector starts before the idempotency lookup, so a replay may scan again; only the first result is recorded and returned.
     expect(dependencies.store.recordContentScan).toHaveBeenCalledOnce();
     expect(reused.statusCode).toBe(409);
     expect(reused.json().error.code).toBe("idempotency_key_reused");
