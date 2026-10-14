@@ -56,7 +56,7 @@ describe("Gen AI Safety pack (FL-85)", () => {
   it.each([
     ["unknown detector", (s: GenAiSafetyPack) => { Reflect.set(item(s.policies, 0), "detector", "missing-detector"); }, /detector/],
     ["missing Barrier", (s: GenAiSafetyPack) => { item(s.policies, 0).barrierId = "absent"; }, /Technical Barrier/],
-    ["Human policy Barrier", (s: GenAiSafetyPack) => { item(s.bowtie.barriers, 0).type = "human"; }, /Technical Barrier/],
+    ["Human policy Barrier", (s: GenAiSafetyPack) => { item(s.bowtie.barriers, 0).type = "human"; item(s.bowtie.barriers, 0).pfdBand = 0.1; }, /Technical Barrier/],
     ["duplicate policy", (s: GenAiSafetyPack) => { item(s.policies, 1).id = item(s.policies, 0).id; }, /Duplicate policy/],
     ["unknown path", (s: GenAiSafetyPack) => { item(s.bowtie.paths, 0).targetId = "absent"; }, /path target/],
     ["missing path", (s: GenAiSafetyPack) => { s.bowtie.paths.pop(); }, /cover every/],

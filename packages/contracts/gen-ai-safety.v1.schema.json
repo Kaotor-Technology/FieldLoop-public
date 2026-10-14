@@ -469,8 +469,7 @@
       ],
       "properties": {
         "id": {
-          "type": "string",
-          "pattern": "^[a-z][a-z0-9-]*$"
+          "const": "uc-1-bowtie-c"
         },
         "hazard": {
           "type": "string",
@@ -571,7 +570,7 @@
                 "properties": {
                   "dimension": {
                     "enum": [
-                      "security",
+                      "legalRegulatory",
                       "people"
                     ]
                   },
@@ -754,7 +753,32 @@
                   }
                 }
               }
-            }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "enum": [
+                        "human",
+                        "organisational"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "type"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "pfdBand": {
+                      "type": "number",
+                      "const": 0.1
+                    }
+                  }
+                }
+              }
+            ]
           }
         },
         "paths": {

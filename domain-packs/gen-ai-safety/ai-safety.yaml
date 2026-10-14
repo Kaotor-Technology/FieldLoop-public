@@ -157,7 +157,7 @@ bowtie:
     - id: restricted-asset-data-disclosure
       name: Disclosure of restricted Asset data
       severity:
-        dimension: security
+        dimension: legalRegulatory
         value: 5
     - id: wrong-engineering-decision
       name: Wrong engineering decision

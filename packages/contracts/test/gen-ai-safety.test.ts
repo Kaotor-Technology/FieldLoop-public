@@ -1,6 +1,7 @@
 import { parse } from "yaml";
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
+import { isRiskSeverity } from "../src/risk.js";
 import { parseGenAiSafetyPack } from "../src/domain-pack.js";
 
 function item<T>(values: T[], index = 0): T {
@@ -20,6 +21,33 @@ describe("Gen AI Safety contracts (FL-85 / FL-36)", () => {
     expect(pack.aiSystem.dataClasses).toEqual(["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"]);
     expect(pack.policies.map(({ kind }) => kind)).toEqual(["injection", "classification-routing", "output-dlp", "tool-call"]);
     expect(pack.policies.every(({ mode, failMode }) => mode === "enforce" && failMode === "fail-closed")).toBe(true);
+  });
+
+  it("keeps every authored Consequence compatible with shared RiskSeverity", async () => {
+    const pack = parseGenAiSafetyPack(await seed(), "ai-safety.yaml");
+    for (const { severity } of pack.bowtie.consequences) {
+      expect(isRiskSeverity({ [severity.dimension]: severity.value })).toBe(true);
+    }
+  });
+
+  it("rejects changing the demo Bowtie identity instead of creating a replacement", async () => {
+    const pack = parseGenAiSafetyPack(await seed(), "ai-safety.yaml");
+    Reflect.set(pack.bowtie, "id", "replacement-bowtie-c");
+    expect(() => parseGenAiSafetyPack(pack, "ai-safety.yaml")).toThrow(/id/);
+  });
+
+  it("rejects unsupported severity dimensions before registration", async () => {
+    const pack = parseGenAiSafetyPack(await seed(), "ai-safety.yaml");
+    Reflect.set(item(pack.bowtie.consequences).severity, "dimension", "security");
+    expect(() => parseGenAiSafetyPack(pack, "ai-safety.yaml")).toThrow(/dimension/);
+  });
+
+  it.each(["human", "organisational"])("rejects a %s Barrier better than the AS-4 ceiling", async (type) => {
+    const pack = parseGenAiSafetyPack(await seed(), "ai-safety.yaml");
+    const barrier = pack.bowtie.barriers.find((value) => value.type === type);
+    if (!barrier) throw new Error("expected demo Barrier type");
+    barrier.pfdBand = 0.01;
+    expect(() => parseGenAiSafetyPack(pack, "ai-safety.yaml")).toThrow(/pfdBand/);
   });
 
   it.each(["detector", "mode", "failMode", "tier"])("rejects unsafe or unknown policy %s with a source filename", async (field) => {
