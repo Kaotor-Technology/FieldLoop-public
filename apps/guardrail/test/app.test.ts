@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GuardrailClassification, Tier1ScanResult } from "@fieldloop/adapters";
 import { buildApp } from "../src/app.js";
 import { InternalUserTokenVerifierUnavailableError, InvalidInternalUserTokenError } from "../src/internal-user-token.js";
+import { UnknownGuardrailSystemError } from "../src/postgres-store.js";
 import type { GuardrailDependencies, GuardrailPolicy, GuardrailSystem, RecordContentScanInput, StoredContentScan } from "../src/model.js";
 
 const apps: ReturnType<typeof buildApp>[] = [];
@@ -73,6 +74,44 @@ describe("Guardrail gateway", () => {
         policy: expect.objectContaining({ id: "injection-policy", barrierId: "injection-barrier" }), decision: "block",
       })],
     }));
+  });
+
+  it("reports each content-scan stage in Server-Timing", async () => {
+    const dependencies = createDependencies();
+    const app = createApp(dependencies);
+    const response = await app.inject({
+      method: "POST", url: "/guardrail/v1/content:scan", headers: { "idempotency-key": "content-scan-timing-0001" },
+      payload: { aiSystem: "demo-uc-1", content: "SYNTHETIC routine document" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["server-timing"]).toMatch(/^load;dur=[\d.]+, idempotency;dur=[\d.]+, detector;dur=[\d.]+, persist;dur=[\d.]+$/);
+  });
+
+  it("does not send content to the detector for an unknown AI System", async () => {
+    const dependencies = createDependencies();
+    dependencies.store.loadSystem = vi.fn(async () => { throw new UnknownGuardrailSystemError(); });
+    const app = createApp(dependencies);
+    const response = await app.inject({
+      method: "POST", url: "/guardrail/v1/content:scan", headers: { "idempotency-key": "content-scan-unknown-0001" },
+      payload: { aiSystem: "not-registered", content: "SYNTHETIC routine document" },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(dependencies.scanner.scanUserPrompt).not.toHaveBeenCalled();
+  });
+
+  it("does not send content above the caller's clearance to the detector", async () => {
+    const dependencies = createDependencies({ clearance: "INTERNAL" });
+    const app = createApp(dependencies);
+    const response = await app.inject({
+      method: "POST", url: "/guardrail/v1/content:scan",
+      headers: { "idempotency-key": "content-scan-clearance-0001", "x-fieldloop-classification": "CONFIDENTIAL" },
+      payload: { aiSystem: "demo-uc-1", content: "SYNTHETIC confidential document" },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(dependencies.scanner.scanUserPrompt).not.toHaveBeenCalled();
   });
 
   it("requires an Idempotency-Key for content scans", async () => {

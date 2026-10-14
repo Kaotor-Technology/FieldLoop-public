@@ -27,6 +27,7 @@
     "db:migrate": "dbmate --migrations-table public.schema_migrations up",
     "test:migrations": "bash scripts/test-migrations.sh",
     "test:risk-service": "bash scripts/test-risk-service.sh",
+    "test:guardrail-store": "bash scripts/test-guardrail-store.sh",
     "test:seed": "bash scripts/test-seed.sh",
     "test:seed:legal": "node scripts/test-legal-seed.mjs",
     "test:seed:bangkok": "bash scripts/test-bangkok-seed.sh",

@@ -1,11 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { appendWorkerEvent } from "@fieldloop/adapters";
+import { insertWorkerEventOutbox, lockWorkerEventOutbox, workerEventOutboxRow } from "@fieldloop/adapters";
 import type { WorkerEvent } from "@fieldloop/contracts";
-import { sql, type Kysely, type Transaction } from "kysely";
+import { sql, type Kysely } from "kysely";
 import { classificationRank, IdempotencyKeyReusedError, isClassification, type GuardrailPolicy, type GuardrailStore, type GuardrailSystem, type ModelRoute, type RecordContentScanInput, type RecordInterceptInput, type StoredContentScan } from "./model.js";
 
 type Database = Record<string, never>;
-type GuardrailTransaction = Transaction<Database>;
 type Classification = GuardrailSystem["classification"];
 
 interface PolicyRow {
@@ -78,7 +77,12 @@ export class PostgresGuardrailStore implements GuardrailStore {
   }
 
   async recordIntercept(input: RecordInterceptInput): Promise<string> {
-    return this.db.transaction().execute((trx) => insertInterceptEvidence(trx, input));
+    return this.db.transaction().execute(async (trx) => {
+      const rows = interceptRecordRows(input);
+      await lockWorkerEventOutbox(trx, input.system.orgId);
+      await sql`WITH ${interceptRecordInserts([rows])} SELECT 1`.execute(trx);
+      return rows.interceptId;
+    });
   }
 
   async getContentScan(orgId: string, idempotencyKeyHash: string): Promise<StoredContentScan | null> {
@@ -94,26 +98,30 @@ export class PostgresGuardrailStore implements GuardrailStore {
     if (!primaryRecord || !primaryRecord.policy.barrierId || primaryRecord.policy.id !== input.result.policyId) {
       throw new Error("Content scan result must map to one recorded Guardrail Policy");
     }
+    // Six round trips: BEGIN, the idempotency lock, the idempotency read, the outbox lock, one statement
+    // that writes every Intercept, Evidence and outbox row plus the content-scan record, and COMMIT.
     return this.db.transaction().execute(async (trx) => {
-      await sql`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify([input.system.orgId, "guardrail_content_request", input.idempotencyKeyHash])}, 0))`.execute(trx);
+      const orgId = input.system.orgId;
+      await sql`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify([orgId, "guardrail_content_request", input.idempotencyKeyHash])}, 0))`.execute(trx);
       const previous = (await sql<ContentScanRow>`SELECT request_hash, status_code, decision, detected_classification,
           reason, policy_id::text, intercept_id::text
         FROM app.guardrail_content_request
-        WHERE org_id = ${input.system.orgId} AND idempotency_key_hash = ${input.idempotencyKeyHash}`.execute(trx)).rows[0];
+        WHERE org_id = ${orgId} AND idempotency_key_hash = ${input.idempotencyKeyHash}`.execute(trx)).rows[0];
       if (previous) {
         const stored = toStoredContentScan(previous);
         if (stored.requestHash !== input.requestHash) throw new IdempotencyKeyReusedError();
         return stored;
       }
 
-      const interceptIds: string[] = [];
-      for (const record of input.records) interceptIds.push(await insertInterceptEvidence(trx, record));
-      const interceptId = interceptIds[input.primaryRecordIndex];
+      const rows = input.records.map(interceptRecordRows);
+      const interceptId = rows[input.primaryRecordIndex]?.interceptId;
       if (!interceptId) throw new Error("Content scan did not produce its primary Intercept");
-      await sql`INSERT INTO app.guardrail_content_request
+      await lockWorkerEventOutbox(trx, orgId);
+      await sql`WITH ${interceptRecordInserts(rows)}
+        INSERT INTO app.guardrail_content_request
           (org_id, idempotency_key_hash, request_hash, status_code, decision, policy_id, intercept_id,
             detected_classification, reason, simulated, classification, created_by, created_at)
-        VALUES (${input.system.orgId}, ${input.idempotencyKeyHash}, ${input.requestHash}, ${input.result.statusCode},
+        VALUES (${orgId}, ${input.idempotencyKeyHash}, ${input.requestHash}, ${input.result.statusCode},
           ${input.result.decision}, ${input.result.policyId}::uuid, ${interceptId}::uuid,
           ${input.result.classification}, ${input.result.reason}, ${input.system.simulated},
           ${input.result.classification}, 'guardrail', clock_timestamp())`.execute(trx);
@@ -122,24 +130,14 @@ export class PostgresGuardrailStore implements GuardrailStore {
   }
 }
 
-async function insertInterceptEvidence(connection: GuardrailTransaction, input: RecordInterceptInput): Promise<string> {
+/** The rows one Intercept writes: the Intercept, its Bowtie C Evidence and the evidence.created outbox event. */
+function interceptRecordRows(input: RecordInterceptInput) {
   if (!input.policy.barrierId) throw new Error("Guardrail Policy has no mapped Technical Barrier");
   const interceptId = randomUUID();
   const evidenceId = randomUUID();
-  const eventId = randomUUID();
   const createdBy = "guardrail";
-  await sql`INSERT INTO app.intercept
-      (id, org_id, policy_id, ai_system_id, decision, reason, latency_ms, simulated, classification, created_by, created_at)
-    VALUES (${interceptId}::uuid, ${input.system.orgId}, ${input.policy.id}::uuid, ${input.system.id}::uuid,
-      ${input.decision}, ${input.reason}, ${input.latencyMs}, ${input.system.simulated},
-      ${input.classification}, ${createdBy}, clock_timestamp())`.execute(connection);
-  await sql`INSERT INTO app.evidence
-      (id, org_id, barrier_id, kind, source, observed_at, simulated, classification, created_by, created_at)
-    VALUES (${evidenceId}::uuid, ${input.system.orgId}, ${input.policy.barrierId}::uuid,
-      'guardrail.intercept', 'guardrail', clock_timestamp(), ${input.system.simulated},
-      ${input.classification}, ${createdBy}, clock_timestamp())`.execute(connection);
   const event: WorkerEvent = {
-    id: eventId,
+    id: randomUUID(),
     type: "evidence.created",
     orgId: input.system.orgId,
     entityId: evidenceId,
@@ -147,8 +145,31 @@ async function insertInterceptEvidence(connection: GuardrailTransaction, input: 
     simulated: input.system.simulated,
     classification: input.classification,
   };
-  await appendWorkerEvent(connection, event, createdBy);
-  return interceptId;
+  return {
+    interceptId,
+    intercept: sql`(${interceptId}::uuid, ${input.system.orgId}, ${input.policy.id}::uuid, ${input.system.id}::uuid,
+      ${input.decision}, ${input.reason}, ${input.latencyMs}, ${input.system.simulated},
+      ${input.classification}, ${createdBy}, clock_timestamp())`,
+    evidence: sql`(${evidenceId}::uuid, ${input.system.orgId}, ${input.policy.barrierId}::uuid,
+      'guardrail.intercept', 'guardrail', clock_timestamp(), ${input.system.simulated},
+      ${input.classification}, ${createdBy}, clock_timestamp())`,
+    outbox: workerEventOutboxRow(event, createdBy),
+  };
+}
+
+/** Data-modifying CTEs that insert the given Intercept rows; the caller holds the outbox lock. */
+function interceptRecordInserts(rows: ReturnType<typeof interceptRecordRows>[]) {
+  return sql`intercepts AS (
+      INSERT INTO app.intercept
+        (id, org_id, policy_id, ai_system_id, decision, reason, latency_ms, simulated, classification, created_by, created_at)
+      VALUES ${sql.join(rows.map((row) => row.intercept))}
+    ), evidence AS (
+      INSERT INTO app.evidence
+        (id, org_id, barrier_id, kind, source, observed_at, simulated, classification, created_by, created_at)
+      VALUES ${sql.join(rows.map((row) => row.evidence))}
+    ), outbox AS (
+      ${insertWorkerEventOutbox(rows.map((row) => row.outbox))}
+    )`;
 }
 
 function toStoredContentScan(row: ContentScanRow): StoredContentScan {

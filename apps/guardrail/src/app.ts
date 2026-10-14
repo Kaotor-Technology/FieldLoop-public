@@ -1,6 +1,6 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { isClassification, type ChatCompletionRequest, type ChatMessage, type GuardrailClassification, type GuardrailDependencies } from "./model.js";
-import { GuardrailEngine, type GuardrailHttpResult } from "./guardrail-engine.js";
+import { CONTENT_SCAN_STAGES, GuardrailEngine, type GuardrailHttpResult } from "./guardrail-engine.js";
 import { InternalUserTokenVerifierUnavailableError, InvalidInternalUserTokenError, type InternalUserIdentity } from "./internal-user-token.js";
 
 const OPENAI_CHAT_COMPLETIONS_PATH = "/guardrail/v1/chat/completions";
@@ -56,7 +56,11 @@ export function buildApp(dependencies: GuardrailDependencies) {
     if (!classification) return reply.code(400).type("application/problem+json").send(errorBody("validation_failed", "Classification header is invalid", 400, "invalid_classification"));
     const identity = request.fieldLoopInternalUser;
     if (!identity) return sendAuthProblem(reply, 401, "unauthenticated", "A valid internal user token is required");
-    const result = await engine.scanContent({ ...body, classification, idempotencyKey, clearance: identity.clearance });
+    const { result, timings } = await engine.scanContent({ ...body, classification, idempotencyKey, clearance: identity.clearance });
+    const serverTiming = CONTENT_SCAN_STAGES
+      .flatMap((stage) => timings[stage] === undefined ? [] : [`${stage};dur=${timings[stage]}`]).join(", ");
+    if (serverTiming) reply.header("server-timing", serverTiming);
+    request.log.info({ timings }, "Guardrail content scan timings");
     return sendResult(reply, result, classification);
   });
 
