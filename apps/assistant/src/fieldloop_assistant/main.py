@@ -112,13 +112,14 @@ def build_app(settings: Settings | None) -> FastAPI:
         scope = KnowledgeScope(session.org_id, folders, classes)
         return _Knowledge(KnowledgeSearch(pool, vertex_embeddings(project), scope))
 
+    adk_sessions = DatabaseSessionService(
+        db_url=settings.adk_database_url,
+        connect_args={"server_settings": {"search_path": "adk"}},
+    )
     deps = RuntimeDeps(
         catalog=catalog, guardrail=GuardrailClient(http, settings.guardrail_url),
         platform=HttpPlatformReader(http, settings.platform_url), sessions=store, trace=store,
-        adk_sessions=DatabaseSessionService(
-            db_url=settings.adk_database_url,
-            connect_args={"server_settings": {"search_path": "adk"}},
-        ),
+        adk_sessions=adk_sessions,
         model_factory=lambda d: guardrail_model(d, settings.guardrail_url),
         knowledge=knowledge,
         drafts=lambda s: PostgresDraftStore(pool, s.org_id, s.simulated, s.classification),
@@ -135,6 +136,7 @@ def build_app(settings: Settings | None) -> FastAPI:
             yield
         finally:
             await http.aclose()
+            await adk_sessions.close()
             await pool.close()
 
     app.router.lifespan_context = lifespan

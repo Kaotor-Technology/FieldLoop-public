@@ -5,6 +5,8 @@ the Guardrail `tool-calls:check` callback. Reads call the platform API with the 
 token, so an agent never sees or does more than the user (§7.5).
 """
 
+import hashlib
+import json
 import re
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
@@ -39,6 +41,14 @@ class DraftStore(Protocol):
         self, *, session_id: str, agent_id: str, user_sub: str, kind: str, content: str,
         citations: list[str],
     ) -> str: ...
+
+
+RUN_PATH = "/api/v1/simulation/runs/current"
+
+
+async def current_run(platform: PlatformReader, user_token: str) -> Any:
+    """The one place the current SimulationRun is read; callers fail closed on a missing id."""
+    return await platform.get(RUN_PATH, user_token)
 
 
 class HttpPlatformReader:
@@ -93,6 +103,8 @@ class TurnState:
     action_request_ids: list[str] = field(default_factory=list)
     held_request_ids: list[str] = field(default_factory=list)
     draft_ids: list[str] = field(default_factory=list)
+    drafts_by_digest: dict[str, str] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -203,7 +215,7 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
 
     async def get_scenario_state() -> dict[str, Any]:
         """Read the current simulation run state (Scenario, clock, status)."""
-        run = await ctx.platform.get("/api/v1/simulation/runs/current", ctx.user_token)
+        run = await current_run(ctx.platform, ctx.user_token)
         return {"run": run}
 
     async def create_action_request(
@@ -236,11 +248,19 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
         """
         if ctx.drafts is None:
             return {"draft_id": None, "error": "drafts_unavailable"}
+        clean_kind = _text(kind, "kind", 64)
+        clean_content = _text(content, "content", 20_000)
+        clean_citations = [_text(c, "citation", 2048) for c in citations][:50]
+        digest = hashlib.sha256(
+            json.dumps([clean_kind, clean_content, clean_citations]).encode("utf-8")
+        ).hexdigest()
+        if digest in ctx.state.drafts_by_digest:  # the model repeated itself within the turn
+            return {"draft_id": ctx.state.drafts_by_digest[digest], "status": "needs_approval"}
         draft_id = await ctx.drafts.create(
             session_id=ctx.session_id, agent_id=ctx.agent_id, user_sub=ctx.user_sub,
-            kind=_text(kind, "kind", 64), content=_text(content, "content", 20_000),
-            citations=[_text(c, "citation", 2048) for c in citations][:50],
+            kind=clean_kind, content=clean_content, citations=clean_citations,
         )
+        ctx.state.drafts_by_digest[digest] = draft_id
         ctx.state.draft_ids.append(draft_id)
         return {"draft_id": draft_id, "status": "needs_approval"}
 

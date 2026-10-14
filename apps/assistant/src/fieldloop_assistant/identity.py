@@ -8,6 +8,7 @@ import jwt
 from jwt import PyJWKSet
 
 TOKEN_HEADER = "x-fieldloop-internal-user-token"
+AI_SYSTEM_HEADER = "X-FieldLoop-Ai-System"
 ALLOWED_ROLES = frozenset({"fieldloop.viewer", "fieldloop.operator", "fieldloop.manager"})
 CLASSIFICATIONS = ("PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED")
 

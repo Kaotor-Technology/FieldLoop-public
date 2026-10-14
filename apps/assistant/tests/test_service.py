@@ -140,19 +140,29 @@ def test_configured_process_wiring_builds_without_touching_the_network() -> None
     assert to_adk_name("integrity-orchestrator") == "integrity_orchestrator"
 
 
-def test_a_second_turn_on_a_running_session_is_refused_and_cancel_is_recorded() -> None:
+def test_a_turn_running_elsewhere_refuses_a_second_turn_and_records_the_cancel() -> None:
     import asyncio
 
     client, h = make_client()
     session_id = client.post("/assistant/v1/sessions", json={"agent": "flood-situation"},
                              headers=auth()).json()["id"]
-    h.runtime._cancels[session_id] = asyncio.Event()  # a turn is running on this instance
+    # Another instance holds the session: only the shared status says so.
+    asyncio.run(h.store.claim_turn(h.store.sessions[session_id]))
     busy = client.post(f"/assistant/v1/sessions/{session_id}/messages", json={"message": "x"},
                        headers=auth())
     assert busy.status_code == 409
     cancelled = client.post(f"/assistant/v1/sessions/{session_id}:cancel", headers=auth())
     assert cancelled.status_code == 202 and cancelled.json() == {"cancelling": True}
-    assert h.store.sessions[session_id].status == "cancelling"  # visible to other instances
+    assert h.store.sessions[session_id].status == "cancelling"  # visible to the other instance
+
+
+def test_cancel_on_an_idle_session_changes_nothing() -> None:
+    client, h = make_client()
+    session_id = client.post("/assistant/v1/sessions", json={"agent": "flood-situation"},
+                             headers=auth()).json()["id"]
+    response = client.post(f"/assistant/v1/sessions/{session_id}:cancel", headers=auth())
+    assert response.json() == {"cancelling": False}
+    assert h.store.sessions[session_id].status == "active"
 
 
 def test_litellm_sends_the_user_token_header_on_the_wire() -> None:

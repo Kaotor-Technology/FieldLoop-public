@@ -14,7 +14,7 @@ from .identity import (
     InvalidTokenError,
     UserIdentity,
 )
-from .runtime import AgentRuntime
+from .runtime import AgentRuntime, TurnInProgressError
 from .trace import SessionStore
 
 # Agents a person may start from the UI; specialists run only as delegates of a coordinator.
@@ -105,11 +105,13 @@ def create_service(
         if record.classification not in permitted:
             raise HTTPException(403, "forbidden")
 
-        if runtime.busy(record.id):
-            raise HTTPException(409, "turn_in_progress")
+        try:
+            handle = await runtime.begin(record, auth.token, body.message, record.agent_id)
+        except TurnInProgressError:
+            raise HTTPException(409, "turn_in_progress") from None
 
         async def stream() -> AsyncIterator[str]:
-            async for event in runtime.run_turn(record, auth.token, body.message, record.agent_id):
+            async for event in runtime.stream(handle):
                 yield event.encode()
 
         return StreamingResponse(

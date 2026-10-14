@@ -298,3 +298,64 @@ def test_a_cancel_after_the_answer_does_not_mark_it_incomplete() -> None:
         return out
 
     assert final(asyncio.run(go())).name == "answer.final"
+
+
+def test_only_one_of_two_simultaneous_turns_is_admitted() -> None:
+    from fieldloop_assistant.runtime import TurnInProgressError
+
+    h = Harness([answer()])
+
+    async def go():  # type: ignore[no-untyped-def]
+        record = await h.session("integrity-orchestrator")
+        results = await asyncio.gather(
+            h.runtime.begin(record, USER_TOKEN, "a", "integrity-orchestrator"),
+            h.runtime.begin(record, USER_TOKEN, "b", "integrity-orchestrator"),
+            return_exceptions=True,
+        )
+        admitted = [r for r in results if not isinstance(r, Exception)]
+        refused = [r for r in results if isinstance(r, TurnInProgressError)]
+        async for _ in h.runtime.stream(admitted[0]):
+            pass
+        await asyncio.sleep(0)
+        status = h.store.sessions[record.id].status
+        return len(admitted), len(refused), status, h.runtime.busy(record.id)
+
+    assert asyncio.run(asyncio.wait_for(go(), 20)) == (1, 1, "active", False)
+
+
+def test_trace_sequence_continues_across_turns_of_one_session() -> None:
+    h = Harness([answer(), answer()])
+
+    async def go():  # type: ignore[no-untyped-def]
+        record = await h.session("integrity-orchestrator")
+        await h.collect(record, "integrity-orchestrator")
+        await h.collect(record, "integrity-orchestrator")
+        return record.id
+
+    session_id = asyncio.run(go())
+    seqs = [step.seq for sid, step in h.store.steps if sid == session_id]
+    assert seqs and len(seqs) == len(set(seqs))  # no restart at 1 on the second turn
+
+
+def test_refusals_are_paired_and_traced() -> None:
+    h = Harness([call("get_barriers", bowtie_id=BOWTIE)] * 10 + [answer()],
+                platform={rf"/api/v1/bowties/{BOWTIE}": CANVAS})
+    events = run(h)
+    calls = [e for e in events if e.name == "tool.call"]
+    decisions = [e for e in events if e.name == "guardrail.decision"]
+    assert len(calls) == len(decisions)
+    runtime_refusals = [e for e in decisions if e.data["source"] == "runtime"]
+    assert runtime_refusals and runtime_refusals[0].data["reason"] == "tool_calls"
+    refused_steps = [s for _, s in h.store.steps if s.guardrail_decision == "block"]
+    assert len(refused_steps) >= len(runtime_refusals)
+
+
+def test_repeated_identical_drafts_in_a_turn_are_stored_once() -> None:
+    from .test_tools import Drafts, context, tool
+
+    ctx = context()
+    create = tool(ctx, "create_draft")
+    first = asyncio.run(create("management_summary", "text", ["EV-1"]))
+    second = asyncio.run(create("management_summary", "text", ["EV-1"]))
+    assert first == second and len(ctx.drafts.created) == 1  # type: ignore[union-attr]
+    assert isinstance(ctx.drafts, Drafts)
