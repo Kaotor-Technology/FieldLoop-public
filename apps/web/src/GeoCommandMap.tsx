@@ -420,9 +420,9 @@ export function GeoCommandMap() {
         <div className="map-legend" aria-label={t(showRainLegend ? "mapLegend" : "mapLegendBase")}>
           <div className="legend-group">
             <h2>{t("barrierHealthLabel")}</h2>
-            <span className="legend-health"><i className="health-failed" aria-hidden="true">{SYMBOLS.failed}</i>{t("failed")}</span>
-            <span className="legend-health"><i className="health-degraded" aria-hidden="true">{SYMBOLS.degraded}</i>{t("degraded")}</span>
-            <span className="legend-health"><i className="health-unverified" aria-hidden="true">{SYMBOLS.unverified}</i>{t("unverified")}</span>
+            <span className="legend-health"><i className="health-failed" aria-hidden="true">{SYMBOLS.failed}</i>{t("barrierHealth.failed")}</span>
+            <span className="legend-health"><i className="health-degraded" aria-hidden="true">{SYMBOLS.degraded}</i>{t("barrierHealth.degraded")}</span>
+            <span className="legend-health"><i className="health-unverified" aria-hidden="true">{SYMBOLS.unverified}</i>{t("barrierHealth.unverified")}</span>
           </div>
           <div className="legend-group legend-risk-group">
             <h2>{t("riskLegend")}</h2>
@@ -486,7 +486,7 @@ export function GeoCommandMap() {
             {features.slice(0, 150).map((feature) => <li key={`${feature.properties.featureKind}-${feature.id}`}>
               <button type="button" className="feature-list-item" onClick={() => chooseFeature(feature)}>
                 <FeatureSymbol feature={feature} />
-                <span className="feature-list-copy"><strong>{feature.properties.name ? <span lang="en">{feature.properties.name}</span> : t("unnamedFeature")}</strong><span>{t(`featureKinds.${feature.properties.featureKind}`, { defaultValue: t("asset") })} · {feature.properties.health ? t(feature.properties.health) : feature.properties.riskBand ? t(feature.properties.riskBand) : t(`classifications.${feature.properties.classification}`, { defaultValue: feature.properties.classification ?? t("unknown") })}</span>
+                <span className="feature-list-copy"><strong>{feature.properties.name ? <span lang="en">{feature.properties.name}</span> : t("unnamedFeature")}</strong><span>{t(`featureKinds.${feature.properties.featureKind}`, { defaultValue: t("asset") })} · {feature.properties.health ? t(`barrierHealth.${feature.properties.health}`) : feature.properties.riskBand ? t(feature.properties.riskBand) : t(`classifications.${feature.properties.classification}`, { defaultValue: feature.properties.classification ?? t("unknown") })}</span>
                   {feature.properties.featureKind === "segment" && (feature.properties.chainageFrom !== null || feature.properties.chainageTo !== null) &&
                     <span className="feature-list-chainage mono">{t("chainage")}: {feature.properties.chainageFrom ?? "?"}–{feature.properties.chainageTo ?? "?"} m</span>}
                 </span>
@@ -589,7 +589,7 @@ function FeatureOverview({ feature }: { feature: MapFeature }) {
 
 function HealthBadge({ health }: { health: string }) {
   const { t } = useTranslation();
-  return <span className={`health-badge health-${health}`}><span aria-hidden="true">{SYMBOLS[health] ?? "●"}</span>{t(health)}</span>;
+  return <span className={`health-badge health-${health}`}><span aria-hidden="true">{SYMBOLS[health] ?? "●"}</span>{t(`barrierHealth.${health}`)}</span>;
 }
 
 function FeatureSymbol({ feature }: { feature: MapFeature }) {

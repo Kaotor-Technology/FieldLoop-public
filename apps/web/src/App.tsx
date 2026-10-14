@@ -31,7 +31,7 @@ function SignedInWorkspace({ user }: { user: CurrentUser }) {
       <a href="/map" className="wordmark" aria-label="FieldLoop-v2">FieldLoop-<span>v2</span></a>
       <div className="preferences">
         <AccountSwitcher user={user} />
-        <button type="button" onClick={toggleLanguage} lang={language === "en" ? "th" : "en"}>{t(language === "en" ? "languageThai" : "languageEnglish")}</button>
+        <button type="button" onClick={toggleLanguage} lang={language === "en" ? "th" : "en"} aria-label={t(language === "en" ? "languageThai" : "languageEnglish")}>{t("languageToggle")}</button>
         <button onClick={toggleNightShift} aria-pressed={nightShift}>{t("nightShift")}</button>
       </div>
     </header>

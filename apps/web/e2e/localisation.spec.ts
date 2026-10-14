@@ -10,6 +10,7 @@ test.beforeEach(async ({ request, page }) => {
 });
 
 test("Thai toggle preserves URL, simulation selection and a typed Health Proposal reason", async ({ page }) => {
+  await expect(page.getByRole("button", { name: "ภาษาไทย", exact: true })).toHaveText("EN / TH");
   await page.getByLabel("Scenario", { exact: true }).click();
   await page.getByRole("option", { name: "Player verification fixture", exact: true }).click();
   await page.getByLabel("Seed", { exact: true }).fill("94");
@@ -21,7 +22,9 @@ test("Thai toggle preserves URL, simulation selection and a typed Health Proposa
   await page.keyboard.press("Enter");
   await expect(page.locator("html")).toHaveAttribute("lang", "th");
   await expect(page.getByRole("heading", { name: "แผนที่บัญชาการเชิงพื้นที่", exact: true })).toBeVisible();
+  await expect(page.locator(".map-legend")).toContainText("ขัดข้อง");
   await expect(page.getByRole("heading", { name: "ตัวควบคุมสถานการณ์จำลอง", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "English", exact: true })).toHaveText("EN / TH");
   await expect(page.getByLabel("สถานการณ์จำลอง", { exact: true })).toContainText("Player verification fixture");
   await expect(page.getByLabel("ค่า seed", { exact: true })).toHaveValue("94");
   await expect(row.getByRole("textbox", { name: "เหตุผลในการตัดสินใจ" })).toHaveValue("เหตุผลจากการตรวจข้อมูลสังเคราะห์");

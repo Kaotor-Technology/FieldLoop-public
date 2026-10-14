@@ -112,12 +112,6 @@
   "healthProposalSimulationLabel": "SIMULATION",
   "healthProposalDecisionReason": "Decision reason",
   "healthProposalReasonHelper": "A reason is required and will be recorded with this decision.",
-  "healthProposalHealth": {
-    "healthy": "Healthy",
-    "degraded": "Degraded",
-    "failed": "Failed",
-    "unverified": "Unverified"
-  },
   "healthProposalReasonRequired": "Enter a reason before submitting this decision.",
   "healthProposalAccept": "Accept",
   "healthProposalReject": "Reject",
@@ -258,6 +252,7 @@
   "skip": "Skip to main content",
   "languageThai": "ภาษาไทย",
   "languageEnglish": "English",
+  "languageToggle": "EN / TH",
   "featureKinds": {
     "asset": "Asset",
     "segment": "Segment",

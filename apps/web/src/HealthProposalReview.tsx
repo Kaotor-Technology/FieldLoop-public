@@ -81,7 +81,7 @@ export function HealthProposalReview({ proposals, isLoading = false, hasError = 
   };
 
   const language = i18n.resolvedLanguage ?? i18n.language;
-  const healthLabel = (health: BarrierHealth) => t(health, { defaultValue: t(`healthProposalHealth.${health}`) });
+  const healthLabel = (health: BarrierHealth) => t(`barrierHealth.${health}`);
 
   return <section className="health-proposal-section context-summary-section" aria-labelledby="health-proposal-heading" lang={language} aria-busy={isLoading || submitting}>
     <div className="health-proposal-heading">

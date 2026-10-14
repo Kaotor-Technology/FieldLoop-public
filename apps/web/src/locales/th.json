@@ -112,12 +112,6 @@
   "healthProposalSimulationLabel": "SIMULATION",
   "healthProposalDecisionReason": "เหตุผลในการตัดสินใจ",
   "healthProposalReasonHelper": "ต้องระบุเหตุผล ระบบจะบันทึกไว้พร้อมกับการตัดสินใจนี้",
-  "healthProposalHealth": {
-    "healthy": "ปกติ",
-    "degraded": "เสื่อมสภาพ",
-    "failed": "ล้มเหลว",
-    "unverified": "ยังไม่ยืนยัน"
-  },
   "healthProposalReasonRequired": "กรุณาระบุเหตุผลก่อนส่งการตัดสินใจ",
   "healthProposalAccept": "ยอมรับ",
   "healthProposalReject": "ปฏิเสธ",
@@ -258,6 +252,7 @@
   "skip": "ข้ามไปเนื้อหาหลัก",
   "languageThai": "ภาษาไทย",
   "languageEnglish": "English",
+  "languageToggle": "EN / TH",
   "featureKinds": {
     "asset": "สินทรัพย์",
     "segment": "ช่วงสินทรัพย์",
