@@ -39,9 +39,15 @@ export class AuditCommitUnknownError extends Error {
   }
 }
 
-// A server verdict carries a five-character SQLSTATE; connection and timeout errors do not.
-function isServerError(error: unknown): boolean {
-  return typeof error === "object" && error !== null && /^[0-9A-Z]{5}$/.test(String(Reflect.get(error, "code")));
+// A PostgreSQL ErrorResponse carries a severity and a five-character SQLSTATE; connection and
+// timeout errors (ECONNRESET, EPIPE, "Connection terminated") do not. Even a server error leaves the
+// outcome unknown when the connection or server went away: class 08 (connection exception),
+// 57P01-57P03 (shutdown/crash) and class 58 or XX (system or internal errors).
+function isDefiniteServerVerdict(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const code = Reflect.get(error, "code");
+  if (typeof Reflect.get(error, "severity") !== "string" || typeof code !== "string" || !/^[0-9A-Z]{5}$/.test(code)) return false;
+  return !(code.startsWith("08") || code.startsWith("58") || code.startsWith("XX") || ["57P01", "57P02", "57P03"].includes(code));
 }
 
 /**
@@ -89,7 +95,7 @@ export async function appendAuditEventAtomically(
     try {
       await client.query("COMMIT");
     } catch (error) {
-      if (isServerError(error)) throw error;
+      if (isDefiniteServerVerdict(error)) throw error;
       // No verdict: the connection state is unknown, so never reuse it and never claim a rollback.
       discardConnection = true;
       throw new AuditCommitUnknownError({ orgId: snapshot.orgId, action: snapshot.action, entity: snapshot.entity, afterHash: snapshot.afterHash }, error);

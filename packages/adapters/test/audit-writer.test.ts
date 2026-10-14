@@ -89,9 +89,28 @@ describe("atomic audit writer", () => {
     expect(f.release).toHaveBeenCalledExactlyOnceWith(true);
   });
 
-  it("rethrows a server verdict on COMMIT unchanged after rolling back", async () => {
+  it.each([
+    ["a Node socket error", { code: "EPIPE" }],
+    ["a connection exception from the server", { severity: "FATAL", code: "08006" }],
+    ["a server shutdown", { severity: "FATAL", code: "57P01" }],
+    ["an error without a SQLSTATE", { severity: "ERROR" }],
+  ])("treats %s on COMMIT as an unknown outcome", async (_name, properties) => {
     const f = fixture();
-    const failure = Object.assign(new Error("deferred constraint failed"), { code: "23505" });
+    const failure = Object.assign(new Error("commit interrupted"), properties);
+    f.query.mockImplementation(async (sql, values) => {
+      f.calls.push({ sql, values });
+      if (sql === "COMMIT") throw failure;
+      return { rows: sql.includes("append_audit_event") ? [appended] : [] };
+    });
+    const error = await writer()(f.pool, input).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(adapters.AuditCommitUnknownError);
+    expect((error as adapters.AuditCommitUnknownError).cause).toBe(failure);
+    expect(f.release).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  it.each(["23505", "40001", "40P01"])("rethrows the server verdict %s on COMMIT unchanged after rolling back", async (code) => {
+    const f = fixture();
+    const failure = Object.assign(new Error("commit refused"), { severity: "ERROR", code });
     f.query.mockImplementation(async (sql, values) => {
       f.calls.push({ sql, values });
       if (sql === "COMMIT") throw failure;
