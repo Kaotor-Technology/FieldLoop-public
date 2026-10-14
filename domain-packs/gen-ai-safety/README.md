@@ -53,7 +53,9 @@ Health and owner. The seed locks the parent Bowtie inside the catalog transactio
 Every policy records `config.seedDefinitionHash`, computed from canonical authored
 pack/safety data (object-key order is ignored). Once the Bowtie leaves Draft,
 identical seed content leaves the whole graph, AI System, policy records and
-reviewed local overrides untouched. Changed content or version, renamed policies,
+reviewed local overrides untouched. The human-reviewed Bowtie revision is independent
+of the authored pack version; an unchanged seed preserves either revision.
+Changed authored content or pack version, renamed policies,
 missing proof or incompatible proof aborts the transaction. Concurrent human
 review cannot be overwritten by startup registration.
 
