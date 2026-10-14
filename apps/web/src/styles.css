@@ -121,6 +121,7 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 .legend-group h2 { flex: 0 0 100%; font-size: var(--type-label-lg-font-size); font-weight: var(--type-label-lg-font-weight); line-height: var(--type-label-lg-line-height); }
 .legend-group > span { display: inline-flex; align-items: center; gap: var(--spacing-space-1); white-space: nowrap; }
 .legend-risk-group { padding-left: var(--spacing-space-3); border-left: var(--spacing-border-hairline) solid var(--outline); }
+.legend-rain-group { padding-left: var(--spacing-space-3); border-left: var(--spacing-border-hairline) solid var(--outline); }
 .legend-health { font-size: var(--type-body-sm-font-size); }
 .legend-health > i { display: inline-flex; align-items: center; justify-content: center; width: var(--spacing-space-4); height: var(--spacing-space-4); font-style: normal; font-weight: var(--type-label-lg-font-weight); }
 .legend-health > .health-failed { color: var(--color-health-failed); }
@@ -130,6 +131,9 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 .legend-intolerable { background: var(--color-risk-intolerable); }
 .legend-alarp { background: var(--color-risk-alarp); }
 .legend-acceptable { background: var(--color-risk-acceptable); }
+.legend-rain-swatch { display: inline-flex; width: var(--spacing-space-4); height: var(--spacing-space-4); border: var(--spacing-border-hairline) solid var(--outline); border-radius: var(--rounded-xs); }
+.legend-rain-low { background: var(--color-rain-low); }
+.legend-rain-high { background: var(--color-rain-high); }
 .legend-risk svg { width: var(--spacing-space-4); height: var(--spacing-space-4); }
 .legend-risk svg path { fill: none; stroke: var(--ink); stroke-width: 2; }
 .timeline-bar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--spacing-space-4); min-height: var(--spacing-timeline-height); padding: var(--spacing-space-2) var(--spacing-page-margin-desktop); background: var(--surface); border-top: var(--spacing-border-hairline) solid var(--outline); }
@@ -253,6 +257,7 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
   .map-legend { left: var(--spacing-space-3); right: var(--spacing-space-3); bottom: var(--spacing-space-3); max-width: none; }
   .legend-group h2 { flex-basis: auto; }
   .legend-risk-group { padding-left: 0; border-left: 0; }
+  .legend-rain-group { padding-left: 0; border-left: 0; }
 }
 @media (max-width: 599px) {
   .top-bar { flex-wrap: wrap; }
