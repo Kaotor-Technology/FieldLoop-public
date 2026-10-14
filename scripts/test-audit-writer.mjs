@@ -58,7 +58,7 @@ try {
   if (native) {
     const bin = resolve(args[1]);
     nativeDirectory = await mkdtemp(join(resolve(args[2]), 'audit-fixture-'));
-    console.log(`LIMIT: native minimal audit migration only; no PostGIS/pgvector/full migration proof. Fixture ${nativeDirectory}`);
+    console.log(`LIMIT: native minimal audit migrations only; no PostGIS/pgvector/full migration proof. Fixture ${nativeDirectory}`);
     command(join(bin, 'initdb'), ['-D', join(nativeDirectory, 'data'), '-U', 'synthetic_audit_fixture', '--auth=trust', '--no-locale', '--encoding=UTF8']);
     nativeStartAttempted = true;
     command(join(bin, 'pg_ctl'), ['-D', join(nativeDirectory, 'data'), '-l', join(nativeDirectory, 'postgres.log'), '-o', `-k ${nativeDirectory} -p 55493 -c listen_addresses= -c unix_socket_permissions=0700`, '-w', 'start']);
@@ -81,6 +81,10 @@ try {
     await pool.query('CREATE SCHEMA app; CREATE TABLE app.asset (id uuid PRIMARY KEY)');
     const migration = await readFile(join(root, 'db/migrations/20261010000005_action_approval_audit.sql'), 'utf8');
     await pool.query(migration.split('-- migrate:down')[0]);
+    // The shared append function and guard, without the simulation reset section that needs later tables.
+    const shared = await readFile(join(root, 'db/migrations/20261014040000_shared_audit_writer.sql'), 'utf8');
+    await pool.query('CREATE ROLE fieldloop_app NOLOGIN');
+    await pool.query(shared.split('-- migrate:down')[0].split('-- The simulation reset appends')[0]);
   }
   // Import the public production export, not a copy, after fixture setup.
   const { appendAuditEventAtomically } = await import('../packages/adapters/dist/index.js');
