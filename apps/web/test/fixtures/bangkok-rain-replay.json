@@ -1,0 +1,401 @@
+{
+  "snapshots": {
+    "ready": {
+      "id": "40000000-0000-4000-8000-000000000001",
+      "orgId": "scenario-test",
+      "scenarioId": "bangkok-storm",
+      "scenarioName": "Demo B: Bangkok convective storm and P-3 power loss",
+      "seed": 75,
+      "speed": 1.0,
+      "clock": "2026-10-12T00:00:00Z",
+      "elapsedSeconds": 0.0,
+      "durationSeconds": 259200.0,
+      "state": "ready",
+      "nextEventIndex": 0,
+      "eventCount": 13,
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "bookmarks": [
+        {
+          "id": "start",
+          "name": "Rain cell enters Z3; generator test already overdue",
+          "atSeconds": 0.0
+        },
+        {
+          "id": "heavy-rainfall",
+          "name": "144 mm accumulated; rain cell leaves Z3",
+          "atSeconds": 7200.0
+        },
+        {
+          "id": "pump-power-lost",
+          "name": "P-3 power lost just after heavy rainfall",
+          "atSeconds": 7201.0
+        },
+        {
+          "id": "forecast-24h",
+          "name": "Forecast +24 hours",
+          "atSeconds": 86400.0
+        },
+        {
+          "id": "complete",
+          "name": "Forecast +72 hours",
+          "atSeconds": 259200.0
+        }
+      ],
+      "revision": 1
+    },
+    "playing": {
+      "id": "40000000-0000-4000-8000-000000000001",
+      "orgId": "scenario-test",
+      "scenarioId": "bangkok-storm",
+      "scenarioName": "Demo B: Bangkok convective storm and P-3 power loss",
+      "seed": 75,
+      "speed": 1.0,
+      "clock": "2026-10-12T00:00:00Z",
+      "elapsedSeconds": 0.0,
+      "durationSeconds": 259200.0,
+      "state": "playing",
+      "nextEventIndex": 3,
+      "eventCount": 13,
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "bookmarks": [
+        {
+          "id": "start",
+          "name": "Rain cell enters Z3; generator test already overdue",
+          "atSeconds": 0.0
+        },
+        {
+          "id": "heavy-rainfall",
+          "name": "144 mm accumulated; rain cell leaves Z3",
+          "atSeconds": 7200.0
+        },
+        {
+          "id": "pump-power-lost",
+          "name": "P-3 power lost just after heavy rainfall",
+          "atSeconds": 7201.0
+        },
+        {
+          "id": "forecast-24h",
+          "name": "Forecast +24 hours",
+          "atSeconds": 86400.0
+        },
+        {
+          "id": "complete",
+          "name": "Forecast +72 hours",
+          "atSeconds": 259200.0
+        }
+      ],
+      "revision": 2
+    },
+    "paused": {
+      "id": "40000000-0000-4000-8000-000000000001",
+      "orgId": "scenario-test",
+      "scenarioId": "bangkok-storm",
+      "scenarioName": "Demo B: Bangkok convective storm and P-3 power loss",
+      "seed": 75,
+      "speed": 1.0,
+      "clock": "2026-10-12T00:00:00Z",
+      "elapsedSeconds": 0.0,
+      "durationSeconds": 259200.0,
+      "state": "paused",
+      "nextEventIndex": 3,
+      "eventCount": 13,
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "bookmarks": [
+        {
+          "id": "start",
+          "name": "Rain cell enters Z3; generator test already overdue",
+          "atSeconds": 0.0
+        },
+        {
+          "id": "heavy-rainfall",
+          "name": "144 mm accumulated; rain cell leaves Z3",
+          "atSeconds": 7200.0
+        },
+        {
+          "id": "pump-power-lost",
+          "name": "P-3 power lost just after heavy rainfall",
+          "atSeconds": 7201.0
+        },
+        {
+          "id": "forecast-24h",
+          "name": "Forecast +24 hours",
+          "atSeconds": 86400.0
+        },
+        {
+          "id": "complete",
+          "name": "Forecast +72 hours",
+          "atSeconds": 259200.0
+        }
+      ],
+      "revision": 3
+    },
+    "pausedLater": {
+      "id": "40000000-0000-4000-8000-000000000001",
+      "orgId": "scenario-test",
+      "scenarioId": "bangkok-storm",
+      "scenarioName": "Demo B: Bangkok convective storm and P-3 power loss",
+      "seed": 75,
+      "speed": 1.0,
+      "clock": "2026-10-12T00:00:00Z",
+      "elapsedSeconds": 0.0,
+      "durationSeconds": 259200.0,
+      "state": "paused",
+      "nextEventIndex": 3,
+      "eventCount": 13,
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "bookmarks": [
+        {
+          "id": "start",
+          "name": "Rain cell enters Z3; generator test already overdue",
+          "atSeconds": 0.0
+        },
+        {
+          "id": "heavy-rainfall",
+          "name": "144 mm accumulated; rain cell leaves Z3",
+          "atSeconds": 7200.0
+        },
+        {
+          "id": "pump-power-lost",
+          "name": "P-3 power lost just after heavy rainfall",
+          "atSeconds": 7201.0
+        },
+        {
+          "id": "forecast-24h",
+          "name": "Forecast +24 hours",
+          "atSeconds": 86400.0
+        },
+        {
+          "id": "complete",
+          "name": "Forecast +72 hours",
+          "atSeconds": 259200.0
+        }
+      ],
+      "revision": 4
+    },
+    "canalRising": {
+      "id": "40000000-0000-4000-8000-000000000001",
+      "orgId": "scenario-test",
+      "scenarioId": "bangkok-storm",
+      "scenarioName": "Demo B: Bangkok convective storm and P-3 power loss",
+      "seed": 75,
+      "speed": 1.0,
+      "clock": "2026-10-12T00:10:00Z",
+      "elapsedSeconds": 600.0,
+      "durationSeconds": 259200.0,
+      "state": "paused",
+      "nextEventIndex": 4,
+      "eventCount": 13,
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "bookmarks": [
+        {
+          "id": "start",
+          "name": "Rain cell enters Z3; generator test already overdue",
+          "atSeconds": 0.0
+        },
+        {
+          "id": "heavy-rainfall",
+          "name": "144 mm accumulated; rain cell leaves Z3",
+          "atSeconds": 7200.0
+        },
+        {
+          "id": "pump-power-lost",
+          "name": "P-3 power lost just after heavy rainfall",
+          "atSeconds": 7201.0
+        },
+        {
+          "id": "forecast-24h",
+          "name": "Forecast +24 hours",
+          "atSeconds": 86400.0
+        },
+        {
+          "id": "complete",
+          "name": "Forecast +72 hours",
+          "atSeconds": 259200.0
+        }
+      ],
+      "revision": 5
+    },
+    "accumulation3600": {
+      "id": "40000000-0000-4000-8000-000000000001",
+      "orgId": "scenario-test",
+      "scenarioId": "bangkok-storm",
+      "scenarioName": "Demo B: Bangkok convective storm and P-3 power loss",
+      "seed": 75,
+      "speed": 1.0,
+      "clock": "2026-10-12T01:00:00Z",
+      "elapsedSeconds": 3600.0,
+      "durationSeconds": 259200.0,
+      "state": "paused",
+      "nextEventIndex": 5,
+      "eventCount": 13,
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "bookmarks": [
+        {
+          "id": "start",
+          "name": "Rain cell enters Z3; generator test already overdue",
+          "atSeconds": 0.0
+        },
+        {
+          "id": "heavy-rainfall",
+          "name": "144 mm accumulated; rain cell leaves Z3",
+          "atSeconds": 7200.0
+        },
+        {
+          "id": "pump-power-lost",
+          "name": "P-3 power lost just after heavy rainfall",
+          "atSeconds": 7201.0
+        },
+        {
+          "id": "forecast-24h",
+          "name": "Forecast +24 hours",
+          "atSeconds": 86400.0
+        },
+        {
+          "id": "complete",
+          "name": "Forecast +72 hours",
+          "atSeconds": 259200.0
+        }
+      ],
+      "revision": 6
+    },
+    "accumulation7200": {
+      "id": "40000000-0000-4000-8000-000000000001",
+      "orgId": "scenario-test",
+      "scenarioId": "bangkok-storm",
+      "scenarioName": "Demo B: Bangkok convective storm and P-3 power loss",
+      "seed": 75,
+      "speed": 1.0,
+      "clock": "2026-10-12T02:00:00Z",
+      "elapsedSeconds": 7200.0,
+      "durationSeconds": 259200.0,
+      "state": "paused",
+      "nextEventIndex": 6,
+      "eventCount": 13,
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "bookmarks": [
+        {
+          "id": "start",
+          "name": "Rain cell enters Z3; generator test already overdue",
+          "atSeconds": 0.0
+        },
+        {
+          "id": "heavy-rainfall",
+          "name": "144 mm accumulated; rain cell leaves Z3",
+          "atSeconds": 7200.0
+        },
+        {
+          "id": "pump-power-lost",
+          "name": "P-3 power lost just after heavy rainfall",
+          "atSeconds": 7201.0
+        },
+        {
+          "id": "forecast-24h",
+          "name": "Forecast +24 hours",
+          "atSeconds": 86400.0
+        },
+        {
+          "id": "complete",
+          "name": "Forecast +72 hours",
+          "atSeconds": 259200.0
+        }
+      ],
+      "revision": 7
+    },
+    "rainLeaves": {
+      "id": "40000000-0000-4000-8000-000000000001",
+      "orgId": "scenario-test",
+      "scenarioId": "bangkok-storm",
+      "scenarioName": "Demo B: Bangkok convective storm and P-3 power loss",
+      "seed": 75,
+      "speed": 1.0,
+      "clock": "2026-10-12T02:00:00Z",
+      "elapsedSeconds": 7200.0,
+      "durationSeconds": 259200.0,
+      "state": "paused",
+      "nextEventIndex": 7,
+      "eventCount": 13,
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "bookmarks": [
+        {
+          "id": "start",
+          "name": "Rain cell enters Z3; generator test already overdue",
+          "atSeconds": 0.0
+        },
+        {
+          "id": "heavy-rainfall",
+          "name": "144 mm accumulated; rain cell leaves Z3",
+          "atSeconds": 7200.0
+        },
+        {
+          "id": "pump-power-lost",
+          "name": "P-3 power lost just after heavy rainfall",
+          "atSeconds": 7201.0
+        },
+        {
+          "id": "forecast-24h",
+          "name": "Forecast +24 hours",
+          "atSeconds": 86400.0
+        },
+        {
+          "id": "complete",
+          "name": "Forecast +72 hours",
+          "atSeconds": 259200.0
+        }
+      ],
+      "revision": 8
+    },
+    "reset": {
+      "id": "40000000-0000-4000-8000-000000000002",
+      "orgId": "scenario-test",
+      "scenarioId": "bangkok-storm",
+      "scenarioName": "Demo B: Bangkok convective storm and P-3 power loss",
+      "seed": 75,
+      "speed": 1.0,
+      "clock": "2026-10-12T00:00:00Z",
+      "elapsedSeconds": 0.0,
+      "durationSeconds": 259200.0,
+      "state": "ready",
+      "nextEventIndex": 0,
+      "eventCount": 13,
+      "simulated": true,
+      "classification": "CONFIDENTIAL",
+      "bookmarks": [
+        {
+          "id": "start",
+          "name": "Rain cell enters Z3; generator test already overdue",
+          "atSeconds": 0.0
+        },
+        {
+          "id": "heavy-rainfall",
+          "name": "144 mm accumulated; rain cell leaves Z3",
+          "atSeconds": 7200.0
+        },
+        {
+          "id": "pump-power-lost",
+          "name": "P-3 power lost just after heavy rainfall",
+          "atSeconds": 7201.0
+        },
+        {
+          "id": "forecast-24h",
+          "name": "Forecast +24 hours",
+          "atSeconds": 86400.0
+        },
+        {
+          "id": "complete",
+          "name": "Forecast +72 hours",
+          "atSeconds": 259200.0
+        }
+      ],
+      "revision": 9
+    }
+  },
+  "signalCount": 7
+}

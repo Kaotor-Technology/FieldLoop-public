@@ -10,7 +10,9 @@ export interface MapLayerRequestState {
 }
 
 const BANGKOK_STORM_SCENARIO = "bangkok-storm";
-const BANGKOK_STORM_RAIN_END_SECONDS = 7_200;
+// The seventh authored event clears rain. Step can pause before it at T+7200
+// after emitting accumulation, so elapsed time alone cannot determine rain state.
+const BANGKOK_STORM_RAIN_END_EVENT_INDEX = 7;
 const BANGKOK_STORM_RAIN_RATE_MM_PER_HOUR = 72;
 
 export interface SimulatedRainCell {
@@ -23,7 +25,7 @@ export function selectSimulatedRainCell(
   assets: readonly MapFeature[],
 ): SimulatedRainCell | null {
   if (!run || !run.simulated || run.scenarioId !== BANGKOK_STORM_SCENARIO || run.nextEventIndex === 0 ||
-      run.elapsedSeconds >= BANGKOK_STORM_RAIN_END_SECONDS || run.state === "ready" || run.state === "finished") return null;
+      run.nextEventIndex >= BANGKOK_STORM_RAIN_END_EVENT_INDEX || run.state === "ready" || run.state === "finished") return null;
 
   const zone = assets.find((feature) => feature.properties.code === "Z3" &&
     feature.properties.domainPack === "flood-water" && feature.properties.featureKind === "area" &&
