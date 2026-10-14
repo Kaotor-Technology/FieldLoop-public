@@ -82,7 +82,7 @@ try {
     const migration = await readFile(join(root, 'db/migrations/20261010000005_action_approval_audit.sql'), 'utf8');
     await pool.query(migration.split('-- migrate:down')[0]);
     // The shared append function and guard, without the simulation reset section that needs later tables.
-    const shared = await readFile(join(root, 'db/migrations/20261014040000_shared_audit_writer.sql'), 'utf8');
+    const shared = await readFile(join(root, 'db/migrations/20261014060000_shared_audit_writer.sql'), 'utf8');
     await pool.query('CREATE ROLE fieldloop_app NOLOGIN');
     await pool.query(shared.split('-- migrate:down')[0].split('-- The simulation reset appends')[0]);
   }
