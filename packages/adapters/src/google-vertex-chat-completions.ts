@@ -31,6 +31,7 @@ export class GoogleVertexChatCompletionsAdapter implements VertexChatCompletions
 
   async complete(model: string, request: Record<string, unknown>): Promise<unknown> {
     if (!model || model.length > 256) throw new Error("Vertex AI model is invalid");
+    const publisherModel = model.startsWith("google/") ? model : `google/${model}`;
     const controller = new AbortController();
     const timeoutError = new Error("Vertex AI request timed out");
     let rejectTimeout: (error: Error) => void = () => undefined;
@@ -46,7 +47,7 @@ export class GoogleVertexChatCompletionsAdapter implements VertexChatCompletions
       const response = await this.transport(url, {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json", accept: "application/json" },
-        body: JSON.stringify({ ...request, model, stream: false }),
+        body: JSON.stringify({ ...request, model: publisherModel, stream: false }),
         signal: controller.signal,
         redirect: "error",
       });

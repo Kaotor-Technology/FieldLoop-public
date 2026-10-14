@@ -11,7 +11,7 @@ it("uses the regional OpenAI-compatible endpoint and overrides caller model and 
   const [url, init] = transport.mock.calls[0] ?? [];
   expect(url).toBe("https://asia-southeast1-aiplatform.googleapis.com/v1/projects/project-id/locations/asia-southeast1/endpoints/openapi/chat/completions");
   expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-token");
-  expect(JSON.parse(String(init?.body))).toEqual({ model: "gemini-flash", stream: false, messages: [{ role: "user", content: "hello" }] });
+  expect(JSON.parse(String(init?.body))).toEqual({ model: "google/gemini-flash", stream: false, messages: [{ role: "user", content: "hello" }] });
 });
 
 it("does not follow redirects or return model errors as successful completions", async () => {
