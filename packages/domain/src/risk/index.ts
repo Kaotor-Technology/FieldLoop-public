@@ -12,6 +12,35 @@ export class RiskInputError extends Error {
   }
 }
 
+/** Validate an Organisation Risk Matrix before accepting its configuration. */
+export function validateRiskMatrix(value: unknown): asserts value is RiskMatrix {
+  const checkInput: RiskInput = {
+    bowtieId: "matrix-check",
+    barriers: [],
+    threats: [{ id: "threat-check", frequencyPerYear: 0 }],
+    consequences: [{ id: "consequence-check", conditionalProbability: 0, severity: { people: 1 } }],
+    independenceGroups: [],
+    paths: [{ id: "path-check", side: "preventive", targetId: "threat-check", barrierIds: [] }],
+    matrix: value as RiskMatrix,
+  };
+  const errors = riskInputErrors(checkInput);
+  if (errors.length > 0) {
+    throw new RiskInputError(errors.map(error => `${error.path || "/"}: ${error.message}`).join("; "));
+  }
+  validateMatrix(checkInput.matrix);
+}
+
+/** Sum the absolute consequence-frequency deltas used to rank an explanation. */
+export function calculateRiskChangeImpact(deltas: readonly number[]): number {
+  return deltas.reduce((sum, delta) => sum + Math.abs(delta), 0);
+}
+
+/** Apply the configured Evidence interval to a stored observation time. */
+export function isEvidenceExpired(observedAtMs: number | null, calculationTimeMs: number, intervalSeconds: number | null): boolean {
+  return intervalSeconds !== null
+    && (observedAtMs === null || calculationTimeMs - observedAtMs > intervalSeconds * 1000);
+}
+
 const ZONE_ORDER = { green: 0, amber: 1, red: 2 } as const;
 
 function byId(a: { id: string }, b: { id: string }): number {

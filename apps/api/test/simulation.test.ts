@@ -3,10 +3,11 @@ import { afterEach, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
 import { AuthError, type AuthServicePort, type CurrentUser } from "../src/auth/service.js";
 import { RemoteSimulationClient, type SimulationPort, type SimulationRun } from "../src/simulation/client.js";
+import type { RiskEvent, RiskApiPort } from "../src/risk/service.js";
 
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
-function fixture() {
+function fixture(riskEvent?: RiskEvent) {
   const user: CurrentUser = { sub: "synthetic-operator", roles: ["fieldloop.operator"], persona: "Integrity Engineer", orgId: "test-org", clearance: "HIGHLY_RESTRICTED", csrfToken: "fixture-csrf", authTime: new Date("2026-10-13T00:00:00Z") };
   const auth: AuthServicePort = {
     getCurrentUser: async (cookie) => { if (cookie !== "valid") throw new AuthError("Session required", 401); return user; },
@@ -33,7 +34,21 @@ function fixture() {
       return run;
     },
   };
-  const app = buildApp({ auth, simulator }); apps.push(app);
+  let riskEventSent = false;
+  const risk: RiskApiPort = {
+    listBowties: async () => [],
+    getBowtie: async () => { throw new Error("unused"); },
+    getRisk: async () => { throw new Error("unused"); },
+    explain: async () => { throw new Error("unused"); },
+    getEvidence: async () => { throw new Error("unused"); },
+    riskEventsAfter: async () => {
+      if (!riskEvent || riskEventSent) return [];
+      riskEventSent = true;
+      return [riskEvent];
+    },
+    processHealthChanges: async () => 0,
+  };
+  const app = buildApp({ auth, simulator, risk }); apps.push(app);
   const headers = { cookie: "fl_session=valid", "x-csrf-token": "fixture-csrf", "idempotency-key": "test-player-request-01" };
   return { app, user, simulator, headers, commands };
 }
@@ -97,6 +112,49 @@ it("emits reset over SSE and detects a reset across a reconnect", async () => {
   const resumedReader = resumed.body.getReader(); let text = "";
   while (!text.includes("event: simulation.reset")) { const chunk = await resumedReader.read(); if (chunk.done) throw new Error("Stream ended"); text += decoder.decode(chunk.value); }
   await resumedReader.cancel(); reconnect.abort();
+});
+
+it("emits risk recalculation snapshots over SSE with a resumable cursor", async () => {
+  const bowtieId = randomUUID();
+  const consequenceId = randomUUID();
+  const snapshotId = randomUUID();
+  const createdAt = new Date().toISOString();
+  const cell = { frequencyBand: 1 as const, severityBand: 1 as const, zone: "green" as const, rank: 1 };
+  const event: RiskEvent = {
+    id: snapshotId, createdAt, bowtieId, snapshotId, trigger: "health_change",
+    calibration: { standardRef: "SYNTHETIC-ORG-RISK-STD", standardVersion: "2026.1", approvedBy: "synthetic-authority", approvedAt: createdAt },
+    snapshot: {
+      bowtieId, topEventFrequencyPerYear: 0.001, threats: [],
+      consequences: [{
+        consequenceId, frequencyPerYear: 0.0001, severityBand: 1,
+        path: { pathId: `mitigative:${consequenceId}`, targetId: consequenceId, pfd: 0.1, barriers: [] },
+        cell,
+      }],
+      worstConsequenceId: consequenceId, cell,
+    },
+  };
+  const { app, headers } = fixture(event);
+  const base = await app.listen({ host: "127.0.0.1", port: 0 });
+  const abort = new AbortController();
+  const response = await fetch(`${base}/api/v1/events`, { headers: { cookie: headers.cookie }, signal: abort.signal });
+  expect(response.headers.get("content-type")).toBe("text/event-stream");
+  if (!response.body) throw new Error("SSE response has no body");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  while (!text.includes("event: risk.recalculated")) {
+    const chunk = await reader.read();
+    if (chunk.done) throw new Error("Risk event stream ended early");
+    text += decoder.decode(chunk.value);
+  }
+  const eventId = /^id: ([A-Za-z0-9_-]+)$/m.exec(text)?.[1];
+  if (!eventId) throw new Error("Risk event did not include a resumable cursor");
+  const cursor = JSON.parse(Buffer.from(eventId, "base64url").toString("utf8")) as { risk: { createdAt: string; id: string } };
+  expect(cursor.risk).toEqual({ createdAt, id: snapshotId });
+  expect(text).toContain(`"bowtieId":"${bowtieId}"`);
+  expect(text).toContain('"trigger":"health_change"');
+  await reader.cancel();
+  abort.abort();
 });
 
 it("uses the generated client and rejects invalid upstream envelopes", async () => {
