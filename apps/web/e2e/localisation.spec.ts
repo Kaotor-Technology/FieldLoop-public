@@ -89,6 +89,7 @@ test("long Thai Scenario labels remain visible in the picker at 320px", async ({
   const metrics = await scenario.evaluate((button) => {
     const buttonRect = button.getBoundingClientRect();
     const label = button.childNodes[0];
+    if (!label) throw new Error("Expected the Scenario label to be the first trigger child.");
     const range = document.createRange();
     range.selectNodeContents(label);
     const labelRect = range.getBoundingClientRect();
