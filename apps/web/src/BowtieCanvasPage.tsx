@@ -79,7 +79,7 @@ export function BowtieCanvasPage() {
             </article>;
           })}
         </section>
-        <section className="bowtie-top-event" aria-labelledby="top-event-title">
+        <section className="bowtie-top-event-panel" aria-labelledby="top-event-title">
           <h2 id="top-event-title">{t("topEvent")}</h2>
           <p>{data.topEvent}</p>
           {risk.data ? <dl>
