@@ -124,6 +124,9 @@ test("all account and preference controls work by keyboard with visible focus", 
   await expect(page.getByRole("link", { name: "Skip to main content" })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.getByRole("link", { name: "FieldLoop-v2" })).toBeFocused();
+  // Operators and managers also get the Audit link before the account controls.
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("link", { name: "Audit", exact: true })).toBeFocused();
   await page.keyboard.press("Tab");
   await expect(page.locator(".account-switcher > summary")).toBeFocused();
   await page.keyboard.press("Tab");
@@ -138,6 +141,7 @@ test("all account and preference controls work by keyboard with visible focus", 
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await page.keyboard.press("Shift+Tab");
   await expect(page.locator(".account-switcher > summary")).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Shift+Tab");
   await page.keyboard.press("Enter");

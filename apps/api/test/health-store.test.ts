@@ -43,6 +43,9 @@ function harness(overrides: { ownerId?: string | null; status?: string } = {}) {
       }
       if (statement.includes("UPDATE app.barrier SET health")) return { command: "UPDATE", rowCount: 1, rows: [] };
       if (statement.includes("INSERT INTO app.health_change")) return { command: "INSERT", rowCount: 1, rows: [{ id: changeId }] };
+      if (statement.includes("app.append_audit_event")) {
+        return { command: "SELECT", rowCount: 1, rows: [{ event_id: "00000000-0000-4000-8000-000000000383", previous_hash: null, event_hash: "c".repeat(64) }] };
+      }
       if (statement.includes("INSERT INTO app.notification")) return { command: "INSERT", rowCount: 0, rows: [] };
       if (statement.includes("INSERT INTO")) return { command: "INSERT", rowCount: 1, rows: [] };
       if (statement.includes("UPDATE")) return { command: "UPDATE", rowCount: 1, rows: [] };
@@ -74,7 +77,7 @@ it("persists an accepted Health decision and emits its Health event in one trans
   expect(test.statements.some(({ sql }) => sql.includes("UPDATE app.barrier SET health"))).toBe(true);
   expect(test.statements.some(({ sql }) => sql.includes("INSERT INTO app.health_change"))).toBe(true);
   expect(test.statements.some(({ sql, parameters }) =>
-    sql.includes("INSERT INTO app.audit_event") && parameters.includes("health_proposal.accepted"))).toBe(true);
+    sql.includes("app.append_audit_event") && parameters.includes("health_proposal.accepted"))).toBe(true);
   expect(test.statements.some(({ sql, parameters }) => {
     const event = parameters.find((value) => typeof value === "string" && value.includes("barrier.health_changed"));
     return sql.includes("INSERT INTO app.signal_event_outbox") && typeof event === "string"

@@ -5,6 +5,8 @@ import { KmsEnvelopeCrypto } from "./envelope-crypto.js";
 import { SecretManagerInternalTokenService } from "./internal-tokens.js";
 import { KeycloakOidcProvider } from "./keycloak-oidc.js";
 import { createAuthDatabase, createCloudSqlAuthDatabase, PostgresAuthStore } from "./postgres-store.js";
+import { PostgresAuditStore } from "../audit/postgres-store.js";
+import type { AuditServicePort } from "../audit/model.js";
 import { PostgresHealthStore } from "../health/postgres-store.js";
 import type { HealthServicePort } from "../health/model.js";
 import type { Kysely } from "kysely";
@@ -13,6 +15,7 @@ import { PostgresRiskService } from "../risk/service.js";
 import { createRiskDatabase } from "../risk/database.js";
 import { PostgresGeoReferenceStore } from "../geo-references/postgres-store.js";
 import type { GeoReferenceStore } from "../geo-references/model.js";
+import { PostgresImportStore } from "../imports/store.js";
 
 export class UnavailableAuthService implements AuthServicePort {
   async startLogin(): Promise<URL> { return this.unavailable(); }
@@ -33,11 +36,13 @@ export async function createProductionAuthRuntime(): Promise<{
   auth: AuthServicePort;
   mapLayers: MapLayerStore;
   geoReferences?: GeoReferenceStore;
+  audit?: AuditServicePort;
   health?: HealthServicePort;
   actions?: ActionServicePort;
   close: () => Promise<void>;
   registerPacks?: (packs: LoadedDomainPack[]) => Promise<void>;
   risk?: PostgresRiskService;
+  imports?: PostgresImportStore;
 }> {
   const baseUrl = process.env["FIELDLOOP_BASE_URL"];
   const defaultOrgId = process.env["FIELDLOOP_DEFAULT_ORG_ID"];
@@ -66,7 +71,9 @@ export async function createProductionAuthRuntime(): Promise<{
     mapLayers: new PostgresMapLayerStore(database.db),
     geoReferences: new PostgresGeoReferenceStore(database.db),
     actions: new PostgresActionStore(database.db as unknown as Kysely<Record<string, never>>),
+    audit: new PostgresAuditStore(database.db as unknown as Kysely<Record<string, never>>),
     health: new PostgresHealthStore(database.db as unknown as Kysely<Record<string, never>>),
+    imports: new PostgresImportStore(database.db as unknown as Kysely<Record<string, never>>),
     risk: new PostgresRiskService(createRiskDatabase(database.pool)),
     close: async () => {
       if ("close" in database && typeof database.close === "function") await database.close();
