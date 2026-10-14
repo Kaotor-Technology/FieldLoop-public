@@ -61,3 +61,19 @@ it("fails closed for detector errors and token timeouts", async () => {
   });
   await expect(slowAdapter.scanUserPrompt("text")).rejects.toThrow("Model Armor request timed out");
 });
+
+it.each([
+  { invocationResult: "SUCCESS" },
+  { invocationResult: "SUCCESS", filterMatchState: "FILTER_MATCH_STATE_UNSPECIFIED", filterResults: {} },
+  { invocationResult: "SUCCESS", filterMatchState: "NO_MATCH_FOUND", filterResults: null },
+  { invocationResult: "SUCCESS", filterMatchState: "NO_MATCH_FOUND", filterResults: {} },
+  { invocationResult: "PARTIAL", filterMatchState: "NO_MATCH_FOUND", filterResults: { sdp: {} } },
+  { invocationResult: "FAILURE", filterMatchState: "NO_MATCH_FOUND", filterResults: { sdp: {} } },
+])("fails closed for an incomplete or invalid detector result: %j", async (sanitizationResult) => {
+  const adapter = new GoogleModelArmorAdapter({
+    projectId: "synthetic-project", location: "asia-southeast1", templateId: "synthetic-tier1",
+    tokenProvider: { getAccessToken: async () => "synthetic-token" },
+    transport: vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ sanitizationResult }), { status: 200 })),
+  });
+  await expect(adapter.scanUserPrompt("SYNTHETIC normal content")).rejects.toThrow(/Model Armor/);
+});
