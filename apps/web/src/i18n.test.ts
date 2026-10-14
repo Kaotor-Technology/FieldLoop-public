@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createInstance } from "i18next";
 import type { BarrierType, RiskBarrier, RiskSeverity, RiskZone } from "@fieldloop/contracts";
 import type { MapFeatureProperties } from "@fieldloop/map";
+import type { TriadDimension } from "./bowtie-data";
 import i18n from "./i18n";
 
 afterEach(async () => { await i18n.changeLanguage("en"); });
@@ -18,6 +19,7 @@ describe("demo localisation", () => {
       area: true, linear: true, segment: true, facility: true, barrier: true, consequence: true,
     } satisfies Record<NonNullable<MapFeatureProperties["featureKind"]>, boolean>;
     const barrierTypes = { technical: true, organisational: true, human: true } satisfies Record<BarrierType, boolean>;
+    const triadDimensions = { effective: true, independent: true, auditable: true } satisfies Record<TriadDimension, boolean>;
     const barrierHealth = { healthy: true, degraded: true, failed: true, unverified: true } satisfies Record<RiskBarrier["health"], boolean>;
     const riskZones = { red: true, amber: true, green: true } satisfies Record<RiskZone, boolean>;
     const severityDimensions = {
@@ -28,6 +30,8 @@ describe("demo localisation", () => {
       ...Object.keys(featureKinds).map((value) => `featureKinds.${value}`),
       ...["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"].map((value) => `classifications.${value}`),
       ...Object.keys(barrierTypes).map((value) => `barrierType.${value}`),
+      ...Object.keys(barrierTypes),
+      ...Object.keys(triadDimensions),
       ...Object.keys(barrierHealth).map((value) => `barrierHealth.${value}`),
       ...Object.keys(riskZones).map((value) => `riskZone.${value}`),
       ...Object.keys(severityDimensions).map((value) => `severityDimension.${value}`),
