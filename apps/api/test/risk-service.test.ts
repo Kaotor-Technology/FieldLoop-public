@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RiskMatrix } from "@fieldloop/contracts";
+import { DEMO_RISK_MATRIX } from "@fieldloop/domain";
 import type { Pool } from "pg";
 import { createRiskDatabase } from "../src/risk/database.js";
 import { PostgresRiskService, RiskServiceError } from "../src/risk/service.js";
@@ -51,11 +52,12 @@ interface FakeHealthChange {
   reason: string;
 }
 
-function fixture(approved = true, healthChanges: FakeHealthChange[] = [], standardRef = "ORG-RISK-STD", standardVersion = "2026.1") {
+function fixture(approved = true, healthChanges: FakeHealthChange[] = [], standardRef = "ORG-RISK-STD", standardVersion = "2026.1", seededDemo = false) {
   const snapshots: Record<string, unknown>[] = [];
   let nextId = 1;
   let health = "healthy";
   let threatFrequency = 0.1;
+  let threatSeeded = seededDemo;
   let evidenceId: string | null = null;
   let evidenceInterval: string | null = null;
   let currentStandardVersion = standardVersion;
@@ -67,13 +69,13 @@ function fixture(approved = true, healthChanges: FakeHealthChange[] = [], standa
       const sql = statement.replaceAll('"', "").replace(/\s+/g, " ").trim().toLowerCase();
       const starts = (pattern: string) => sql.startsWith(pattern.toLowerCase());
       const has = (pattern: string) => sql.includes(pattern.toLowerCase());
-      if (has("FROM app.bowtie") && !has("FROM app.bowtie AS b")) return { rows: [{ id: ids.bowtie, hazard: "Synthetic hazard", top_event: "Synthetic top event", domain: "pipeline", status: "active", simulated: false, classification: "PUBLIC" }] };
+      if (has("FROM app.bowtie") && !has("FROM app.bowtie AS b")) return { rows: [{ id: ids.bowtie, hazard: "Synthetic hazard", top_event: "Synthetic top event", domain: "pipeline", status: "active", simulated: seededDemo, classification: "PUBLIC", created_by: seededDemo ? "seed:dl-01" : "synthetic-reviewer" }] };
       if (starts("SELECT hc.id, hc.org_id, hc.barrier_id")) return { rows: healthChanges
         .filter((change) => !snapshots.some((snapshot) => snapshot.health_change_id === change.id))
         .map((change) => ({
           id: change.id, org_id: user.orgId, barrier_id: change.barrierId, actor: "synthetic-reviewer",
           from_health: change.fromHealth, to_health: change.toHealth, created_at: new Date(change.createdAt),
-          simulated: false, classification: "PUBLIC",
+          simulated: seededDemo, classification: "PUBLIC",
         })) };
       if (has("FROM app.organisation")) return { rows: approved ? [{
         risk_matrix: matrix(), risk_severity_criteria: criteria, risk_matrix_approved_at: new Date("2026-10-13T00:00:00Z"),
@@ -81,15 +83,19 @@ function fixture(approved = true, healthChanges: FakeHealthChange[] = [], standa
         risk_matrix_standard_version: currentStandardVersion, classification: "PUBLIC",
       }] : [{ risk_matrix: null, risk_severity_criteria: null, risk_matrix_approved_at: null, risk_matrix_approved_by: null,
         risk_matrix_standard_ref: null, risk_matrix_standard_version: null, classification: "PUBLIC" }] };
-      if (starts("SELECT id, frequency_per_year, classification FROM app.threat")) return { rows: [{ id: ids.threat, name: "Synthetic threat", frequency_per_year: threatFrequency, classification: "PUBLIC" }] };
-      if (starts("SELECT id, severity, p_conditional, classification FROM app.consequence")) return { rows: [{ id: ids.consequence, name: "Synthetic consequence", severity: { people: 3, environment: 2, financial: 2 }, p_conditional: 1, classification: "PUBLIC" }] };
-      if (starts("SELECT id, classification FROM app.independence_group")) return { rows: [] };
-      if (starts("SELECT bp.id AS path_row_id")) return { rows: paths.map((path) => ({ ...path, health: path.barrier_id === ids.preventiveBarrier ? health : "healthy" })) };
+      if (starts("SELECT id, frequency_per_year, simulated, classification, created_by FROM app.threat")) return { rows: [{ id: ids.threat, name: "Synthetic threat", frequency_per_year: threatFrequency, simulated: threatSeeded, classification: "PUBLIC", created_by: threatSeeded ? "seed:dl-01" : "synthetic-reviewer" }] };
+      if (starts("SELECT id, severity, p_conditional, simulated, classification, created_by FROM app.consequence")) return { rows: [{ id: ids.consequence, name: "Synthetic consequence", severity: { people: 3, environment: 2, financial: 2 }, p_conditional: 1, simulated: seededDemo, classification: "PUBLIC", created_by: seededDemo ? "seed:dl-01" : "synthetic-reviewer" }] };
+      if (starts("SELECT id, simulated, classification, created_by FROM app.independence_group")) return { rows: [] };
+      if (starts("SELECT bp.id AS path_row_id")) return { rows: paths.map((path) => ({ ...path, health: path.barrier_id === ids.preventiveBarrier ? health : "healthy", path_simulated: seededDemo, path_created_by: seededDemo ? "seed:dl-01" : "synthetic-reviewer", barrier_simulated: seededDemo, barrier_created_by: seededDemo ? "seed:dl-01" : "synthetic-reviewer" })) };
       if (has("SELECT DISTINCT ON (barrier_id)")) return { rows: evidenceId ? [{
         id: evidenceId, barrier_id: ids.preventiveBarrier, observed_at: new Date("2026-10-13T00:00:00Z"), classification: "PUBLIC",
+        simulated: seededDemo, created_by: seededDemo ? "seed:dl-01" : "synthetic-reviewer",
       }] : [] };
       if (starts("SELECT id, created_at, trigger, snapshot_json, input_json, health_change_id, classification")) {
         return { rows: snapshots.slice().sort(byNewest).slice(0, 2) };
+      }
+      if (starts("SELECT id, bowtie_id, created_at, trigger, snapshot_json, input_json, classification FROM app.risk_snapshot")) {
+        return { rows: snapshots.slice().sort(byNewest).reverse() };
       }
       if (starts("SELECT id, barrier_id, from_health FROM app.health_change")) {
         const [orgId, barrierIds, createdAt, changeId] = values;
@@ -110,6 +116,7 @@ function fixture(approved = true, healthChanges: FakeHealthChange[] = [], standa
           : snapshots.filter((snapshot) => snapshot.health_change_id === values[2]);
         return { rows: rows.slice(0, 1) };
       }
+      if (starts("SELECT active_run_id FROM app.simulation_workspace")) return { rows: [{ active_run_id: null }] };
       if (has("FROM app.bowtie AS b")) return { rows: [{ bowtie_id: ids.bowtie }] };
       if (starts("INSERT INTO app.risk_snapshot")) {
         const fingerprint = String(values[12]);
@@ -146,6 +153,7 @@ function fixture(approved = true, healthChanges: FakeHealthChange[] = [], standa
   return {
     service: new PostgresRiskService(createRiskDatabase(pool)), snapshots,
     set health(value: string) { health = value; },
+    setThreatSeeded(value: boolean) { threatSeeded = value; },
     setThreatFrequency(value: number) { threatFrequency = value; },
     setEvidence(id: string | null, interval: string | null) { evidenceId = id; evidenceInterval = interval; },
     setStandardVersion(value: string) { currentStandardVersion = value; },
@@ -166,6 +174,39 @@ describe("PostgresRiskService", () => {
   it("fails closed when an approved matrix has no controlled standard reference", async () => {
     const { service } = fixture(true, [], "", "2026.1");
     await expect(service.getRisk(user, ids.bowtie)).rejects.toMatchObject({ status: 409, code: "risk_matrix_unconfigured" });
+  });
+
+  it("uses the owner-approved demo matrix for a complete simulated seed and emits recalculation events", async () => {
+    const change = {
+      id: "40000000-0000-4000-8000-000000000011", barrierId: ids.preventiveBarrier,
+      createdAt: "2026-10-13T00:00:01.000Z", fromHealth: "healthy", toHealth: "degraded", reason: "Synthetic seed review",
+    };
+    const testFixture = fixture(false, [change], "ORG-RISK-STD", "2026.1", true);
+    const initial = await testFixture.service.getRisk(user, ids.bowtie);
+    expect(initial.calibration).toEqual({
+      standardRef: "FieldLoop PRD §7.2 demo Risk Matrix", standardVersion: "demo-1",
+      approvedBy: "Owner-approved FieldLoop demo policy", approvedAt: "2026-10-14T00:00:00.000Z",
+    });
+    expect(testFixture.snapshots[0]).toMatchObject({ input_json: { input: { matrix: DEMO_RISK_MATRIX } } });
+
+    testFixture.health = "degraded";
+    expect(await testFixture.service.processHealthChanges()).toBe(1);
+    const events = await testFixture.service.riskEventsAfter(user, {
+      createdAt: new Date(0).toISOString(), id: "00000000-0000-0000-0000-000000000000",
+    });
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ bowtieId: ids.bowtie, trigger: "health_change", calibration: initial.calibration }),
+    ]));
+    expect(testFixture.snapshots).toHaveLength(2);
+  });
+
+  it("does not apply the demo matrix to a mixed seed and non-seed Bowtie", async () => {
+    const testFixture = fixture(false, [], "ORG-RISK-STD", "2026.1", true);
+    testFixture.setThreatSeeded(false);
+
+    await expect(testFixture.service.getRisk(user, ids.bowtie))
+      .rejects.toMatchObject({ status: 409, code: "risk_matrix_unconfigured" });
+    expect(testFixture.snapshots).toHaveLength(0);
   });
 
   it("persists only changed snapshots and explains the Barrier Health impact", async () => {

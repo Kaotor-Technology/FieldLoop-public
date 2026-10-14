@@ -14,6 +14,7 @@ interface BowtieTable {
   status: string | null;
   simulated: boolean;
   classification: string;
+  created_by: string;
 }
 
 interface OrganisationTable {
@@ -34,7 +35,9 @@ interface ThreatTable {
   bowtie_id: string;
   name: string | null;
   frequency_per_year: number | string;
+  simulated: boolean;
   classification: string;
+  created_by: string;
 }
 
 interface ConsequenceTable {
@@ -44,7 +47,9 @@ interface ConsequenceTable {
   name: string | null;
   severity: JsonColumn;
   p_conditional: number | string;
+  simulated: boolean;
   classification: string;
+  created_by: string;
 }
 
 interface BarrierTable {
@@ -55,7 +60,9 @@ interface BarrierTable {
   side: string;
   health: string;
   pfd_band: number | string;
+  simulated: boolean;
   classification: string;
+  created_by: string;
   independence_group_id: string | null;
   evidence_interval: string | null;
 }
@@ -67,7 +74,9 @@ interface BarrierPathTable {
   threat_id: string | null;
   consequence_id: string | null;
   barrier_id: string;
+  simulated: boolean;
   classification: string;
+  created_by: string;
 }
 
 interface DegradationFactorTable {
@@ -82,7 +91,9 @@ interface IndependenceGroupTable {
   id: string;
   org_id: string;
   bowtie_id: string;
+  simulated: boolean;
   classification: string;
+  created_by: string;
 }
 
 interface HealthChangeTable {
@@ -107,6 +118,7 @@ interface EvidenceTable {
   observed_at: Timestamp;
   simulated: boolean;
   classification: string;
+  created_by: string;
 }
 
 interface RiskSnapshotTable {
