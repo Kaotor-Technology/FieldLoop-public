@@ -94,6 +94,9 @@ CREATE TRIGGER trg_guard_audit_event_insert
 BEFORE INSERT ON audit_event
 FOR EACH ROW EXECUTE FUNCTION guard_audit_event_insert();
 
+-- GET /v1/audit filters by Organisation and entity, newest first.
+CREATE INDEX idx_audit_event_org_entity ON audit_event (org_id, entity, created_at DESC, id DESC);
+
 -- The simulation reset appends through the shared function instead of a direct INSERT.
 CREATE OR REPLACE FUNCTION restore_simulation_baseline(organisation text) RETURNS void AS $$
 DECLARE
@@ -159,6 +162,7 @@ BEGIN
     VALUES (organisation, 'simulator', 'simulation.reset', workspace.active_run_id::text, true, 'INTERNAL');
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = app, pg_temp;
+DROP INDEX idx_audit_event_org_entity;
 DROP TRIGGER trg_guard_audit_event_insert ON audit_event;
 DROP FUNCTION guard_audit_event_insert();
 DROP FUNCTION append_audit_event(text, text, text, text, text, text, boolean, text, text);
