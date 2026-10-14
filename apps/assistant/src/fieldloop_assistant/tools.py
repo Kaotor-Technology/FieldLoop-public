@@ -5,6 +5,7 @@ the Guardrail `tool-calls:check` callback. Reads call the platform API with the 
 token, so an agent never sees or does more than the user (§7.5).
 """
 
+import re
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
@@ -74,6 +75,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec("create_draft", "propose", "Save a Draft that needs human approval."),
 )
 TOOL_NAMES = frozenset(spec.name for spec in TOOL_SPECS)
+# Tools that propose a change; their calls carry an action envelope and the current run.
+PROPOSE_TOOLS = frozenset(spec.name for spec in TOOL_SPECS if spec.kind == "propose")
 # Names a definition may list (architecture §7.3). Only TOOL_NAMES are executable here; the rest
 # belong to later issues, so an agent that lists them simply has fewer tools in this build.
 DEFINITION_VOCABULARY = TOOL_NAMES | frozenset({
@@ -105,6 +108,7 @@ class ToolContext:
     knowledge: KnowledgeProvider | None
     drafts: DraftStore | None
     state: TurnState
+    scan: Callable[[str], Awaitable[str | None]] | None = None
 
 
 def _text(value: str, name: str, limit: int) -> str:
@@ -114,8 +118,6 @@ def _text(value: str, name: str, limit: int) -> str:
 
 
 def _uuid(value: str, name: str) -> str:
-    import re
-
     if not isinstance(value, str) or not re.fullmatch(UUID_RE, value):
         raise ToolInputError(f"{name} must be a UUID")
     return value
@@ -140,9 +142,18 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
         allowed_folders = [f for f in wanted if f in ctx.knowledge_folders]
         if not allowed_folders:
             raise ToolInputError("folders are outside this agent's Knowledge Library scope")
-        results = await ctx.knowledge.search(text, allowed_folders, None)
-        for item in results:
+        found = await ctx.knowledge.search(text, allowed_folders, None)
+        results: list[dict[str, Any]] = []
+        for item in found:
+            # Retrieved text is scanned before the model sees it (PRD GR-2). No scanner or a
+            # failed scan withholds the passage; the citation stays so the answer can say so.
+            scanned = await ctx.scan(item["content"]) if ctx.scan else None
             ctx.state.citations.append(item["citation"])
+            if scanned is None:
+                results.append({"citation": item["citation"], "content": None,
+                                "withheld": "content_scan_not_allowed"})
+            else:
+                results.append({**item, "content": scanned})
         return {"results": results, "untrusted_content": True}
 
     async def get_asset(asset_id: str) -> dict[str, Any]:

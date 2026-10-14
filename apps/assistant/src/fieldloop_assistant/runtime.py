@@ -5,14 +5,18 @@ Action Requests; the `tool-calls:check` decision is authoritative and a failure 
 """
 
 import asyncio
+import functools
 import json
 import re
 import time
 from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
+from uuid import uuid4
 
 from google.adk.agents import LlmAgent
+
+# StreamingMode is not re-exported publicly in google-adk 2.11.0 (mypy attr-defined).
 from google.adk.agents._streaming_mode import StreamingMode
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.agents.run_config import RunConfig
@@ -27,9 +31,11 @@ from google.genai import types
 
 from .catalog import AgentCatalog, AgentDefinition
 from .events import StreamEvent
-from .guardrail_client import TOKEN_HEADER, GuardrailClient, blocked, idempotency_key
+from .guardrail_client import GuardrailClient, blocked, idempotency_key
+from .identity import TOKEN_HEADER
 from .limits import TurnBudget
 from .tools import (
+    PROPOSE_TOOLS,
     TOOL_NAMES,
     DraftStore,
     KnowledgeProvider,
@@ -42,9 +48,6 @@ from .tools import (
 from .trace import SessionRecord, SessionStore, StepRecord, TraceSink, args_hash, summarize
 
 APP_NAME = "fieldloop-assistant"
-READ_TOOLS = frozenset(
-    {"search_knowledge", "get_asset", "get_barriers", "get_bowtie_risk", "get_scenario_state"}
-)
 TRANSFER_TOOL = "transfer_to_agent"
 LIMIT_MESSAGE = "The turn limit was reached before the answer was complete."
 CANCEL_MESSAGE = "The turn was cancelled before the answer was complete."
@@ -86,6 +89,7 @@ class _Turn:
     step: int = 0
     notices: list[str] = field(default_factory=list)
     pending: list["asyncio.Future[None]"] = field(default_factory=list)
+    turn_id: str = field(default_factory=lambda: uuid4().hex[:12])
 
     def emit(self, name: Any, data: dict[str, Any]) -> None:
         self.seq += 1
@@ -96,11 +100,11 @@ class _Turn:
         return self.step
 
 
-def agent_name(agent_id: str) -> str:
+def to_adk_name(agent_id: str) -> str:
     return agent_id.replace("-", "_")
 
 
-def _agent_id(name: str) -> str:
+def from_adk_name(name: str) -> str:
     return name.replace("_", "-")
 
 
@@ -125,7 +129,7 @@ def build_envelope(
             rationale=f"Draft proposed by agent {turn.definition.id}",
             citations=args.get("citations") or ["draft"],
         )
-    if simulation_run_id and tool in {"create_action_request", "create_draft"}:
+    if simulation_run_id and tool in PROPOSE_TOOLS:
         envelope["simulationRunId"] = simulation_run_id
     return {k: v for k, v in envelope.items() if v is not None}
 
@@ -160,10 +164,17 @@ def parse_answer(text: str, state: TurnState, incomplete: str | None) -> dict[st
     return answer
 
 
+class TurnInProgressError(RuntimeError):
+    """A session runs one turn at a time."""
+
+
 class AgentRuntime:
     def __init__(self, deps: RuntimeDeps) -> None:
         self._d = deps
         self._cancels: dict[str, asyncio.Event] = {}
+
+    def busy(self, session_id: str) -> bool:
+        return session_id in self._cancels
 
     def cancel(self, session_id: str) -> bool:
         """Stops the loop between steps. Created Drafts and requests keep their normal flow."""
@@ -173,10 +184,31 @@ class AgentRuntime:
         event.set()
         return True
 
+    async def request_cancel(self, session: SessionRecord) -> bool:
+        """Cancels here and records `cancelling`, so a turn on another instance stops too."""
+        local = self.cancel(session.id)
+        await self._d.sessions.set_status(session.id, session.org_id, "cancelling", 0)
+        return local
+
+    async def _cancel_requested(self, turn: _Turn) -> bool:
+        if turn.cancel.is_set():
+            return True
+        try:
+            current = await self._d.sessions.get(
+                turn.session.id, turn.session.org_id, turn.session.user_sub
+            )
+        except Exception:  # noqa: BLE001 - the local flag still works
+            return False
+        if current is not None and current.status == "cancelling":
+            turn.cancel.set()
+        return turn.cancel.is_set()
+
     async def run_turn(
         self, session: SessionRecord, user_token: str, message: str, agent_id: str
     ) -> AsyncIterator[StreamEvent]:
         definition = self._d.catalog.get(agent_id)
+        if session.id in self._cancels:
+            raise TurnInProgressError(session.id)
         cancel = asyncio.Event()
         self._cancels[session.id] = cancel
         turn = _Turn(
@@ -198,6 +230,9 @@ class AgentRuntime:
         final_text = ""
         failed = False
         try:
+            await self._d.sessions.set_status(
+                turn.session.id, turn.session.org_id, "running", 0
+            )
             runner = Runner(
                 app_name=APP_NAME, agent=self._build_agent(turn, turn.definition),
                 session_service=self._d.adk_sessions,
@@ -233,16 +268,19 @@ class AgentRuntime:
             turn.events.put_nowait(None)
 
     async def _finish(self, turn: _Turn, final_text: str, failed: bool) -> None:
-        incomplete = "cancelled" if turn.cancel.is_set() else turn.budget.exhausted
+        # A cancel that arrives after the answer was produced does not make it incomplete.
+        produced = bool(final_text) and final_text not in {CANCEL_MESSAGE, LIMIT_MESSAGE}
+        cancelled = turn.cancel.is_set() and not produced
+        incomplete = "cancelled" if cancelled else turn.budget.exhausted
         await asyncio.gather(*turn.pending, return_exceptions=True)
         if turn.notices:
             turn.emit("agent.step", {"phase": "trace_degraded",
                                      "detail": sorted(set(turn.notices))})
         if not failed:
-            fallback = CANCEL_MESSAGE if turn.cancel.is_set() else LIMIT_MESSAGE
+            fallback = CANCEL_MESSAGE if cancelled else LIMIT_MESSAGE
             answer = parse_answer(final_text or fallback, turn.state, incomplete)
             turn.emit("answer.incomplete" if incomplete else "answer.final", answer)
-        status = "failed" if failed else ("cancelled" if turn.cancel.is_set() else "active")
+        status = "failed" if failed else ("cancelled" if cancelled else "active")
         try:
             await self._d.sessions.set_status(
                 turn.session.id, turn.session.org_id, status, turn.budget.tokens
@@ -262,13 +300,16 @@ class AgentRuntime:
 
     # -- agent assembly -------------------------------------------------------------------
 
-    def _build_agent(self, turn: _Turn, definition: AgentDefinition) -> LlmAgent:
+    def _build_agent(
+        self, turn: _Turn, definition: AgentDefinition, parent_id: str | None = None
+    ) -> LlmAgent:
         ctx = ToolContext(
             session_id=turn.session.id, agent_id=definition.id, user_sub=turn.session.user_sub,
             user_token=turn.user_token, knowledge_folders=definition.knowledge_folders,
             simulated=turn.session.simulated, classification=turn.session.classification,
             platform=self._d.platform, knowledge=self._d.knowledge(turn.session),
             drafts=self._d.drafts(turn.session), state=turn.state,
+            scan=lambda content: self._scan(turn, definition, content),
         )
         tools = [self._safe(fn) for fn in build_tools(ctx, definition.allowed_tools)]
         instruction = "\n".join([
@@ -276,21 +317,20 @@ class AgentRuntime:
             "Refusal rules:", *[f"- {rule}" for rule in definition.refusal_rules], ANSWER_CONTRACT,
         ])
         return LlmAgent(
-            name=agent_name(definition.id), model=self._d.model_factory(definition),
+            name=to_adk_name(definition.id), model=self._d.model_factory(definition),
             instruction=instruction, tools=tools,  # type: ignore[arg-type]
             sub_agents=[
-                self._build_agent(turn, self._d.catalog.get(d)) for d in definition.delegates
+                self._build_agent(turn, self._d.catalog.get(d), definition.id)
+                for d in definition.delegates
             ],
             before_model_callback=self._before_model(turn, definition),
             after_model_callback=self._after_model(turn),
-            before_tool_callback=self._before_tool(turn, definition),
+            before_tool_callback=self._before_tool(turn, definition, parent_id),
             after_tool_callback=self._after_tool(turn),
         )
 
     @staticmethod
     def _safe(fn: Callable[..., Any]) -> Callable[..., Any]:
-        import functools
-
         @functools.wraps(fn)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
@@ -304,9 +344,9 @@ class AgentRuntime:
 
     def _before_model(
         self, turn: _Turn, definition: AgentDefinition
-    ) -> Callable[[CallbackContext, LlmRequest], LlmResponse | None]:
-        def callback(context: CallbackContext, request: LlmRequest) -> LlmResponse | None:
-            reason = "cancelled" if turn.cancel.is_set() else (
+    ) -> Callable[[CallbackContext, LlmRequest], Any]:
+        async def callback(context: CallbackContext, request: LlmRequest) -> LlmResponse | None:
+            reason = "cancelled" if await self._cancel_requested(turn) else (
                 turn.budget.check_time() or turn.budget.exhausted
             )
             if reason:
@@ -331,11 +371,11 @@ class AgentRuntime:
             tout = int(getattr(usage, "candidates_token_count", 0) or 0)
             turn.budget.charge_tokens(tin + tout)
             turn.emit("agent.step", {
-                "agent": _agent_id(context.agent_name), "phase": "model",
+                "agent": from_adk_name(context.agent_name), "phase": "model",
                 "step": turn.next_step(), "tokens_in": tin, "tokens_out": tout,
             })
             self._record(turn, StepRecord(
-                kind="model", agent_id=_agent_id(context.agent_name), tokens_in=tin,
+                kind="model", agent_id=from_adk_name(context.agent_name), tokens_in=tin,
                 tokens_out=tout, model=response.model_version,
             ))
             return None
@@ -343,21 +383,22 @@ class AgentRuntime:
         return callback
 
     def _before_tool(
-        self, turn: _Turn, definition: AgentDefinition
+        self, turn: _Turn, definition: AgentDefinition, parent_id: str | None
     ) -> Callable[[BaseTool, dict[str, Any], AdkToolContext], Any]:
         async def callback(
             tool: BaseTool, args: dict[str, Any], tool_context: AdkToolContext
         ) -> dict[str, Any] | None:
-            agent = _agent_id(tool_context.agent_name)
-            if turn.cancel.is_set():
+            agent = from_adk_name(tool_context.agent_name)
+            if await self._cancel_requested(turn):
                 return blocked("cancelled")
             if tool.name == TRANSFER_TOOL:
                 # Framework control flow, not a registry tool: counted, capped and shown.
                 limit = turn.budget.take_handoff()
                 if limit:
                     return {"error": "handoff_limit", "limit": limit}
-                target = _agent_id(str(args.get("agent_name", "")))
-                if target not in definition.delegates and target != definition.id:
+                target = from_adk_name(str(args.get("agent_name", "")))
+                permitted = {*definition.delegates, *([parent_id] if parent_id else [])}
+                if target not in permitted or target == definition.id:
                     return {"error": "handoff_not_allowed"}
                 turn.emit("agent.step", {"agent": agent, "phase": "handoff", "to": target,
                                          "step": turn.next_step()})
@@ -398,13 +439,19 @@ class AgentRuntime:
 
         return callback
 
+    async def _scan(self, turn: _Turn, definition: AgentDefinition, content: str) -> str | None:
+        key = idempotency_key(f"{turn.session.id}:{turn.turn_id}", "content:scan", {"c": content})
+        return await self._d.guardrail.scan_content(
+            turn.user_token, definition.ai_system_id, content, key
+        )
+
     async def _check(
         self, turn: _Turn, definition: AgentDefinition, tool: str, args: Mapping[str, Any]
     ) -> dict[str, Any]:
         # Tools outside the definition or registry are still asked of the Guardrail, so the
         # Intercept is recorded as Evidence (GR-9); it blocks anything not registered.
         run_id: str | None = None
-        if turn.session.simulated and tool in {"create_action_request", "create_draft"}:
+        if turn.session.simulated and tool in PROPOSE_TOOLS:
             try:
                 run = await self._d.platform.get("/api/v1/simulation/runs/current", turn.user_token)
             except Exception:  # noqa: BLE001 - fail closed
@@ -413,7 +460,8 @@ class AgentRuntime:
             if not run_id:
                 return blocked("simulation_run_unavailable")
         envelope = build_envelope(turn, tool, args, run_id)
-        key = idempotency_key(turn.session.id, tool, args)
+        # One turn's retries replay; the same proposal in a later turn is a new request.
+        key = idempotency_key(f"{turn.session.id}:{turn.turn_id}", tool, args)
         return await self._d.guardrail.check_tool_call(turn.user_token, envelope, key)
 
     def _after_tool(
@@ -424,7 +472,7 @@ class AgentRuntime:
         ) -> None:
             if tool.name == TRANSFER_TOOL:
                 return None
-            agent = _agent_id(tool_context.agent_name)
+            agent = from_adk_name(tool_context.agent_name)
             summary = summarize(response)
             turn.emit("tool.result", {"agent": agent, "tool": tool.name, "summary": summary,
                                       "step": turn.next_step()})

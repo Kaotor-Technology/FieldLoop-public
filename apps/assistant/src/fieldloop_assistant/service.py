@@ -7,11 +7,16 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from .identity import CLASSIFICATIONS, InternalTokenVerifier, InvalidTokenError, UserIdentity
+from .identity import (
+    CLASSIFICATIONS,
+    TOKEN_HEADER,
+    InternalTokenVerifier,
+    InvalidTokenError,
+    UserIdentity,
+)
 from .runtime import AgentRuntime
 from .trace import SessionStore
 
-TOKEN_HEADER = "x-fieldloop-internal-user-token"
 # Agents a person may start from the UI; specialists run only as delegates of a coordinator.
 STARTABLE = ("integrity-orchestrator", "flood-situation")
 DEFAULT_CLASSIFICATION = "INTERNAL"
@@ -100,6 +105,9 @@ def create_service(
         if record.classification not in permitted:
             raise HTTPException(403, "forbidden")
 
+        if runtime.busy(record.id):
+            raise HTTPException(409, "turn_in_progress")
+
         async def stream() -> AsyncIterator[str]:
             async for event in runtime.run_turn(record, auth.token, body.message, record.agent_id):
                 yield event.encode()
@@ -117,6 +125,6 @@ def create_service(
         record = await sessions.get(session_id, auth.identity.org_id, auth.identity.sub)
         if record is None:
             raise HTTPException(404, "not_found")
-        return {"cancelling": runtime.cancel(record.id)}
+        return {"cancelling": await runtime.request_cancel(record)}
 
     return app

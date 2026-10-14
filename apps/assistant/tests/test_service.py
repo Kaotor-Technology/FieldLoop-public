@@ -119,7 +119,7 @@ def test_message_body_is_strict() -> None:
 
 def test_configured_process_wiring_builds_without_touching_the_network() -> None:
     from fieldloop_assistant.main import Settings, build_app, guardrail_model
-    from fieldloop_assistant.runtime import agent_name
+    from fieldloop_assistant.runtime import to_adk_name
 
     from .support import REPO, catalog
 
@@ -137,4 +137,57 @@ def test_configured_process_wiring_builds_without_touching_the_network() -> None
     # Every model call is routed to the Guardrail's OpenAI-compatible endpoint with the AI System.
     model = guardrail_model(catalog().get("flood-situation"), "http://guardrail.internal/")
     assert model.model == "openai/flash"
-    assert agent_name("integrity-orchestrator") == "integrity_orchestrator"
+    assert to_adk_name("integrity-orchestrator") == "integrity_orchestrator"
+
+
+def test_a_second_turn_on_a_running_session_is_refused_and_cancel_is_recorded() -> None:
+    import asyncio
+
+    client, h = make_client()
+    session_id = client.post("/assistant/v1/sessions", json={"agent": "flood-situation"},
+                             headers=auth()).json()["id"]
+    h.runtime._cancels[session_id] = asyncio.Event()  # a turn is running on this instance
+    busy = client.post(f"/assistant/v1/sessions/{session_id}/messages", json={"message": "x"},
+                       headers=auth())
+    assert busy.status_code == 409
+    cancelled = client.post(f"/assistant/v1/sessions/{session_id}:cancel", headers=auth())
+    assert cancelled.status_code == 202 and cancelled.json() == {"cancelling": True}
+    assert h.store.sessions[session_id].status == "cancelling"  # visible to other instances
+
+
+def test_litellm_sends_the_user_token_header_on_the_wire() -> None:
+    """The header set in before_model_callback must reach the Guardrail's HTTP request."""
+    import asyncio
+
+    from fieldloop_assistant.guardrail_client import TOKEN_HEADER
+    from fieldloop_assistant.main import guardrail_model
+    from google.adk.models.llm_request import LlmRequest
+    from google.genai import types
+    from litellm import ModelResponse
+
+    from .support import USER_TOKEN, catalog
+
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        async def acompletion(self, model, messages, tools, **kwargs):  # type: ignore[no-untyped-def]
+            captured.update(kwargs, model=model)
+            return ModelResponse(choices=[{"message": {"role": "assistant", "content": "ok"}}])
+
+    model = guardrail_model(catalog().get("flood-situation"), "http://guardrail.internal")
+    model.llm_client = FakeClient()  # type: ignore[attr-defined]
+    request = LlmRequest(
+        model="openai/flash",
+        contents=[types.Content(role="user", parts=[types.Part(text="hi")])],
+        config=types.GenerateContentConfig(
+            http_options=types.HttpOptions(headers={TOKEN_HEADER: USER_TOKEN})),
+    )
+
+    async def go() -> None:
+        async for _ in model.generate_content_async(request):
+            pass
+
+    asyncio.run(go())
+    assert captured["extra_headers"][TOKEN_HEADER] == USER_TOKEN  # type: ignore[index]
+    assert captured["extra_body"] == {"aiSystem": "demo-uc-4"}
+    assert captured["api_base"] == "http://guardrail.internal/guardrail/v1"

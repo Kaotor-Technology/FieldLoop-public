@@ -77,6 +77,10 @@ class Harness:
             lambda body: {"decision": "allow", "reason": "registered_read"}
         )
         self._platform = platform if platform is not None else {}
+        self.scan: Callable[[dict[str, Any]], dict[str, Any] | int] = lambda body: {
+            "decision": "allow", "content": body["content"], "classification": "INTERNAL",
+            "policyId": "00000000-0000-4000-8000-000000000000",
+        }
         self.store = MemoryStore()
         self.adk = InMemorySessionService()
         self.llm = ScriptedLlm(script=script)
@@ -91,7 +95,13 @@ class Harness:
     def _route(self, request: httpx.Request) -> httpx.Response:
         if request.url.host == "guardrail":
             self.guardrail_requests.append(request)
-            result = self._guardrail(json.loads(request.content))
+            body = json.loads(request.content)
+            if request.url.path.endswith("content:scan"):
+                outcome = self.scan(body)
+                if isinstance(outcome, int):
+                    return httpx.Response(outcome)
+                return httpx.Response(200, json=outcome)
+            result = self._guardrail(body)
             if isinstance(result, int):
                 return httpx.Response(result)
             return httpx.Response(200, json=result)

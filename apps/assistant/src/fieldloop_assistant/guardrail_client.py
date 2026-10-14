@@ -7,7 +7,8 @@ from typing import Any
 
 import httpx
 
-TOKEN_HEADER = "x-fieldloop-internal-user-token"
+from .identity import TOKEN_HEADER
+
 DECISIONS = frozenset({"allow", "convert_l1", "hold_l2", "block"})
 
 
@@ -52,3 +53,25 @@ class GuardrailClient:
         ):
             return blocked("guardrail_invalid_response")
         return decision
+
+    async def scan_content(
+        self, user_token: str, ai_system: str, content: str, key: str
+    ) -> str | None:
+        """`content:scan` (PRD GR-2). Returns text safe to quote to the model, else None."""
+        try:
+            response = await self._client.post(
+                f"{self._base_url}/guardrail/v1/content:scan",
+                headers={TOKEN_HEADER: user_token, "Idempotency-Key": key},
+                json={"aiSystem": ai_system, "content": content},
+            )
+            if response.status_code != 200:
+                return None
+            result = response.json()
+        except (httpx.HTTPError, ValueError):
+            return None
+        if (
+            not isinstance(result, dict) or result.get("decision") != "allow"
+            or not isinstance(result.get("content"), str)
+        ):
+            return None
+        return str(result["content"])
