@@ -32,6 +32,7 @@ from google.adk.tools.tool_context import ToolContext as AdkToolContext
 
 from .catalog import AgentCatalog, AgentDefinition
 from .events import StreamEvent
+from .geo_extraction import GeoExtractionPlatform
 from .guardrail_client import GuardrailClient, blocked, idempotency_key
 from .identity import AI_SYSTEM_HEADER, TOKEN_HEADER
 from .limits import TurnBudget
@@ -82,6 +83,7 @@ class RuntimeDeps:
     trace: TraceSink
     adk_sessions: BaseSessionService
     model_factory: ModelFactory
+    geo_platform: GeoExtractionPlatform | None = None
     knowledge: KnowledgeFactory = lambda session: None
     drafts: DraftFactory = lambda session: None
 
@@ -355,6 +357,8 @@ class AgentRuntime:
             platform=self._deps.platform, knowledge=self._deps.knowledge(turn.session),
             drafts=self._deps.drafts(turn.session), state=turn.state,
             scan=lambda content: self._scan(turn, definition, content),
+            geo_platform=self._deps.geo_platform, geo_guardrail=self._deps.guardrail,
+            turn_id=turn.turn_id,
         )
         tools = [self._safe(fn) for fn in build_tools(ctx, definition.allowed_tools)]
         instruction = "\n".join([

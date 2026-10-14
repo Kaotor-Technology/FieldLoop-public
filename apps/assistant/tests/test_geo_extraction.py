@@ -168,10 +168,12 @@ class FakeGuardrail:
         self.content = content
         self.decision = decision
         self.scanned: list[str] = []
+        self.scan_keys: list[str] = []
         self.completion: dict[str, Any] | None = None
 
-    async def scan_content(self, **kwargs: Any) -> Mapping[str, Any]:
+    async def scan_geo_content(self, **kwargs: Any) -> Mapping[str, Any]:
         self.scanned.append(kwargs["content"])
+        self.scan_keys.append(kwargs["idempotency_key"])
         return {
             "decision": self.decision,
             "content": kwargs["content"],
@@ -210,6 +212,7 @@ def test_tool_scans_then_saves_only_grounded_drafts() -> None:
             allowed_folders=("Safety",), idempotency_key="geo-test-key-0001"
         )
         assert guardrail.scanned == [source]
+        assert guardrail.scan_keys == ["geo-scan:geo-test-key-0001"]
         assert guardrail.completion is not None
         assert guardrail.completion["response_format"]["type"] == "json_schema"
         schema = guardrail.completion["response_format"]["json_schema"]["schema"]

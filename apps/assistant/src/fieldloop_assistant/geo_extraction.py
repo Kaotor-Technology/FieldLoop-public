@@ -6,14 +6,18 @@ import json
 import math
 import re
 from collections.abc import Collection, Mapping
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
+from urllib.parse import quote
 from uuid import uuid4
 
+import httpx
 from fieldloop_common.generated_geo_reference import (
     GeoReferenceCandidate,
     GeoReferenceDraftCreate,
 )
 from pydantic import ValidationError
+
+from .identity import TOKEN_HEADER
 
 MAX_DOCUMENT_CHARS = 100_000
 MAX_CHAINAGE_METRES = 1_000_000_000
@@ -51,8 +55,54 @@ class GeoExtractionPlatform(Protocol):
     ) -> Mapping[str, Any]: ...
 
 
+class HttpGeoExtractionPlatform:
+    """Call the scoped web-api endpoints with the signed internal user token."""
+
+    def __init__(self, client: httpx.AsyncClient, base_url: str) -> None:
+        self._client = client
+        self._base_url = base_url.rstrip("/")
+
+    async def get_geo_source(
+        self, document_id: str, internal_user_token: str
+    ) -> Mapping[str, Any]:
+        path = f"/api/internal/assistant/documents/{quote(document_id, safe='')}/geo-source"
+        response = await self._client.get(
+            f"{self._base_url}{path}",
+            headers={TOKEN_HEADER: internal_user_token, "accept": "application/json"},
+        )
+        response.raise_for_status()
+        return _response_object(response)
+
+    async def create_geo_reference_drafts(
+        self,
+        document_id: str,
+        internal_user_token: str,
+        idempotency_key: str,
+        references: list[dict[str, Any]],
+    ) -> Mapping[str, Any]:
+        path = f"/api/internal/assistant/documents/{quote(document_id, safe='')}/geo-references"
+        response = await self._client.post(
+            f"{self._base_url}{path}",
+            headers={
+                TOKEN_HEADER: internal_user_token,
+                "Idempotency-Key": idempotency_key,
+                "accept": "application/json",
+            },
+            json={"references": references},
+        )
+        response.raise_for_status()
+        return _response_object(response)
+
+
+def _response_object(response: httpx.Response) -> Mapping[str, Any]:
+    value = response.json()
+    if not isinstance(value, dict) or not all(isinstance(key, str) for key in value):
+        raise RuntimeError("Geo Reference API returned an invalid response")
+    return cast(Mapping[str, Any], value)
+
+
 class GeoExtractionGuardrail(Protocol):
-    async def scan_content(
+    async def scan_geo_content(
         self,
         *,
         ai_system: str,
@@ -241,12 +291,12 @@ async def extract_geo_references(
         raise GeoExtractionValidationError("Document classification is invalid")
 
     key = idempotency_key or str(uuid4())
-    scan = await guardrail.scan_content(
+    scan = await guardrail.scan_geo_content(
         ai_system=GEO_AI_SYSTEM,
         content=source_text,
         classification=classification,
         internal_user_token=internal_user_token,
-        idempotency_key=f"geo-scan:{uuid4()}",
+        idempotency_key=f"geo-scan:{key}",
     )
     if scan.get("decision") != "allow" or not isinstance(scan.get("content"), str):
         raise GeoExtractionBlockedError("Guardrail did not allow document text for extraction")

@@ -14,6 +14,15 @@ from typing import Any, Literal, Protocol
 
 import httpx
 
+from .geo_extraction import (
+    GeoExtractionGuardrail,
+    GeoExtractionPlatform,
+)
+from .geo_extraction import (
+    extract_geo_references as run_geo_extraction,
+)
+from .guardrail_client import idempotency_key as make_idempotency_key
+
 Kind = Literal["read", "propose"]
 UUID_RE = r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 
@@ -79,6 +88,10 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec("get_barriers", "read", "Read the Barriers and Barrier Health of a Bowtie."),
     ToolSpec("get_bowtie_risk", "read", "Read the current Risk Score of a Bowtie."),
     ToolSpec("get_scenario_state", "read", "Read the current simulation run state."),
+    ToolSpec(
+        "extract_geo_references", "read",
+        "Extract grounded location references into human-reviewable drafts.",
+    ),
     ToolSpec("create_action_request", "propose", "Propose an L1/L2 Action Request for a person."),
     ToolSpec("create_draft", "propose", "Save a Draft that needs human approval."),
 )
@@ -89,7 +102,6 @@ PROPOSE_TOOLS = frozenset(spec.name for spec in TOOL_SPECS if spec.kind == "prop
 # belong to later issues, so an agent that lists them simply has fewer tools in this build.
 DEFINITION_VOCABULARY = TOOL_NAMES | frozenset({
     "get_document", "get_action_requests", "get_stakeholders", "spatial_query",
-    "extract_geo_references",
 })
 
 
@@ -119,6 +131,9 @@ class ToolContext:
     drafts: DraftStore | None
     state: TurnState
     scan: Callable[[str], Awaitable[str | None]] | None = None
+    geo_platform: GeoExtractionPlatform | None = None
+    geo_guardrail: GeoExtractionGuardrail | None = None
+    turn_id: str = ""
 
 
 def _text(value: str, name: str, limit: int) -> str:
@@ -212,6 +227,29 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
         run = await current_run(ctx.platform, ctx.user_token)
         return {"run": run}
 
+    async def extract_geo_references(document_id: str) -> dict[str, Any]:
+        """Extract grounded locations as Draft Geo References that require human confirmation.
+
+        Args:
+            document_id: The UUID of a current controlled document in an allowed folder.
+        """
+        wanted = _uuid(document_id, "document_id")
+        if ctx.geo_platform is None or ctx.geo_guardrail is None:
+            return {"references": [], "error": "geo_extraction_unavailable"}
+        result = await run_geo_extraction(
+            wanted,
+            ctx.user_token,
+            ctx.geo_platform,
+            ctx.geo_guardrail,
+            allowed_folders=ctx.knowledge_folders,
+            idempotency_key=make_idempotency_key(
+                f"{ctx.session_id}:{ctx.turn_id}",
+                "extract_geo_references",
+                {"document_id": wanted},
+            ),
+        )
+        return {"status": "needs_human_confirmation", **result}
+
     async def create_action_request(
         action_type: str, action_level: str, target: str, payload: dict[str, Any],
         rationale: str, citations: list[str],
@@ -261,6 +299,7 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
     available: Mapping[str, Callable[..., Awaitable[Any]]] = {
         "search_knowledge": search_knowledge, "get_asset": get_asset, "get_barriers": get_barriers,
         "get_bowtie_risk": get_bowtie_risk, "get_scenario_state": get_scenario_state,
+        "extract_geo_references": extract_geo_references,
         "create_action_request": create_action_request, "create_draft": create_draft,
     }
     return [available[name] for name in allowed if name in available]
