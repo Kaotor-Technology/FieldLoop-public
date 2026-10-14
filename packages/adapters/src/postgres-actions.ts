@@ -190,10 +190,14 @@ function toAction(row: ActionRow): ActionRequest {
   return { id: row.id, orgId: row.org_id, actionType: row.action_type, actionLevel: row.action_level, target: row.target,
     payload: row.payload, payloadHash: row.payload_hash, rationale: row.rationale, citations: row.citations,
     requestedBy: row.requested_by,
-    requester: row.requester_kind === "assistant" && row.requester_ai_system_id
-      ? { kind: "assistant", aiSystemId: row.requester_ai_system_id } : { kind: "person" },
+    requester: toRequester(row),
     status: row.status, expiresAt: row.expires_at.toISOString(), simulated: row.simulated,
     classification: row.classification, ...(row.simulation_run_id ? { simulationRunId: row.simulation_run_id } : {}) };
+}
+function toRequester(row: ActionRow): ActionRequester {
+  if (row.requester_kind === "person" && row.requester_ai_system_id === null) return { kind: "person" };
+  if (row.requester_kind === "assistant" && row.requester_ai_system_id) return { kind: "assistant", aiSystemId: row.requester_ai_system_id };
+  throw new Error("Action Request requester is inconsistent");
 }
 async function insertAction(trx: Tx, user: ActionIdentity, body: ActionRequestCreate, slaSeconds: number, requester: ActionRequester): Promise<ActionRequest> {
   const now = (await sql<{ now: Date }>`SELECT clock_timestamp() AS now`.execute(trx)).rows[0]?.now;
