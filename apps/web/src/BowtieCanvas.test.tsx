@@ -1,10 +1,25 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
-import "./i18n";
+import { afterEach, describe, expect, it } from "vitest";
+import i18n from "./i18n";
 import { BowtieCanvas } from "./BowtieCanvas";
 import { listBowties } from "./bowtie-data";
 
+afterEach(async () => { await i18n.changeLanguage("en"); });
+
 describe("Bowtie canvas", () => {
+  it("translates Classification in both the canvas and its text equivalent", async () => {
+    const bowtie = listBowties()[0];
+    if (!bowtie) throw new Error("A synthetic Bowtie fixture is required");
+    await i18n.changeLanguage("th");
+    const markup = renderToStaticMarkup(<BowtieCanvas bowtie={{ ...bowtie, classification: "CONFIDENTIAL" }} onBack={() => undefined} />);
+    expect(markup).toContain("ระดับชั้นข้อมูล");
+    expect(markup.match(/>ลับ</g)).toHaveLength(2);
+    expect(markup).not.toContain(">CONFIDENTIAL<");
+    expect(markup.match(/ข้อมูลสังเคราะห์ \(SYNTHETIC\)/g)).toHaveLength(2);
+    const missing = renderToStaticMarkup(<BowtieCanvas bowtie={{ ...bowtie, classification: "Not recorded" }} onBack={() => undefined} />);
+    expect(missing).not.toContain("Not recorded");
+    expect(missing).toContain(i18n.t("notRecorded"));
+  });
   it.each(listBowties())("renders Bowtie $code as a read-only three-column view", (bowtie) => {
     const markup = renderToStaticMarkup(<BowtieCanvas bowtie={bowtie} onBack={() => undefined} />);
 

@@ -81,7 +81,7 @@ export function BowtieCanvasPage() {
         </section>
         <section className="bowtie-top-event-panel" aria-labelledby="top-event-title">
           <h2 id="top-event-title">{t("topEvent")}</h2>
-          <p>{data.topEvent}</p>
+          <p lang="en">{data.topEvent}</p>
           {risk.data ? <dl>
             <dt>{t("frequencyPerYearLabel")}</dt><dd className="mono">{risk.data.snapshot.topEventFrequencyPerYear.toExponential(3)}</dd>
             <dt>{t("riskZoneLabel")}</dt><dd>{t(`riskZone.${risk.data.snapshot.cell.zone}`)}</dd>
@@ -131,7 +131,7 @@ function BarrierCell({ barrier, t }: { barrier: BowtieCanvas["barriers"][number]
     <div className="barrier-cell-heading"><strong lang="en">{barrier.name}</strong><HealthBadge health={barrier.health} label={t(`barrierHealth.${barrier.health}`)} /></div>
     <p className="mono">{barrier.id}</p>
     <p>{typeLabel} · {t("pfdBand")} <span className="mono">{barrier.pfdBand.toExponential(2)}</span></p>
-    {barrier.degradationFactors.map((factor) => <p className="degradation-factor" key={factor}>{t("degradationFactor")}: {factor}</p>)}
+    {barrier.degradationFactors.map((factor) => <p className="degradation-factor" key={factor}>{t("degradationFactor")}: <span lang="en">{factor}</span></p>)}
   </div>;
 }
 
