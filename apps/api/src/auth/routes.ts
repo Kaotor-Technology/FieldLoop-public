@@ -15,6 +15,14 @@ const PUBLIC_ROUTES = new Set([
   "POST /api/auth/backchannel-logout",
   "GET /api/internal/auth/jwks",
 ]);
+// The only routes that accept the internal user token as a Bearer credential: the reads behind the
+// assistant tools. Everything else ignores the header, so least privilege is explicit, not implied.
+const INTERNAL_TOKEN_READ_ROUTES: ReadonlySet<string> = new Set([
+  "/api/v1/assets/:assetId",
+  "/api/v1/bowties/:bowtieId",
+  "/api/v1/bowties/:bowtieId/risk",
+  "/api/v1/simulation/runs/current",
+]);
 const CONSEQUENTIAL_DECISION =
   /^\/api\/v1\/(?:(?:held-requests|drafts)\/[^/]+:(?:approve|reject)|action-requests\/[^/]+(?:\/approvals|:(?:approve|reject|release|execute)))\/?$/;
 
@@ -31,12 +39,11 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthServicePort, 
     if (isPublicRoute(request)) return;
     const consequential = isConsequentialDecision(request);
     const bearer = internalBearerToken(request);
-    // Server-to-server read as the user (assistant tools): GET on /api/v1 only, never a
-    // decision, never a stream and never a state change (no CSRF secret, no recent auth).
+    // Server-to-server read as the user (assistant tools): only the GET routes the tools use
+    // (an allowlist), never a decision, a stream or a state change (no CSRF secret, no recent auth).
     // Anywhere else the header is ignored, so a bearer-only request is simply unauthenticated.
     const bearerReadable = bearer !== undefined && request.method === "GET" && !consequential
-      && (request.routeOptions.url ?? "").startsWith("/api/v1/")
-      && request.routeOptions.url !== "/api/v1/events"
+      && INTERNAL_TOKEN_READ_ROUTES.has(request.routeOptions.url ?? "")
       && auth.getCurrentUserFromInternalToken !== undefined;
     if (bearerReadable && auth.getCurrentUserFromInternalToken) {
       try {

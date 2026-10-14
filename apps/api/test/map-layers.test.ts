@@ -17,10 +17,10 @@ describe("asset by id API", () => {
     const store = makeStore(DL01);
     const app = makeApp({}, store);
     expect((await app.inject({ method: "GET", url: "/api/v1/assets/DL-01" })).statusCode).toBe(401);
-    const bad = await app.inject({
-      method: "GET", url: "/api/v1/assets/a%20b%3B--", cookies: { fl_session: "opaque-session-value" },
-    });
-    expect(bad.statusCode).toBe(400);
+    for (const url of ["/api/v1/assets/a%20b%3B--", "/api/v1/assets/.", "/api/v1/assets/..x"]) {
+      const bad = await app.inject({ method: "GET", url, cookies: { fl_session: "opaque-session-value" } });
+      expect(bad.statusCode, url).toBe(400);
+    }
     expect(store.getAsset).not.toHaveBeenCalled();
   });
 
@@ -42,6 +42,8 @@ describe("asset by id API", () => {
   });
 
   it("filters by Organisation, clearance and the seeded demo rule in SQL", () => {
+    expect(ASSET_BY_ID_SQL).toContain("a.id::text = lower($2)");
+    expect(ASSET_BY_ID_SQL).toContain("ORDER BY (a.id::text = lower($2)) DESC");
     expect(ASSET_BY_ID_SQL).toContain("a.org_id = $1");
     expect(ASSET_BY_ID_SQL).toContain("a.classification = ANY($3::text[])");
     expect(ASSET_BY_ID_SQL).toContain("a.created_by IN ('seed:dl-01', 'seed:bangkok')");
@@ -75,6 +77,32 @@ describe("internal user token reads", () => {
     const authRoute = await app.inject({ method: "GET", url: "/api/auth/reauth", headers: bearer });
     // The header is ignored there, so a bearer-only request is simply unauthenticated.
     for (const response of [post, decision, stream, authRoute]) expect(response.statusCode).toBe(401);
+    expect(fromToken).not.toHaveBeenCalled();
+  });
+
+  it("is accepted only on the routes behind the assistant tools", async () => {
+    const fromToken = vi.fn(async () => claims);
+    const app = makeApp({ getCurrentUserFromInternalToken: fromToken }, makeStore(DL01));
+    for (const url of ["/api/v1/map/layers/assets?bbox=99,13,101,15&zoom=8", "/api/v1/audit", "/api/v1/notifications"]) {
+      const response = await app.inject({ method: "GET", url, headers: bearer });
+      expect(response.statusCode, url).toBe(401);
+    }
+    expect(fromToken).not.toHaveBeenCalled();
+  });
+
+  it("gives a bearer plus a cookie no extra power and ignores it on /me and HEAD", async () => {
+    const fromToken = vi.fn(async () => claims);
+    const app = makeApp({ getCurrentUserFromInternalToken: fromToken }, makeStore(DL01));
+    const cookies = { fl_session: "opaque-session-value" };
+    const post = await app.inject({
+      method: "POST", url: "/api/v1/action-requests", headers: bearer, cookies, payload: {},
+    });
+    const head = await app.inject({ method: "HEAD", url: "/api/v1/assets/DL-01", headers: bearer });
+    const encoded = await app.inject({ method: "GET", url: "/%61pi/v1/events", headers: bearer });
+    const me = await app.inject({ method: "GET", url: "/api/v1/me", headers: bearer });
+    // POST falls to the cookie path, which demands a CSRF token the bearer never supplies.
+    expect(post.statusCode).toBe(403);
+    expect([head.statusCode, encoded.statusCode, me.statusCode].every((code) => code === 401 || code === 404)).toBe(true);
     expect(fromToken).not.toHaveBeenCalled();
   });
 

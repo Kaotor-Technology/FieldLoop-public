@@ -21,14 +21,16 @@ export interface AssetRecord {
   geometry: unknown;
 }
 
+export interface AssetLookup {
+  assetId: string;
+  orgId: string;
+  clearance: string;
+  allowSeededDemoGeometry: boolean;
+}
+
 export interface MapLayerStore {
   /** One Asset by UUID or asset code, scoped to the caller's Organisation and clearance. */
-  getAsset(input: {
-    assetId: string;
-    orgId: string;
-    clearance: string;
-    allowSeededDemoGeometry: boolean;
-  }): Promise<AssetRecord | null>;
+  getAsset(input: AssetLookup): Promise<AssetRecord | null>;
 
   getLayer(input: {
     layer: MapLayerName;
@@ -57,12 +59,7 @@ export class UnavailableMapLayerStore implements MapLayerStore {
 export class PostgresMapLayerStore implements MapLayerStore {
   constructor(private readonly db: Kysely<AuthDatabase>) {}
 
-  async getAsset(input: {
-    assetId: string;
-    orgId: string;
-    clearance: string;
-    allowSeededDemoGeometry: boolean;
-  }): Promise<AssetRecord | null> {
+  async getAsset(input: AssetLookup): Promise<AssetRecord | null> {
     const result = await bindPostgisQuery<AssetRow>(ASSET_BY_ID_SQL, [
       input.orgId, input.assetId, classificationsThrough(input.clearance), input.allowSeededDemoGeometry,
     ]).execute(this.db);
@@ -423,7 +420,7 @@ export function registerMapLayerRoutes(app: FastifyInstance, store: MapLayerStor
       .send({ type: "about:blank", title, status, code, traceId: request.id });
     if (!user) return problem(401, "unauthenticated", "Authentication required");
     const { assetId } = request.params as { assetId: string };
-    if (!/^[A-Za-z0-9._:-]{1,128}$/.test(assetId)) {
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(assetId)) {
       return problem(400, "validation_failed", "Asset identifier is invalid");
     }
     try {
@@ -584,10 +581,10 @@ SELECT a.id::text AS id, a.type, a.domain_pack, a.simulated, a.classification,
        a.attributes->>'asset_code' AS code, a.attributes->>'label' AS label,
        ST_AsGeoJSON(a.geom)::jsonb AS geometry
 FROM app.asset a
-WHERE a.org_id = $1 AND (a.id::text = $2 OR a.attributes->>'asset_code' = $2)
+WHERE a.org_id = $1 AND (a.id::text = lower($2) OR a.attributes->>'asset_code' = $2)
   AND (a.classification = ANY($3::text[]) OR
     ($4::boolean AND a.simulated IS TRUE AND a.created_by IN ('seed:dl-01', 'seed:bangkok')))
-ORDER BY a.id
+ORDER BY (a.id::text = lower($2)) DESC, a.id
 LIMIT 1
 `;
 

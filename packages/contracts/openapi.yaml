@@ -320,14 +320,14 @@ paths:
     get:
       operationId: getAsset
       summary: Read one Asset by identifier or asset code
-      description: Returns the Asset visible to the signed-in Organisation and clearance. Also readable with the five-minute internal user token as a Bearer credential (read-only, used by the assistant tools); the token is never accepted for a state change, a decision or the event stream.
+      description: Returns the Asset visible to the signed-in Organisation and clearance. Also readable with the five-minute internal user token as a Bearer credential. That credential is accepted only on the GET routes behind the assistant tools (this route, /v1/bowties/{bowtieId}, /v1/bowties/{bowtieId}/risk and /v1/simulation/runs/current) and never for a state change, a decision or the event stream.
       tags: [Map]
       parameters:
         - name: assetId
           in: path
           required: true
           description: Asset UUID or asset code, for example DL-01.
-          schema: { type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9._:-]+$' }
+          schema: { type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$' }
       responses:
         "200":
           description: The scoped Asset.
