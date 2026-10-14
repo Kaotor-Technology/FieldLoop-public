@@ -98,6 +98,8 @@ run_psql_database fieldloop_dev < db/test/guardrail_roles.sql
 run_psql_database fieldloop_demo < db/test/guardrail_roles.sql
 run_psql_database fieldloop_dev < db/test/action_requests.sql
 run_psql_database fieldloop_demo < db/test/action_requests.sql
+run_psql_database fieldloop_dev < db/test/audit_append_roles.sql
+run_psql_database fieldloop_demo < db/test/audit_append_roles.sql
 
 # Cloud SQL shape: the extensions already exist and the migrating role is not a superuser.
 echo "==> dbmate up as a non-superuser with pre-installed extensions"

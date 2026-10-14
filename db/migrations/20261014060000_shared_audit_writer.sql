@@ -6,11 +6,18 @@ SET search_path = app, public;
 -- Organisation lock, reads the predecessor, and computes prev_hash and the row hash in UTC, so
 -- the chain does not depend on a caller's session. A guard trigger rejects any other INSERT.
 
--- SHA-256 of a stored audit row. The function-level time zone makes the jsonb text of the
--- timestamptz columns independent of the caller's TimeZone setting.
+-- SHA-256 of a stored audit row over a FROZEN v1 field list (not to_jsonb(row)), so a column added
+-- to audit_event later never changes the hash of an existing row. jsonb orders keys itself, and
+-- the values serialize as to_jsonb(row) did, so rows written before this function hash the same.
+-- The function-level time zone makes the timestamptz text independent of the caller's TimeZone.
+-- To hash more fields, add a new hash version; never edit this list.
 CREATE FUNCTION audit_event_hash(event app.audit_event)
 RETURNS text AS $$
-    SELECT app.payload_sha256(to_jsonb(event));
+    SELECT app.payload_sha256(jsonb_build_object(
+        'id', event.id, 'org_id', event.org_id, 'actor', event.actor, 'action', event.action,
+        'entity', event.entity, 'before_hash', event.before_hash, 'after_hash', event.after_hash,
+        'prev_hash', event.prev_hash, 'simulated', event.simulated, 'classification', event.classification,
+        'created_at', event.created_at, 'created_by', event.created_by));
 $$ LANGUAGE sql STABLE STRICT SET timezone = 'UTC';
 
 -- Lock order rule: take domain row locks first and call this function last in the transaction,
@@ -54,18 +61,20 @@ $$ LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = app, pg_temp;
 REVOKE ALL ON FUNCTION audit_event_hash(app.audit_event), append_audit_event(text, text, text, text, text, text, boolean, text, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION audit_event_hash(app.audit_event), append_audit_event(text, text, text, text, text, text, boolean, text, text) TO fieldloop_app;
 
--- Environment roles and the Signal worker identity run in their own database only, like the
--- grants in migrations 9 and signal_worker. The function owner is the only role that may INSERT.
+-- Environment roles, the Guardrail runtime role and the Signal worker identity run in their own
+-- database only, like the grants in migrations 9, guardrail_runtime and signal_worker. They already
+-- hold INSERT on audit_event, which the guard now refuses; they append through the function.
 DO $$
-DECLARE environment text; worker_role text;
+DECLARE environment text; role_name text;
 BEGIN
     IF current_database() IN ('fieldloop_dev', 'fieldloop_demo') THEN
         environment := replace(current_database(), 'fieldloop_', '');
-        EXECUTE format('GRANT EXECUTE ON FUNCTION app.audit_event_hash(app.audit_event), app.append_audit_event(text, text, text, text, text, text, boolean, text, text) TO %I', 'fieldloop_app_' || environment);
-        worker_role := 'fl-v2-signal-worker-' || environment || '@example-project.iam';
-        IF EXISTS (SELECT FROM pg_roles WHERE rolname = worker_role) THEN
-            EXECUTE format('GRANT EXECUTE ON FUNCTION app.audit_event_hash(app.audit_event), app.append_audit_event(text, text, text, text, text, text, boolean, text, text) TO %I', worker_role);
-        END IF;
+        FOREACH role_name IN ARRAY ARRAY['fieldloop_app_' || environment, 'fieldloop_guardrail_' || environment,
+            'fl-v2-signal-worker-' || environment || '@example-project.iam'] LOOP
+            IF EXISTS (SELECT FROM pg_roles WHERE rolname = role_name) THEN
+                EXECUTE format('GRANT EXECUTE ON FUNCTION app.audit_event_hash(app.audit_event), app.append_audit_event(text, text, text, text, text, text, boolean, text, text) TO %I', role_name);
+            END IF;
+        END LOOP;
     END IF;
 END $$;
 

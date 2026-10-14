@@ -96,6 +96,27 @@ BEGIN
     END IF;
 END $$;
 
+-- The hash covers a frozen v1 field list: it equals the former whole-row hash today, and a column
+-- added later does not change the hash of any existing row.
+DO $$
+DECLARE
+    before_alter text[];
+BEGIN
+    IF EXISTS (SELECT 1 FROM app.audit_event AS e WHERE app.audit_event_hash(e) <> app.payload_sha256(to_jsonb(e))) THEN
+        RAISE EXCEPTION 'the v1 hash must equal the hash of the current whole row';
+    END IF;
+    SELECT array_agg(app.audit_event_hash(e) ORDER BY e.id) INTO before_alter FROM app.audit_event AS e;
+    ALTER TABLE app.audit_event ADD COLUMN synthetic_future text;
+    IF (SELECT array_agg(app.audit_event_hash(e) ORDER BY e.id) FROM app.audit_event AS e) IS DISTINCT FROM before_alter THEN
+        RAISE EXCEPTION 'a column added later must not change existing audit hashes';
+    END IF;
+    PERFORM app.append_audit_event('org-test', 'tester', 'test.after_alter', 'none', NULL, NULL, true, 'INTERNAL');
+    IF (SELECT prev_hash FROM app.audit_event WHERE action = 'test.after_alter')
+        IS DISTINCT FROM (SELECT app.audit_event_hash(e) FROM app.audit_event AS e WHERE e.org_id = 'org-test' AND e.action = 'test.third') THEN
+        RAISE EXCEPTION 'the chain must continue across a schema change';
+    END IF;
+END $$;
+
 -- Invalid metadata is rejected before anything is written.
 DO $$
 DECLARE
