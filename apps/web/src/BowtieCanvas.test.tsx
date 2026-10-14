@@ -33,6 +33,7 @@ describe("Bowtie canvas", () => {
       expect(renderedText).toContain(barrier.name);
       expect(markup).toContain(`data-health="${barrier.health}"`);
       expect(markup).toContain(`aria-hidden="true">${healthShapes[barrier.health]}</span>`);
+      for (const pathName of barrier.pathNames) expect(renderedText).toContain(pathName);
       for (const factor of barrier.degradationFactors) expect(renderedText).toContain(factor.description);
     }
     expect(markup).toContain("Degradation Factors");
@@ -55,12 +56,13 @@ describe("Bowtie canvas", () => {
   it("renders a shared Barrier only once", () => {
     const bowtie = listBowties().find(({ code }) => code === "A");
     if (!bowtie) throw new Error("Bowtie A fixture is required");
-    const sharedBarrier = bowtie.barriers[0];
+    const sharedBarrier = bowtie.barriers.find(({ pathNames }) => pathNames.length > 1);
     if (!sharedBarrier) throw new Error("Bowtie A needs at least one Barrier");
     const sharedBowtie = { ...bowtie, barriers: [...bowtie.barriers, sharedBarrier] };
 
     const markup = renderToStaticMarkup(<BowtieCanvas bowtie={sharedBowtie} onBack={() => undefined} />);
 
     expect(markup.match(/class="bowtie-barrier-card"/g) ?? []).toHaveLength(new Set(bowtie.barriers.map(({ id }) => id)).size);
+    for (const pathName of sharedBarrier.pathNames) expect(markup.replaceAll("&amp;", "&")).toContain(pathName);
   });
 });

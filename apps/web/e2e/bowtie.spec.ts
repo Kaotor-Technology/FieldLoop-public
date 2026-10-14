@@ -15,6 +15,7 @@ for (const colorScheme of ["light", "dark"] as const) {
       if (colorScheme === "dark") await page.getByRole("button", { name: "Night shift" }).click();
       await page.getByRole("button", { name: /Bowtie A/ }).click();
       await expect(page.getByRole("heading", { name: /Pipeline integrity/ })).toBeVisible();
+      await expect(page.locator(".bowtie-path-membership").filter({ hasText: /Paths: Jet fire near a High Consequence Area, Supply interruption, Environmental damage at a river crossing/ }).first()).toBeVisible();
       await expect(page.locator(".bowtie-top-event")).toBeInViewport();
 
       const layout = await page.locator(".bowtie-canvas").evaluate((element) => ({
