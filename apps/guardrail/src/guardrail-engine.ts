@@ -533,7 +533,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
-
 /** Milliseconds since startedAt, rounded to `decimals` places and clamped to the Intercept latency column range. */
 function elapsedMs(startedAt: number, decimals = 0): number {
   const scale = 10 ** decimals;
