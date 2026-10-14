@@ -152,17 +152,29 @@ export class PostgresImportStore implements ImportPort {
       if (row.version !== version || row.status !== (command === "commit" ? "mapped" : "committed") || !row.mapping) throw new ImportError(409,"conflict");
       const mapping = row.mapping;
       if (command === "commit") {
-        await sql`SELECT id FROM app.segment WHERE asset_id=${mapping.assetId}::uuid AND org_id=${user.orgId} FOR SHARE`.execute(trx);
-        await sql`SELECT id FROM app.organisation WHERE org_id=${user.orgId} FOR SHARE`.execute(trx);
-        if (row.validation_hash !== await this.contextHash(trx,user,mapping)) throw new ImportError(409,"mapping_stale");
-        if (row.preview.some((point) => point.flags.includes("duplicate"))) throw new ImportError(409,"duplicates_require_new_upload");
-        // Revalidate referenced records inside the commit transaction.
-        const asset = (await sql`SELECT id FROM app.asset WHERE id=${mapping.assetId}::uuid AND org_id=${user.orgId} AND simulated IS TRUE AND classification=ANY(${allowed(user)}::text[]) FOR SHARE`.execute(trx)).rows[0];
+        // Parent UPDATE locks also prevent new FK children from changing the context.
+        const asset = (await sql`SELECT id FROM app.asset WHERE id=${mapping.assetId}::uuid AND org_id=${user.orgId} AND simulated IS TRUE AND classification=ANY(${allowed(user)}::text[]) FOR UPDATE`.execute(trx)).rows[0];
         if (!asset) throw new ImportError(404,"not_found");
         if (mapping.target === "evidence") {
-          const barrier = (await sql`SELECT id FROM app.barrier WHERE id=${mapping.barrierId}::uuid AND org_id=${user.orgId} AND simulated IS TRUE AND classification=ANY(${allowed(user)}::text[]) FOR SHARE`.execute(trx)).rows[0];
+          const barrier = (await sql`SELECT id FROM app.barrier WHERE id=${mapping.barrierId}::uuid AND org_id=${user.orgId} AND simulated IS TRUE AND classification=ANY(${allowed(user)}::text[]) FOR UPDATE`.execute(trx)).rows[0];
           if (!barrier) throw new ImportError(404,"not_found");
         }
+        await sql`SELECT id FROM app.segment WHERE asset_id=${mapping.assetId}::uuid AND org_id=${user.orgId} FOR SHARE`.execute(trx);
+        await sql`SELECT id FROM app.organisation WHERE org_id=${user.orgId} FOR SHARE`.execute(trx);
+        await sql`SELECT id FROM app.barrier_path WHERE barrier_id=${mapping.barrierId}::uuid AND org_id=${user.orgId} ORDER BY id FOR SHARE`.execute(trx);
+        await sql`SELECT id FROM app.threat WHERE org_id=${user.orgId} AND id IN
+          (SELECT threat_id FROM app.barrier_path WHERE barrier_id=${mapping.barrierId}::uuid AND org_id=${user.orgId}) ORDER BY id FOR SHARE`.execute(trx);
+        await sql`SELECT id FROM app.consequence WHERE org_id=${user.orgId} AND id IN
+          (SELECT consequence_id FROM app.barrier_path WHERE barrier_id=${mapping.barrierId}::uuid AND org_id=${user.orgId}) ORDER BY id FOR SHARE`.execute(trx);
+        const relatedBowties = sql`SELECT COALESCE(t.bowtie_id,c.bowtie_id) FROM app.barrier_path bp
+          LEFT JOIN app.threat t ON t.id=bp.threat_id AND t.org_id=bp.org_id
+          LEFT JOIN app.consequence c ON c.id=bp.consequence_id AND c.org_id=bp.org_id
+          WHERE bp.barrier_id=${mapping.barrierId}::uuid AND bp.org_id=${user.orgId}`;
+        await sql`SELECT id FROM app.bowtie WHERE org_id=${user.orgId} AND id IN (${relatedBowties}) ORDER BY id FOR UPDATE`.execute(trx);
+        await sql`SELECT bowtie_id,asset_id FROM app.bowtie_asset WHERE org_id=${user.orgId}
+          AND bowtie_id IN (${relatedBowties}) ORDER BY bowtie_id,asset_id FOR SHARE`.execute(trx);
+        if (row.validation_hash !== await this.contextHash(trx,user,mapping)) throw new ImportError(409,"mapping_stale");
+        if (row.preview.some((point) => point.flags.includes("duplicate"))) throw new ImportError(409,"duplicates_require_new_upload");
         for (const point of row.preview) {
           const targetId = randomUUID();
           const location = sql`ST_SetSRID(ST_MakePoint(${point.longitude},${point.latitude}),4326)`;

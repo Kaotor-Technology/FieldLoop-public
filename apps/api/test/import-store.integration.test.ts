@@ -95,4 +95,32 @@ describe.skipIf(!url)("KML imports against migrated PostGIS", () => {
     try {expect((await new PostgresImportStore(singleDb).map(user,created.id,created.version,mapping)).status).toBe("mapped");}
     finally {await singleDb.destroy();}
   });
+  it.each(["asset","barrier"] as const)("rejects a %s classification change while commit waits for its lock",async(dependency)=>{
+    const {user,assetId,barrierId,mapping}=await fixture();
+    await pool.query("UPDATE app.asset SET classification='INTERNAL' WHERE org_id=$1",[user.orgId]);
+    await pool.query("UPDATE app.segment SET classification='INTERNAL' WHERE org_id=$1",[user.orgId]);
+    await pool.query("UPDATE app.barrier SET classification='INTERNAL' WHERE org_id=$1",[user.orgId]);
+    const created=await store.create(user,content(),"kml",randomUUID());
+    const mapped=await store.map(user,created.id,created.version,dependency === "asset" ? {...mapping,target:"facility",barrierId:null} : mapping);
+    expect(mapped.classification).toBe("INTERNAL");
+    const locker=await pool.connect();
+    const table=dependency === "asset" ? "app.asset" : "app.barrier";
+    const targetId=dependency === "asset" ? assetId : barrierId;
+    await locker.query("BEGIN");
+    try {
+      await locker.query(`SELECT id FROM ${table} WHERE id=$1 FOR UPDATE`,[targetId]);
+      const outcome=store.command(user,mapped.id,mapped.version,"commit",randomUUID()).then(()=>({status:200,code:"committed"}),error=>error as unknown);
+      let waiting=false;
+      for(let attempt=0;attempt<100;attempt++) {
+        const blocked=await pool.query<{count:number}>("SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE $1",[`%FROM ${table}%`]);
+        if(blocked.rows[0]?.count) {waiting=true;break;}
+        await new Promise(resolve=>setTimeout(resolve,20));
+      }
+      expect(waiting).toBe(true);
+      await locker.query(`UPDATE ${table} SET classification='CONFIDENTIAL' WHERE id=$1`,[targetId]);
+      await locker.query("COMMIT");
+      expect(await outcome).toMatchObject({status:409,code:"mapping_stale"});
+      expect((await pool.query("SELECT count(*)::int AS count FROM app.kml_import_item WHERE kml_import_id=$1",[mapped.id])).rows[0]?.count).toBe(0);
+    } finally {await locker.query("ROLLBACK");locker.release();}
+  });
 });
