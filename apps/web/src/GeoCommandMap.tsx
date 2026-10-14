@@ -10,7 +10,7 @@ import { GoogleMapsOverlay } from "@deck.gl/google-maps";
 import type { MapFeature, MapFeatureCollection, MapLayerName, MapViewport } from "@fieldloop/map";
 import type { BarrierHealth } from "@fieldloop/ui";
 import { HealthProposalReview } from "./HealthProposalReview";
-import { decideHealthProposal, getHealthProposalPage, healthProposalsQueryKey } from "./health-proposals";
+import { applyBarrierHealthToMapCache, decideHealthProposal, getHealthProposalPage, healthProposalsQueryKey } from "./health-proposals";
 import { useCurrentSession } from "./SessionGate";
 import { getMapConfig, getMapLayer } from "./map-api";
 import {
@@ -467,11 +467,9 @@ function MapOverviewSummary({ summary }: { summary: VisibleFeatureSummary }) {
   const canDecide = Boolean(session.data?.roles.some((role) => role === "fieldloop.operator" || role === "fieldloop.manager"));
   const submitDecision = async (input: { proposalId: string; decision: "accept" | "reject"; reason: string; idempotencyKey: string }) => {
     if (!session.data) throw new Error("Session is unavailable");
-    await decideHealthProposal({ ...input, csrfToken: session.data.csrfToken });
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: healthProposalsQueryKey }),
-      queryClient.invalidateQueries({ queryKey: ["map-layer", "barriers"] }),
-    ]);
+    const result = await decideHealthProposal({ ...input, csrfToken: session.data.csrfToken });
+    await applyBarrierHealthToMapCache(queryClient, result.barrierId, result.health);
+    await queryClient.invalidateQueries({ queryKey: healthProposalsQueryKey });
   };
   return <div className="context-overview-summary">
     <section className="context-summary-section" aria-labelledby="risk-summary-title">

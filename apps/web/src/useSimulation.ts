@@ -34,6 +34,13 @@ export function useSimulationEvents() {
     };
     stream.addEventListener("simulation.state", receive);
     stream.addEventListener("simulation.reset", receive);
+    const refreshHealthProposals: EventListener = (event) => {
+      let payload: unknown;
+      if ("data" in event && typeof event.data === "string") {
+        try { payload = JSON.parse(event.data); } catch { payload = undefined; }
+      }
+      void invalidateHealthProposalQueries(client, event.type, payload);
+    };
     stream.addEventListener("risk.recalculated", (event: MessageEvent<string>) => {
       try {
         const payload: unknown = JSON.parse(event.data);
@@ -43,7 +50,6 @@ export function useSimulationEvents() {
       }
       setConnected(true);
     });
-    const refreshHealthProposals: EventListener = (event) => { void invalidateHealthProposalQueries(client, event.type); };
     stream.addEventListener("health_proposal.created", refreshHealthProposals);
     stream.addEventListener("barrier.health_changed", refreshHealthProposals);
     return () => { stream.close(); };

@@ -78,7 +78,7 @@ it("returns validated, owner-scoped open Health Proposal pages", async () => {
 it("streams health events and resumes with the returned cursor", async () => {
   const { app, headers, health } = fixture();
   const event = { id: randomUUID(), type: "barrier.health_changed" as const, orgId: "test-org", entityId: randomUUID(),
-    barrierId: randomUUID(), simulated: true, classification: "CONFIDENTIAL" as const };
+    barrierId: randomUUID(), simulated: true, classification: "CONFIDENTIAL" as const, health: "degraded" as const };
   vi.mocked(health.listEvents).mockResolvedValueOnce([{ position: { createdAt: "2026-10-13 00:01:00+00", id: event.id }, event }]);
   const base = await app.listen({ host: "127.0.0.1", port: 0 });
   const abort = new AbortController();
@@ -93,6 +93,7 @@ it("streams health events and resumes with the returned cursor", async () => {
     text += decoder.decode(chunk.value);
   }
   expect(text).toContain(event.barrierId);
+  expect(text).toContain('"health":"degraded"');
   expect(text).toMatch(/id: [A-Za-z0-9_-]+/);
   await reader.cancel(); abort.abort();
 });

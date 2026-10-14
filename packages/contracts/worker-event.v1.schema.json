@@ -10,6 +10,7 @@
     "barrierId": {"type": "string", "format": "uuid"},
     "entityId": {"type": "string", "format": "uuid"},
     "simulated": {"type": "boolean"},
-    "classification": {"enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"]}
+    "classification": {"enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"]},
+    "health": {"enum": ["healthy", "degraded", "failed", "unverified"]}
   }
 }
