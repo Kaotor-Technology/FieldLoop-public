@@ -2,8 +2,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createRootRoute, createRoute, createRouter, Navigate, RouterProvider } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Navigate, RouterProvider } from "@tanstack/react-router";
 import { MapEntry } from "./MapEntry";
+import { BowtieCanvasPage } from "./BowtieCanvasPage";
 import { usePreferences } from "./preferences";
 import "./i18n";
 import "@fontsource/ibm-plex-sans-thai/400.css";
@@ -22,7 +23,18 @@ const mapRoute = createRoute({
   validateSearch: (search: Record<string, unknown>) => search,
   component: MapEntry,
 });
-const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, mapRoute]) });
+const bowtieRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/bowties/$bowtieId",
+  component: BowtieCanvasPage,
+});
+const legacyBowtieRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/bowtie/$bowtieId",
+  validateSearch: (search: Record<string, unknown>) => search,
+  component: lazyRouteComponent(() => import("./BowtieEntry"), "BowtieEntry"),
+});
+const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, mapRoute, bowtieRoute, legacyBowtieRoute]) });
 
 declare module "@tanstack/react-router" {
   interface Register { router: typeof router }

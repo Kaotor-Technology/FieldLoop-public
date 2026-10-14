@@ -103,6 +103,9 @@ importers:
 
   apps/guardrail:
     dependencies:
+      '@fieldloop/adapters':
+        specifier: workspace:*
+        version: link:../../packages/adapters
       fastify:
         specifier: 5.12.5
         version: 5.12.5

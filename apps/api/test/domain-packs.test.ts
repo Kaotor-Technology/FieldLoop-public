@@ -82,7 +82,7 @@ describe("web-api Domain Pack startup", () => {
 
   it("targets existing demo Bowties and Barriers without adding pipeline fields to core tables", async () => {
     const packs = await loadDemoDomainPacks();
-    for (const { content } of packs) {
+    for (const { content } of packs.filter(({ aiSafety }) => !aiSafety)) {
       const seedFile = content.id === "pipeline-integrity" ? "dl-01/bowtie-a.json" : "bangkok/bowtie-d.json";
       const seed = JSON.parse(await readFile(new URL(`../../../data/synthetic/${seedFile}`, import.meta.url), "utf8")) as { id: string; barriers: { id: string }[] };
       for (const rule of content.signalRules) {

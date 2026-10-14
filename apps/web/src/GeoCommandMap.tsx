@@ -10,14 +10,17 @@ import { GoogleMapsOverlay } from "@deck.gl/google-maps";
 import type { MapFeature, MapFeatureCollection, MapLayerName, MapViewport } from "@fieldloop/map";
 import type { BarrierHealth } from "@fieldloop/ui";
 import { HealthProposalReview } from "./HealthProposalReview";
-import { decideHealthProposal, getHealthProposalPage, healthProposalsQueryKey } from "./health-proposals";
+import { applyBarrierHealthToMapCache, decideHealthProposal, getHealthProposalPage, healthProposalsQueryKey } from "./health-proposals";
 import { useCurrentSession } from "./SessionGate";
 import { getMapConfig, getMapLayer } from "./map-api";
+import { useSimulation } from "./useSimulation";
 import {
   barrierMarkerStatus,
   countVisibleBarrierAlerts,
   filterFeaturesByDomain,
+  rainLayerVisualStyle,
   riskBandVisualStyle,
+  selectSimulatedRainCell,
   searchVisibleFeatures,
   selectBarrierMarkerFeatures,
   selectVisibleFeatures,
@@ -31,6 +34,11 @@ const FLOOD_VIEW: MapViewport = { latitude: 13.775, longitude: 100.58, zoom: 13,
 const SYMBOLS: Record<string, string> = { degraded: "▲", failed: "✖", unverified: "⬚" };
 const RISK_BANDS = ["intolerable", "alarp", "acceptable"] as const;
 const BARRIER_HEALTH_STATES = ["healthy", "degraded", "failed", "unverified"] as const;
+const BOWTIE_LINKS = [
+  { id: "dl-01-bowtie-a", code: "A", story: "bowtieStoryA" },
+  { id: "uc-1-bowtie-c", code: "C", story: "bowtieStoryC" },
+  { id: "bangkok-bowtie-d", code: "D", story: "bowtieStoryD" },
+] as const;
 const BARRIER_ICON_ATLAS = `data:image/svg+xml;charset=utf-8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="32" viewBox="0 0 96 32"><defs><mask id="hatch"><rect x="68" y="3" width="24" height="26" fill="white"/><path d="m67 11 9-9m-4 19L89 4m-8 25 13-13" stroke="black" stroke-width="4"/></mask></defs><path d="M16 2 30 29H2z" fill="white"/><path d="m39 7 18 18m0-18L39 25" stroke="white" stroke-width="4"/><rect x="68" y="3" width="24" height="26" fill="white" mask="url(#hatch)"/><path d="M68 3h24v26H68z" fill="none" stroke="white" stroke-width="2"/></svg>')}`;
 const BARRIER_ICON_MAPPING = {
   degraded: { x: 0, y: 0, width: 32, height: 32, mask: true },
@@ -57,11 +65,13 @@ export function GeoCommandMap() {
   const initialViewport = useRef(viewport);
   const [bounds, setBounds] = useState<ViewportBounds | null>(null);
   const [activeLayers, setActiveLayers] = useState<MapLayerName[]>(LAYERS);
+  const [rainOverlayVisible, setRainOverlayVisible] = useState(true);
   const [domain, setDomain] = useState<"all" | "pipeline-integrity" | "flood-water">("all");
   const [selectedFeature, setSelectedFeature] = useState<MapFeature | null>(null);
   const [query, setQuery] = useState("");
   const [mapLoadFailed, setMapLoadFailed] = useState(false);
   const [mapRetry, setMapRetry] = useState(0);
+  const { data: simulationRun } = useSimulation();
   const mapConfig = useQuery({ queryKey: ["map-config"], queryFn: ({ signal }) => getMapConfig(signal), retry: 1 });
   const visibleLayers = useQueries({
     queries: LAYERS.map((layer) => ({
@@ -72,7 +82,8 @@ export function GeoCommandMap() {
         zoom: bounds?.zoom ?? 0,
         signal,
       }),
-      enabled: Boolean(bounds) && activeLayers.includes(layer),
+      enabled: Boolean(bounds) && (activeLayers.includes(layer) ||
+        (layer === "assets" && rainOverlayVisible && domain !== "pipeline-integrity")),
       staleTime: 30_000,
       retry: 1,
     })),
@@ -158,6 +169,9 @@ export function GeoCommandMap() {
     });
     return byLayer;
   }, [visibleLayers]);
+  const rainCell = useMemo(() => selectSimulatedRainCell(simulationRun, collections.get("assets")?.features ?? []),
+    [collections, simulationRun]);
+  const showRainLegend = rainOverlayVisible && domain !== "pipeline-integrity" && rainCell !== null;
   const visibleFeatures = useMemo(() => selectVisibleFeatures(LAYERS.map((layer, index) => ({
     layer, features: visibleLayers[index]?.data?.features ?? [],
   })), activeLayers, domain),
@@ -181,6 +195,24 @@ export function GeoCommandMap() {
     const assets = collections.get("assets");
     const barriers = collections.get("barriers");
     const consequences = collections.get("consequences");
+    if (rainOverlayVisible && domain !== "pipeline-integrity" && rainCell) {
+      const style = rainLayerVisualStyle(rainCell.rateMillimetersPerHour);
+      const lowColor = tokenColor(style.lowToken, 255);
+      const highColor = tokenColor(style.highToken, 255);
+      layers.push(new GeoJsonLayer<MapFeature["properties"]>({
+        id: "simulated-rain-cell",
+        data: { type: "FeatureCollection", features: [rainCell.feature] } as never,
+        pickable: false,
+        stroked: false,
+        filled: true,
+        getFillColor: [
+          Math.round(lowColor[0] + (highColor[0] - lowColor[0]) * style.colorWeight),
+          Math.round(lowColor[1] + (highColor[1] - lowColor[1]) * style.colorWeight),
+          Math.round(lowColor[2] + (highColor[2] - lowColor[2]) * style.colorWeight),
+          Math.round(style.opacity * 255),
+        ],
+      }));
+    }
     if (activeLayers.includes("assets") && assets) {
       const filtered = filterCollection(assets, domain);
       layers.push(new GeoJsonLayer<MapFeature["properties"], PathStyleExtensionProps<MapFeature>>({
@@ -261,7 +293,7 @@ export function GeoCommandMap() {
     }
     baseLayers.current = layers;
     overlay.current.setProps({ layers });
-  }, [activeLayers, collections, domain]);
+  }, [activeLayers, collections, domain, rainCell, rainOverlayVisible]);
 
   useEffect(() => {
     const mapBarriers = collections.get("barriers");
@@ -374,12 +406,16 @@ export function GeoCommandMap() {
                 <input type="checkbox" checked={activeLayers.includes(layer)} onChange={() => setActiveLayers((current) => current.includes(layer) ? current.filter((item) => item !== layer) : [...current, layer])} />
                 <span>{t(layer)}</span>
               </label>)}
+              <label className="layer-option">
+                <input type="checkbox" checked={rainOverlayVisible} onChange={() => setRainOverlayVisible((visible) => !visible)} />
+                <span>{t("simulatedRain")}</span>
+              </label>
             </fieldset>
           </details>
         </div>
-        <div className="map-legend" aria-label={t("mapLegend")}>
+        <div className="map-legend" aria-label={t(showRainLegend ? "mapLegend" : "mapLegendBase")}>
           <div className="legend-group">
-            <h2>{t("barrierHealth")}</h2>
+            <h2>{t("barrierHealthLabel")}</h2>
             <span className="legend-health"><i className="health-failed" aria-hidden="true">{SYMBOLS.failed}</i>{t("failed")}</span>
             <span className="legend-health"><i className="health-degraded" aria-hidden="true">{SYMBOLS.degraded}</i>{t("degraded")}</span>
             <span className="legend-health"><i className="health-unverified" aria-hidden="true">{SYMBOLS.unverified}</i>{t("unverified")}</span>
@@ -390,6 +426,11 @@ export function GeoCommandMap() {
             <span><i className="legend-risk legend-alarp" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M2 14 14 2M2 8 8 2M8 14l6-6" /></svg></i>{t("alarp")}</span>
             <span><i className="legend-risk legend-acceptable" />{t("acceptable")}</span>
           </div>
+          {showRainLegend && <div className="legend-group legend-rain-group">
+            <h2>{t("rainLegend")}</h2>
+            <span><i className="legend-rain-swatch legend-rain-low" aria-hidden="true" />{t("rainLow")}</span>
+            <span><i className="legend-rain-swatch legend-rain-high" aria-hidden="true" />{t("rainHigh")}</span>
+          </div>}
         </div>
       </div>
       <footer className="timeline-bar">
@@ -417,6 +458,17 @@ export function GeoCommandMap() {
       <div className="context-body" tabIndex={0}>
         <MapOverviewSummary summary={contextSummary} />
         {selectedFeature ? <FeatureOverview feature={selectedFeature} /> : <p className="context-hint">{t("selectMapFeature")}</p>}
+        <section className="feature-list-section" aria-labelledby="bowtie-shortcuts-title">
+          <div className="section-heading"><h3 id="bowtie-shortcuts-title">{t("bowtieShortcuts")}</h3></div>
+          <ul className="feature-list">{BOWTIE_LINKS.map((bowtie) => <li key={bowtie.id}>
+            <button type="button" className="feature-list-item" onClick={() => {
+              void navigate({ to: "/bowtie/$bowtieId", params: { bowtieId: bowtie.id }, search });
+            }}>
+              <span className="feature-symbol" aria-hidden="true">B</span>
+              <span className="feature-list-copy"><strong>{t("bowtieCode", { code: bowtie.code })}</strong><span>{t(bowtie.story)}</span></span>
+            </button>
+          </li>)}</ul>
+        </section>
         <section className="feature-list-section" aria-labelledby="visible-features-title">
           <div className="section-heading"><h3 id="visible-features-title">{t("visibleFeatures")}</h3><span className="mono">{features.length}</span></div>
           {features.length === 0 ? <p className="empty-note">{bounds ? t("noFeaturesInView") : t("mapLoading")}</p> : <ul className="feature-list">
@@ -467,11 +519,9 @@ function MapOverviewSummary({ summary }: { summary: VisibleFeatureSummary }) {
   const canDecide = Boolean(session.data?.roles.some((role) => role === "fieldloop.operator" || role === "fieldloop.manager"));
   const submitDecision = async (input: { proposalId: string; decision: "accept" | "reject"; reason: string; idempotencyKey: string }) => {
     if (!session.data) throw new Error("Session is unavailable");
-    await decideHealthProposal({ ...input, csrfToken: session.data.csrfToken });
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: healthProposalsQueryKey }),
-      queryClient.invalidateQueries({ queryKey: ["map-layer", "barriers"] }),
-    ]);
+    const result = await decideHealthProposal({ ...input, csrfToken: session.data.csrfToken });
+    await applyBarrierHealthToMapCache(queryClient, result.barrierId, result.health);
+    await queryClient.invalidateQueries({ queryKey: healthProposalsQueryKey });
   };
   return <div className="context-overview-summary">
     <section className="context-summary-section" aria-labelledby="risk-summary-title">
@@ -520,7 +570,7 @@ function FeatureOverview({ feature }: { feature: MapFeature }) {
     {feature.properties.chainageFrom !== null && feature.properties.chainageFrom !== undefined && <div><dt>{t("chainage")}</dt><dd className="mono">{formatChainage(feature.properties.chainageFrom)}–{formatChainage(feature.properties.chainageTo ?? feature.properties.chainageFrom)} m</dd></div>}
     <div><dt>{t("classification")}</dt><dd>{t(`classifications.${feature.properties.classification}`, { defaultValue: feature.properties.classification ?? t("unknown") })}</dd></div>
     {typeof feature.properties.simulated === "boolean" && <div><dt>{t("provenance")}</dt><dd>{feature.properties.simulated ? t("simulationLabel") : feature.properties.label ?? t("publicBaseMap")}</dd></div>}
-    {health && <div><dt>{t("barrierHealth")}</dt><dd><HealthBadge health={health} /></dd></div>}
+    {health && <div><dt>{t("barrierHealthLabel")}</dt><dd><HealthBadge health={health} /></dd></div>}
     {feature.properties.riskBand && <div><dt>{t("riskBand")}</dt><dd>{t(feature.properties.riskBand)}</dd></div>}
     {feature.properties.evidenceObservedAt && <div><dt>{t("latestEvidence")}</dt><dd><time className="mono" dateTime={feature.properties.evidenceObservedAt}>{new Date(feature.properties.evidenceObservedAt).toLocaleDateString(i18n.language === "th" ? "th-TH" : "en-GB", { timeZone: "Asia/Bangkok" })}</time></dd></div>}
   </dl>;

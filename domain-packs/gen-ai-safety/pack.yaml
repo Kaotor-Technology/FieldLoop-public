@@ -1,0 +1,21 @@
+id: gen-ai-safety
+version: 1.0.0
+label: SIMULATION
+simulated: true
+classification: CONFIDENTIAL
+parameterBasis: Pre-authored demo configuration from PRD 6.1-C and ADR-0002/0005. No detector
+  evaluation or observed Intercept statistics.
+knowledgeFolders: []
+threatCategories:
+  - code: prompt-injection
+    name: Indirect prompt injection
+  - code: restricted-data
+    name: Restricted data exposure
+  - code: hallucinated-advice
+    name: Hallucinated engineering advice
+  - code: unsafe-tool-write
+    name: System-of-record write attempt
+signalRules: []
+agentFiles: []
+warningTemplates: []
+aiSafetyFile: ai-safety.yaml

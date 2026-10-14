@@ -14,7 +14,8 @@
     "start": "node dist/server.js"
   },
   "dependencies": {
-    "fastify": "5.12.5"
+    "fastify": "5.12.5",
+    "@fieldloop/adapters": "workspace:*"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",

@@ -35,6 +35,14 @@
       ],
       "outputs": []
     },
+    "@fieldloop/contracts#test": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/domain-packs/gen-ai-safety/**"],
+      "outputs": []
+    },
+    "@fieldloop/guardrail#test": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/domain-packs/**"],
+      "outputs": []
+    },
     "@fieldloop/adapters#test": {
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/domain-packs/**"],
       "outputs": []

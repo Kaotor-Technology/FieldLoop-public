@@ -5,6 +5,9 @@ export * from "./risk.js";
 export { isSimulationRun, isScenarioSummary, isRunCreate, isPlayerCommand } from "./simulation.js";
 export {
   parseDomainPack,
+  parseGenAiSafetyPack,
+  genAiSafetySchema,
+  type GenAiSafetyPack,
   parseAgentDefinition,
   domainPackSchema,
   agentDefinitionSchema,

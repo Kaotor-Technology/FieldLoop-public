@@ -15,6 +15,13 @@ test("D15 reviews owner Health Proposals in the Overview panel through the BFF a
   await expect(acceptedRow.getByRole("group", { name: "Proposed Barrier Health change" })).toContainText("Healthy");
   await expect(acceptedRow.getByRole("group", { name: "Proposed Barrier Health change" })).toContainText("Degraded");
   const acceptButton = acceptedRow.getByRole("button", { name: "Accept Health Proposal for SYNTHETIC-CP-01" });
+  const observerPage = await page.context().newPage();
+  const streamReady = observerPage.waitForResponse((response) => response.url().endsWith("/api/v1/events") && response.status() === 200);
+  await observerPage.goto("/map");
+  await streamReady;
+  const observerRow = observerPage.getByRole("complementary", { name: "Map context panel" })
+    .locator(".health-proposal-row").filter({ hasText: "SYNTHETIC-CP-01" });
+  await expect(observerRow).toBeVisible();
   await acceptButton.focus();
   await page.keyboard.press("Enter");
   const acceptReason = acceptedRow.getByRole("textbox", { name: "Decision reason" });
@@ -22,13 +29,21 @@ test("D15 reviews owner Health Proposals in the Overview panel through the BFF a
   await acceptReason.fill("Synthetic owner inspection confirms degraded health.");
   await page.keyboard.press("Tab");
   await expect(acceptedRow.getByRole("button", { name: "Accept", exact: true })).toBeFocused();
-  const acceptRequest = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith("/00000000-0000-4000-8000-000000000083:accept"));
+  const acceptResponse = page.waitForResponse((response) => response.request().method() === "POST"
+    && response.url().endsWith("/00000000-0000-4000-8000-000000000083:accept"));
+  const acceptedAt = Date.now();
   await page.keyboard.press("Enter");
-  const accept = await acceptRequest;
+  const response = await acceptResponse;
+  expect(response.status()).toBe(200);
+  const accept = response.request();
   expect(accept.headers()["x-csrf-token"]).toBeTruthy();
   expect(accept.headers()["idempotency-key"]).toMatch(/^[A-Za-z0-9._:-]{16,128}$/);
   expect(accept.postDataJSON()).toEqual({ reason: "Synthetic owner inspection confirms degraded health." });
   await expect(acceptedRow).toHaveCount(0);
+  await expect(observerRow).toHaveCount(0, { timeout: 1000 });
+  const updateLatencyMs = Date.now() - acceptedAt;
+  expect(updateLatencyMs).toBeLessThan(1000);
+  test.info().annotations.push({ type: "health-change-visible-ms", description: String(updateLatencyMs) });
   await expect.poll(async () => (await (await page.request.get("/test/health-state")).json()).eventCount).toBe(1);
 
   const rejectedRow = panel.locator(".health-proposal-row").filter({ hasText: "SYNTHETIC-CP-02" });
@@ -48,6 +63,7 @@ test("D15 reviews owner Health Proposals in the Overview panel through the BFF a
     { proposalId: "00000000-0000-4000-8000-000000000084", decision: "reject", reason: "Synthetic owner requests fresh inspection evidence." },
   ]);
   expect(state.eventCount).toBe(1);
+  await observerPage.close();
 });
 
 test("viewer can read owned proposals but cannot submit a Health decision", async ({ page }) => {

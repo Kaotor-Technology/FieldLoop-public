@@ -1,7 +1,41 @@
 import type { MapFeature, MapLayerName } from "@fieldloop/map";
+import type { SimulationRun } from "./simulation-events";
 
 export type MapDomain = "all" | "pipeline-integrity" | "flood-water";
 export type BarrierMarkerStatus = "degraded" | "failed" | "unverified";
+
+const BANGKOK_STORM_SCENARIO = "bangkok-storm";
+const BANGKOK_STORM_RAIN_END_SECONDS = 7_200;
+const BANGKOK_STORM_RAIN_RATE_MM_PER_HOUR = 72;
+
+export interface SimulatedRainCell {
+  feature: MapFeature;
+  rateMillimetersPerHour: number;
+}
+
+export function selectSimulatedRainCell(
+  run: Pick<SimulationRun, "scenarioId" | "elapsedSeconds" | "nextEventIndex" | "state" | "simulated"> | null | undefined,
+  assets: readonly MapFeature[],
+): SimulatedRainCell | null {
+  if (!run || !run.simulated || run.scenarioId !== BANGKOK_STORM_SCENARIO || run.nextEventIndex === 0 ||
+      run.elapsedSeconds >= BANGKOK_STORM_RAIN_END_SECONDS || run.state === "ready" || run.state === "finished") return null;
+
+  const zone = assets.find((feature) => feature.properties.code === "Z3" &&
+    feature.properties.domainPack === "flood-water" && feature.properties.featureKind === "area" &&
+    feature.properties.simulated && (feature.geometry.type === "Polygon" || feature.geometry.type === "MultiPolygon"));
+  return zone ? { feature: zone, rateMillimetersPerHour: BANGKOK_STORM_RAIN_RATE_MM_PER_HOUR } : null;
+}
+
+export function rainLayerVisualStyle(rateMillimetersPerHour: number) {
+  const boundedRate = Math.max(0, Math.min(BANGKOK_STORM_RAIN_RATE_MM_PER_HOUR, rateMillimetersPerHour));
+  const opacityStep = Math.max(1, Math.ceil((boundedRate / BANGKOK_STORM_RAIN_RATE_MM_PER_HOUR) * 5)) / 5;
+  return {
+    lowToken: "--color-rain-low",
+    highToken: "--color-rain-high",
+    colorWeight: opacityStep,
+    opacity: opacityStep,
+  };
+}
 
 const RISK_TOKENS = {
   intolerable: "--color-risk-intolerable",

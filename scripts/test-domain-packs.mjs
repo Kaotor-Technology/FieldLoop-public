@@ -1,3 +1,4 @@
+import { testGenAiSafetyRecords } from "./test-gen-ai-safety.mjs";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 import { spawnSync } from "node:child_process";
@@ -6,7 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Kysely, PostgresDialect, sql } from "kysely";
 import pg from "pg";
-import { loadDemoDomainPacks, registerDomainPackRecords } from "../apps/api/dist/domain-packs.js";
+import { loadDomainPacks } from "../packages/adapters/dist/domain-pack-loader.js";
+import { DEMO_AGENT_TOOL_NAMES, loadDemoDomainPacks, registerDomainPackRecords } from "../apps/api/dist/domain-packs.js";
 import { createProductionAuthRuntime } from "../apps/api/dist/auth/runtime.js";
 import { loadSeed as loadDlSeed } from "../db/seed/dl-01/seed.mjs";
 import { loadSeed as loadBangkokSeed } from "../db/seed/bangkok/seed.mjs";
@@ -28,7 +30,7 @@ try {
   await loadDlSeed(database, buildDl(), orgId);
   await loadBangkokSeed(database, buildBangkok(), orgId);
   const healthBefore = (await sql`SELECT id, health FROM app.barrier ORDER BY id`.execute(database)).rows;
-  const packs = await loadDemoDomainPacks();
+  const packs = (await loadDemoDomainPacks()).filter(({ aiSafety }) => !aiSafety);
   // Also exercise the optional spatial field accepted by the same loader schema.
   packs[0].content.signalRules[0].spatialGeometry = {
     type: "Polygon", coordinates: [[[100, 13], [101, 13], [101, 14], [100, 14], [100, 13]]],
@@ -97,12 +99,12 @@ try {
   const times = [];
   for (let index = 0; index < 25; index++) {
     const start = performance.now();
-    const loaded = await loadDemoDomainPacks();
+    const loaded = await loadDomainPacks(new URL("../domain-packs/", import.meta.url), DEMO_AGENT_TOOL_NAMES, ["pipeline-integrity", "flood-water"]);
     await registerDomainPackRecords(application, orgId, loaded);
     times.push(performance.now() - start);
   }
   times.sort((left, right) => left - right);
-  console.log(`Local pack load + DB registration (25 samples): p50=${times[12].toFixed(2)} ms p95=${times[23].toFixed(2)} ms`);
+  console.log(`Two-pack baseline load + DB registration (25 samples): p50=${times[12].toFixed(2)} ms p95=${times[23].toFixed(2)} ms`);
   const id = first.find(({ kind }) => kind === "rule").id;
   const plan = await sql`EXPLAIN (ANALYZE, BUFFERS) INSERT INTO app.signal_rule
     (id, org_id, pack, condition, target_barrier_selector, simulated, classification, created_by)
@@ -110,6 +112,7 @@ try {
     FROM app.signal_rule WHERE id = ${id}::uuid
     ON CONFLICT (id) DO UPDATE SET condition = EXCLUDED.condition`.execute(application);
   console.log(plan.rows.map((row) => row["QUERY PLAN"]).join("\n"));
+  await testGenAiSafetyRecords(database, application, await loadDemoDomainPacks());
   console.log("Domain Pack PostGIS integration passed: application grants, restart, update, spatial persistence, Organisation isolation, rollback and unchanged Health.");
 } finally {
   await application.destroy();

@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { MapFeature } from "@fieldloop/map";
+import type { SimulationRun } from "./simulation-events";
 import {
   barrierMarkerStatus,
   countVisibleBarrierAlerts,
+  rainLayerVisualStyle,
   riskBandVisualStyle,
+  selectSimulatedRainCell,
   searchVisibleFeatures,
   selectBarrierMarkerFeatures,
   selectVisibleFeatures,
@@ -18,8 +21,61 @@ const segment: MapFeature = {
   id: "pipeline-segment",
   properties: { ...simulatedAsset.properties, featureKind: "segment", chainageFrom: 1200, chainageTo: 1400 },
 };
+const rainZone = feature({
+  id: "synthetic-zone-z3",
+  name: "Demo drainage zone Z3 (SIMULATION)",
+  code: "Z3",
+  simulated: true,
+  health: null,
+  domainPack: "flood-water",
+  featureKind: "area",
+  geometry: { type: "Polygon", coordinates: [[[100, 13], [101, 13], [101, 14], [100, 13]]] },
+});
+const bangkokStormRun: SimulationRun = {
+  id: "11111111-1111-4111-8111-111111111111",
+  revision: 1,
+  orgId: "test-org",
+  scenarioId: "bangkok-storm",
+  scenarioName: "Bangkok storm",
+  seed: 42,
+  speed: 1,
+  clock: "2026-10-12T00:00:00Z",
+  elapsedSeconds: 0,
+  durationSeconds: 259_200,
+  state: "playing",
+  nextEventIndex: 3,
+  eventCount: 13,
+  simulated: true,
+  classification: "CONFIDENTIAL",
+  bookmarks: [],
+};
 
 describe("map visible feature state", () => {
+  it("projects the active Bangkok Scenario rain event onto simulated zone Z3", () => {
+    expect(selectSimulatedRainCell(bangkokStormRun, [rainZone])).toEqual({
+      feature: rainZone,
+      rateMillimetersPerHour: 72,
+    });
+    expect(selectSimulatedRainCell({ ...bangkokStormRun, elapsedSeconds: 7_199 }, [rainZone])).not.toBeNull();
+    expect(selectSimulatedRainCell({ ...bangkokStormRun, elapsedSeconds: 7_200, nextEventIndex: 8 }, [rainZone])).toBeNull();
+  });
+
+  it("waits for the simulator to emit the initial rain event and requires simulated flood-zone geometry", () => {
+    expect(selectSimulatedRainCell({ ...bangkokStormRun, state: "ready", nextEventIndex: 0 }, [rainZone])).toBeNull();
+    expect(selectSimulatedRainCell({ ...bangkokStormRun, scenarioId: "cp-rectifier-failure" }, [rainZone])).toBeNull();
+    expect(selectSimulatedRainCell(bangkokStormRun, [simulatedAsset])).toBeNull();
+  });
+
+  it("uses DESIGN rain tokens with opacity in 0.2 steps", () => {
+    expect(rainLayerVisualStyle(0)).toEqual({
+      lowToken: "--color-rain-low", highToken: "--color-rain-high", colorWeight: 0.2, opacity: 0.2,
+    });
+    expect(rainLayerVisualStyle(36).opacity).toBe(0.6);
+    expect(rainLayerVisualStyle(72)).toEqual({
+      lowToken: "--color-rain-low", highToken: "--color-rain-high", colorWeight: 1, opacity: 1,
+    });
+  });
+
   it("keeps simulated provenance tied to rendered geometry when search has no matches", () => {
     const rendered = selectVisibleFeatures([
       { layer: "assets", features: [simulatedAsset] },
@@ -96,19 +152,22 @@ describe("map visible feature state", () => {
 function feature(input: {
   id: string;
   name: string;
+  code?: string;
   simulated: boolean;
   health: "healthy" | "degraded" | "failed" | "unverified" | null;
+  featureKind?: MapFeature["properties"]["featureKind"];
+  geometry?: MapFeature["geometry"];
   riskBand?: MapFeature["properties"]["riskBand"];
   domainPack?: "pipeline-integrity" | "flood-water";
 }): MapFeature {
   return {
     type: "Feature",
     id: input.id,
-    geometry: { type: "Point", coordinates: [100, 14] },
+    geometry: input.geometry ?? { type: "Point", coordinates: [100, 14] },
     properties: {
       name: input.name,
-      code: null,
-      featureKind: input.health ? "barrier" : "facility",
+      code: input.code ?? null,
+      featureKind: input.featureKind ?? (input.health ? "barrier" : "facility"),
       classification: "HIGHLY_RESTRICTED",
       simulated: input.simulated,
       label: null,
