@@ -128,8 +128,10 @@ test("an unknown Bowtie shows an empty state and returns to the same map URL sta
 });
 
 test("viewer role can open a Bowtie in read-only mode", async ({ page, request }) => {
+  await page.context().clearCookies();
   await request.get("/test/reset");
   await page.goto("/map");
+  await expect(page.getByRole("heading", { name: "Scripted SSO" })).toBeVisible();
   await page.getByRole("link", { name: "Sign in as viewer" }).click();
   await expect(page.getByRole("heading", { name: "Geo Command Map", exact: true })).toBeVisible();
 
