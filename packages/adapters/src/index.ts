@@ -10,3 +10,17 @@ export { GoogleServiceIdentityVerifier, type ServiceIdentityVerifier } from "./g
 export { SignalPublisher, MAX_SIGNAL_BYTES, type MessageTransport, type SignalPublisherConfig, type SignalPublishResult } from "./signal-publisher.js";
 export { createCloudRunFetch, type ServiceFetch } from "./cloud-run-fetch.js";
 export { appendAuditEvent, appendWorkerEvent, hashAuditSnapshot, type AuditEventInput } from "./postgres-domain-events.js";
+export {
+  GoogleModelArmorAdapter,
+  GoogleCloudAccessTokenProvider,
+  type GuardrailAccessTokenProvider,
+  type GuardrailClassification,
+  type ModelArmorAdapterOptions,
+  type Tier1ScanResult,
+  type Tier1TextScanner,
+} from "./guardrail-detectors.js";
+export {
+  GoogleVertexChatCompletionsAdapter,
+  type VertexChatCompletions,
+  type VertexChatCompletionsOptions,
+} from "./google-vertex-chat-completions.js";
