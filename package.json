@@ -8,6 +8,11 @@
     "node": ">=22.23.3 <23",
     "pnpm": "10.34.6"
   },
+  "pnpm": {
+    "overrides": {
+      "@luma.gl/shadertools": "9.3.6"
+    }
+  },
   "scripts": {
     "build": "turbo run build",
     "lint": "turbo run lint && eslint scripts db/seed data/synthetic/bangkok data/synthetic/corpus/generate.mjs",

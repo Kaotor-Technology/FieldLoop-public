@@ -8,7 +8,10 @@ assert.ok(image, "Supply an image tag");
 const docker = (...args) => execFileSync("docker", args, { encoding: "utf8" }).trim();
 const user = docker("image", "inspect", image, "--format", "{{.Config.User}}");
 assert.ok(user && !["0", "root"].includes(user.split(":")[0]), "Runtime must use a non-root user");
-const id = docker("run", "--detach", "--publish", "127.0.0.1::8080", image);
+// Catalog target validation needs the seeded database; this smoke checks only
+// process startup and health, while scenario validity is covered separately.
+const simulatorArgs = app === "simulator" ? ["--env", "FIELDLOOP_SCENARIO_DIR=/tmp"] : [];
+const id = docker("run", "--detach", ...simulatorArgs, "--publish", "127.0.0.1::8080", image);
 try {
   const port = docker("port", id, "8080/tcp").split(":").at(-1);
   const origin = `http://127.0.0.1:${port}`;

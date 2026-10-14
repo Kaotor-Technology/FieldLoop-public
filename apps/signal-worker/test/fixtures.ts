@@ -30,7 +30,8 @@ export const rule: RegisteredSignalRule = {
 };
 export function runtime(): WorkerRuntime {
   return {
-    store: { ingest: vi.fn().mockResolvedValue(undefined), detectSilence: vi.fn().mockResolvedValue(1), publishPending: vi.fn().mockResolvedValue(undefined) },
+    store: { ingest: vi.fn().mockResolvedValue(undefined), detectSilence: vi.fn().mockResolvedValue(1),
+      ageEvidence: vi.fn().mockResolvedValue({ changed: 1, notified: 2 }), publishPending: vi.fn().mockResolvedValue(undefined) },
     identity: { verify: vi.fn().mockResolvedValue(undefined) },
     audience: "https://worker.example.test", pushEmail: "push@example.test", schedulerEmail: "scheduler@example.test",
     subscription: "projects/fixture/subscriptions/signals-local", orgId: signal.orgId,

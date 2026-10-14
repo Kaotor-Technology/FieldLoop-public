@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { api, SessionError } from "./api-client";
+import { GeoCommandMap } from "./GeoCommandMap";
 
 export function MapEntry() {
   const { t } = useTranslation();
@@ -14,8 +15,7 @@ export function MapEntry() {
     },
     retry: false,
   });
-  return <main id="main-content" className="map-entry" tabIndex={-1}>
-    <div className="view-heading"><h1>{t("map")}</h1><p>{t("mapDetail")}</p></div>
+  return <>
     <section className="bowtie-list" aria-labelledby="bowtie-list-title">
       <h2 id="bowtie-list-title">{t("bowties")}</h2>
       {bowties.isPending ? <p role="status">{t("loadingBowties")}</p> : null}
@@ -25,12 +25,10 @@ export function MapEntry() {
           <strong>{bowtie.topEvent}</strong>
           <span>{bowtie.hazard}</span>
           <span className="mono">{bowtie.id}</span>
-          <span className="simulation-label">{bowtie.simulated ? t("simulatedData") : t("syntheticData")}</span>
+          <span className="simulation-label">{bowtie.simulated ? t("simulationTag") : t("syntheticData")}</span>
         </Link>
       </li>)}</ul> : !bowties.isPending && !bowties.isError ? <p>{t("noBowties")}</p> : null}
     </section>
-    <section className="map-pending" aria-label={t("map")}>
-      <h2>{t("mapPending")}</h2>
-    </section>
-  </main>;
+    <GeoCommandMap />
+  </>;
 }

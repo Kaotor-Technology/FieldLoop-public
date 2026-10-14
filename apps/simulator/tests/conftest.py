@@ -11,6 +11,23 @@ from fieldloop_common.signal_publisher import SignalPublisher
 from fieldloop_simulator.mock_signals import SimulatedSignalEmitter
 
 ORG_ID = "fieldloop-demo"
+ROOT = Path(__file__).resolve().parents[3]
+
+
+@pytest.fixture(autouse=True)
+def seeded_asset_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Validate the app catalog against seeded Asset codes without a live database."""
+    import fieldloop_simulator.main as simulator_main
+
+    facilities = json.loads((ROOT / "data/synthetic/bangkok/facilities.geojson").read_text())
+    asset_codes = {feature["properties"]["asset_code"] for feature in facilities["features"]}
+
+    class SeededAssetStore:
+        def asset_codes(self) -> set[str]:
+            return set(asset_codes)
+
+    store = SeededAssetStore()
+    monkeypatch.setattr(simulator_main, "store", lambda: store)
 
 
 @pytest.fixture

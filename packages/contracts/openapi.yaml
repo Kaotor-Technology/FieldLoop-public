@@ -24,6 +24,8 @@ tags:
     description: OIDC sign-in, sign-out and session reauthentication.
   - name: Session
     description: Current signed-in user's BFF session.
+  - name: Map
+    description: Organisation-scoped map configuration and viewport layers.
   - name: Internal Auth
     description: Internal token verification keys; contains no user data.
   - name: Simulation
@@ -32,6 +34,8 @@ tags:
     description: Organisation-calibrated Bowtie risk scores, snapshots and explanations.
   - name: Evidence
     description: Organisation-scoped source Evidence metadata.
+  - name: Health
+    description: Barrier Health decisions and in-app notifications.
 paths:
   /auth/login:
     get:
@@ -166,6 +170,55 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CurrentUser" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/map/config:
+    get:
+      operationId: getMapConfig
+      summary: Get browser map configuration
+      description: Returns the referrer-restricted Google Maps JavaScript API key for the authenticated session.
+      tags: [Map]
+      responses:
+        "200":
+          description: Browser map configuration.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapConfig" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/map/layers/{layer}:
+    get:
+      operationId: getMapLayer
+      summary: Get map features within the current viewport
+      description: Returns an Organisation- and clearance-filtered GeoJSON layer for a bounded viewport. Demo roles may also read only the explicitly seeded DL-01 and Bangkok records when they are marked simulated.
+      tags: [Map]
+      parameters:
+        - name: layer
+          in: path
+          required: true
+          schema: { type: string, enum: [assets, barriers, consequences] }
+        - name: bbox
+          in: query
+          required: true
+          description: West, south, east and north longitude/latitude values in WGS84.
+          style: form
+          explode: false
+          schema:
+            type: array
+            minItems: 4
+            maxItems: 4
+            items: { type: number }
+        - name: zoom
+          in: query
+          required: true
+          schema: { type: integer, minimum: 0, maximum: 22 }
+      responses:
+        "200":
+          description: Features visible in the requested viewport.
+          content:
+            application/geo+json:
+              schema: { $ref: "#/components/schemas/MapFeatureCollection" }
+        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /internal/auth/jwks:
@@ -566,13 +619,23 @@ paths:
   /v1/events:
     get:
       operationId: streamEvents
-      summary: Stream live platform events
-      description: SSE emits simulation.state, simulation.reset and risk.recalculated events. Risk events carry a persisted RiskSnapshot and the controlled-standard calibration provenance used to calculate it, then invalidate the matching Bowtie risk query. The stream is limited to a session validation window; reconnect reauthenticates.
+      summary: Stream live domain and simulation events
+      description: SSE emits scoped Health, notification, simulation, and Risk events. Risk events carry a persisted RiskSnapshot and the controlled-standard calibration provenance used to calculate it. Last-Event-ID resumes the event cursor; reconnect reauthenticates.
       tags:
+      - Health
       - Simulation
+      - Risk
+      parameters:
+      - name: Last-Event-ID
+        in: header
+        required: false
+        description: Opaque cursor from the previous event, used to resume the stream.
+        schema:
+          type: string
+          maxLength: 512
       responses:
         '200':
-          description: Event stream with simulation state/reset or persisted risk recalculation events.
+          description: Event stream for barrier.health_changed, health_proposal.created, evidence.created, notification.delivered, simulation.state, simulation.reset and risk.recalculated.
           content:
             text/event-stream:
               schema:
@@ -696,6 +759,85 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/health-proposals/{healthProposalId}:accept:
+    post:
+      operationId: acceptHealthProposal
+      summary: Accept a Health Proposal
+      description: Applies the proposed Health for its Barrier Owner, records an audited Health Change and emits a live event.
+      tags: [Health]
+      parameters:
+      - name: healthProposalId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HealthDecision' }
+      responses:
+        '200':
+          description: Accepted decision and current Barrier Health.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthDecisionResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/health-proposals/{healthProposalId}:reject:
+    post:
+      operationId: rejectHealthProposal
+      summary: Reject a Health Proposal
+      description: Rejects an open Health Proposal for its Barrier Owner without applying the proposed Health.
+      tags: [Health]
+      parameters:
+      - name: healthProposalId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HealthDecision' }
+      responses:
+        '200':
+          description: Rejected decision and unchanged Barrier Health.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthDecisionResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/notifications:
+    get:
+      operationId: listNotifications
+      summary: List current user's in-app notifications
+      description: Returns notifications for the signed-in user within Organisation and clearance scope. Evidence expiry notices disappear when newer Evidence arrives.
+      tags: [Health]
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Current user's notifications in reverse chronological order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 components:
   securitySchemes:
     sessionCookie:
@@ -754,6 +896,87 @@ components:
         minimum: 0
 
   schemas:
+    MapConfig:
+      type: object
+      required: [mapsApiKey]
+      properties:
+        mapsApiKey:
+          type: string
+          description: Browser key restricted to the FieldLoop HTTPS referrers and Maps JavaScript API.
+
+    MapFeatureCollection:
+      type: object
+      required: [type, features]
+      properties:
+        type: { type: string, const: FeatureCollection }
+        features:
+          type: array
+          items: { $ref: "#/components/schemas/MapFeature" }
+
+    MapFeature:
+      type: object
+      required: [type, id, geometry, properties]
+      properties:
+        type: { type: string, const: Feature }
+        id: { type: string }
+        geometry: { $ref: "#/components/schemas/MapGeometry" }
+        properties: { $ref: "#/components/schemas/MapFeatureProperties" }
+
+    MapGeometry:
+      oneOf:
+        - type: object
+          required: [type, coordinates]
+          properties:
+            type: { type: string, const: Point }
+            coordinates: { type: array, minItems: 2, maxItems: 2, items: { type: number } }
+        - type: object
+          required: [type, coordinates]
+          properties:
+            type: { type: string, const: LineString }
+            coordinates:
+              type: array
+              minItems: 2
+              items: { type: array, minItems: 2, maxItems: 2, items: { type: number } }
+        - type: object
+          required: [type, coordinates]
+          properties:
+            type: { type: string, const: Polygon }
+            coordinates:
+              type: array
+              items:
+                type: array
+                minItems: 4
+                items: { type: array, minItems: 2, maxItems: 2, items: { type: number } }
+        - type: object
+          required: [type, coordinates]
+          properties:
+            type: { type: string, const: MultiPolygon }
+            coordinates:
+              type: array
+              items:
+                type: array
+                items:
+                  type: array
+                  minItems: 4
+                  items: { type: array, minItems: 2, maxItems: 2, items: { type: number } }
+
+    MapFeatureProperties:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: [string, "null"] }
+        code: { type: [string, "null"] }
+        featureKind: { type: string, enum: [area, facility, linear, segment, barrier, consequence] }
+        classification: { type: string }
+        simulated: { type: boolean }
+        label: { type: [string, "null"] }
+        health: { type: [string, "null"], enum: [healthy, degraded, failed, unverified, null] }
+        riskBand: { type: [string, "null"], enum: [intolerable, alarp, acceptable, null] }
+        chainageFrom: { type: [number, "null"] }
+        chainageTo: { type: [number, "null"] }
+        evidenceObservedAt: { type: [string, "null"], format: date-time }
+        domainPack: { type: [string, "null"] }
+
     # BEGIN generated simulation schemas
     SimulationRun:
       type: object
@@ -935,6 +1158,48 @@ components:
       - simulated
       - classification
     # END generated simulation schemas
+    HealthDecision:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required: [reason]
+    HealthDecisionResult:
+      type: object
+      additionalProperties: false
+      properties:
+        healthProposalId: { type: string, format: uuid }
+        status: { type: string, enum: [accepted, rejected] }
+        barrierId: { type: string, format: uuid }
+        health: { type: string, enum: [healthy, degraded, failed, unverified] }
+      required: [healthProposalId, status, barrierId, health]
+    Notification:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        subjectType: { type: string, enum: [action_request, health_change, evidence] }
+        subjectId: { type: string, format: uuid }
+        barrierId: { type: [string, 'null'], format: uuid }
+        channel: { type: string }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+      required: [id, subjectType, subjectId, barrierId, channel, status, createdAt, simulated, classification]
+    NotificationPage:
+      allOf:
+      - $ref: '#/components/schemas/CursorPage'
+      - type: object
+        properties:
+          items:
+            type: array
+            items: { $ref: '#/components/schemas/Notification' }
+          limit: { type: integer, minimum: 1, maximum: 200 }
+        required: [items, limit]
     CurrentUser:
       type: object
       required: [sub, roles, persona, orgId, clearance, csrfToken, authTime]

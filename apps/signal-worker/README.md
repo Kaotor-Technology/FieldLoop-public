@@ -57,7 +57,16 @@ restores Health automatically. Dependencies start their first interval at worker
 registration even when the source has never been heard. Old observations and
 redelivery do not refresh liveness. Scenario run IDs isolate replay watermarks;
 silence uses service receipt time so Scenario clock jumps cannot instantly silence
-every source. Evidence ageing and human acceptance/rejection belong to FL-82.
+every source.
+
+`POST /internal/jobs/ageing` also requires the Scheduler identity. It expires a
+Barrier only when its latest current Evidence plus `evidence_interval` is strictly
+earlier than the job time. Healthy and Degraded become Unverified; Failed remains
+Failed. It writes `health_change`, append-only audit and `barrier.health_changed`
+in the same transaction. The Barrier Owner receives an in-app notice in the hour
+before Evidence expires and when Health changes; simulated notices use sandbox
+recipients. Repeated hourly runs do not duplicate notices. The one-hour lead time
+matches the hourly job cadence.
 
 ## Persistence and delivery
 
@@ -95,8 +104,9 @@ publisher IAM and one pinned custom audience shared with Pub/Sub/Scheduler.
 
 Release prerequisites: provision the worker IAM SQL users; run the migration;
 reload DL-01/Bangkok seeds with content codes; register the FL-78 packs; release
-the worker image; verify authenticated push/events; then enable the new paused
-hourly `silent-sources` Scheduler jobs. Existing ageing/SLA jobs remain paused.
+the worker image; verify authenticated push/events; then enable the hourly `ageing`
+Scheduler jobs. `silent-sources` and SLA jobs remain paused until their release
+prerequisites are verified.
 The worker DB role cannot read BFF session tokens or modify audit records.
 No GCP configuration was applied by this feature's local tests.
 
@@ -113,7 +123,8 @@ pgvector, both synthetic seeds and the current validated pack rules loaded throu
 the FL-78 API pack loader. It checks scoped worker grants, concurrent deduplication,
 rollback, periodic CP/patrol, the registered aggregate-rain and categorical-pump rules, duration
 boundaries, spatial coverage, quarterly Bangkok dates, silence/audit and outbox
-retry. It separately ingests the pinned PR #47 rain/pump source samples and verifies
+retry. It also checks the strict Evidence expiry boundary, Failed-stays, owner
+notifications and notification deduplication. It separately ingests the pinned PR #47 rain/pump source samples and verifies
 that unmatched data cannot create false Evidence or Proposals. It also prints local
 latency and an `EXPLAIN (ANALYZE, BUFFERS)` history query. These results do not
 establish Cloud Run latency, billing, browser SSE or end-to-end GCP delivery.

@@ -147,7 +147,10 @@ it("emits risk recalculation snapshots over SSE with a resumable cursor", async 
     if (chunk.done) throw new Error("Risk event stream ended early");
     text += decoder.decode(chunk.value);
   }
-  expect(text).toContain(`id: risk:${createdAt}:${snapshotId}`);
+  const eventId = /^id: ([A-Za-z0-9_-]+)$/m.exec(text)?.[1];
+  if (!eventId) throw new Error("Risk event did not include a resumable cursor");
+  const cursor = JSON.parse(Buffer.from(eventId, "base64url").toString("utf8")) as { risk: { createdAt: string; id: string } };
+  expect(cursor.risk).toEqual({ createdAt, id: snapshotId });
   expect(text).toContain(`"bowtieId":"${bowtieId}"`);
   expect(text).toContain('"trigger":"health_change"');
   await reader.cancel();

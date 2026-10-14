@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { isRiskSnapshot, type BarrierHealth, type RiskBand, type RiskInput } from "@fieldloop/contracts";
 import { calculateRisk, RiskInputError } from "./index.js";
 import { basicInput } from "./test-fixtures.js";
+import { DEMO_RISK_MATRIX } from "../risk-score.js";
 
 describe("PFD × Health", () => {
   it.each<[BarrierHealth, number]>([["healthy", 0.01], ["degraded", 0.1], ["unverified", 0.1], ["failed", 1]])("calculates %s", (health, expected) => {
@@ -149,6 +150,21 @@ describe("Threat frequency accumulation", () => {
 });
 
 describe("Risk Matrix", () => {
+  it("accepts the PRD demo matrix as a canonical Risk Matrix input", () => {
+    expect(calculateRisk({ ...basicInput(), matrix: DEMO_RISK_MATRIX }).cell.zone).toBe("amber");
+  });
+
+  it("keeps the PRD 4×4 example ALARP in the monotonic demo matrix", () => {
+    const input = basicInput();
+    input.barriers = [];
+    input.paths = input.paths.map(path => ({ ...path, barrierIds: [] }));
+    input.threats = [{ id: "threat", frequencyPerYear: 1e-3 }];
+    input.consequences = [{ id: "consequence", conditionalProbability: 1, severity: { people: 4 } }];
+
+    expect(calculateRisk({ ...input, matrix: DEMO_RISK_MATRIX }).cell)
+      .toMatchObject({ frequencyBand: 4, severityBand: 4, zone: "amber" });
+  });
+
   it.each<[number, RiskBand]>([
     [0, 1], [0.999e-5, 1], [1e-5, 2], [0.999e-4, 2], [1e-4, 3],
     [0.999e-3, 3], [1e-3, 4], [0.999e-2, 4], [1e-2, 5], [1, 5],

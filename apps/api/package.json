@@ -20,6 +20,7 @@
     "@fieldloop/adapters": "workspace:*",
     "@fieldloop/contracts": "workspace:*",
     "@fieldloop/domain": "workspace:*",
+    "@fieldloop/map": "workspace:*",
     "fastify": "5.12.5",
     "jose": "6.2.12",
     "kysely": "0.29.6",

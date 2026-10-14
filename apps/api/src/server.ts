@@ -18,6 +18,8 @@ try {
 }
 const app = buildApp({
   auth: authRuntime.auth,
+  mapLayers: authRuntime.mapLayers,
+  ...(authRuntime.health ? { health: authRuntime.health } : {}),
   ...(authRuntime.risk ? { risk: authRuntime.risk } : {}),
   domainPacks,
   ...(simulator ? { simulator } : {}),
