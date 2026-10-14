@@ -21,6 +21,7 @@ const app = buildApp({
   mapLayers: authRuntime.mapLayers,
   ...(authRuntime.health ? { health: authRuntime.health } : {}),
   ...(authRuntime.risk ? { risk: authRuntime.risk } : {}),
+  ...(authRuntime.imports ? { imports: authRuntime.imports } : {}),
   domainPacks,
   ...(simulator ? { simulator } : {}),
   ...(process.env["FIELDLOOP_BASE_URL"] ? { baseUrl: process.env["FIELDLOOP_BASE_URL"] } : {}),

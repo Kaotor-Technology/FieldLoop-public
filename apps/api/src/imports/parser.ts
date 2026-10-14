@@ -86,7 +86,9 @@ export function parseKml(xml: string): KmlPoint[] {
 
 export async function parseUpload(bytes: Buffer, format: "kml" | "kmz"): Promise<KmlPoint[]> {
   if (!bytes.length || bytes.length > MAX_UPLOAD_BYTES) throw new ImportError(413, "upload_too_large");
-  if (format === "kml") return parseKml(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+  if (format === "kml") {
+    try { return parseKml(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); } catch { throw invalid(); }
+  }
   return new Promise((resolve, reject) => {
     fromBuffer(bytes, { lazyEntries: true, validateEntrySizes: true }, (error, zip) => {
       if (error || !zip) { reject(invalid()); return; }

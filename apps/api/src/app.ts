@@ -11,6 +11,8 @@ import type { RiskApiPort } from "./risk/service.js";
 import { registerHealthRoutes } from "./health/routes.js";
 import type { HealthServicePort } from "./health/model.js";
 import { registerLiveEventRoute } from "./live-events.js";
+import { registerImportRoutes } from "./imports/routes.js";
+import type { ImportPort } from "./imports/store.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -28,6 +30,7 @@ export function buildApp(options: {
   risk?: RiskApiPort;
   health?: HealthServicePort;
   domainPacks?: LoadedDomainPack[];
+  imports?: ImportPort;
 } = {}) {
   const app = Fastify({ logger: { serializers: { req: serializeRequestForLog } } });
   const auth = options.auth ?? new UnavailableAuthService();
@@ -41,6 +44,7 @@ export function buildApp(options: {
   registerSimulationRoutes(app, options.simulator);
   registerRiskRoutes(app, options.risk);
   registerHealthRoutes(app, options.health);
+  registerImportRoutes(app, options.imports);
   registerLiveEventRoute(app, options.simulator, options.health, options.risk);
   return app;
 }
