@@ -3,7 +3,7 @@ import { sql, type Kysely } from "kysely";
 import type { CurrentUser } from "../auth/service.js";
 import { ImportError, parseUpload, type KmlPoint } from "./parser.js";
 
-const classes = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"];
+const CLASSIFICATION_ORDER = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"];
 export interface ImportMapping {
   assetId: string;
   toleranceMetres: number;
@@ -38,23 +38,23 @@ export interface ImportPort {
   command(user: CurrentUser, id: string, version: number, command: "commit" | "rollback", key: string): Promise<ImportPreview>;
   options(user: CurrentUser): Promise<{ assets: { id: string; name: string }[]; barriers: { id: string; name: string; assetId: string }[] }>;
 }
-function allowed(user: CurrentUser): string[] { return classes.slice(0, classes.indexOf(user.clearance) + 1); }
+function allowed(user: CurrentUser): string[] { return CLASSIFICATION_ORDER.slice(0, CLASSIFICATION_ORDER.indexOf(user.clearance) + 1); }
 function result(row: ImportRow): ImportPreview {
   return { id: row.id, status: row.status, version: row.version, classification: row.classification,
     fileHash: row.file_hash, createdAt: new Date(row.created_at).toISOString(), mapping: row.mapping, points: row.preview };
 }
 export class PostgresImportStore implements ImportPort {
   constructor(private readonly db: Kysely<Record<string, never>>) {}
-  async options(user: CurrentUser) {
+  async options(user: CurrentUser, db = this.db) {
     const assets = await sql<{ id: string; name: string }>`SELECT a.id::text, COALESCE(a.attributes->>'name', a.id::text) AS name FROM app.asset a
       WHERE a.org_id = ${user.orgId} AND a.classification = ANY(${allowed(user)}::text[]) AND a.simulated IS TRUE
-      AND EXISTS (SELECT 1 FROM app.segment s WHERE s.asset_id=a.id AND s.org_id=a.org_id AND s.classification=ANY(${allowed(user)}::text[]))`.execute(this.db);
+      AND EXISTS (SELECT 1 FROM app.segment s WHERE s.asset_id=a.id AND s.org_id=a.org_id AND s.classification=ANY(${allowed(user)}::text[]))`.execute(db);
     const barriers = await sql<{ id: string; name: string; assetId: string }>`SELECT DISTINCT b.id::text, COALESCE(b.name,b.id::text) AS name, ba.asset_id::text AS "assetId"
       FROM app.barrier b JOIN app.barrier_path bp ON bp.barrier_id=b.id AND bp.org_id=b.org_id
       LEFT JOIN app.threat t ON t.id=bp.threat_id AND t.org_id=b.org_id LEFT JOIN app.consequence c ON c.id=bp.consequence_id AND c.org_id=b.org_id
       JOIN app.bowtie_asset ba ON ba.bowtie_id=COALESCE(t.bowtie_id,c.bowtie_id) AND ba.org_id=b.org_id
       WHERE b.org_id=${user.orgId} AND b.simulated IS TRUE AND b.classification=ANY(${allowed(user)}::text[])
-      AND bp.classification=ANY(${allowed(user)}::text[]) AND ba.classification=ANY(${allowed(user)}::text[])`.execute(this.db);
+      AND bp.classification=ANY(${allowed(user)}::text[]) AND ba.classification=ANY(${allowed(user)}::text[])`.execute(db);
     return { assets: assets.rows, barriers: barriers.rows };
   }
   async create(user: CurrentUser, bytes: Buffer, format: "kml" | "kmz", key: string) {
@@ -108,11 +108,11 @@ export class PostgresImportStore implements ImportPort {
       let classification = asset.classification;
       if (mapping.target === "evidence") {
         if (!mapping.barrierId) throw new ImportError(400,"barrier_required");
-        const choices = await this.options(user);
+        const choices = await this.options(user,trx);
         if (!choices.barriers.some((barrier) => barrier.id === mapping.barrierId && barrier.assetId === mapping.assetId)) throw new ImportError(404,"not_found");
         const barrier = (await sql<{ classification: string }>`SELECT classification FROM app.barrier WHERE id=${mapping.barrierId}::uuid AND org_id=${user.orgId} FOR SHARE`.execute(trx)).rows[0];
         if (!barrier) throw new ImportError(404,"not_found");
-        classification = classes[Math.max(classes.indexOf(classification), classes.indexOf(barrier.classification))] ?? "HIGHLY_RESTRICTED";
+        classification = CLASSIFICATION_ORDER[Math.max(CLASSIFICATION_ORDER.indexOf(classification), CLASSIFICATION_ORDER.indexOf(barrier.classification))] ?? "HIGHLY_RESTRICTED";
       }
       const fields = new Set(row.preview.flatMap((point) => Object.keys(point.attributes)));
       if (![mapping.nameField,mapping.descriptionField,mapping.categoryField].every((field) => !field || fields.has(field))) throw new ImportError(400,"invalid_mapping");
@@ -124,7 +124,7 @@ export class PostgresImportStore implements ImportPort {
           FROM app.segment s WHERE s.asset_id=${mapping.assetId}::uuid AND s.org_id=${user.orgId} AND s.classification=ANY(${allowed(user)}::text[])
           AND s.chainage_from IS NOT NULL AND s.chainage_to IS NOT NULL ORDER BY ST_Distance(s.geom::geography,${location}::geography) LIMIT 1`.execute(trx)).rows[0];
         if (!nearest) throw new ImportError(400,"asset_has_no_segments");
-        classification = classes[Math.max(classes.indexOf(classification),classes.indexOf(nearest.classification))] ?? "HIGHLY_RESTRICTED";
+        classification = CLASSIFICATION_ORDER[Math.max(CLASSIFICATION_ORDER.indexOf(classification),CLASSIFICATION_ORDER.indexOf(nearest.classification))] ?? "HIGHLY_RESTRICTED";
         const area = (await sql<{ inside: boolean | null }>`SELECT ST_Covers(import_area,${location}) AS inside FROM app.organisation WHERE org_id=${user.orgId}`.execute(trx)).rows[0];
         const duplicate = (await sql<{ duplicate: boolean }>`SELECT EXISTS(SELECT 1 FROM app.kml_import_item i JOIN app.kml_import k ON k.id=i.kml_import_id AND k.org_id=i.org_id
           WHERE i.org_id=${user.orgId} AND k.status='committed' AND i.simulated IS TRUE AND i.geom && ${location} AND ST_Equals(i.geom,${location}))

@@ -8,7 +8,7 @@ import { PostgresImportStore, type ImportMapping } from "../src/imports/store.js
 const url = process.env["FIELDLOOP_IMPORT_TEST_DATABASE_URL"];
 describe.skipIf(!url)("KML imports against migrated PostGIS", () => {
   let pool: Pool, db: Kysely<Record<string,never>>, store: PostgresImportStore;
-  beforeAll(() => {pool=new Pool({connectionString:url});db=new Kysely({dialect:new PostgresDialect({pool})});store=new PostgresImportStore(db);});
+  beforeAll(() => {pool=new Pool({connectionString:url,max:5});db=new Kysely({dialect:new PostgresDialect({pool})});store=new PostgresImportStore(db);});
   afterAll(async () => {await db?.destroy();});
   async function fixture() {
     const orgId=randomUUID(),assetId=randomUUID(),barrierId=randomUUID(),bowtieId=randomUUID(),threatId=randomUUID();
@@ -87,5 +87,12 @@ describe.skipIf(!url)("KML imports against migrated PostGIS", () => {
     expect(outcomes.filter(outcome=>outcome.status==="fulfilled")).toHaveLength(1);
     expect(outcomes.filter(outcome=>outcome.status==="rejected")).toHaveLength(1);
     expect((await pool.query("SELECT count(*)::int AS count FROM app.evidence WHERE org_id=$1",[user.orgId])).rows[0]?.count).toBe(1);
+  });
+  it("maps linked Evidence without requiring a second connection",async()=>{
+    const {user,mapping}=await fixture();
+    const created=await store.create(user,content(),"kml",randomUUID());
+    const singleDb=new Kysely<Record<string,never>>({dialect:new PostgresDialect({pool:new Pool({connectionString:url,max:1})})});
+    try {expect((await new PostgresImportStore(singleDb).map(user,created.id,created.version,mapping)).status).toBe("mapped");}
+    finally {await singleDb.destroy();}
   });
 });
