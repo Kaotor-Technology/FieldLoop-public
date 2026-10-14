@@ -16,6 +16,12 @@ describe("translation CI gate", () => {
     expect(validateResources({ en: { label: { value: "{{name}}: {{count}}" } }, th: { label: { value: "{{count}}: {{name}}" } } })).toEqual([]);
   });
   it("extracts literal and conditional UI calls without confusing comments or unrelated strings", () => {
-    expect(translationKeys('// t("comment")\nconst x = "not-a-key"; t("map"); t(pending ? "loading" : "retry"); t(`skip`);')).toEqual(["map", "loading", "retry", "skip"]);
+    expect(translationKeys('// t("comment")\nconst x = "not-a-key"; t("map"); i18next.t("heading"); translator.t(pending ? "loading" : "retry"); t(`skip`);')).toEqual(["map", "heading", "loading", "retry", "skip"]);
+  });
+  it("reports missing keys from i18next member calls", () => {
+    const keys = translationKeys('i18next.t("missingStaticKey")');
+    expect(validateResources({ en: {}, th: {} }, keys)).toEqual([
+      "en: missing key missingStaticKey", "th: missing key missingStaticKey",
+    ]);
   });
 });

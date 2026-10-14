@@ -34,13 +34,18 @@ export function translationKeys(source, filename = "component.tsx") {
   const keys = [];
   const tree = ts.createSourceFile(filename, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   const visit = (node) => {
-    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "t") {
-      const collect = (argument) => {
-        if (!argument) return;
-        if (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument)) keys.push(argument.text);
-        else if (ts.isConditionalExpression(argument)) { collect(argument.whenTrue); collect(argument.whenFalse); }
-      };
-      collect(node.arguments[0]);
+    if (ts.isCallExpression(node)) {
+      const isTranslationCall = ts.isIdentifier(node.expression)
+        ? node.expression.text === "t"
+        : ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === "t";
+      if (isTranslationCall) {
+        const collect = (argument) => {
+          if (!argument) return;
+          if (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument)) keys.push(argument.text);
+          else if (ts.isConditionalExpression(argument)) { collect(argument.whenTrue); collect(argument.whenFalse); }
+        };
+        collect(node.arguments[0]);
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -51,7 +56,7 @@ export function translationKeys(source, filename = "component.tsx") {
 function sourceFiles(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name);
-    return entry.isDirectory() ? sourceFiles(path) : /\.tsx?$/.test(path) && !/\.test\.ts$/.test(path) ? [path] : [];
+    return entry.isDirectory() ? sourceFiles(path) : /\.tsx?$/.test(path) && !/\.(?:test|spec)\.tsx?$/.test(path) ? [path] : [];
   });
 }
 
