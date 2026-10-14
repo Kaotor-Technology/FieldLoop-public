@@ -10,6 +10,8 @@ import { registerMapLayerRoutes, UnavailableMapLayerStore, type MapLayerStore } 
 import type { LoadedDomainPack } from "@fieldloop/adapters";
 import { registerRiskRoutes } from "./risk/routes.js";
 import type { RiskApiPort } from "./risk/service.js";
+import { registerAuditRoutes } from "./audit/routes.js";
+import type { AuditServicePort } from "./audit/model.js";
 import { registerHealthRoutes } from "./health/routes.js";
 import type { HealthServicePort } from "./health/model.js";
 import { registerLiveEventRoute } from "./live-events.js";
@@ -25,6 +27,7 @@ declare module "fastify" {
 
 export function buildApp(options: {
   actions?: ActionServicePort;
+  audit?: AuditServicePort;
   auth?: AuthServicePort;
   baseUrl?: string;
   mapLayers?: MapLayerStore;
@@ -48,6 +51,7 @@ export function buildApp(options: {
   registerRiskRoutes(app, options.risk);
   registerHealthRoutes(app, options.health);
   registerImportRoutes(app, options.imports);
+  registerAuditRoutes(app, options.audit);
   registerActionRoutes(app, options.actions);
   registerLiveEventRoute(app, options.simulator, options.health, options.risk);
   return app;
