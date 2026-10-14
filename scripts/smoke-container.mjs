@@ -11,7 +11,23 @@ assert.ok(user && !["0", "root"].includes(user.split(":")[0]), "Runtime must use
 // Catalog target validation needs the seeded database; this smoke checks only
 // process startup and health, while scenario validity is covered separately.
 const simulatorArgs = app === "simulator" ? ["--env", "FIELDLOOP_SCENARIO_DIR=/tmp"] : [];
-const id = docker("run", "--detach", ...simulatorArgs, "--publish", "127.0.0.1::8080", image);
+const guardrailSmokeProgram = `
+import { buildApp } from "./dist/app.js";
+const unavailable = async () => { throw new Error("Smoke requests must not use external Guardrail dependencies"); };
+const app = buildApp({
+  store: { loadSystem: unavailable, recordIntercept: unavailable, getContentScan: unavailable, recordContentScan: unavailable },
+  scanner: { scanUserPrompt: unavailable, scanModelResponse: unavailable },
+  model: { complete: unavailable },
+  userTokenVerifier: { verify: unavailable },
+  orgId: "container-smoke",
+  simulated: true,
+  vertexModels: { flash: "smoke", pro: "smoke" },
+});
+await app.listen({ host: "0.0.0.0", port: Number(process.env.PORT ?? "8080") });
+`;
+const containerCommand = app === "guardrail" ? ["node", "--input-type=module", "-e", guardrailSmokeProgram] : [];
+const healthPath = app === "web" ? "/" : app === "guardrail" ? "/health" : "/healthz";
+const id = docker("run", "--detach", ...simulatorArgs, "--publish", "127.0.0.1::8080", image, ...containerCommand);
 try {
   const port = docker("port", id, "8080/tcp").split(":").at(-1);
   const origin = `http://127.0.0.1:${port}`;
@@ -19,7 +35,7 @@ try {
   let lastError;
   for (let attempt = 0; attempt < 40; attempt += 1) {
     try {
-      response = await fetch(`${origin}${app === "web" ? "/" : "/healthz"}`, { signal: AbortSignal.timeout(1000) });
+      response = await fetch(`${origin}${healthPath}`, { signal: AbortSignal.timeout(1000) });
       if (response.ok) break;
     } catch (error) {
       lastError = error;
