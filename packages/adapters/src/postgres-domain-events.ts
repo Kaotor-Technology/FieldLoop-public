@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { sql, type Kysely, type Transaction } from "kysely";
+import { sql, type Kysely, type RawBuilder, type Transaction } from "kysely";
 import type { WorkerEvent } from "@fieldloop/contracts";
 
 type PostgresConnection<Database> = Kysely<Database> | Transaction<Database>;
@@ -35,10 +35,21 @@ export async function appendAuditEvent<Database>(connection: PostgresConnection<
       ${event.simulated}, ${event.classification}, ${event.createdBy}, clock_timestamp())`.execute(connection);
 }
 
+// Pair with the API's initial stream cursor so a subscriber cannot advance past
+// an outbox row that is still uncommitted when its first watermark is read.
+export async function lockWorkerEventOutbox<Database>(connection: PostgresConnection<Database>, orgId: string): Promise<void> {
+  await sql`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify([orgId, "worker_event_outbox"])}, 0))`.execute(connection);
+}
+
+/** Column list and one VALUES row for app.signal_event_outbox, for callers that batch outbox inserts. */
+export const WORKER_EVENT_OUTBOX_COLUMNS = sql`(id, org_id, event, simulated, classification, created_by, created_at)`;
+
+export function workerEventOutboxRow(event: WorkerEvent, createdBy: string): RawBuilder<unknown> {
+  return sql`(${event.id}::uuid, ${event.orgId}, ${JSON.stringify(event)}::jsonb, ${event.simulated}, ${event.classification}, ${createdBy}, clock_timestamp())`;
+}
+
 export async function appendWorkerEvent<Database>(connection: PostgresConnection<Database>, event: WorkerEvent, createdBy: string): Promise<void> {
-  // Pair with the API's initial stream cursor so a subscriber cannot advance past
-  // an outbox row that is still uncommitted when its first watermark is read.
-  await sql`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify([event.orgId, "worker_event_outbox"])}, 0))`.execute(connection);
-  await sql`INSERT INTO app.signal_event_outbox (id, org_id, event, simulated, classification, created_by, created_at)
-    VALUES (${event.id}::uuid, ${event.orgId}, ${JSON.stringify(event)}::jsonb, ${event.simulated}, ${event.classification}, ${createdBy}, clock_timestamp())`.execute(connection);
+  await lockWorkerEventOutbox(connection, event.orgId);
+  await sql`INSERT INTO app.signal_event_outbox ${WORKER_EVENT_OUTBOX_COLUMNS}
+    VALUES ${workerEventOutboxRow(event, createdBy)}`.execute(connection);
 }
