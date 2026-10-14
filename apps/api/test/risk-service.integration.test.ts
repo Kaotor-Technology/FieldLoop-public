@@ -17,6 +17,7 @@ interface FixtureOptions {
   classification?: Classification;
   barrierClassification?: Classification;
   simulated?: boolean;
+  demoSeed?: boolean;
 }
 
 interface RiskFixture {
@@ -107,6 +108,36 @@ integration("PostgresRiskService against migrated PostgreSQL", () => {
       .rejects.toMatchObject({ status: 409, code: "risk_matrix_unconfigured" });
   });
 
+  it("persists and emits Health-change Risk snapshots for complete simulated demo seeds within five seconds", async () => {
+    const fixture = await createFixture({ approved: false, simulated: true, demoSeed: true });
+    const user = reviewer(fixture.orgId, fixture.classification);
+    const initial = await service.getRisk(user, fixture.bowtieId);
+    expect(initial.calibration).toMatchObject({ standardRef: "FieldLoop PRD §7.2 demo Risk Matrix", standardVersion: "demo-1" });
+
+    const healthChangeId = randomUUID();
+    await pool.query("UPDATE app.barrier SET health = 'degraded' WHERE org_id = $1 AND id = $2", [fixture.orgId, fixture.barrierId]);
+    await pool.query(
+      `INSERT INTO app.health_change (id, org_id, barrier_id, from_health, to_health, reason, actor, simulated, classification, created_by)
+       VALUES ($1, $2, $3, 'healthy', 'degraded', 'Synthetic demo seed review', 'synthetic-reviewer', true, $4, 'synthetic-reviewer')`,
+      [healthChangeId, fixture.orgId, fixture.barrierId, fixture.classification],
+    );
+
+    const startedAt = Date.now();
+    expect(await service.processHealthChanges()).toBe(1);
+    const snapshots = await pool.query<{ health_change_id: string; trigger: string; calibration: unknown }>(
+      `SELECT health_change_id, trigger, input_json->'calibration' AS calibration FROM app.risk_snapshot
+       WHERE org_id = $1 AND bowtie_id = $2 ORDER BY created_at, id`, [fixture.orgId, fixture.bowtieId],
+    );
+    expect(snapshots.rows).toHaveLength(2);
+    expect(snapshots.rows[1]).toMatchObject({ health_change_id: healthChangeId, trigger: "health_change" });
+    expect(snapshots.rows[1]?.calibration).toMatchObject({ standardVersion: "demo-1" });
+
+    const events = await service.riskEventsAfter(user, { createdAt: new Date(0).toISOString(), id: "00000000-0000-0000-0000-000000000000" });
+    expect(events).toHaveLength(2);
+    expect(events[1]).toMatchObject({ bowtieId: fixture.bowtieId, trigger: "health_change", calibration: initial.calibration });
+    expect(Date.now() - startedAt).toBeLessThan(5_000);
+  }, 20_000);
+
   it("rejects an approved calibration without its controlled standard reference and version", async () => {
     const fixture = await createFixture({ approved: false });
     await expect(pool.query(
@@ -170,6 +201,7 @@ integration("PostgresRiskService against migrated PostgreSQL", () => {
 });
 
 async function createFixture(options: FixtureOptions = {}): Promise<RiskFixture> {
+  const createdBy = options.demoSeed ? "seed:dl-01" : "synthetic-reviewer";
   const fixture = {
     orgId: `risk-integration-${randomUUID()}`,
     bowtieId: randomUUID(),
@@ -197,40 +229,40 @@ async function createFixture(options: FixtureOptions = {}): Promise<RiskFixture>
   );
   await pool.query(
     `INSERT INTO app.bowtie (id, org_id, hazard, top_event, domain, status, simulated, classification, created_by)
-     VALUES ($1, $2, 'Synthetic hazard', 'Synthetic top event', 'integration-test', 'active', $3, $4, 'synthetic-reviewer')`,
-    [fixture.bowtieId, fixture.orgId, fixture.simulated, fixture.classification],
+     VALUES ($1, $2, 'Synthetic hazard', 'Synthetic top event', 'integration-test', 'active', $3, $4, $5)`,
+    [fixture.bowtieId, fixture.orgId, fixture.simulated, fixture.classification, createdBy],
   );
   await pool.query(
     `INSERT INTO app.threat (id, org_id, bowtie_id, name, frequency_per_year, simulated, classification, created_by)
-     VALUES ($1, $2, $3, 'Synthetic threat', 0.1, $4, $5, 'synthetic-reviewer')`,
-    [fixture.threatId, fixture.orgId, fixture.bowtieId, fixture.simulated, fixture.classification],
+     VALUES ($1, $2, $3, 'Synthetic threat', 0.1, $4, $5, $6)`,
+    [fixture.threatId, fixture.orgId, fixture.bowtieId, fixture.simulated, fixture.classification, createdBy],
   );
   await pool.query(
     `INSERT INTO app.consequence (id, org_id, bowtie_id, name, severity, p_conditional, simulated, classification, created_by)
-     VALUES ($1, $2, $3, 'Synthetic consequence', $4::jsonb, 0.9, $5, $6, 'synthetic-reviewer')`,
+     VALUES ($1, $2, $3, 'Synthetic consequence', $4::jsonb, 0.9, $5, $6, $7)`,
     [fixture.consequenceId, fixture.orgId, fixture.bowtieId,
       JSON.stringify({ people: 3, environment: 2, financial: 2, serviceContinuity: 3, reputation: 2, legalRegulatory: 1 }),
-      fixture.simulated, fixture.classification],
+      fixture.simulated, fixture.classification, createdBy],
   );
   await pool.query(
     `INSERT INTO app.barrier (id, org_id, name, type, side, pfd_band, health, simulated, classification, created_by)
-     VALUES ($1, $2, 'Synthetic barrier', 'technical', 'preventive', 0.01, 'healthy', $3, $4, 'synthetic-reviewer')`,
-    [fixture.barrierId, fixture.orgId, fixture.simulated, fixture.barrierClassification],
+     VALUES ($1, $2, 'Synthetic barrier', 'technical', 'preventive', 0.01, 'healthy', $3, $4, $5)`,
+    [fixture.barrierId, fixture.orgId, fixture.simulated, fixture.barrierClassification, createdBy],
   );
   await pool.query(
     `INSERT INTO app.barrier (id, org_id, name, type, side, pfd_band, health, simulated, classification, created_by)
-     VALUES ($1, $2, 'Synthetic mitigative barrier', 'human', 'mitigative', 0.1, 'healthy', $3, $4, 'synthetic-reviewer')`,
-    [fixture.mitigativeBarrierId, fixture.orgId, fixture.simulated, fixture.barrierClassification],
+     VALUES ($1, $2, 'Synthetic mitigative barrier', 'human', 'mitigative', 0.1, 'healthy', $3, $4, $5)`,
+    [fixture.mitigativeBarrierId, fixture.orgId, fixture.simulated, fixture.barrierClassification, createdBy],
   );
   await pool.query(
     `INSERT INTO app.barrier_path (org_id, barrier_id, threat_id, position, simulated, classification, created_by)
-     VALUES ($1, $2, $3, 1, $4, $5, 'synthetic-reviewer')`,
-    [fixture.orgId, fixture.barrierId, fixture.threatId, fixture.simulated, fixture.classification],
+     VALUES ($1, $2, $3, 1, $4, $5, $6)`,
+    [fixture.orgId, fixture.barrierId, fixture.threatId, fixture.simulated, fixture.classification, createdBy],
   );
   await pool.query(
     `INSERT INTO app.barrier_path (org_id, barrier_id, consequence_id, position, simulated, classification, created_by)
-     VALUES ($1, $2, $3, 1, $4, $5, 'synthetic-reviewer')`,
-    [fixture.orgId, fixture.mitigativeBarrierId, fixture.consequenceId, fixture.simulated, fixture.classification],
+     VALUES ($1, $2, $3, 1, $4, $5, $6)`,
+    [fixture.orgId, fixture.mitigativeBarrierId, fixture.consequenceId, fixture.simulated, fixture.classification, createdBy],
   );
   return fixture;
 }

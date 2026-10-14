@@ -5,6 +5,7 @@ import { api } from "./api-client";
 
 export const healthProposalsQueryKey = ["health-proposals"] as const;
 const barrierLayerQueryKey = ["map-layer", "barriers"] as const;
+const assetLayerQueryKey = ["map-layer", "assets"] as const;
 export type HealthProposalPage = components["schemas"]["HealthProposalPage"];
 type BarrierHealth = components["schemas"]["HealthDecisionResult"]["health"];
 type HealthEventCache = Pick<QueryClient, "cancelQueries" | "invalidateQueries" | "setQueriesData">;
@@ -49,12 +50,16 @@ export async function invalidateHealthProposalQueries(
     const event = isWorkerEvent(payload) && payload.type === "barrier.health_changed" ? payload : undefined;
     if (event?.health) {
       await applyBarrierHealthToMapCache(client, event.barrierId, event.health);
-      await client.invalidateQueries({ queryKey: healthProposalsQueryKey });
+      await Promise.all([
+        client.invalidateQueries({ queryKey: healthProposalsQueryKey }),
+        client.invalidateQueries({ queryKey: assetLayerQueryKey }),
+      ]);
       return;
     }
     await Promise.all([
       client.invalidateQueries({ queryKey: healthProposalsQueryKey }),
       client.invalidateQueries({ queryKey: barrierLayerQueryKey }),
+      client.invalidateQueries({ queryKey: assetLayerQueryKey }),
     ]);
   }
 }
