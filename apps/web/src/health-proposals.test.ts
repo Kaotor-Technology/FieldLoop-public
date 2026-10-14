@@ -22,9 +22,10 @@ it("refreshes the proposal queue when a proposal is created", async () => {
 it("refreshes proposal and map layers for legacy Health events without a Health value", async () => {
   const { client, invalidateQueries } = createClient();
   await invalidateHealthProposalQueries(client, "barrier.health_changed");
-  expect(invalidateQueries).toHaveBeenCalledTimes(2);
+  expect(invalidateQueries).toHaveBeenCalledTimes(3);
   expect(invalidateQueries).toHaveBeenNthCalledWith(1, { queryKey: healthProposalsQueryKey });
   expect(invalidateQueries).toHaveBeenNthCalledWith(2, { queryKey: ["map-layer", "barriers"] });
+  expect(invalidateQueries).toHaveBeenNthCalledWith(3, { queryKey: ["map-layer", "assets"] });
 });
 
 it("patches every cached Barrier marker from a Health event without refetching the layer", async () => {
@@ -60,7 +61,9 @@ it("patches every cached Barrier marker from a Health event without refetching t
     expect(updated?.features[1]?.properties.health).toBe("healthy");
   }
   expect(cancelQueries).toHaveBeenCalledExactlyOnceWith({ queryKey: ["map-layer", "barriers"] });
-  expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({ queryKey: healthProposalsQueryKey });
+  expect(invalidateQueries).toHaveBeenCalledTimes(2);
+  expect(invalidateQueries).toHaveBeenNthCalledWith(1, { queryKey: healthProposalsQueryKey });
+  expect(invalidateQueries).toHaveBeenNthCalledWith(2, { queryKey: ["map-layer", "assets"] });
 });
 
 it("ignores events outside the Health Proposal refresh contract", async () => {
