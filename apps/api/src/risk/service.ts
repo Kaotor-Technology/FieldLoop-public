@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { DEMO_RISK_MATRIX } from "@fieldloop/domain";
 import { calculateRisk, calculateRiskChangeImpact, isEvidenceExpired, RiskInputError, validateRiskMatrix } from "@fieldloop/domain/risk";
 import type { RiskInput, RiskSnapshot } from "@fieldloop/contracts";
 import { sql, type Kysely } from "kysely";
@@ -7,6 +8,13 @@ import type { RiskDatabase } from "./database.js";
 
 const CLASSIFICATIONS = ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"] as const;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const DEMO_SEED_CREATORS = ["seed:dl-01", "seed:bangkok"] as const;
+const DEMO_RISK_CALIBRATION: RiskCalibration = {
+  standardRef: "FieldLoop PRD §7.2 demo Risk Matrix",
+  standardVersion: "demo-1",
+  approvedBy: "Owner-approved FieldLoop demo policy",
+  approvedAt: "2026-10-14T00:00:00.000Z",
+};
 
 export class RiskServiceError extends Error {
   constructor(readonly status: number, readonly code: string) { super(code); }
@@ -134,6 +142,7 @@ interface BowtieRow {
   status: string | null;
   simulated: boolean;
   classification: string;
+  created_by?: string;
 }
 
 interface LoadedRisk {
@@ -359,13 +368,38 @@ export class PostgresRiskService implements RiskApiPort {
     const rows = await this.db.withSchema("app").selectFrom("health_change as hc")
       .select(["hc.id", "hc.org_id", "hc.barrier_id", "hc.actor", "hc.from_health", "hc.to_health",
         "hc.created_at", "hc.simulated", "hc.classification"])
-      .where((eb) => eb.exists(eb.selectFrom("organisation as org").select("org.id")
+      .where((eb) => eb.or([
+        eb.exists(eb.selectFrom("organisation as org").select("org.id")
         .whereRef("org.org_id", "=", "hc.org_id")
         .where("org.risk_matrix", "is not", null).where("org.risk_severity_criteria", "is not", null)
         .where("org.risk_matrix_approved_at", "is not", null)
         .where(sql<boolean>`nullif(btrim(org.risk_matrix_approved_by), '') is not null`)
         .where(sql<boolean>`nullif(btrim(org.risk_matrix_standard_ref), '') is not null`)
-        .where(sql<boolean>`nullif(btrim(org.risk_matrix_standard_version), '') is not null`)))
+        .where(sql<boolean>`nullif(btrim(org.risk_matrix_standard_version), '') is not null`)),
+        eb.and([
+          eb("hc.simulated", "=", true),
+          eb.or([
+            eb.exists(eb.selectFrom("threat as t").innerJoin("barrier_path as bp", (join) => join
+              .onRef("bp.threat_id", "=", "t.id").onRef("bp.org_id", "=", "t.org_id"))
+              .innerJoin("barrier as b", (join) => join.onRef("b.id", "=", "bp.barrier_id").onRef("b.org_id", "=", "bp.org_id"))
+              .innerJoin("bowtie as bt", (join) => join.onRef("bt.id", "=", "t.bowtie_id").onRef("bt.org_id", "=", "t.org_id"))
+              .select("t.id").whereRef("bp.org_id", "=", "hc.org_id").whereRef("bp.barrier_id", "=", "hc.barrier_id")
+              .where("bt.simulated", "=", true).where("bt.created_by", "in", DEMO_SEED_CREATORS)
+              .where("t.simulated", "=", true).where("t.created_by", "in", DEMO_SEED_CREATORS)
+              .where("bp.simulated", "=", true).where("bp.created_by", "in", DEMO_SEED_CREATORS)
+              .where("b.simulated", "=", true).where("b.created_by", "in", DEMO_SEED_CREATORS)),
+            eb.exists(eb.selectFrom("consequence as c").innerJoin("barrier_path as bp", (join) => join
+              .onRef("bp.consequence_id", "=", "c.id").onRef("bp.org_id", "=", "c.org_id"))
+              .innerJoin("barrier as b", (join) => join.onRef("b.id", "=", "bp.barrier_id").onRef("b.org_id", "=", "bp.org_id"))
+              .innerJoin("bowtie as bt", (join) => join.onRef("bt.id", "=", "c.bowtie_id").onRef("bt.org_id", "=", "c.org_id"))
+              .select("c.id").whereRef("bp.org_id", "=", "hc.org_id").whereRef("bp.barrier_id", "=", "hc.barrier_id")
+              .where("bt.simulated", "=", true).where("bt.created_by", "in", DEMO_SEED_CREATORS)
+              .where("c.simulated", "=", true).where("c.created_by", "in", DEMO_SEED_CREATORS)
+              .where("bp.simulated", "=", true).where("bp.created_by", "in", DEMO_SEED_CREATORS)
+              .where("b.simulated", "=", true).where("b.created_by", "in", DEMO_SEED_CREATORS)),
+          ]),
+        ]),
+      ]))
       .where((eb) => eb.exists(eb.selectFrom("barrier_path as bp")
         .leftJoin("threat as t", (join) => join.onRef("t.id", "=", "bp.threat_id").onRef("t.org_id", "=", "bp.org_id"))
         .leftJoin("consequence as c", (join) => join.onRef("c.id", "=", "bp.consequence_id").onRef("c.org_id", "=", "bp.org_id"))
@@ -419,7 +453,7 @@ export class PostgresRiskService implements RiskApiPort {
   private async loadRisk(user: CurrentUser, bowtieId: string, healthChange?: HealthChangeCursor): Promise<LoadedRisk> {
     if (!UUID_PATTERN.test(bowtieId)) throw new RiskServiceError(400, "validation_failed");
     const bowtie = await this.db.withSchema("app").selectFrom("bowtie")
-      .select(["id", "hazard", "top_event", "domain", "status", "simulated", "classification"])
+      .select(["id", "hazard", "top_event", "domain", "status", "simulated", "classification", "created_by"])
       .where("org_id", "=", user.orgId).where("id", "=", bowtieId).executeTakeFirst();
     if (!bowtie) throw new RiskServiceError(404, "not_found");
     assertClearance(user, bowtie.classification);
@@ -432,28 +466,40 @@ export class PostgresRiskService implements RiskApiPort {
         .select(["risk_matrix", "risk_severity_criteria", "risk_matrix_approved_at", "risk_matrix_approved_by",
           "risk_matrix_standard_ref", "risk_matrix_standard_version", "classification"])
         .where("org_id", "=", user.orgId).orderBy("id").limit(1).executeTakeFirst(),
-      this.db.withSchema("app").selectFrom("threat").select(["id", "frequency_per_year", "classification"])
+      this.db.withSchema("app").selectFrom("threat").select(["id", "frequency_per_year", "simulated", "classification", "created_by"])
         .where("org_id", "=", user.orgId).where("bowtie_id", "=", bowtieId).orderBy("id").execute(),
-      this.db.withSchema("app").selectFrom("consequence").select(["id", "severity", "p_conditional", "classification"])
+      this.db.withSchema("app").selectFrom("consequence").select(["id", "severity", "p_conditional", "simulated", "classification", "created_by"])
         .where("org_id", "=", user.orgId).where("bowtie_id", "=", bowtieId).orderBy("id").execute(),
-      this.db.withSchema("app").selectFrom("independence_group").select(["id", "classification"])
+      this.db.withSchema("app").selectFrom("independence_group").select(["id", "simulated", "classification", "created_by"])
         .where("org_id", "=", user.orgId).where("bowtie_id", "=", bowtieId).orderBy("id").execute(),
       this.db.withSchema("app").selectFrom("barrier_path as bp")
         .innerJoin("barrier as b", (join) => join.onRef("b.id", "=", "bp.barrier_id").onRef("b.org_id", "=", "bp.org_id"))
         .select(["bp.id as path_row_id", "bp.position", "bp.threat_id", "bp.consequence_id",
           "bp.classification as path_classification", "b.id as barrier_id", "b.type", "b.side", "b.pfd_band", "b.health",
-          "b.independence_group_id", "b.evidence_interval", "b.classification as barrier_classification"])
+          "bp.simulated as path_simulated", "bp.created_by as path_created_by",
+          "b.independence_group_id", "b.evidence_interval", "b.simulated as barrier_simulated",
+          "b.created_by as barrier_created_by", "b.classification as barrier_classification"])
         .where("bp.org_id", "=", user.orgId)
         .where((eb) => eb.or([eb("bp.threat_id", "in", threatIds), eb("bp.consequence_id", "in", consequenceIds)]))
         .orderBy("bp.position").orderBy("bp.id").execute(),
     ]);
     if (!organisation) throw new RiskServiceError(409, "risk_matrix_unconfigured");
     assertClearance(user, organisation.classification);
-    const calibration = readCalibration(organisation);
-    if (!organisation.risk_matrix || !organisation.risk_severity_criteria || !calibration) {
+    const calibration = organisation ? readCalibration(organisation) : null;
+    const demoSeedEligible = isDemoSeedGraph(bowtie, threats, consequences, groups, paths);
+    const hasOrganisationCalibration = hasCalibrationValues(organisation);
+    let selectedCalibration: RiskCalibration;
+    let selectedMatrix: RiskInput["matrix"];
+    if (organisation?.risk_matrix && organisation.risk_severity_criteria && calibration) {
+      if (!isSeverityCriteria(organisation.risk_severity_criteria)) throw new RiskServiceError(409, "risk_matrix_invalid");
+      selectedCalibration = calibration;
+      selectedMatrix = organisation.risk_matrix as RiskInput["matrix"];
+    } else if (!hasOrganisationCalibration && demoSeedEligible) {
+      selectedCalibration = DEMO_RISK_CALIBRATION;
+      selectedMatrix = DEMO_RISK_MATRIX;
+    } else {
       throw new RiskServiceError(409, "risk_matrix_unconfigured");
     }
-    if (!isSeverityCriteria(organisation.risk_severity_criteria)) throw new RiskServiceError(409, "risk_matrix_invalid");
     for (const row of [...threats, ...consequences, ...groups]) assertClearance(user, row.classification);
     for (const row of paths) {
       assertClearance(user, row.path_classification);
@@ -493,8 +539,11 @@ export class PostgresRiskService implements RiskApiPort {
     }
     if (barrierIds.length) {
       let evidenceQuery = this.db.withSchema("app").selectFrom("evidence")
-        .distinctOn("barrier_id").select(["id", "barrier_id", "observed_at", "classification"])
+        .distinctOn("barrier_id").select(["id", "barrier_id", "observed_at", "classification", "simulated", "created_by"])
         .where("org_id", "=", user.orgId).where("barrier_id", "in", barrierIds);
+      if (selectedCalibration === DEMO_RISK_CALIBRATION) {
+        evidenceQuery = evidenceQuery.where("simulated", "=", true).where("created_by", "in", DEMO_SEED_CREATORS);
+      }
       if (healthChange) evidenceQuery = evidenceQuery.where("observed_at", "<=", new Date(healthChange.createdAt));
       const evidenceRows = await evidenceQuery.orderBy("barrier_id").orderBy("observed_at", "desc").orderBy("id", "desc").execute();
       for (const row of evidenceRows) {
@@ -530,7 +579,7 @@ export class PostgresRiskService implements RiskApiPort {
       })),
       independenceGroups: groups.map((row) => ({ id: String(row.id) })),
       paths: [...pathGroups.values()],
-      matrix: organisation.risk_matrix as RiskInput["matrix"],
+      matrix: selectedMatrix,
     };
     const classification = maxClassification([
       bowtie.classification, organisation.classification, ...threats.map((row) => row.classification),
@@ -538,7 +587,7 @@ export class PostgresRiskService implements RiskApiPort {
       ...paths.flatMap((row) => [row.path_classification, row.barrier_classification]),
       ...[...barrierEvidence.values()].map((evidence) => evidence.classification),
     ]);
-    return { bowtie, stored: { input, evidenceByBarrier, calibration }, classification };
+    return { bowtie, stored: { input, evidenceByBarrier, calibration: selectedCalibration }, classification };
   }
 
   private async latestSnapshot(orgId: string, bowtieId: string) {
@@ -603,6 +652,41 @@ export class PostgresRiskService implements RiskApiPort {
 
 function summary(row: BowtieRow): BowtieSummary {
   return { id: row.id, hazard: row.hazard, topEvent: row.top_event, domain: row.domain, status: row.status, simulated: row.simulated, classification: row.classification };
+}
+
+function hasCalibrationValues(organisation: {
+  risk_matrix: unknown;
+  risk_severity_criteria: unknown;
+  risk_matrix_approved_at: unknown;
+  risk_matrix_approved_by: unknown;
+  risk_matrix_standard_ref: unknown;
+  risk_matrix_standard_version: unknown;
+}): boolean {
+  return [organisation.risk_matrix, organisation.risk_severity_criteria, organisation.risk_matrix_approved_at,
+    organisation.risk_matrix_approved_by, organisation.risk_matrix_standard_ref, organisation.risk_matrix_standard_version]
+    .some((value) => value !== null && value !== undefined);
+}
+
+function isDemoSeedRecord(row: { simulated: boolean; created_by: string }): boolean {
+  return row.simulated && DEMO_SEED_CREATORS.some((creator) => row.created_by === creator);
+}
+
+function isDemoSeedGraph(
+  bowtie: { simulated: boolean; created_by?: string },
+  threats: readonly { simulated: boolean; created_by: string }[],
+  consequences: readonly { simulated: boolean; created_by: string }[],
+  groups: readonly { simulated: boolean; created_by: string }[],
+  paths: readonly {
+    path_simulated: boolean; path_created_by: string;
+    barrier_simulated: boolean; barrier_created_by: string;
+  }[],
+): boolean {
+  return Boolean(bowtie.created_by && isDemoSeedRecord({ simulated: bowtie.simulated, created_by: bowtie.created_by }))
+    && threats.length > 0 && threats.every(isDemoSeedRecord)
+    && consequences.length > 0 && consequences.every(isDemoSeedRecord)
+    && groups.every(isDemoSeedRecord)
+    && paths.length > 0 && paths.every((path) => isDemoSeedRecord({ simulated: path.path_simulated, created_by: path.path_created_by })
+      && isDemoSeedRecord({ simulated: path.barrier_simulated, created_by: path.barrier_created_by }));
 }
 
 function isSeverityCriteria(value: unknown): value is SeverityCriteria {

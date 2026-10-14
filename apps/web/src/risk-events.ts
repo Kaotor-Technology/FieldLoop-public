@@ -4,5 +4,6 @@ export function applyRiskRecalculatedEvent(client: QueryClient, payload: unknown
   if (!payload || typeof payload !== "object" || !("bowtieId" in payload) || typeof payload.bowtieId !== "string") return false;
   void client.invalidateQueries({ queryKey: ["bowtie", payload.bowtieId, "risk"] });
   void client.invalidateQueries({ queryKey: ["bowtie", payload.bowtieId, "risk", "explain"] });
+  void client.invalidateQueries({ queryKey: ["map-layer", "assets"] });
   return true;
 }
