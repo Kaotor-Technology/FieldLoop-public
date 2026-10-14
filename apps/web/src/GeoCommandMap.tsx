@@ -8,7 +8,7 @@ import { FillStyleExtension, PathStyleExtension } from "@deck.gl/extensions";
 import type { FillStyleExtensionProps, PathStyleExtensionProps } from "@deck.gl/extensions";
 import { GoogleMapsOverlay } from "@deck.gl/google-maps";
 import type { MapFeature, MapFeatureCollection, MapLayerName, MapViewport } from "@fieldloop/map";
-import type { BarrierHealth } from "@fieldloop/ui";
+import { Skeleton, type BarrierHealth } from "@fieldloop/ui";
 import { HealthProposalReview } from "./HealthProposalReview";
 import { applyBarrierHealthToMapCache, decideHealthProposal, getHealthProposalPage, healthProposalsQueryKey } from "./health-proposals";
 import { useCurrentSession } from "./SessionGate";
@@ -18,11 +18,14 @@ import {
   barrierMarkerStatus,
   countVisibleBarrierAlerts,
   filterFeaturesByDomain,
+  formatChainage,
+  mapLayerFeedback,
   rainLayerVisualStyle,
   riskBandVisualStyle,
   selectSimulatedRainCell,
   searchVisibleFeatures,
   selectBarrierMarkerFeatures,
+  selectMapFeature,
   selectVisibleFeatures,
   summarizeVisibleFeatures,
 } from "./map-view";
@@ -178,10 +181,11 @@ export function GeoCommandMap() {
   [activeLayers, domain, visibleLayers]);
   const features = useMemo(() => searchVisibleFeatures(visibleFeatures, query),
   [visibleFeatures, query]);
-  const layerError = visibleLayers.some((result, index) => {
-    const layer = LAYERS[index];
-    return layer !== undefined && activeLayers.includes(layer) && result.isError;
-  });
+  const layerState = mapLayerFeedback(LAYERS.map((layer, index) => ({
+    layer,
+    isPending: visibleLayers[index]?.isPending ?? false,
+    isError: visibleLayers[index]?.isError ?? false,
+  })), activeLayers, rainOverlayVisible, domain, Boolean(bounds));
   const featureCounts = useMemo(() => countVisibleBarrierAlerts(visibleFeatures), [visibleFeatures]);
   const contextSummary = useMemo(() => summarizeVisibleFeatures(visibleFeatures), [visibleFeatures]);
 
@@ -390,7 +394,7 @@ export function GeoCommandMap() {
           {mapConfig.isError && <button type="button" onClick={() => { void mapConfig.refetch(); }}>{t("retry")}</button>}
           {mapLoadFailed && <button type="button" onClick={() => { setMapLoadFailed(false); setMapRetry((current) => current + 1); }}>{t("retry")}</button>}
         </div>}
-        {mapConfig.data && layerError && <p className="map-inline-alert" role="alert">{t("mapLayerError")}</p>}
+        {mapConfig.data && layerState.hasError && <p className="map-inline-alert" role="alert">{t("mapLayerError")}</p>}
         <div className="map-overlay-top">
           <div className="map-view-controls" role="group" aria-label={t("mapControls")}>
             <button type="button" className="map-view-preset" aria-label={t("obliqueView")} aria-pressed={viewport.tilt >= 30} onClick={() => changeTilt(45)}><span className="mono">45°</span></button>
@@ -471,7 +475,14 @@ export function GeoCommandMap() {
         </section>
         <section className="feature-list-section" aria-labelledby="visible-features-title">
           <div className="section-heading"><h3 id="visible-features-title">{t("visibleFeatures")}</h3><span className="mono">{features.length}</span></div>
-          {features.length === 0 ? <p className="empty-note">{bounds ? t("noFeaturesInView") : t("mapLoading")}</p> : <ul className="feature-list">
+          {layerState.showSkeleton && <div className="map-feature-skeletons" aria-hidden="true">
+            <Skeleton variant="row" />
+            <Skeleton variant="row" />
+            <Skeleton variant="row" />
+          </div>}
+          {layerState.isLoading && !layerState.hasError && <p className="map-feature-loading" role="status">{t("mapLoading")}</p>}
+          {features.length === 0 && !layerState.showSkeleton ? <p className="empty-note">{bounds ? t("noFeaturesInView") : t("mapLoading")}</p> : null}
+          {features.length > 0 ? <ul className="feature-list">
             {features.slice(0, 150).map((feature) => <li key={`${feature.properties.featureKind}-${feature.id}`}>
               <button type="button" className="feature-list-item" onClick={() => chooseFeature(feature)}>
                 <FeatureSymbol feature={feature} />
@@ -482,7 +493,7 @@ export function GeoCommandMap() {
                 {feature.properties.simulated && <span className="sim-tag" lang="en" aria-label={t("healthProposalSimulationLabel")}>SIM</span>}
               </button>
             </li>)}
-          </ul>}
+          </ul> : null}
           {features.length > 150 && <p className="empty-note">{t("featureListLimit", { count: 150 })}</p>}
         </section>
       </div>
@@ -593,14 +604,6 @@ function filterCollection(collection: MapFeatureCollection, domain: "all" | "pip
   return { type: "FeatureCollection", features: filterFeaturesByDomain(collection.features, domain) };
 }
 
-function selectMapFeature(value: unknown, setSelectedFeature: (feature: MapFeature) => void): boolean {
-  if (!value || typeof value !== "object") return false;
-  const feature = value as Partial<MapFeature>;
-  if (feature.type !== "Feature" || typeof feature.id !== "string" || !feature.geometry || !feature.properties) return false;
-  setSelectedFeature(feature as MapFeature);
-  return true;
-}
-
 function pointPosition(feature: MapFeature): [number, number] {
   const geometry = feature.geometry;
   if (geometry.type === "Point") return [geometry.coordinates[0] ?? 0, geometry.coordinates[1] ?? 0];
@@ -653,10 +656,6 @@ function readViewportFromSearch(params: Record<string, unknown>): MapViewport {
     heading: Number.isFinite(heading) ? heading : DEFAULT_VIEW.heading,
     tilt: tilt === 0 ? 0 : tilt === 45 ? 45 : DEFAULT_VIEW.tilt,
   };
-}
-
-function formatChainage(value: number): string {
-  return new Intl.NumberFormat("en-GB", { maximumFractionDigits: 0 }).format(value);
 }
 
 function round(value: number, decimals: number): number {
