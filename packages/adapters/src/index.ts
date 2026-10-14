@@ -25,4 +25,5 @@ export {
   type VertexChatCompletionsOptions,
 } from "./google-vertex-chat-completions.js";
 export { ACTION_CEILINGS, ActionError, effectiveCeiling, evaluateToolCall, targetMatches, levelRank } from "./action-policy.js";
+export type { ToolRegistration } from "./action-policy.js";
 export { PostgresActionStore, type ActionServicePort, type ActionIdentity } from "./postgres-actions.js";

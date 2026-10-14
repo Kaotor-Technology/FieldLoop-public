@@ -23,7 +23,7 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
     const user: ActionIdentity = { sub: "synthetic-operator", orgId, roles: ["fieldloop.operator"], clearance: "HIGHLY_RESTRICTED" };
     await pool.query("INSERT INTO app.barrier (id,org_id,type,side,health,simulated,classification) VALUES ($1,$2,'technical','preventive','unverified',true,'INTERNAL')", [barrierId, orgId]);
     await pool.query("INSERT INTO app.ai_system (id,org_id,name,tools,data_classes,simulated,classification) VALUES ($1,$2,'Synthetic AI', $3::jsonb, $4::jsonb,true,'INTERNAL')", [systemId, orgId, JSON.stringify(["get_asset", "create_action_request"]), JSON.stringify(["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"])]);
-    await pool.query("INSERT INTO app.guardrail_policy (id,org_id,ai_system_id,barrier_id,config,mode,fail_mode,simulated,classification) VALUES ($1,$2,$3,$4,$5::jsonb,'enforce','fail-closed',true,'INTERNAL')", [policyId, orgId, systemId, barrierId, JSON.stringify({ aiSystemCode: "synthetic-ai", kind: "tool-call", settings: { allowedTools: ["get_asset", "create_action_request"] } })]);
+    await pool.query("INSERT INTO app.guardrail_policy (id,org_id,ai_system_id,barrier_id,config,mode,fail_mode,simulated,classification) VALUES ($1,$2,$3,$4,$5::jsonb,'enforce','fail-closed',true,'INTERNAL')", [policyId, orgId, systemId, barrierId, JSON.stringify({ aiSystemCode: "synthetic-ai", kind: "tool-call", settings: { allowedTools: ["get_asset", "create_action_request"], allowedTargets: ["fieldloop", "cmms", "stakeholders"] } })]);
     const body: ActionRequestCreate = { actionType: "system_of_record", actionLevel: "l1", target: "cmms", payload: { title: "Synthetic maintenance", details: { b: 2, a: 1 } }, rationale: "Prepare for human entry", citations: ["synthetic:procedure-1"], classification: "INTERNAL", simulated: true };
     const check: ToolCallCheck = { ...body, aiSystem: "synthetic-ai", tool: "create_action_request" };
     return { user, body, check, policyId, systemId, barrierId };
@@ -62,6 +62,8 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
     for (const body of [{ ...check, tool: "write_cmms" }, { ...check, actionLevel: "l2" as const }, { ...check, actionType: "internal_record" as const }]) {
       expect((await store.check(user, body, key())).decision).toBe("block");
     }
+    // PRD GR-4: GIS is a valid system-of-record target but is not on this AI System's target allowlist.
+    expect(await store.check(user, { ...check, target: "gis" }, key())).toEqual({ decision: "block", reason: "target_not_registered" });
     expect(Number((await pool.query("SELECT count(*) FROM app.action_request WHERE org_id=$1", [user.orgId])).rows[0].count)).toBe(0);
   });
   it("respects lowered Organisation ceilings and rechecks changed policies on replay", async () => {
@@ -76,6 +78,8 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
     const { user, check, policyId } = await fixture();
     await expect(store.check(user, { ...check, aiSystem: "unknown" }, key())).rejects.toThrow("tool_registry_unavailable");
     await expect(store.check(user, { aiSystem: check.aiSystem, tool: check.tool, target: check.target, actionType: "system_of_record", actionLevel: "l1", simulated: true, classification: "INTERNAL" }, key())).rejects.toThrow("action_metadata_required");
+    await pool.query("UPDATE app.guardrail_policy SET config = config #- '{settings,allowedTargets}' WHERE id=$1", [policyId]);
+    await expect(store.check(user, check, key())).rejects.toThrow("tool_registry_unavailable");
     await pool.query("UPDATE app.guardrail_policy SET mode='monitor' WHERE id=$1", [policyId]);
     await expect(store.check(user, check, key())).rejects.toThrow("tool_registry_unavailable");
   });

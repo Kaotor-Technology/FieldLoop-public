@@ -76,12 +76,15 @@ export class PostgresActionStore implements ActionServicePort {
       if (!Array.isArray(registry.data_classes) || !registry.data_classes.includes(body.classification)) throw new ActionError(403, "classification_not_registered");
       const settings = registry.config["settings"];
       const policyTools: unknown = settings && typeof settings === "object" ? Reflect.get(settings, "allowedTools") : undefined;
+      const policyTargets: unknown = settings && typeof settings === "object" ? Reflect.get(settings, "allowedTargets") : undefined;
+      // A policy without a target allowlist fails closed rather than allowing every target (PRD GR-4).
       if (!Array.isArray(registry.tools) || !registry.tools.every(x => typeof x === "string")
-        || !Array.isArray(policyTools) || !policyTools.every(x => typeof x === "string")) throw new ActionError(503, "tool_registry_unavailable");
+        || !Array.isArray(policyTools) || !policyTools.every(x => typeof x === "string")
+        || !Array.isArray(policyTargets) || !policyTargets.every(x => typeof x === "string")) throw new ActionError(503, "tool_registry_unavailable");
       const classification = classes.indexOf(registry.classification) > classes.indexOf(body.classification)
         ? registry.classification as ActionClassification : body.classification;
       const policy = body.actionType ? await loadCeiling(trx, user.orgId, body.actionType, body.simulated) : undefined;
-      const result = evaluateToolCall(body, registry.tools.filter(x => policyTools.includes(x)), policy?.ceiling);
+      const result = evaluateToolCall(body, { tools: registry.tools.filter(x => policyTools.includes(x)), targets: policyTargets }, policy?.ceiling);
       if (result.decision === "convert_l1" || result.decision === "hold_l2") authorize(user, body.classification, true);
       const previous = await replay(trx, user, "check", body, key);
       if (previous) {

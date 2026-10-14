@@ -20,11 +20,14 @@ export function effectiveCeiling(type: ActionType, lowered?: ActionLevel): Actio
   }
   return lowered ?? platform;
 }
+/** An AI System's registered tools and targets after intersecting with its tool-call policy (PRD GR-4). */
+export interface ToolRegistration { tools: readonly string[]; targets: readonly string[] }
 export class ActionError extends Error {
   constructor(readonly status: number, readonly code: string) { super(code); this.name = "ActionError"; }
 }
-export function evaluateToolCall(input: ToolCallCheck, allowedTools: readonly string[], lowered?: ActionLevel): ToolCallDecision {
-  if (!allowedTools.includes(input.tool)) return { decision: "block", reason: "tool_not_registered" };
+export function evaluateToolCall(input: ToolCallCheck, registered: ToolRegistration, lowered?: ActionLevel): ToolCallDecision {
+  if (!registered.tools.includes(input.tool)) return { decision: "block", reason: "tool_not_registered" };
+  if (!registered.targets.includes(input.target)) return { decision: "block", reason: "target_not_registered" };
   if (reads.has(input.tool)) {
     return input.target === "fieldloop" && input.actionType === undefined && input.actionLevel === undefined
       ? { decision: "allow", reason: "registered_read" }
