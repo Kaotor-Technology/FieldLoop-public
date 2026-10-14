@@ -31,6 +31,11 @@ const FLOOD_VIEW: MapViewport = { latitude: 13.775, longitude: 100.58, zoom: 13,
 const SYMBOLS: Record<string, string> = { degraded: "▲", failed: "✖", unverified: "⬚" };
 const RISK_BANDS = ["intolerable", "alarp", "acceptable"] as const;
 const BARRIER_HEALTH_STATES = ["healthy", "degraded", "failed", "unverified"] as const;
+const BOWTIE_LINKS = [
+  { id: "dl-01-bowtie-a", code: "A", story: "bowtieStoryA" },
+  { id: "uc-1-bowtie-c", code: "C", story: "bowtieStoryC" },
+  { id: "bangkok-bowtie-d", code: "D", story: "bowtieStoryD" },
+] as const;
 const BARRIER_ICON_ATLAS = `data:image/svg+xml;charset=utf-8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="96" height="32" viewBox="0 0 96 32"><defs><mask id="hatch"><rect x="68" y="3" width="24" height="26" fill="white"/><path d="m67 11 9-9m-4 19L89 4m-8 25 13-13" stroke="black" stroke-width="4"/></mask></defs><path d="M16 2 30 29H2z" fill="white"/><path d="m39 7 18 18m0-18L39 25" stroke="white" stroke-width="4"/><rect x="68" y="3" width="24" height="26" fill="white" mask="url(#hatch)"/><path d="M68 3h24v26H68z" fill="none" stroke="white" stroke-width="2"/></svg>')}`;
 const BARRIER_ICON_MAPPING = {
   degraded: { x: 0, y: 0, width: 32, height: 32, mask: true },
@@ -417,6 +422,17 @@ export function GeoCommandMap() {
       <div className="context-body" tabIndex={0}>
         <MapOverviewSummary summary={contextSummary} />
         {selectedFeature ? <FeatureOverview feature={selectedFeature} /> : <p className="context-hint">{t("selectMapFeature")}</p>}
+        <section className="feature-list-section" aria-labelledby="bowtie-shortcuts-title">
+          <div className="section-heading"><h3 id="bowtie-shortcuts-title">{t("bowtieShortcuts")}</h3></div>
+          <ul className="feature-list">{BOWTIE_LINKS.map((bowtie) => <li key={bowtie.id}>
+            <button type="button" className="feature-list-item" onClick={() => {
+              void navigate({ to: "/bowtie/$bowtieId", params: { bowtieId: bowtie.id }, search });
+            }}>
+              <span className="feature-symbol" aria-hidden="true">B</span>
+              <span className="feature-list-copy"><strong>{t("bowtieCode", { code: bowtie.code })}</strong><span>{t(bowtie.story)}</span></span>
+            </button>
+          </li>)}</ul>
+        </section>
         <section className="feature-list-section" aria-labelledby="visible-features-title">
           <div className="section-heading"><h3 id="visible-features-title">{t("visibleFeatures")}</h3><span className="mono">{features.length}</span></div>
           {features.length === 0 ? <p className="empty-note">{bounds ? t("noFeaturesInView") : t("mapLoading")}</p> : <ul className="feature-list">
