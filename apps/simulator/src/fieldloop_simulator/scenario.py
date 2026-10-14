@@ -2,6 +2,7 @@
 
 import json
 import math
+from collections.abc import Collection
 from datetime import datetime, timedelta
 from importlib.resources import files
 from pathlib import Path
@@ -11,6 +12,7 @@ import yaml  # type: ignore[import-untyped]
 from fieldloop_common.generated_scenario import Scenario
 from jsonschema import Draft202012Validator, FormatChecker
 
+from fieldloop_simulator import storm_events
 from fieldloop_simulator.mock_historian import TAG_PROFILES
 from fieldloop_simulator.mock_signals import utc_text
 from fieldloop_simulator.timestamps import to_utc
@@ -58,6 +60,7 @@ def validate_scenario(document: object) -> Scenario:
         raise ScenarioError(pointer, f"violates {error.validator}")
     scenario = Scenario.model_validate(document, strict=True)
     event_ids: set[str] = set()
+    readings: set[tuple[tuple[str, str, str], timedelta]] = set()
     previous = -1.0
     for index, event in enumerate(scenario.events):
         prefix = f"/events/{index}"
@@ -83,6 +86,17 @@ def validate_scenario(document: object) -> Scenario:
             isinstance(event.value, bool) or not isinstance(event.value, (int, float))
         ):
             raise ScenarioError(prefix + "/noiseAmplitude", "noise requires a numeric value")
+        # After the rules every source shares, so those keep their own error for an event.
+        if refused := storm_events.check(event):
+            raise ScenarioError(prefix + refused[0], refused[1])
+        if reading := storm_events.reading_of(event):
+            # A Signal's time has microseconds, so two events closer than that are one instant.
+            instant = timedelta(seconds=event.at_seconds)
+            if (reading, instant) in readings:
+                raise ScenarioError(
+                    prefix + "/atSeconds", "a second event for this tag and Asset at the same time"
+                )
+            readings.add((reading, instant))
     bookmark_ids: set[str] = set()
     for index, bookmark in enumerate(scenario.bookmarks):
         if bookmark.id in bookmark_ids or bookmark.at_seconds > scenario.duration_seconds:
@@ -99,7 +113,14 @@ def validate_scenario(document: object) -> Scenario:
     return scenario
 
 
-def load_scenario(path: Path) -> Scenario:
+def validate_asset_targets(scenario: Scenario, asset_codes: Collection[str]) -> None:
+    """Reject Scenario Asset references that do not exist in this Organisation."""
+    for index, event in enumerate(scenario.events):
+        if event.target.kind == "asset" and event.target.id not in asset_codes:
+            raise ScenarioError(f"/events/{index}/target/id", "unknown Asset")
+
+
+def load_scenario(path: Path, *, asset_codes: Collection[str] | None = None) -> Scenario:
     raw = path.read_bytes()
     if len(raw) > MAX_SCENARIO_BYTES:
         raise ScenarioError("/", "file exceeds 1 MiB")
@@ -118,7 +139,10 @@ def load_scenario(path: Path) -> Scenario:
         mark = getattr(error, "problem_mark", None)
         location = f"line {mark.line + 1}, column {mark.column + 1}" if mark else "/"
         raise ScenarioError(location, "invalid UTF-8, JSON or YAML") from error
-    return validate_scenario(document)
+    scenario = validate_scenario(document)
+    if asset_codes is not None:
+        validate_asset_targets(scenario, asset_codes)
+    return scenario
 
 
 def _unique_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -145,14 +169,16 @@ class _ScenarioLoader(yaml.SafeLoader):  # type: ignore[misc]
         return _unique_pairs(pairs)
 
 
-def load_catalog(directory: Path) -> dict[str, Scenario]:
+def load_catalog(
+    directory: Path, *, asset_codes: Collection[str] | None = None
+) -> dict[str, Scenario]:
     catalog: dict[str, Scenario] = {}
     if not directory.is_dir():
         return catalog
     for path in sorted(directory.iterdir()):
         if path.suffix not in (".json", ".yaml", ".yml"):
             continue
-        scenario = load_scenario(path)
+        scenario = load_scenario(path, asset_codes=asset_codes)
         if scenario.id in catalog:
             raise ScenarioError("/id", "duplicate Scenario ID in catalog")
         catalog[scenario.id] = scenario

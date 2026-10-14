@@ -1,10 +1,18 @@
-import { GoogleCloudKmsEnvelopeKeyService, GoogleCloudSecretReader, type LoadedDomainPack } from "@fieldloop/adapters";
+import { PostgresActionStore, type ActionServicePort, GoogleCloudKmsEnvelopeKeyService, GoogleCloudSecretReader, type LoadedDomainPack } from "@fieldloop/adapters";
 import { registerDomainPackRecords } from "../domain-packs.js";
 import { AuthError, BffAuthService, type AuthServicePort } from "./service.js";
 import { KmsEnvelopeCrypto } from "./envelope-crypto.js";
 import { SecretManagerInternalTokenService } from "./internal-tokens.js";
 import { KeycloakOidcProvider } from "./keycloak-oidc.js";
 import { createAuthDatabase, createCloudSqlAuthDatabase, PostgresAuthStore } from "./postgres-store.js";
+import { PostgresAuditStore } from "../audit/postgres-store.js";
+import type { AuditServicePort } from "../audit/model.js";
+import { PostgresHealthStore } from "../health/postgres-store.js";
+import type { HealthServicePort } from "../health/model.js";
+import type { Kysely } from "kysely";
+import { PostgresMapLayerStore, UnavailableMapLayerStore, type MapLayerStore } from "../map/layers.js";
+import { PostgresRiskService } from "../risk/service.js";
+import { createRiskDatabase } from "../risk/database.js";
 
 export class UnavailableAuthService implements AuthServicePort {
   async startLogin(): Promise<URL> { return this.unavailable(); }
@@ -23,8 +31,13 @@ export class UnavailableAuthService implements AuthServicePort {
 
 export async function createProductionAuthRuntime(): Promise<{
   auth: AuthServicePort;
+  mapLayers: MapLayerStore;
+  audit?: AuditServicePort;
+  health?: HealthServicePort;
+  actions?: ActionServicePort;
   close: () => Promise<void>;
   registerPacks?: (packs: LoadedDomainPack[]) => Promise<void>;
+  risk?: PostgresRiskService;
 }> {
   const baseUrl = process.env["FIELDLOOP_BASE_URL"];
   const defaultOrgId = process.env["FIELDLOOP_DEFAULT_ORG_ID"];
@@ -39,8 +52,8 @@ export async function createProductionAuthRuntime(): Promise<{
       ? { instanceConnectionName: cloudSqlConnection, database: cloudSqlDatabase, user: cloudSqlUser }
       : undefined;
 
-  if (!defaultOrgId || (!databaseUrl && !cloudSqlConfig)) {
-    return { auth: new UnavailableAuthService(), close: async () => {} };
+  if (!databaseUrl && !cloudSqlConfig) {
+    return { auth: new UnavailableAuthService(), mapLayers: new UnavailableMapLayerStore(), close: async () => {} };
   }
 
   const database = databaseUrl
@@ -48,16 +61,21 @@ export async function createProductionAuthRuntime(): Promise<{
     : cloudSqlConfig
       ? await createCloudSqlAuthDatabase(cloudSqlConfig)
       : undefined;
-  if (!database) return { auth: new UnavailableAuthService(), close: async () => {} };
-  const packRuntime = {
-    registerPacks: (packs: LoadedDomainPack[]) => registerDomainPackRecords(database.db, defaultOrgId, packs),
+  if (!database) return { auth: new UnavailableAuthService(), mapLayers: new UnavailableMapLayerStore(), close: async () => {} };
+  const runtime = {
+    mapLayers: new PostgresMapLayerStore(database.db),
+    actions: new PostgresActionStore(database.db as unknown as Kysely<Record<string, never>>),
+    audit: new PostgresAuditStore(database.db as unknown as Kysely<Record<string, never>>),
+    health: new PostgresHealthStore(database.db as unknown as Kysely<Record<string, never>>),
+    risk: new PostgresRiskService(createRiskDatabase(database.pool)),
     close: async () => {
       if ("close" in database && typeof database.close === "function") await database.close();
       else await database.db.destroy();
     },
+    ...(defaultOrgId ? { registerPacks: (packs: LoadedDomainPack[]) => registerDomainPackRecords(database.db, defaultOrgId, packs) } : {}),
   };
-  if (!baseUrl || !kmsKeyName || !projectId) {
-    return { auth: new UnavailableAuthService(), ...packRuntime };
+  if (!baseUrl || !defaultOrgId || !kmsKeyName || !projectId) {
+    return { auth: new UnavailableAuthService(), ...runtime };
   }
   const secrets = new GoogleCloudSecretReader(projectId);
   const oidc = new KeycloakOidcProvider(
@@ -82,6 +100,6 @@ export async function createProductionAuthRuntime(): Promise<{
 
   return {
     auth,
-    ...packRuntime,
+    ...runtime,
   };
 }

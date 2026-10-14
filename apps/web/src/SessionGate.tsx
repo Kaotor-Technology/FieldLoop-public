@@ -3,12 +3,16 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { getCurrentUser, loginDestination, SessionError, type CurrentUser } from "./api-client";
 
-export function SessionGate({ children }: { children: (user: CurrentUser) => React.ReactNode }) {
-  const { t } = useTranslation();
-  const session = useQuery({
+export function useCurrentSession() {
+  return useQuery({
     queryKey: ["session"], queryFn: ({ signal }) => getCurrentUser(signal), retry: false,
     staleTime: 0, refetchInterval: 60_000, refetchOnWindowFocus: "always",
   });
+}
+
+export function SessionGate({ children }: { children: (user: CurrentUser) => React.ReactNode }) {
+  const { t } = useTranslation();
+  const session = useCurrentSession();
   const signedOut = session.error instanceof SessionError && session.error.status === 401;
   useEffect(() => { if (signedOut) window.location.replace(loginDestination()); }, [signedOut]);
 

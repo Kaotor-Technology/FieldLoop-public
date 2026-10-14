@@ -1,9 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { readFileSync } from "node:fs";
 
 export default defineConfig(({ command }) => {
-  const plugins = [react()];
+  const plugins = [react(), tailwindcss()];
   if (command !== "serve") return { plugins };
 
   const certPath = process.env["FIELDLOOP_DEV_TLS_CERT"];

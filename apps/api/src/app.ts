@@ -1,10 +1,20 @@
+import { registerActionRoutes } from "./actions/routes.js";
+import type { ActionServicePort } from "@fieldloop/adapters";
 import Fastify from "fastify";
 import { registerSimulationRoutes } from "./simulation/routes.js";
 import type { SimulationPort } from "./simulation/client.js";
 import { registerAuthRoutes } from "./auth/routes.js";
 import { UnavailableAuthService } from "./auth/runtime.js";
 import type { AuthServicePort } from "./auth/service.js";
+import { registerMapLayerRoutes, UnavailableMapLayerStore, type MapLayerStore } from "./map/layers.js";
 import type { LoadedDomainPack } from "@fieldloop/adapters";
+import { registerRiskRoutes } from "./risk/routes.js";
+import type { RiskApiPort } from "./risk/service.js";
+import { registerAuditRoutes } from "./audit/routes.js";
+import type { AuditServicePort } from "./audit/model.js";
+import { registerHealthRoutes } from "./health/routes.js";
+import type { HealthServicePort } from "./health/model.js";
+import { registerLiveEventRoute } from "./live-events.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -14,9 +24,15 @@ declare module "fastify" {
 }
 
 export function buildApp(options: {
+  actions?: ActionServicePort;
+  audit?: AuditServicePort;
   auth?: AuthServicePort;
   baseUrl?: string;
+  mapLayers?: MapLayerStore;
+  mapsApiKey?: string;
   simulator?: SimulationPort;
+  risk?: RiskApiPort;
+  health?: HealthServicePort;
   domainPacks?: LoadedDomainPack[];
 } = {}) {
   const app = Fastify({ logger: { serializers: { req: serializeRequestForLog } } });
@@ -27,7 +43,13 @@ export function buildApp(options: {
   // Cloud Run reserves some paths ending in z; use this route for remote probes.
   app.get("/health", async () => ({ status: "ok" }));
   registerAuthRoutes(app, auth, options.baseUrl ?? process.env["FIELDLOOP_BASE_URL"]);
+  registerMapLayerRoutes(app, options.mapLayers ?? new UnavailableMapLayerStore(), options.mapsApiKey ?? process.env["FIELDLOOP_MAPS_API_KEY"]);
   registerSimulationRoutes(app, options.simulator);
+  registerRiskRoutes(app, options.risk);
+  registerHealthRoutes(app, options.health);
+  registerAuditRoutes(app, options.audit);
+  registerActionRoutes(app, options.actions);
+  registerLiveEventRoute(app, options.simulator, options.health, options.risk);
   return app;
 }
 

@@ -1,0 +1,758 @@
+{
+  "projectId": "7888686501883489313",
+  "title": "FieldLoop-v2",
+  "deviceType": "DESKTOP",
+  "Last Sync Time": "2026-10-13T16:28:12.000Z",
+  "visibility": "PUBLIC",
+  "sourceProjectUrl": "https://stitch.withgoogle.com/projects/7888686501883489313",
+  "designTheme": {
+    "colorMode": "LIGHT",
+    "font": "IBM_PLEX_SANS",
+    "roundness": "ROUND_EIGHT",
+    "customColor": "#14604E"
+  },
+  "screens": {
+    "013f028c3e9e4c179d483606d693a816": {
+      "id": "013f028c3e9e4c179d483606d693a816",
+      "label": "Generating Screen...",
+      "sourceScreen": "projects/7888686501883489313/screens/013f028c3e9e4c179d483606d693a816",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 41496
+      },
+      "deviceType": "DESKTOP"
+    },
+    "0655bf29f82c40859654a358e8bc3244": {
+      "id": "0655bf29f82c40859654a358e8bc3244",
+      "label": "/redesign-26/07-approval/light · Action Requests and approval",
+      "sourceScreen": "projects/7888686501883489313/screens/0655bf29f82c40859654a358e8bc3244",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 53592
+      },
+      "deviceType": "DESKTOP"
+    },
+    "08abee61c66940c0a6c2452b436e9e07": {
+      "id": "08abee61c66940c0a6c2452b436e9e07",
+      "label": "/redesign-26/13-capture/light · Field capture",
+      "sourceScreen": "projects/7888686501883489313/screens/08abee61c66940c0a6c2452b436e9e07",
+      "dimensions": {
+        "width": 390,
+        "height": 1756
+      },
+      "canvasPosition": {
+        "x": 69720
+      },
+      "deviceType": "MOBILE"
+    },
+    "10522422348676921706": {
+      "id": "10522422348676921706",
+      "label": "/redesign-26/canonical/11-import/dark",
+      "sourceScreen": "projects/7888686501883489313/screens/10522422348676921706",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {}
+    },
+    "11950458260050939870": {
+      "id": "11950458260050939870",
+      "label": "/redesign-26/canonical/13-capture/dark",
+      "sourceScreen": "projects/7888686501883489313/screens/11950458260050939870",
+      "dimensions": {
+        "width": 390,
+        "height": 884
+      },
+      "canvasPosition": {
+        "x": 1344
+      },
+      "deviceType": "MOBILE"
+    },
+    "12353232703741438240": {
+      "id": "12353232703741438240",
+      "label": "/redesign-26/canonical/07-approval/light",
+      "sourceScreen": "projects/7888686501883489313/screens/12353232703741438240",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 1798
+      }
+    },
+    "13517614703790346409": {
+      "id": "13517614703790346409",
+      "label": "/redesign-26/canonical/13-capture/light",
+      "sourceScreen": "projects/7888686501883489313/screens/13517614703790346409",
+      "dimensions": {
+        "width": 390,
+        "height": 884
+      },
+      "canvasPosition": {
+        "x": 3142
+      },
+      "deviceType": "MOBILE"
+    },
+    "14014726429335427429": {
+      "id": "14014726429335427429",
+      "label": "/redesign-26/canonical/03-bowtie/dark",
+      "sourceScreen": "projects/7888686501883489313/screens/14014726429335427429",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 3596
+      }
+    },
+    "15083927198580561700": {
+      "id": "15083927198580561700",
+      "label": "/redesign-26/canonical/13-capture/light",
+      "sourceScreen": "projects/7888686501883489313/screens/15083927198580561700",
+      "dimensions": {
+        "width": 390,
+        "height": 884
+      },
+      "canvasPosition": {
+        "x": 4940
+      },
+      "deviceType": "MOBILE"
+    },
+    "15539489277951088031": {
+      "id": "15539489277951088031",
+      "label": "/redesign-26/canonical/02-context/light",
+      "sourceScreen": "projects/7888686501883489313/screens/15539489277951088031",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 5394
+      }
+    },
+    "1560760151378414579": {
+      "id": "1560760151378414579",
+      "label": "/redesign-26/canonical/10-strip/dark",
+      "sourceScreen": "projects/7888686501883489313/screens/1560760151378414579",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 6738
+      }
+    },
+    "15670900099496360028": {
+      "id": "15670900099496360028",
+      "label": "/redesign-26/canonical/04-barriers/light",
+      "sourceScreen": "projects/7888686501883489313/screens/15670900099496360028",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 8082
+      }
+    },
+    "15f8aeea9c534f37a4f6012a569ac0d8": {
+      "id": "15f8aeea9c534f37a4f6012a569ac0d8",
+      "label": "/redesign-26/12-knowledge/dark · Knowledge Library",
+      "sourceScreen": "projects/7888686501883489313/screens/15f8aeea9c534f37a4f6012a569ac0d8",
+      "dimensions": {
+        "width": 1280,
+        "height": 1271
+      },
+      "canvasPosition": {
+        "x": 70174
+      },
+      "deviceType": "DESKTOP"
+    },
+    "16000957026580574503": {
+      "id": "16000957026580574503",
+      "label": "/redesign-26/canonical/13-capture/dark",
+      "sourceScreen": "projects/7888686501883489313/screens/16000957026580574503",
+      "dimensions": {
+        "width": 390,
+        "height": 884
+      },
+      "canvasPosition": {
+        "x": 9426
+      },
+      "deviceType": "MOBILE"
+    },
+    "16723040851897038413": {
+      "id": "16723040851897038413",
+      "label": "/redesign-26/canonical/09-crisis/light · FL-132 corrected",
+      "sourceScreen": "projects/7888686501883489313/screens/16723040851897038413",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 9880
+      }
+    },
+    "1676023239120021061": {
+      "id": "1676023239120021061",
+      "label": "/redesign-26/canonical/03-bowtie/light",
+      "sourceScreen": "projects/7888686501883489313/screens/1676023239120021061",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 11224
+      }
+    },
+    "16963853374839853341": {
+      "id": "16963853374839853341",
+      "label": "/redesign-26/canonical/11-import/light",
+      "sourceScreen": "projects/7888686501883489313/screens/16963853374839853341",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 12568
+      }
+    },
+    "17887973861984273350": {
+      "id": "17887973861984273350",
+      "label": "/redesign-26/canonical/08-agent/dark · FL-132 corrected",
+      "sourceScreen": "projects/7888686501883489313/screens/17887973861984273350",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 13912
+      }
+    },
+    "18443735871904287824": {
+      "id": "18443735871904287824",
+      "label": "/redesign-26/canonical/08-agent/light · FL-132 corrected",
+      "sourceScreen": "projects/7888686501883489313/screens/18443735871904287824",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 15256
+      }
+    },
+    "1c2e80e602e940abb26d3ead97b956dc": {
+      "id": "1c2e80e602e940abb26d3ead97b956dc",
+      "label": "/redesign-26/08-agent/dark · Agent Chat",
+      "sourceScreen": "projects/7888686501883489313/screens/1c2e80e602e940abb26d3ead97b956dc",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 61656
+      },
+      "deviceType": "DESKTOP"
+    },
+    "1f875137e3dc4c48b2090b292f83c593": {
+      "id": "1f875137e3dc4c48b2090b292f83c593",
+      "label": "/redesign-26/05-risk/dark · Risk Matrix",
+      "sourceScreen": "projects/7888686501883489313/screens/1f875137e3dc4c48b2090b292f83c593",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 56280
+      },
+      "deviceType": "DESKTOP"
+    },
+    "21054ba2539f4f6bbf1d07756dba672f": {
+      "id": "21054ba2539f4f6bbf1d07756dba672f",
+      "label": "/redesign-26/01-map/dark · Geo Command Map",
+      "sourceScreen": "projects/7888686501883489313/screens/21054ba2539f4f6bbf1d07756dba672f",
+      "dimensions": {
+        "width": 1280,
+        "height": 1023
+      },
+      "canvasPosition": {
+        "x": 45528
+      },
+      "deviceType": "DESKTOP"
+    },
+    "2597256930163183425": {
+      "id": "2597256930163183425",
+      "label": "/redesign-26/canonical/06-guardrail/light",
+      "sourceScreen": "projects/7888686501883489313/screens/2597256930163183425",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 16600
+      }
+    },
+    "2843010166623640439": {
+      "id": "2843010166623640439",
+      "label": "/redesign-26/canonical/04-barriers/dark",
+      "sourceScreen": "projects/7888686501883489313/screens/2843010166623640439",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 17944
+      }
+    },
+    "2939803675015862189": {
+      "id": "2939803675015862189",
+      "label": "/redesign-26/canonical/09-crisis/dark · FL-132 corrected",
+      "sourceScreen": "projects/7888686501883489313/screens/2939803675015862189",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 19288
+      }
+    },
+    "298f24cff828447ca5fd315d95628e7c": {
+      "id": "298f24cff828447ca5fd315d95628e7c",
+      "label": "/redesign-26/08-agent/light · Agent Chat",
+      "sourceScreen": "projects/7888686501883489313/screens/298f24cff828447ca5fd315d95628e7c",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 54936
+      },
+      "deviceType": "DESKTOP"
+    },
+    "3192832177211620886": {
+      "id": "3192832177211620886",
+      "label": "/redesign-26/canonical/08-agent/dark",
+      "sourceScreen": "projects/7888686501883489313/screens/3192832177211620886",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 20632
+      }
+    },
+    "39b050dd229f4f14a04ee9bf8bafb726": {
+      "id": "39b050dd229f4f14a04ee9bf8bafb726",
+      "label": "/redesign-26/09-crisis/dark · Crisis mode",
+      "sourceScreen": "projects/7888686501883489313/screens/39b050dd229f4f14a04ee9bf8bafb726",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 63000
+      },
+      "deviceType": "DESKTOP"
+    },
+    "4284956259029622403": {
+      "id": "4284956259029622403",
+      "label": "/redesign-26/canonical/09-crisis/dark",
+      "sourceScreen": "projects/7888686501883489313/screens/4284956259029622403",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 21976
+      }
+    },
+    "4506629376774476832": {
+      "id": "4506629376774476832",
+      "label": "/redesign-26/canonical/09-crisis/light",
+      "sourceScreen": "projects/7888686501883489313/screens/4506629376774476832",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 23320
+      }
+    },
+    "4506629376774478842": {
+      "id": "4506629376774478842",
+      "label": "/redesign-26/canonical/08-agent/light",
+      "sourceScreen": "projects/7888686501883489313/screens/4506629376774478842",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 24664
+      }
+    },
+    "4f386a2a0995412eb4501a82cf175c77": {
+      "id": "4f386a2a0995412eb4501a82cf175c77",
+      "label": "/redesign-26/10-strip/dark · Strip Chainage view",
+      "sourceScreen": "projects/7888686501883489313/screens/4f386a2a0995412eb4501a82cf175c77",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 64344
+      },
+      "deviceType": "DESKTOP"
+    },
+    "506dce36b91d4eba9b3febbff9951ada": {
+      "id": "506dce36b91d4eba9b3febbff9951ada",
+      "label": "/redesign-26/06-guardrail/dark · Guardrail view",
+      "sourceScreen": "projects/7888686501883489313/screens/506dce36b91d4eba9b3febbff9951ada",
+      "dimensions": {
+        "width": 1280,
+        "height": 1207
+      },
+      "canvasPosition": {
+        "x": 57624
+      },
+      "deviceType": "DESKTOP"
+    },
+    "5338924759770220000": {
+      "id": "5338924759770220000",
+      "label": "/redesign-26/canonical/02-context/dark",
+      "sourceScreen": "projects/7888686501883489313/screens/5338924759770220000",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 26008
+      }
+    },
+    "5769463578715314163": {
+      "id": "5769463578715314163",
+      "label": "/redesign-26/canonical/05-risk/light",
+      "sourceScreen": "projects/7888686501883489313/screens/5769463578715314163",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 27352
+      }
+    },
+    "5948747683069634041": {
+      "id": "5948747683069634041",
+      "label": "/redesign-26/canonical/01-map/light",
+      "sourceScreen": "projects/7888686501883489313/screens/5948747683069634041",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 28696
+      },
+      "localReference": "apps/web/.stitch/designs/screen-5948747683069634041.html"
+    },
+    "5abd4753e51c408c96cf1c3d4abd4e20": {
+      "id": "5abd4753e51c408c96cf1c3d4abd4e20",
+      "label": "/redesign-26/12-knowledge/light · Knowledge Library",
+      "sourceScreen": "projects/7888686501883489313/screens/5abd4753e51c408c96cf1c3d4abd4e20",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 67032
+      },
+      "deviceType": "DESKTOP"
+    },
+    "5ebf955552684be5b97b65c15f50a3fb": {
+      "id": "5ebf955552684be5b97b65c15f50a3fb",
+      "label": "/redesign-26/06-guardrail/light · Guardrail view",
+      "sourceScreen": "projects/7888686501883489313/screens/5ebf955552684be5b97b65c15f50a3fb",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 52248
+      },
+      "deviceType": "DESKTOP"
+    },
+    "6738967444596779696": {
+      "id": "6738967444596779696",
+      "label": "/redesign-26/canonical/12-knowledge/light",
+      "sourceScreen": "projects/7888686501883489313/screens/6738967444596779696",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 30040
+      }
+    },
+    "6802810922368815876": {
+      "id": "6802810922368815876",
+      "label": "/redesign-26/canonical/07-approval/dark",
+      "sourceScreen": "projects/7888686501883489313/screens/6802810922368815876",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 31384
+      }
+    },
+    "6891596846903296428": {
+      "id": "6891596846903296428",
+      "label": "/redesign-26/canonical/12-knowledge/dark",
+      "sourceScreen": "projects/7888686501883489313/screens/6891596846903296428",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 32728
+      }
+    },
+    "7631654295750903555": {
+      "id": "7631654295750903555",
+      "label": "/redesign-26/canonical/01-map/dark",
+      "sourceScreen": "projects/7888686501883489313/screens/7631654295750903555",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 34072
+      },
+      "localReference": "apps/web/.stitch/designs/screen-7631654295750903555.html"
+    },
+    "7974712203415932984": {
+      "id": "7974712203415932984",
+      "label": "/redesign-26/canonical/06-guardrail/dark",
+      "sourceScreen": "projects/7888686501883489313/screens/7974712203415932984",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 35416
+      }
+    },
+    "8128294524054166349": {
+      "id": "8128294524054166349",
+      "label": "/redesign-26/canonical/05-risk/dark",
+      "sourceScreen": "projects/7888686501883489313/screens/8128294524054166349",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 36760
+      }
+    },
+    "883887952525324899": {
+      "id": "883887952525324899",
+      "label": "/redesign-26/canonical/10-strip/light",
+      "sourceScreen": "projects/7888686501883489313/screens/883887952525324899",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 38104
+      }
+    },
+    "8bf71219eab747338480466fc5139d32": {
+      "id": "8bf71219eab747338480466fc5139d32",
+      "label": "/redesign-26/01-map/light · Geo Command Map",
+      "sourceScreen": "projects/7888686501883489313/screens/8bf71219eab747338480466fc5139d32",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 44184
+      },
+      "deviceType": "DESKTOP"
+    },
+    "9b02ea7f8d64402fa8703270bcb8537a": {
+      "id": "9b02ea7f8d64402fa8703270bcb8537a",
+      "label": "/redesign-26/11-import/dark · KML import wizard",
+      "sourceScreen": "projects/7888686501883489313/screens/9b02ea7f8d64402fa8703270bcb8537a",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 68376
+      },
+      "deviceType": "DESKTOP"
+    },
+    "9ece7ea90cc44bdab56f092965b9c7fb": {
+      "id": "9ece7ea90cc44bdab56f092965b9c7fb",
+      "label": "/redesign-26/13-capture/dark · Field capture",
+      "sourceScreen": "projects/7888686501883489313/screens/9ece7ea90cc44bdab56f092965b9c7fb",
+      "dimensions": {
+        "width": 1280,
+        "height": 1577
+      },
+      "canvasPosition": {
+        "x": 71518
+      },
+      "deviceType": "DESKTOP"
+    },
+    "ab9aba0bf7eb4ba7a35abe72791a96f5": {
+      "id": "ab9aba0bf7eb4ba7a35abe72791a96f5",
+      "label": "Geo Command Map · FieldLoop-v2 (Shared Components)",
+      "sourceScreen": "projects/7888686501883489313/screens/ab9aba0bf7eb4ba7a35abe72791a96f5",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 42840
+      },
+      "deviceType": "DESKTOP"
+    },
+    "assets_5035888971126564773": {
+      "id": "assets_5035888971126564773",
+      "label": "assets_5035888971126564773",
+      "sourceScreen": null,
+      "dimensions": {
+        "width": 960,
+        "height": 540
+      },
+      "canvasPosition": {
+        "x": 39448
+      },
+      "sourceAsset": "assets/5035888971126564773",
+      "type": "DESIGN_SYSTEM_INSTANCE"
+    },
+    "assets_8274164050075767015": {
+      "id": "assets_8274164050075767015",
+      "label": "assets_8274164050075767015",
+      "sourceScreen": null,
+      "dimensions": {
+        "width": 960,
+        "height": 540
+      },
+      "canvasPosition": {
+        "x": 40472
+      },
+      "sourceAsset": "assets/8274164050075767015",
+      "type": "DESIGN_SYSTEM_INSTANCE"
+    },
+    "b27adff864894ba9a92768175c226f98": {
+      "id": "b27adff864894ba9a92768175c226f98",
+      "label": "/redesign-26/05-risk/light · Risk Matrix",
+      "sourceScreen": "projects/7888686501883489313/screens/b27adff864894ba9a92768175c226f98",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 49560
+      },
+      "deviceType": "DESKTOP"
+    },
+    "b3647377501c4ebd954808f408fb9cc2": {
+      "id": "b3647377501c4ebd954808f408fb9cc2",
+      "label": "Generating Screen...",
+      "sourceScreen": "projects/7888686501883489313/screens/b3647377501c4ebd954808f408fb9cc2",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 41496,
+        "y": 1168
+      },
+      "deviceType": "DESKTOP"
+    },
+    "b880d4cda4c14cc0b819841bd5c6b4f6": {
+      "id": "b880d4cda4c14cc0b819841bd5c6b4f6",
+      "label": "/redesign-26/02-context/light · Context panel",
+      "sourceScreen": "projects/7888686501883489313/screens/b880d4cda4c14cc0b819841bd5c6b4f6",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 46872
+      },
+      "deviceType": "DESKTOP"
+    },
+    "c34441078b0a45759ca872289f00fec1": {
+      "id": "c34441078b0a45759ca872289f00fec1",
+      "label": "/redesign-26/09-crisis/light · Crisis mode",
+      "sourceScreen": "projects/7888686501883489313/screens/c34441078b0a45759ca872289f00fec1",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 60312
+      },
+      "deviceType": "DESKTOP"
+    },
+    "d37edc0256794125aff0a660a5e0f9d6": {
+      "id": "d37edc0256794125aff0a660a5e0f9d6",
+      "label": "/redesign-26/07-approval/dark · Action Requests and approval",
+      "sourceScreen": "projects/7888686501883489313/screens/d37edc0256794125aff0a660a5e0f9d6",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 58968
+      },
+      "deviceType": "DESKTOP"
+    },
+    "dddfd6a87e7b4a549e97fa1c4a7f75a7": {
+      "id": "dddfd6a87e7b4a549e97fa1c4a7f75a7",
+      "label": "/redesign-26/11-import/light · KML import wizard",
+      "sourceScreen": "projects/7888686501883489313/screens/dddfd6a87e7b4a549e97fa1c4a7f75a7",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 65688
+      },
+      "deviceType": "DESKTOP"
+    },
+    "e203fba7d00640ce9375bd5a349ef73b": {
+      "id": "e203fba7d00640ce9375bd5a349ef73b",
+      "label": "/redesign-26/04-barriers/dark · Barrier register",
+      "sourceScreen": "projects/7888686501883489313/screens/e203fba7d00640ce9375bd5a349ef73b",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 50904
+      },
+      "deviceType": "DESKTOP"
+    },
+    "f2fc9a7ae00e4858ac3a382340522a6c": {
+      "id": "f2fc9a7ae00e4858ac3a382340522a6c",
+      "label": "/redesign-26/04-barriers/light · Barrier register",
+      "sourceScreen": "projects/7888686501883489313/screens/f2fc9a7ae00e4858ac3a382340522a6c",
+      "dimensions": {
+        "width": 1280,
+        "height": 1024
+      },
+      "canvasPosition": {
+        "x": 48216
+      },
+      "deviceType": "DESKTOP"
+    }
+  }
+}

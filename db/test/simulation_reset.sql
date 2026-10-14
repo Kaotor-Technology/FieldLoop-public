@@ -37,7 +37,7 @@ BEGIN
     EXCEPTION WHEN check_violation THEN NULL;
     END;
 END $$;
-INSERT INTO audit_event(org_id, actor, action, entity, simulated, classification) VALUES ('simulation-test', 'synthetic-human', 'approval.created', 'test', true, 'INTERNAL');
+SELECT app.append_audit_event('simulation-test', 'synthetic-human', 'approval.created', 'test', NULL, NULL, true, 'INTERNAL');
 SELECT restore_simulation_baseline('simulation-test');
 DO $$
 BEGIN

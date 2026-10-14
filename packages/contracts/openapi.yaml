@@ -24,11 +24,149 @@ tags:
     description: OIDC sign-in, sign-out and session reauthentication.
   - name: Session
     description: Current signed-in user's BFF session.
+  - name: Map
+    description: Organisation-scoped map configuration and viewport layers.
   - name: Internal Auth
     description: Internal token verification keys; contains no user data.
   - name: Simulation
     description: Deterministic, sandboxed Scenario player.
+  - name: Risk
+    description: Organisation-calibrated Bowtie risk scores, snapshots and explanations.
+  - name: Evidence
+    description: Organisation-scoped source Evidence metadata.
+  - name: Health
+    description: Barrier Health decisions and in-app notifications.
+  - name: Audit
+    description: Read-only, hash-chained audit events within Organisation and clearance scope.
+  - name: Guardrail
+    description: Internal service-to-service OpenAI-compatible model gateway and Tier 1 content scan.
+  - name: Actions
+    description: Exact payload proposals and human action ceilings.
 paths:
+  /v1/action-requests:
+    post:
+      operationId: createActionRequest
+      summary: Prepare a proposed human action
+      description: Stores the exact L1/L2 payload with database-generated SHA-256,
+        rationale, citations, session identity and bounded SLA. L0 recommendations
+        have no record. Never executes the payload. Replays return the current
+        record.
+      tags:
+        - Actions
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequestCreate"
+      responses:
+        "201":
+          description: Action Request created or idempotently replayed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionRequest"
+        "400": &a1
+          $ref: "#/components/responses/BadRequest"
+        "401": &a2
+          $ref: "#/components/responses/Unauthenticated"
+        "403": &a3
+          $ref: "#/components/responses/Forbidden"
+        "409": &a4
+          $ref: "#/components/responses/Conflict"
+        "503": &a5
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/action-requests/{actionRequestId}:
+    get:
+      operationId: getActionRequest
+      summary: Read an Action Request
+      description: Returns an Organisation and clearance scoped current Action
+        Request; an expired request is rejected and escalated. Retired simulation
+        records are unavailable.
+      tags:
+        - Actions
+      parameters:
+        - name: actionRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Exact stored payload and generated hash.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionRequest"
+        "400": *a1
+        "401": *a2
+        "403": *a3
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409": *a4
+        "503": *a5
+  /guardrail/v1/tool-calls:check:
+    post:
+      servers:
+        - url: https://guardrail-{environment}-822853914340.asia-southeast1.run.app
+          description: Private Guardrail; Google service identity and verified internal
+            user token required.
+          variables:
+            environment:
+              default: demo
+              enum:
+                - dev
+                - demo
+      operationId: checkToolCall
+      summary: Check a registered tool call against Action Level ceilings
+      description: Uses registered AI System tools and target policy. Returns allow
+        for reads/recommendations, convert_l1 with an Action Request, hold_l2 with
+        an exact-payload Held Request, or block. Never invokes a tool or writes a
+        target system. Above-ceiling and unknown tools are blocked; policy/storage
+        failures fail closed.
+      tags:
+        - Guardrail
+      security:
+        - serviceIdentity: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: X-FieldLoop-Internal-User-Token
+          in: header
+          required: true
+          description: Five-minute server-to-server RS256 user token.
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 8192
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ToolCallCheck"
+      responses:
+        "200":
+          description: Persisted decision and any proposed/held records. A block is a
+            successful check and forbids tool execution.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ToolCallDecision"
+        "400": *a1
+        "401":
+          $ref: "#/components/responses/GuardrailUnauthenticated"
+        "403":
+          $ref: "#/components/responses/GuardrailForbidden"
+        "409": *a4
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "503": *a5
   /auth/login:
     get:
       operationId: startLogin
@@ -164,6 +302,55 @@ paths:
               schema: { $ref: "#/components/schemas/CurrentUser" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/map/config:
+    get:
+      operationId: getMapConfig
+      summary: Get browser map configuration
+      description: Returns the referrer-restricted Google Maps JavaScript API key for the authenticated session.
+      tags: [Map]
+      responses:
+        "200":
+          description: Browser map configuration.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapConfig" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/map/layers/{layer}:
+    get:
+      operationId: getMapLayer
+      summary: Get map features within the current viewport
+      description: Returns an Organisation- and clearance-filtered GeoJSON layer for a bounded viewport. Demo roles may also read only the explicitly seeded DL-01 and Bangkok records when they are marked simulated.
+      tags: [Map]
+      parameters:
+        - name: layer
+          in: path
+          required: true
+          schema: { type: string, enum: [assets, barriers, consequences] }
+        - name: bbox
+          in: query
+          required: true
+          description: West, south, east and north longitude/latitude values in WGS84.
+          style: form
+          explode: false
+          schema:
+            type: array
+            minItems: 4
+            maxItems: 4
+            items: { type: number }
+        - name: zoom
+          in: query
+          required: true
+          schema: { type: integer, minimum: 0, maximum: 22 }
+      responses:
+        "200":
+          description: Features visible in the requested viewport.
+          content:
+            application/geo+json:
+              schema: { $ref: "#/components/schemas/MapFeatureCollection" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /internal/auth/jwks:
     get:
       operationId: getInternalAuthJwks
@@ -177,6 +364,107 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Jwks" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /guardrail/v1/chat/completions:
+    post:
+      servers:
+        - url: https://guardrail-{environment}-822853914340.asia-southeast1.run.app
+          description: Private Cloud Run Guardrail service; requests require a Google-signed identity token.
+          variables:
+            environment:
+              default: demo
+              enum: [dev, demo]
+      operationId: createGuardrailChatCompletion
+      summary: Scan, route and proxy an OpenAI-compatible chat completion
+      description: Uses the registered AI System's enforce-mode Tier 1 policies. Model output is scanned before any JSON or buffered SSE response is returned.
+      tags: [Guardrail]
+      security:
+        - serviceIdentity: []
+      parameters:
+        - name: X-FieldLoop-Internal-User-Token
+          in: header
+          required: true
+          description: Five-minute RS256 token minted by web-api; this token is server-to-server and never sent to the browser.
+          schema: { type: string, minLength: 16, maxLength: 8192 }
+        - name: X-FieldLoop-Classification
+          in: header
+          required: false
+          description: Caller classification; defaults to INTERNAL and is raised when SDP detects more sensitive data.
+          schema: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GuardrailChatCompletionRequest" }
+      responses:
+        "200":
+          description: OpenAI-compatible completion. Streaming requests receive a buffered SSE response after output scanning.
+          headers:
+            X-FieldLoop-Policy-Id: { schema: { type: string, format: uuid } }
+            X-FieldLoop-Intercept-Id: { schema: { type: string, format: uuid } }
+            X-FieldLoop-Classification: { schema: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GuardrailChatCompletionResponse" }
+            text/event-stream:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/GuardrailUnauthenticated" }
+        "403": { $ref: "#/components/responses/GuardrailForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /guardrail/v1/content:scan:
+    post:
+      servers:
+        - url: https://guardrail-{environment}-822853914340.asia-southeast1.run.app
+          description: Private Cloud Run Guardrail service; requests require a Google-signed identity token.
+          variables:
+            environment:
+              default: demo
+              enum: [dev, demo]
+      operationId: scanGuardrailContent
+      summary: Scan retrieved or uploaded text before it enters an AI prompt
+      description: Detects prompt injection and raises classification when Sensitive Data Protection finds restricted content.
+      tags: [Guardrail]
+      security:
+        - serviceIdentity: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: X-FieldLoop-Internal-User-Token
+          in: header
+          required: true
+          description: Five-minute RS256 token minted by web-api; this token is server-to-server and never sent to the browser.
+          schema: { type: string, minLength: 16, maxLength: 8192 }
+        - name: X-FieldLoop-Classification
+          in: header
+          required: false
+          description: Caller classification; defaults to INTERNAL.
+          schema: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GuardrailContentScanRequest" }
+      responses:
+        "200":
+          description: Content scan outcome and detected classification.
+          headers:
+            X-FieldLoop-Policy-Id: { schema: { type: string, format: uuid } }
+            X-FieldLoop-Intercept-Id: { schema: { type: string, format: uuid } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GuardrailContentScanResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/GuardrailUnauthenticated" }
+        "403": { $ref: "#/components/responses/GuardrailForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "415": { $ref: "#/components/responses/UnsupportedMediaType" }
+        "500": { $ref: "#/components/responses/InternalError" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/scenarios:
     get:
@@ -562,15 +850,23 @@ paths:
   /v1/events:
     get:
       operationId: streamEvents
-      summary: Stream live simulation events
-      description: SSE emits simulation.state and simulation.reset snapshots from the server. Reconnect receives the
-        current snapshot. Reset invalidates all client caches. The stream is limited to a session validation window;
-        reconnect reauthenticates.
+      summary: Stream live domain and simulation events
+      description: SSE emits scoped Health, notification, simulation, and Risk events. Risk events carry a persisted RiskSnapshot and the controlled-standard calibration provenance used to calculate it. Last-Event-ID resumes the event cursor; reconnect reauthenticates.
       tags:
+      - Health
       - Simulation
+      - Risk
+      parameters:
+      - name: Last-Event-ID
+        in: header
+        required: false
+        description: Opaque cursor from the previous event, used to resume the stream.
+        schema:
+          type: string
+          maxLength: 512
       responses:
         '200':
-          description: Event stream, named simulation.state or simulation.reset; data is SimulationRun JSON.
+          description: Event stream for barrier.health_changed, health_proposal.created, evidence.created, notification.delivered, simulation.state, simulation.reset and risk.recalculated.
           content:
             text/event-stream:
               schema:
@@ -587,8 +883,257 @@ paths:
           $ref: '#/components/responses/Conflict'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /v1/bowties:
+    get:
+      operationId: listBowties
+      summary: List Bowties visible to the current Organisation
+      description: Returns Bowtie canvas entry points scoped to the signed-in Organisation and clearance.
+      tags: [Risk]
+      responses:
+        '200':
+          description: Bowties in the current Organisation.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/BowtieSummary' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/bowties/{bowtieId}:
+    get:
+      operationId: getBowtieCanvas
+      summary: Read a Bowtie canvas
+      description: Returns the scoped Threat, Barrier, path and Consequence data used by the three-column canvas.
+      tags: [Risk]
+      parameters:
+        - name: bowtieId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Bowtie canvas data.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BowtieCanvas' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/bowties/{bowtieId}/risk:
+    get:
+      operationId: getBowtieRisk
+      summary: Read the current Bowtie Risk Score
+      description: Calculates with the approved Organisation Risk Matrix, persists a full RiskSnapshot and its controlled-standard reference/version when inputs change, and returns risk_matrix_unconfigured until the matrix, severity criteria and standard provenance have Technical Authority approval.
+      tags: [Risk]
+      parameters:
+        - name: bowtieId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Current persisted RiskSnapshot.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RiskSnapshotEnvelope' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/bowties/{bowtieId}/risk/explain:
+    get:
+      operationId: explainBowtieRisk
+      summary: Explain the change from the previous RiskSnapshot
+      description: Compares the current and previous persisted inputs, orders changed Barriers by calculated consequence-frequency impact and links available source Evidence. With no prior snapshot it explicitly reports no change.
+      tags: [Risk]
+      parameters:
+        - name: bowtieId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Risk score comparison and ranked causes.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RiskExplain' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/evidence/{evidenceId}:
+    get:
+      operationId: getEvidenceSummary
+      summary: Read source Evidence metadata
+      description: Returns metadata for a source Evidence record when it belongs to the current Organisation and is within the caller's clearance.
+      tags: [Evidence]
+      parameters:
+        - name: evidenceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Evidence metadata without blob contents or storage credentials.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EvidenceSummary' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/health-proposals:
+    get:
+      operationId: listHealthProposals
+      summary: List the signed-in Barrier Owner's open Health Proposals
+      description: Returns current open proposals owned by the signed-in user within Organisation and clearance scope, newest first.
+      tags: [Health]
+      parameters:
+      - name: status
+        in: query
+        required: true
+        schema: { type: string, const: open }
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Current user's open Health Proposals in reverse chronological order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthProposalPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/health-proposals/{healthProposalId}:accept:
+    post:
+      operationId: acceptHealthProposal
+      summary: Accept a Health Proposal
+      description: Applies the proposed Health for its Barrier Owner, records an audited Health Change and emits a live event.
+      tags: [Health]
+      parameters:
+      - name: healthProposalId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HealthDecision' }
+      responses:
+        '200':
+          description: Accepted decision and current Barrier Health.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthDecisionResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/health-proposals/{healthProposalId}:reject:
+    post:
+      operationId: rejectHealthProposal
+      summary: Reject a Health Proposal
+      description: Rejects an open Health Proposal for its Barrier Owner without applying the proposed Health.
+      tags: [Health]
+      parameters:
+      - name: healthProposalId
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+      - $ref: '#/components/parameters/CsrfToken'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HealthDecision' }
+      responses:
+        '200':
+          description: Rejected decision and unchanged Barrier Health.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthDecisionResult' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/notifications:
+    get:
+      operationId: listNotifications
+      summary: List current user's in-app notifications
+      description: Returns notifications for the signed-in user within Organisation and clearance scope. Evidence expiry notices disappear when newer Evidence arrives.
+      tags: [Health]
+      parameters:
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Current user's notifications in reverse chronological order.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NotificationPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/audit:
+    get:
+      operationId: listAuditEvents
+      summary: List audit events, newest first
+      description: |
+        Returns audit events of the signed-in user's Organisation, within the user's clearance, newest
+        first. `entityType` is the namespace of the event action (`barrier` for `barrier.health_changed`)
+        and `entityId` is the audited entity identifier; both are optional exact-match filters. Events
+        are append-only; this endpoint never changes them. Restricted to operators and managers.
+      tags: [Audit]
+      parameters:
+      - name: entityType
+        in: query
+        description: Action namespace to match, for example `health_proposal`, `barrier` or `simulation`.
+        schema: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+      - name: entityId
+        in: query
+        description: Identifier of the audited entity to match exactly.
+        schema: { type: string, minLength: 1, maxLength: 256 }
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Audit events in reverse chronological order.
+          headers:
+            Cache-Control:
+              description: Always `private, no-store`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditEventPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 components:
   securitySchemes:
+    serviceIdentity:
+      type: http
+      scheme: bearer
+      bearerFormat: Google-signed Cloud Run identity token
+      description: Service-to-service identity verified by Cloud Run invoker IAM.
     sessionCookie:
       type: apiKey
       in: cookie
@@ -645,6 +1190,405 @@ components:
         minimum: 0
 
   schemas:
+    # BEGIN generated action schemas
+    ActionLevel:
+      type: string
+      enum:
+        - l0
+        - l1
+        - l2
+    ActionType:
+      type: string
+      enum:
+        - internal_record
+        - system_of_record
+        - field_command
+        - engineering_approval
+        - emergency_communication
+        - external_submission
+    ActionClassification:
+      type: string
+      enum:
+        - PUBLIC
+        - INTERNAL
+        - CONFIDENTIAL
+        - HIGHLY_RESTRICTED
+    ActionTarget:
+      type: string
+      enum:
+        - fieldloop
+        - cmms
+        - integrity-database
+        - gis
+        - asset-register
+        - siem
+        - historian
+        - scada
+        - ot
+        - engineering-authority
+        - stakeholders
+        - regulator
+        - external-party
+    ActionRequestCreate:
+      type: object
+      additionalProperties: false
+      required:
+        - actionType
+        - actionLevel
+        - target
+        - payload
+        - rationale
+        - citations
+        - simulated
+        - classification
+      properties:
+        actionType:
+          $ref: "#/components/schemas/ActionType"
+        actionLevel:
+          $ref: "#/components/schemas/ActionLevel"
+        target:
+          $ref: "#/components/schemas/ActionTarget"
+        payload:
+          type: object
+          additionalProperties: true
+        rationale:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+        citations:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 2048
+            pattern: \S
+        simulated:
+          type: boolean
+        classification:
+          $ref: "#/components/schemas/ActionClassification"
+        expiresAt:
+          type: string
+          format: date-time
+        simulationRunId:
+          type: string
+          format: uuid
+    ToolCallCheck:
+      type: object
+      additionalProperties: false
+      required:
+        - aiSystem
+        - tool
+        - target
+        - simulated
+        - classification
+      properties:
+        actionType:
+          $ref: "#/components/schemas/ActionType"
+        actionLevel:
+          $ref: "#/components/schemas/ActionLevel"
+        target:
+          $ref: "#/components/schemas/ActionTarget"
+        payload:
+          type: object
+          additionalProperties: true
+        rationale:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+        citations:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 2048
+            pattern: \S
+        simulated:
+          type: boolean
+        classification:
+          $ref: "#/components/schemas/ActionClassification"
+        expiresAt:
+          type: string
+          format: date-time
+        simulationRunId:
+          type: string
+          format: uuid
+        aiSystem:
+          type: string
+          minLength: 1
+          maxLength: 128
+        tool:
+          type: string
+          minLength: 1
+          maxLength: 128
+    ActionRequester:
+      description: Who requested the action (PRD AX-1). An assistant acts on behalf of
+        requestedBy.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - kind
+          properties:
+            kind:
+              const: person
+        - type: object
+          additionalProperties: false
+          required:
+            - kind
+            - aiSystemId
+          properties:
+            kind:
+              const: assistant
+            aiSystemId:
+              type: string
+              format: uuid
+    ActionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - orgId
+        - actionType
+        - actionLevel
+        - target
+        - payload
+        - payloadHash
+        - rationale
+        - citations
+        - requestedBy
+        - requester
+        - status
+        - expiresAt
+        - simulated
+        - classification
+      properties:
+        actionType:
+          $ref: "#/components/schemas/ActionType"
+        actionLevel:
+          $ref: "#/components/schemas/ActionLevel"
+        target:
+          $ref: "#/components/schemas/ActionTarget"
+        payload:
+          type: object
+          additionalProperties: true
+        rationale:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+        citations:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 2048
+            pattern: \S
+        simulated:
+          type: boolean
+        classification:
+          $ref: "#/components/schemas/ActionClassification"
+        expiresAt:
+          type: string
+          format: date-time
+        simulationRunId:
+          type: string
+          format: uuid
+        id:
+          type: string
+          format: uuid
+        orgId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        payloadHash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        requestedBy:
+          type: string
+          minLength: 1
+          maxLength: 512
+        requester:
+          $ref: "#/components/schemas/ActionRequester"
+        status:
+          type: string
+          enum:
+            - open
+            - in_review
+            - approved
+            - rejected
+            - superseded
+            - executed
+    ToolCallDecision:
+      type: object
+      additionalProperties: false
+      required:
+        - decision
+        - reason
+      properties:
+        decision:
+          type: string
+          enum:
+            - allow
+            - convert_l1
+            - hold_l2
+            - block
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        ceiling:
+          $ref: "#/components/schemas/ActionLevel"
+        actionRequest:
+          $ref: "#/components/schemas/ActionRequest"
+        heldRequestId:
+          type: string
+          format: uuid
+    # END generated action schemas
+    GuardrailChatCompletionRequest:
+      type: object
+      required: [aiSystem, messages]
+      properties:
+        aiSystem: { type: string, minLength: 1, maxLength: 128 }
+        model: { type: string, enum: [flash, pro], description: Logical route class; the caller never selects a model ID or provider. }
+        stream: { type: boolean, description: Streaming is buffered until Tier 1 output checks complete. }
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 128
+          items:
+            type: object
+            required: [role]
+            properties:
+              role: { type: string, enum: [system, developer, user, assistant, tool] }
+              content: { type: [string, "null"] }
+            additionalProperties: true
+      additionalProperties: true
+
+    GuardrailChatCompletionResponse:
+      type: object
+      required: [choices]
+      properties:
+        id: { type: string }
+        object: { type: string, const: chat.completion }
+        model: { type: string }
+        choices:
+          type: array
+          items:
+            type: object
+            properties:
+              index: { type: integer }
+              message: { type: object, additionalProperties: true }
+            additionalProperties: true
+      additionalProperties: true
+
+    GuardrailContentScanRequest:
+      type: object
+      required: [aiSystem, content]
+      properties:
+        aiSystem: { type: string, minLength: 1, maxLength: 128 }
+        content: { type: string, maxLength: 250000 }
+      additionalProperties: false
+
+    GuardrailContentScanResult:
+      type: object
+      required: [decision, content, classification, policyId]
+      properties:
+        decision: { type: string, enum: [allow, reroute] }
+        content: { type: string }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+        policyId: { type: string, format: uuid }
+        reason: { type: string }
+      additionalProperties: false
+
+    MapConfig:
+      type: object
+      required: [mapsApiKey]
+      properties:
+        mapsApiKey:
+          type: string
+          description: Browser key restricted to the FieldLoop HTTPS referrers and Maps JavaScript API.
+
+    MapFeatureCollection:
+      type: object
+      required: [type, features]
+      properties:
+        type: { type: string, const: FeatureCollection }
+        features:
+          type: array
+          items: { $ref: "#/components/schemas/MapFeature" }
+
+    MapFeature:
+      type: object
+      required: [type, id, geometry, properties]
+      properties:
+        type: { type: string, const: Feature }
+        id: { type: string }
+        geometry: { $ref: "#/components/schemas/MapGeometry" }
+        properties: { $ref: "#/components/schemas/MapFeatureProperties" }
+
+    MapGeometry:
+      oneOf:
+        - type: object
+          required: [type, coordinates]
+          properties:
+            type: { type: string, const: Point }
+            coordinates: { type: array, minItems: 2, maxItems: 2, items: { type: number } }
+        - type: object
+          required: [type, coordinates]
+          properties:
+            type: { type: string, const: LineString }
+            coordinates:
+              type: array
+              minItems: 2
+              items: { type: array, minItems: 2, maxItems: 2, items: { type: number } }
+        - type: object
+          required: [type, coordinates]
+          properties:
+            type: { type: string, const: Polygon }
+            coordinates:
+              type: array
+              items:
+                type: array
+                minItems: 4
+                items: { type: array, minItems: 2, maxItems: 2, items: { type: number } }
+        - type: object
+          required: [type, coordinates]
+          properties:
+            type: { type: string, const: MultiPolygon }
+            coordinates:
+              type: array
+              items:
+                type: array
+                items:
+                  type: array
+                  minItems: 4
+                  items: { type: array, minItems: 2, maxItems: 2, items: { type: number } }
+
+    MapFeatureProperties:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: [string, "null"] }
+        code: { type: [string, "null"] }
+        featureKind: { type: string, enum: [area, facility, linear, segment, barrier, consequence] }
+        classification: { type: string }
+        simulated: { type: boolean }
+        label: { type: [string, "null"] }
+        health: { type: [string, "null"], enum: [healthy, degraded, failed, unverified, null] }
+        riskBand: { type: [string, "null"], enum: [intolerable, alarp, acceptable, null] }
+        chainageFrom: { type: [number, "null"] }
+        chainageTo: { type: [number, "null"] }
+        evidenceObservedAt: { type: [string, "null"], format: date-time }
+        domainPack: { type: [string, "null"] }
+
     # BEGIN generated simulation schemas
     SimulationRun:
       type: object
@@ -826,6 +1770,99 @@ components:
       - simulated
       - classification
     # END generated simulation schemas
+    HealthDecision:
+      type: object
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+      required: [reason]
+    HealthDecisionResult:
+      type: object
+      additionalProperties: false
+      properties:
+        healthProposalId: { type: string, format: uuid }
+        status: { type: string, enum: [accepted, rejected] }
+        barrierId: { type: string, format: uuid }
+        health: { type: string, enum: [healthy, degraded, failed, unverified] }
+      required: [healthProposalId, status, barrierId, health]
+    HealthProposal:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        barrierId: { type: string, format: uuid }
+        barrierName: { type: [string, 'null'] }
+        currentHealth: { type: [string, 'null'], enum: [healthy, degraded, failed, unverified, null] }
+        proposedHealth: { type: string, enum: [healthy, degraded, failed, unverified] }
+        sourceReason: { type: [string, 'null'] }
+        simulated: { type: boolean }
+        createdAt: { type: string, format: date-time }
+      required: [id, barrierId, barrierName, currentHealth, proposedHealth, sourceReason, simulated, createdAt]
+    HealthProposalPage:
+      allOf:
+      - $ref: '#/components/schemas/CursorPage'
+      - type: object
+        properties:
+          items:
+            type: array
+            items: { $ref: '#/components/schemas/HealthProposal' }
+          limit: { type: integer, minimum: 1, maximum: 200 }
+        required: [items, limit]
+    Notification:
+      type: object
+      additionalProperties: false
+      properties:
+        id: { type: string, format: uuid }
+        subjectType: { type: string, enum: [action_request, health_change, evidence] }
+        subjectId: { type: string, format: uuid }
+        barrierId: { type: [string, 'null'], format: uuid }
+        channel: { type: string }
+        status: { type: string }
+        createdAt: { type: string, format: date-time }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+      required: [id, subjectType, subjectId, barrierId, channel, status, createdAt, simulated, classification]
+    NotificationPage:
+      allOf:
+      - $ref: '#/components/schemas/CursorPage'
+      - type: object
+        properties:
+          items:
+            type: array
+            items: { $ref: '#/components/schemas/Notification' }
+          limit: { type: integer, minimum: 1, maximum: 200 }
+        required: [items, limit]
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      description: One append-only audit record. `hash` is the v1 SHA-256 of the record; the next record of the Organisation carries it as `prevHash`.
+      properties:
+        id: { type: string, format: uuid }
+        entityType: { type: string, description: Action namespace, the text before the first dot of `action`. }
+        entity: { type: string }
+        action: { type: string }
+        actor: { type: string }
+        beforeHash: { type: [string, 'null'], pattern: '^[a-f0-9]{64}$' }
+        afterHash: { type: [string, 'null'], pattern: '^[a-f0-9]{64}$' }
+        prevHash: { type: [string, 'null'], pattern: '^[a-f0-9]{64}$' }
+        hash: { type: string, pattern: '^[a-f0-9]{64}$' }
+        createdAt: { type: string, format: date-time }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+      required: [id, entityType, entity, action, actor, beforeHash, afterHash, prevHash, hash, createdAt, simulated, classification]
+    AuditEventPage:
+      allOf:
+      - $ref: '#/components/schemas/CursorPage'
+      - type: object
+        properties:
+          items:
+            type: array
+            items: { $ref: '#/components/schemas/AuditEvent' }
+          limit: { type: integer, minimum: 1, maximum: 200 }
+        required: [items, limit]
     CurrentUser:
       type: object
       required: [sub, roles, persona, orgId, clearance, csrfToken, authTime]
@@ -839,6 +1876,222 @@ components:
         clearance: { type: string }
         csrfToken: { type: string }
         authTime: { type: string, format: date-time }
+
+    BowtieSummary:
+      type: object
+      additionalProperties: false
+      required: [id, hazard, topEvent, domain, status, simulated, classification]
+      properties:
+        id: { type: string, format: uuid }
+        hazard: { type: string }
+        topEvent: { type: string }
+        domain: { type: [string, 'null'] }
+        status: { type: [string, 'null'] }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+    BowtieCanvas:
+      type: object
+      additionalProperties: false
+      required: [id, hazard, topEvent, domain, status, simulated, classification, severityCriteria, threats, barriers, consequences, paths]
+      properties:
+        id: { type: string, format: uuid }
+        hazard: { type: string }
+        topEvent: { type: string }
+        domain: { type: [string, 'null'] }
+        status: { type: [string, 'null'] }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+        severityCriteria:
+          oneOf:
+            - { $ref: '#/components/schemas/RiskSeverityCriteria' }
+            - { type: 'null' }
+        threats:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, frequencyPerYear]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              frequencyPerYear: { type: number, minimum: 0 }
+        barriers:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, type, side, health, pfdBand, degradationFactors]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              type: { type: string, enum: [technical, organisational, human] }
+              side: { type: string, enum: [preventive, mitigative] }
+              health: { type: string, enum: [healthy, degraded, failed, unverified] }
+              pfdBand: { type: number, exclusiveMinimum: 0, maximum: 1 }
+              degradationFactors: { type: array, items: { type: string } }
+        consequences:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, severity]
+            properties:
+              id: { type: string, format: uuid }
+              name: { type: string }
+              severity: { type: object, additionalProperties: { type: integer, minimum: 1, maximum: 5 } }
+        paths:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, side, targetId, barrierIds]
+            properties:
+              id: { type: string }
+              side: { type: string, enum: [preventive, mitigative] }
+              targetId: { type: string, format: uuid }
+              barrierIds: { type: array, items: { type: string, format: uuid } }
+    RiskSnapshotEnvelope:
+      type: object
+      additionalProperties: false
+      required: [id, createdAt, trigger, calibration, snapshot]
+      properties:
+        id: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        trigger: { type: string }
+        calibration: { $ref: '#/components/schemas/RiskCalibration' }
+        snapshot: { $ref: '#/components/schemas/RiskSnapshot' }
+    RiskCalibration:
+      type: object
+      additionalProperties: false
+      required: [standardRef, standardVersion, approvedBy, approvedAt]
+      properties:
+        standardRef: { type: string, minLength: 1 }
+        standardVersion: { type: string, minLength: 1 }
+        approvedBy: { type: string, minLength: 1 }
+        approvedAt: { type: string, format: date-time }
+    RiskSnapshot:
+      type: object
+      additionalProperties: false
+      required: [bowtieId, topEventFrequencyPerYear, threats, consequences, worstConsequenceId, cell]
+      properties:
+        bowtieId: { type: string, format: uuid }
+        topEventFrequencyPerYear: { type: number, minimum: 0 }
+        threats: { type: array, items: { $ref: '#/components/schemas/RiskThreatResult' } }
+        consequences: { type: array, items: { $ref: '#/components/schemas/RiskConsequenceResult' } }
+        worstConsequenceId: { type: string, format: uuid }
+        cell: { $ref: '#/components/schemas/RiskCell' }
+    RiskThreatResult:
+      type: object
+      additionalProperties: false
+      required: [threatId, frequencyPerYear, path]
+      properties:
+        threatId: { type: string, format: uuid }
+        frequencyPerYear: { type: number, minimum: 0 }
+        path: { $ref: '#/components/schemas/RiskPathResult' }
+    RiskConsequenceResult:
+      type: object
+      additionalProperties: false
+      required: [consequenceId, frequencyPerYear, severityBand, path, cell]
+      properties:
+        consequenceId: { type: string, format: uuid }
+        frequencyPerYear: { type: number, minimum: 0 }
+        severityBand: { type: integer, enum: [1, 2, 3, 4, 5] }
+        path: { $ref: '#/components/schemas/RiskPathResult' }
+        cell: { $ref: '#/components/schemas/RiskCell' }
+    RiskPathResult:
+      type: object
+      additionalProperties: false
+      required: [pathId, targetId, pfd, barriers]
+      properties:
+        pathId: { type: string, minLength: 1 }
+        targetId: { type: string, format: uuid }
+        pfd: { type: number, minimum: 0, maximum: 1 }
+        barriers: { type: array, items: { $ref: '#/components/schemas/RiskBarrierCredit' } }
+    RiskBarrierCredit:
+      type: object
+      additionalProperties: false
+      required: [barrierId, health, effectivePfd, credited]
+      properties:
+        barrierId: { type: string, format: uuid }
+        health: { type: string, enum: [healthy, degraded, failed, unverified] }
+        effectivePfd: { type: number, minimum: 0, maximum: 1 }
+        credited: { type: boolean }
+    RiskCell:
+      type: object
+      additionalProperties: false
+      required: [frequencyBand, severityBand, zone, rank]
+      properties:
+        frequencyBand: { type: integer, enum: [1, 2, 3, 4, 5] }
+        severityBand: { type: integer, enum: [1, 2, 3, 4, 5] }
+        zone: { type: string, enum: [green, amber, red] }
+        rank: { type: integer, minimum: 1, maximum: 25 }
+    RiskSeverityCriteria:
+      type: object
+      additionalProperties: false
+      required: [people, environment, financial, serviceContinuity, reputation, legalRegulatory]
+      properties:
+        people: { type: array, minItems: 5, maxItems: 5, items: { type: string, minLength: 1 } }
+        environment: { type: array, minItems: 5, maxItems: 5, items: { type: string, minLength: 1 } }
+        financial: { type: array, minItems: 5, maxItems: 5, items: { type: string, minLength: 1 } }
+        serviceContinuity: { type: array, minItems: 5, maxItems: 5, items: { type: string, minLength: 1 } }
+        reputation: { type: array, minItems: 5, maxItems: 5, items: { type: string, minLength: 1 } }
+        legalRegulatory: { type: array, minItems: 5, maxItems: 5, items: { type: string, minLength: 1 } }
+    RiskExplain:
+      type: object
+      additionalProperties: false
+      required: [bowtieId, hasPrevious, summary, previous, current, changes, riskInputChanges]
+      properties:
+        bowtieId: { type: string, format: uuid }
+        hasPrevious: { type: boolean }
+        summary: { type: string }
+        previous: { oneOf: [{ $ref: '#/components/schemas/RiskSnapshotEnvelope' }, { type: 'null' }] }
+        current: { $ref: '#/components/schemas/RiskSnapshotEnvelope' }
+        changes:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [barrierId, beforeHealth, afterHealth, reason, sourceEvidenceId, sourceEvidenceHref, topEventFrequencyDeltaPerYear, consequenceFrequencyDeltasPerYear, impact]
+            properties:
+              barrierId: { type: string, format: uuid }
+              beforeHealth: { type: string }
+              afterHealth: { type: string }
+              reason: { type: string }
+              sourceEvidenceId: { oneOf: [{ type: string, format: uuid }, { type: 'null' }] }
+              sourceEvidenceHref: { oneOf: [{ type: string }, { type: 'null' }] }
+              topEventFrequencyDeltaPerYear: { type: number }
+              consequenceFrequencyDeltasPerYear:
+                type: array
+                items:
+                  type: object
+                  additionalProperties: false
+                  required: [consequenceId, delta]
+                  properties:
+                    consequenceId: { type: string, format: uuid }
+                    delta: { type: number }
+              impact: { type: number, minimum: 0 }
+        riskInputChanges:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [path, beforeValue, afterValue]
+            properties:
+              path: { type: string, minLength: 1 }
+              beforeValue: { oneOf: [{ type: string }, { type: 'null' }] }
+              afterValue: { oneOf: [{ type: string }, { type: 'null' }] }
+    EvidenceSummary:
+      type: object
+      additionalProperties: false
+      required: [id, barrierId, kind, source, observedAt, simulated, classification]
+      properties:
+        id: { type: string, format: uuid }
+        barrierId: { type: string, format: uuid }
+        kind: { type: string }
+        source: { type: string }
+        observedAt: { type: string, format: date-time }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
 
     Jwks:
       type: object
@@ -874,6 +2127,13 @@ components:
         - rate_limited
         - internal_error
         - service_unavailable
+        - guardrail_blocked
+        - payload_too_large
+        - unsupported_media_type
+        - risk_matrix_unconfigured
+        - risk_matrix_invalid
+        - risk_service_unavailable
+        - risk_input_invalid
 
     Problem:
       type: object
@@ -949,8 +2209,32 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+    PayloadTooLarge:
+      description: The request body exceeds the Guardrail request size limit (`payload_too_large`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    UnsupportedMediaType:
+      description: The request uses an unsupported content type (`unsupported_media_type`).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
     Unauthenticated:
       description: No valid session (`unauthenticated`). The SPA sends the user to `/auth/login`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    GuardrailUnauthenticated:
+      description: The verified internal user token is missing or invalid (`unauthenticated`). This service-to-service response does not start a browser login flow.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    GuardrailForbidden:
+      description: The token Organisation does not match this Guardrail service, or the caller's clearance or Guardrail policy blocks the request (`forbidden`, `clearance_denied`, or `guardrail_blocked`).
       content:
         application/problem+json:
           schema:

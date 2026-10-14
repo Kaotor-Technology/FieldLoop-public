@@ -1,11 +1,13 @@
 """Deterministic, read-only simulated pump and gate status source for Demo B (SIM-2).
 
 Fixed Facilities with no wall clock and no I/O: no pump SCADA connector and no operation that
-starts, stops, opens or closes anything. A Scenario changes a Facility's power in process
-through ``set_power``; operating a real pump or gate is an L1 Command Package (ADR-0006).
+starts, stops, opens or closes anything. A Scenario changes a Facility's power in process:
+``set_power`` holds one change, and the Scenario player's service ``restore``s every change
+and the clock of a run at once. Operating a real pump or gate is an L1 Command Package
+(ADR-0006).
 """
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Annotated, Literal, get_args
@@ -18,7 +20,7 @@ from fieldloop_simulator.bangkok_storm import LABEL, SIMULATION_STARTS_AT
 from fieldloop_simulator.mock_http import Rfc3339, app_state, known_query_only, problem
 from fieldloop_simulator.mock_signals import Classification, Observation
 from fieldloop_simulator.organisation import DEMO_ORG_ID, require_org_id
-from fieldloop_simulator.scenario_overrides import HeldValues
+from fieldloop_simulator.scenario_overrides import HeldValues, RunState
 
 SOURCE_ID = "mock-pumps"
 CLASSIFICATION: Classification = "CONFIDENTIAL"
@@ -58,9 +60,51 @@ PUMPS_AND_GATES: Mapping[str, PumpOrGate] = {
 }
 
 
+POWER_UNIT = "state"
+
+
+def power_tag(asset_code: str) -> str:
+    """The Signal tag of a pump's or gate's power status: ``pump.power`` or ``gate.power``."""
+    return f"{_known(asset_code).facility_type}.power"
+
+
+def operating_state(asset_code: str, status: PowerStatus) -> OperatingState:
+    """A pump without power is stopped; a gate stays where it was."""
+    facility = _known(asset_code)
+    if facility.facility_type == "pump" and status == "lost":
+        return "stopped"
+    return facility.operating_state
+
+
+def signal_payload(asset_code: str, status: PowerStatus) -> dict[str, object]:
+    """What a Signal of this source says about its pump or gate, whoever publishes the Signal."""
+    facility = _known(asset_code)
+    return {
+        "assetCode": asset_code,
+        "facilityType": facility.facility_type,
+        "zone": facility.zone_code,
+        "operatingState": operating_state(asset_code, status),
+        "label": LABEL,
+    }
+
+
 def _known(asset_code: str) -> PumpOrGate:
     """The pump or gate of that code. ``KeyError`` for any other code."""
     return PUMPS_AND_GATES[asset_code]
+
+
+def _checked(asset_code: str, status: PowerStatus) -> PowerStatus:
+    """The status as a power change holds it. ``KeyError`` or ``ValueError`` if it cannot."""
+    _known(asset_code)
+    if status not in get_args(PowerStatus):
+        raise ValueError("Power status must be available or lost")
+    return status
+
+
+def _power(held: HeldValues[PowerStatus], asset_code: str, at: datetime) -> PowerStatus:
+    """The power of a pump or gate at a time, given what a run holds."""
+    _known(asset_code)
+    return held.at(asset_code, at) or "available"
 
 
 class SimulatedPumps:
@@ -68,29 +112,44 @@ class SimulatedPumps:
 
     def __init__(self, *, org_id: str = DEMO_ORG_ID) -> None:
         self.org_id = require_org_id(org_id)
-        self._power: HeldValues[PowerStatus] = HeldValues()
+        self._run: RunState[PowerStatus] = RunState(HeldValues(), SIMULATION_STARTS_AT)
+
+    @property
+    def clock(self) -> datetime:
+        """The Scenario time a read uses when it names none.
+
+        The start of the simulation, or the clock of the committed run once the Scenario player
+        has restored one.
+        """
+        return self._run.clock
 
     def set_power(self, asset_code: str, *, start: datetime, status: PowerStatus) -> None:
         """Hold a Facility's power at ``status`` from ``start`` on, until the next reset."""
-        _known(asset_code)
-        if status not in get_args(PowerStatus):
-            raise ValueError("Power status must be available or lost")
-        self._power.hold(asset_code, start=start, value=status)
+        self._run.held.hold(asset_code, start=start, value=_checked(asset_code, status))
 
     def reset(self) -> None:
-        """Forget every power change, so the next run starts from the baseline (SIM-5)."""
-        self._power.reset()
+        """Forget every power change and the run's clock: the baseline of the next run (SIM-5)."""
+        self._run = RunState(HeldValues(), SIMULATION_STARTS_AT)
+
+    def restore(
+        self, changes: Iterable[tuple[str, datetime, PowerStatus]], *, clock: datetime
+    ) -> None:
+        """Replace every power change and the clock with those of a run, in one step.
+
+        Each change is ``(asset code, start, status)`` and is held to the rules of
+        ``set_power``. If one is refused, nothing changes.
+        """
+        held = HeldValues.of(
+            (asset_code, start, _checked(asset_code, status))
+            for asset_code, start, status in changes
+        )
+        self._run = RunState(held, clock)
 
     def power_at(self, asset_code: str, at: datetime) -> PowerStatus:
-        _known(asset_code)
-        return self._power.at(asset_code, at) or "available"
+        return _power(self._run.held, asset_code, at)
 
     def operating_state_at(self, asset_code: str, at: datetime) -> OperatingState:
-        """A pump without power is stopped; a gate stays where it was."""
-        facility = _known(asset_code)
-        if facility.facility_type == "pump" and self.power_at(asset_code, at) == "lost":
-            return "stopped"
-        return facility.operating_state
+        return operating_state(asset_code, self.power_at(asset_code, at))
 
     def observe(self, asset_code: str, at: datetime) -> Observation:
         """The power status a Scenario publishes as a Signal; the payload names the Facility.
@@ -98,35 +157,35 @@ class SimulatedPumps:
         A pump's Signal is what the flood pack rule ``pump-power-lost`` matches exactly:
         ``mock-pumps``, ``pump.power``, ``eq lost``, unit ``state``.
         """
-        facility = _known(asset_code)
+        status = self.power_at(asset_code, at)
         return Observation(
             source=SOURCE_ID,
             classification=CLASSIFICATION,
-            tag=f"{facility.facility_type}.power",
-            value=self.power_at(asset_code, at),
+            tag=power_tag(asset_code),
+            value=status,
             observed_at=at,
-            unit="state",
+            unit=POWER_UNIT,
             # Two pumps share a tag, so the Facility takes part in the Signal's identity.
             subject=asset_code,
-            payload={
-                "assetCode": asset_code,
-                "facilityType": facility.facility_type,
-                "zone": facility.zone_code,
-                "operatingState": self.operating_state_at(asset_code, at),
-                "label": LABEL,
-            },
+            payload=signal_payload(asset_code, status),
         )
 
-    def status(self, asset_code: str, as_of: datetime) -> MockPumpsStatus:
-        """The status as the API serves it. ``KeyError`` for an unknown pump or gate."""
+    def status(self, asset_code: str, as_of: datetime | None = None) -> MockPumpsStatus:
+        """The status as the API serves it, as of the clock when no time is given.
+
+        ``KeyError`` for an unknown pump or gate.
+        """
         facility = _known(asset_code)
+        run = self._run  # read once, so the time and the status are of one run
+        as_of = as_of or run.clock
+        power = _power(run.held, asset_code, as_of)
         return MockPumpsStatus.model_validate(
             {
                 "assetCode": asset_code,
                 "facilityType": facility.facility_type,
                 "zoneCode": facility.zone_code,
-                "operatingState": self.operating_state_at(asset_code, as_of),
-                "powerStatus": self.power_at(asset_code, as_of),
+                "operatingState": operating_state(asset_code, power),
+                "powerStatus": power,
                 "observedAt": as_of,
                 "orgId": self.org_id,
                 "label": LABEL,
@@ -147,7 +206,7 @@ get_pumps = app_state("pumps", SimulatedPumps)
 def read_status(
     id: str,
     pumps: Annotated[SimulatedPumps, Depends(get_pumps)],
-    as_of: Annotated[Rfc3339, Query(alias="asOf")] = SIMULATION_STARTS_AT,
+    as_of: Annotated[Rfc3339 | None, Query(alias="asOf")] = None,
 ) -> MockPumpsStatus | JSONResponse:
     try:
         return pumps.status(id, as_of)
