@@ -25,11 +25,15 @@ describe("Bowtie canvas", () => {
     const bowtie = listBowties().find(({ code }) => code === "A");
     if (!bowtie) throw new Error("Bowtie A fixture is required");
     const markup = renderToStaticMarkup(<BowtieCanvas bowtie={bowtie} onBack={() => undefined} />);
+    const renderedText = markup.replaceAll("&amp;", "&");
     const healthShapes = { healthy: "●", degraded: "▲", failed: "✖", unverified: "⬚" } as const;
 
+    for (const threat of bowtie.threats) expect(renderedText).toContain(threat.name);
     for (const barrier of bowtie.barriers) {
+      expect(renderedText).toContain(barrier.name);
       expect(markup).toContain(`data-health="${barrier.health}"`);
       expect(markup).toContain(`aria-hidden="true">${healthShapes[barrier.health]}</span>`);
+      for (const factor of barrier.degradationFactors) expect(renderedText).toContain(factor.description);
     }
     expect(markup).toContain("Degradation Factors");
     expect(markup).toContain("Validation Triad");
