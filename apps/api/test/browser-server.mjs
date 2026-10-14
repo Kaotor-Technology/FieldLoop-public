@@ -49,7 +49,7 @@ const health = {
     if (decision === "accept") {
       healthEventTime = new Date(Math.max(Date.now(), healthEventTime.getTime() + 1));
       const event = { id: randomUUID(), type: "barrier.health_changed", orgId: user.orgId,
-        entityId: randomUUID(), barrierId: proposal.barrierId, simulated: true, classification: "CONFIDENTIAL" };
+        entityId: randomUUID(), barrierId: proposal.barrierId, simulated: true, classification: "CONFIDENTIAL", health: currentHealth };
       const position = { createdAt: healthEventTime.toISOString(), id: event.id };
       healthEvents.push({ position, event });
     }
