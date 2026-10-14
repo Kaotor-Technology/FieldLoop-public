@@ -3,6 +3,11 @@ import type { SimulationRun } from "./simulation-events";
 
 export type MapDomain = "all" | "pipeline-integrity" | "flood-water";
 export type BarrierMarkerStatus = "degraded" | "failed" | "unverified";
+export interface MapLayerRequestState {
+  layer: MapLayerName;
+  isPending: boolean;
+  isError: boolean;
+}
 
 const BANGKOK_STORM_SCENARIO = "bangkok-storm";
 const BANGKOK_STORM_RAIN_END_SECONDS = 7_200;
@@ -49,6 +54,33 @@ export function selectVisibleFeatures(
   domain: MapDomain,
 ): MapFeature[] {
   return filterFeaturesByDomain(layers.flatMap(({ layer, features }) => activeLayers.includes(layer) ? features : []), domain);
+}
+
+export function mapLayerFeedback(
+  requests: readonly MapLayerRequestState[],
+  activeLayers: readonly MapLayerName[],
+  rainOverlayVisible: boolean,
+  domain: MapDomain,
+  hasViewport: boolean,
+) {
+  const requested = hasViewport ? requests.filter(({ layer }) =>
+    activeLayers.includes(layer) || (layer === "assets" && rainOverlayVisible && domain !== "pipeline-integrity"),
+  ) : [];
+  const isLoading = requested.some(({ isPending }) => isPending);
+  const hasError = requested.some(({ isError }) => isError);
+  return { isLoading, hasError, showSkeleton: isLoading || hasError };
+}
+
+export function selectMapFeature(value: unknown, setSelectedFeature: (feature: MapFeature) => void): boolean {
+  if (!value || typeof value !== "object") return false;
+  const feature = value as Partial<MapFeature>;
+  if (feature.type !== "Feature" || typeof feature.id !== "string" || !feature.geometry || !feature.properties) return false;
+  setSelectedFeature(feature as MapFeature);
+  return true;
+}
+
+export function formatChainage(value: number): string {
+  return new Intl.NumberFormat("en-GB", { maximumFractionDigits: 0 }).format(value);
 }
 
 export function filterFeaturesByDomain(features: readonly MapFeature[], domain: MapDomain): MapFeature[] {
