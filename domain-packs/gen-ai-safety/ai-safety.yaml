@@ -114,6 +114,14 @@ policies:
         - create_action_request
         - get_action_requests
         - spatial_query
+      allowedTargets:
+        - fieldloop
+        - cmms
+        - integrity-database
+        - gis
+        - asset-register
+        - siem
+        - historian
       blockedTargets:
         - SCADA
         - CMMS

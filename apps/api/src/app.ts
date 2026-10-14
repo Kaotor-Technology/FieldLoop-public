@@ -1,3 +1,5 @@
+import { registerActionRoutes } from "./actions/routes.js";
+import type { ActionServicePort } from "@fieldloop/adapters";
 import Fastify from "fastify";
 import { registerSimulationRoutes } from "./simulation/routes.js";
 import type { SimulationPort } from "./simulation/client.js";
@@ -20,6 +22,7 @@ declare module "fastify" {
 }
 
 export function buildApp(options: {
+  actions?: ActionServicePort;
   auth?: AuthServicePort;
   baseUrl?: string;
   mapLayers?: MapLayerStore;
@@ -41,6 +44,7 @@ export function buildApp(options: {
   registerSimulationRoutes(app, options.simulator);
   registerRiskRoutes(app, options.risk);
   registerHealthRoutes(app, options.health);
+  registerActionRoutes(app, options.actions);
   registerLiveEventRoute(app, options.simulator, options.health, options.risk);
   return app;
 }

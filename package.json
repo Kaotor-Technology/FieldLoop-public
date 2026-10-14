@@ -34,7 +34,8 @@
     "test:seed:bangkok": "bash scripts/test-bangkok-seed.sh",
     "test:audit-writer": "pnpm exec turbo run build --filter=@fieldloop/adapters... && node scripts/test-audit-writer.mjs",
     "test:signals": "pnpm exec turbo run build --filter=@fieldloop/signal-worker... --filter=@fieldloop/api... && node scripts/test-signal-worker.mjs",
-    "test:domain-packs": "pnpm exec turbo run build --filter=@fieldloop/api... --filter=@fieldloop/guardrail... && bash scripts/test-domain-packs.sh"
+    "test:domain-packs": "pnpm exec turbo run build --filter=@fieldloop/api... --filter=@fieldloop/guardrail... && bash scripts/test-domain-packs.sh",
+    "test:actions": "bash scripts/test-actions.sh"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",

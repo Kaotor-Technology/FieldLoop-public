@@ -76,6 +76,7 @@ export interface GuardrailStore {
 }
 
 export interface GuardrailDependencies {
+  actions?: import("@fieldloop/adapters").ActionServicePort;
   store: GuardrailStore;
   scanner: Tier1TextScanner;
   model: VertexChatCompletions;

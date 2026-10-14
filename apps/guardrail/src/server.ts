@@ -1,4 +1,4 @@
-import { GoogleModelArmorAdapter, GoogleVertexChatCompletionsAdapter, createGoogleCloudSqlPool } from "@fieldloop/adapters";
+import { PostgresActionStore, GoogleModelArmorAdapter, GoogleVertexChatCompletionsAdapter, createGoogleCloudSqlPool } from "@fieldloop/adapters";
 import { Kysely, PostgresDialect } from "kysely";
 import { buildApp } from "./app.js";
 import { LocalJwksInternalUserTokenVerifier } from "./internal-user-token.js";
@@ -45,6 +45,7 @@ const userTokenVerifier = new LocalJwksInternalUserTokenVerifier({
 });
 const app = buildApp({
   store: new PostgresGuardrailStore(db),
+  actions: new PostgresActionStore(db),
   scanner,
   model,
   userTokenVerifier,
