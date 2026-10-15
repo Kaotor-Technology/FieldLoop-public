@@ -482,6 +482,7 @@ class AgentRuntime:
         turn.emit("guardrail.decision", {
             "agent": agent, "tool": tool, "decision": decision["decision"],
             "reason": decision.get("reason"), "ceiling": decision.get("ceiling"),
+            "policy_id": decision.get("policyId"),
             "action_request_id": action_id, "held_request_id": held_id,
             "source": decision.get("source", "guardrail"),
         })

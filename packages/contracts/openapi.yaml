@@ -2170,6 +2170,10 @@ components:
           type: string
           minLength: 1
           maxLength: 2000
+        policyId:
+          type: string
+          format: uuid
+          description: Guardrail Policy applied to this tool-call decision.
         ceiling:
           $ref: "#/components/schemas/ActionLevel"
         actionRequest:

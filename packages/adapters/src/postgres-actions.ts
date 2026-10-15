@@ -89,19 +89,19 @@ export class PostgresActionStore implements ActionServicePort {
       const previous = await replay(trx, user, "check", body, key);
       if (previous) {
         // A changed policy cannot restore an old allow; re-evaluate before replaying artifacts.
-        if (result.decision === "block") return result;
+        if (result.decision === "block") return { ...result, policyId: registry.policy_id };
         const saved = previous.result;
         if (previous.action_request_id) {
           const action = await readAction(trx, user, previous.action_request_id);
-          if (action.status === "rejected" || action.status === "superseded") return { decision: "block", reason: "request_expired_or_superseded" };
-          if (saved.actionRequest?.payloadHash !== action.payloadHash) return { decision: "block", reason: "payload_changed" };
+          if (action.status === "rejected" || action.status === "superseded") return { decision: "block", reason: "request_expired_or_superseded", policyId: registry.policy_id };
+          if (saved.actionRequest?.payloadHash !== action.payloadHash) return { decision: "block", reason: "payload_changed", policyId: registry.policy_id };
           if (saved.heldRequestId) {
             const hold = (await sql<{ status: string }>`SELECT status FROM app.held_request WHERE id = ${saved.heldRequestId}::uuid AND org_id = ${user.orgId}`.execute(trx)).rows[0];
-            if (hold?.status !== "held") return { decision: "block", reason: "hold_no_longer_pending" };
+            if (hold?.status !== "held") return { decision: "block", reason: "hold_no_longer_pending", policyId: registry.policy_id };
           }
-          return { ...saved, actionRequest: action };
+          return { ...saved, policyId: registry.policy_id, actionRequest: action };
         }
-        return result;
+        return { ...result, policyId: registry.policy_id };
       }
       let action: ActionRequest | undefined;
       const interceptId = randomUUID();
@@ -125,7 +125,7 @@ export class PostgresActionStore implements ActionServicePort {
           VALUES (${heldRequestId}::uuid, ${user.orgId}, ${interceptId}::uuid, ${action.id}::uuid, ${JSON.stringify(action.payload)}::jsonb,
             'held', ${action.expiresAt}::timestamptz, ${action.simulated}, ${action.classification}, ${user.sub})`.execute(trx);
       }
-      const response: ToolCallDecision = { ...result, ...(action ? { actionRequest: action } : {}), ...(heldRequestId ? { heldRequestId } : {}) };
+      const response: ToolCallDecision = { ...result, policyId: registry.policy_id, ...(action ? { actionRequest: action } : {}), ...(heldRequestId ? { heldRequestId } : {}) };
       await appendAuditEvent(trx, { orgId: user.orgId, actor: user.sub, action: "tool_call.checked", entity: interceptId,
         before: null, after: { ...response, aiSystemId: registry.id, tool: body.tool, target: body.target }, simulated: body.simulated, classification, createdBy: "guardrail" });
       await remember(trx, user, "check", body, key, response, action?.id, classification);

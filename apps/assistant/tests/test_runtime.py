@@ -185,7 +185,8 @@ def test_convert_decision_skips_the_tool_and_reports_the_action_request() -> Non
               target="cmms", payload={"order": "inspect"}, rationale="Coating degraded",
               citations=["EV-1"]), answer()],
         guardrail=lambda body: {"decision": "convert_l1", "reason": "human_action_required",
-                                "ceiling": "l1", "actionRequest": {"id": request_id}},
+                                "ceiling": "l1", "policyId": "22222222-2222-4333-8444-555555555555",
+                                "actionRequest": {"id": request_id}},
         platform={"/api/v1/simulation/runs/current": {"id": RUN_ID}},
         simulated=True,
     )
@@ -195,6 +196,7 @@ def test_convert_decision_skips_the_tool_and_reports_the_action_request() -> Non
     assert envelope["simulationRunId"] == RUN_ID
     decision = next(e for e in events if e.name == "guardrail.decision")
     assert decision.data["decision"] == "convert_l1"
+    assert decision.data["policy_id"] == "22222222-2222-4333-8444-555555555555"
     assert decision.data["action_request_id"] == request_id
     assert final(events).data["action_request_ids"] == [request_id]
 
