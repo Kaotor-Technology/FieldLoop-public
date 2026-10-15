@@ -19,6 +19,7 @@ from .catalog import AgentDefinition, load_catalog
 from .guardrail_client import GuardrailClient
 from .identity import InternalTokenVerifier
 from .knowledge import KnowledgeScope, KnowledgeSearch
+from .reference_catalog import load_reference_catalog
 from .runtime import AgentRuntime, RuntimeDeps
 from .service import create_service
 from .tools import DEFINITION_VOCABULARY, HttpPlatformReader, KnowledgeProvider
@@ -93,6 +94,7 @@ def build_app(settings: Settings | None) -> FastAPI:
     if settings is None:
         return create_service(None, None, None)
     catalog = load_catalog(settings.packs_dir, settings.schema_path, DEFINITION_VOCABULARY)
+    references = load_reference_catalog(settings.schema_path.parents[2])
     pool: AsyncConnectionPool[AsyncConnection[DictRow]] = AsyncConnectionPool(
         settings.database_url, open=False, min_size=0, max_size=5,
         kwargs={"row_factory": dict_row},
@@ -121,7 +123,7 @@ def build_app(settings: Settings | None) -> FastAPI:
         platform=HttpPlatformReader(http, settings.platform_url), sessions=store, trace=store,
         adk_sessions=adk_sessions,
         model_factory=lambda d: guardrail_model(d, settings.guardrail_url),
-        knowledge=knowledge,
+        knowledge=knowledge, reference_catalog=references,
         drafts=lambda s: PostgresDraftStore(pool, s.org_id, s.simulated, s.classification),
     )
     verifier = InternalTokenVerifier(

@@ -72,6 +72,10 @@
 !packages/contracts/scripts/**
 !packages/ui/scripts/
 !packages/ui/scripts/**
+!packages/contracts/reference-catalog.v1.schema.json
+!data/corpus/references/
+!data/corpus/references/manifest.json
+!data/corpus/references/source-observations.json
 # These exclusions take precedence even inside an admitted source directory.
 **/node_modules
 **/dist
