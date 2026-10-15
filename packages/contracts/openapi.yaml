@@ -2657,6 +2657,7 @@ components:
         entity: { type: string }
         action: { type: string }
         actor: { type: string }
+        reason: { type: [string, 'null'], description: Health decision reason reconstructed from an accessible domain record only when it matches this event afterHash; otherwise null. }
         beforeHash: { type: [string, 'null'], pattern: '^[a-f0-9]{64}$' }
         afterHash: { type: [string, 'null'], pattern: '^[a-f0-9]{64}$' }
         prevHash: { type: [string, 'null'], pattern: '^[a-f0-9]{64}$' }

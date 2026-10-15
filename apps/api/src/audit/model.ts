@@ -8,6 +8,7 @@ export interface AuditEventItem {
   entity: string;
   action: string;
   actor: string;
+  reason?: string | null;
   beforeHash: string | null;
   afterHash: string | null;
   prevHash: string | null;

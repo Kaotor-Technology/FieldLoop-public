@@ -394,6 +394,7 @@
   "auditColumnAction": "การกระทำ",
   "auditColumnEntity": "เอนทิตี",
   "auditColumnActor": "ผู้กระทำ",
+  "auditColumnReason": "เหตุผลการตัดสินใจ",
   "auditColumnClassification": "ระดับชั้นข้อมูล",
   "auditColumnIntegrity": "ความสมบูรณ์",
   "auditSimulationLabel": "SIMULATION",

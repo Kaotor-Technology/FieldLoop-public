@@ -17,6 +17,14 @@ const render = (props: Partial<Parameters<typeof AuditLog>[0]> = {}) =>
   renderToStaticMarkup(<AuditLog events={[event()]} filter={{}} onFilter={() => undefined} {...props} />);
 
 describe("Audit log view", () => {
+  it("shows the decision reason with the event actor as escaped text", () => {
+    const reason = "Synthetic owner accepted <script>unsafe</script>";
+    const markup = render({ events: [{ ...event({ action: "health_proposal.accepted" }), reason } as AuditEvent] });
+    expect(markup).toContain("synthetic-user");
+    expect(markup).toContain("Synthetic owner accepted &lt;script&gt;unsafe&lt;/script&gt;");
+    expect(markup).not.toContain("<script>unsafe</script>");
+  });
+
   it("renders events as a captioned table with mono IDs, times and hashes", () => {
     const markup = render();
     expect(markup).toContain("<caption");

@@ -394,6 +394,7 @@
   "auditColumnAction": "Action",
   "auditColumnEntity": "Entity",
   "auditColumnActor": "Actor",
+  "auditColumnReason": "Decision reason",
   "auditColumnClassification": "Classification",
   "auditColumnIntegrity": "Integrity",
   "auditSimulationLabel": "SIMULATION",
