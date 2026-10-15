@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Pool } from "pg";
 import { PostgresHealthStore } from "../src/health/postgres-store.js";
 import { Kysely, PostgresDialect } from "kysely";
@@ -66,6 +66,45 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
     expect(await store.check(user, { ...check, target: "gis" }, key())).toEqual({ decision: "block", reason: "target_not_registered" });
     expect(Number((await pool.query("SELECT count(*) FROM app.action_request WHERE org_id=$1", [user.orgId])).rows[0].count)).toBe(0);
   });
+  it("converts the registered CMMS operation once without executing a CMMS write", async () => {
+    const { user, check, policyId, systemId } = await fixture();
+    const tools = JSON.stringify(["get_asset", "create_action_request", "cmms.create_work_order"]);
+    await pool.query("UPDATE app.ai_system SET tools=$1::jsonb WHERE id=$2", [tools, systemId]);
+    await pool.query("UPDATE app.guardrail_policy SET config=jsonb_set(config,'{settings,allowedTools}',$1::jsonb) WHERE id=$2", [tools, policyId]);
+    const input = { ...check, tool: "cmms.create_work_order" }, savedKey = key();
+    const outbound = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Unexpected external call"));
+    try {
+      const result = await store.check(user, input, savedKey);
+      expect(result.decision).toBe("convert_l1");
+      expect(result.heldRequestId).toBeUndefined();
+      expect(result.actionRequest).toMatchObject({ actionLevel: "l1", actionType: "system_of_record", target: "cmms", status: "open", orgId: user.orgId, requestedBy: user.sub, requester: { kind: "assistant", aiSystemId: systemId } });
+      expect((await store.check(user, input, savedKey)).actionRequest?.id).toBe(result.actionRequest?.id);
+      expect(Number((await pool.query("SELECT count(*) FROM app.action_request WHERE org_id=$1", [user.orgId])).rows[0].count)).toBe(1);
+      expect(Number((await pool.query("SELECT count(*) FROM app.evidence WHERE org_id=$1 AND kind='guardrail.intercept'", [user.orgId])).rows[0].count)).toBe(1);
+      expect(outbound).not.toHaveBeenCalled();
+      for (const bad of [
+        { ...input, target: "fieldloop" as const, actionType: "internal_record" as const },
+        { ...input, actionLevel: "l0" as const },
+        { ...input, actionLevel: "l2" as const },
+        { ...input, target: "gis" as const },
+      ]) expect((await store.check(user, bad, key())).decision).toBe("block");
+      await expect(store.check({ ...user, orgId: "foreign-org" }, input, key())).rejects.toThrow("tool_registry_unavailable");
+      await expect(store.check(user, { ...input, requestedBy: "agent:forged" } as ToolCallCheck, key())).rejects.toThrow("validation_failed");
+      await pool.query("INSERT INTO app.action_ceiling (org_id,action_type,action_level,simulated,classification) VALUES ($1,'system_of_record','l0',true,'INTERNAL')", [user.orgId]);
+      expect((await store.check(user, input, key())).decision).toBe("block");
+      await pool.query("DELETE FROM app.action_ceiling WHERE org_id=$1", [user.orgId]);
+      await pool.query("UPDATE app.guardrail_policy SET config=jsonb_set(config,'{settings,allowedTools}','[\"get_asset\",\"create_action_request\"]'::jsonb) WHERE id=$1", [policyId]);
+      expect((await store.check(user, input, savedKey)).decision).toBe("block");
+      expect(outbound).not.toHaveBeenCalled();
+    } finally { outbound.mockRestore(); }
+  });
+  it("blocks an unregistered CMMS operation and records its Intercept without creating an Action Request", async () => {
+    const { user, check } = await fixture();
+    expect((await store.check(user, { ...check, tool: "cmms.create_work_order" }, key())).decision).toBe("block");
+    expect(Number((await pool.query("SELECT count(*) FROM app.intercept WHERE org_id=$1", [user.orgId])).rows[0].count)).toBe(1);
+    expect(Number((await pool.query("SELECT count(*) FROM app.action_request WHERE org_id=$1", [user.orgId])).rows[0].count)).toBe(0);
+  });
+
   it("respects lowered Organisation ceilings and rechecks changed policies on replay", async () => {
     const { user, check, body } = await fixture(), savedKey = key();
     expect((await store.check(user, check, savedKey)).decision).toBe("convert_l1");

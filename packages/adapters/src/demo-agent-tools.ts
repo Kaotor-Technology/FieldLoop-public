@@ -5,3 +5,9 @@ export const DEMO_AGENT_TOOL_NAMES: ReadonlySet<string> = new Set([
   "get_action_requests", "get_stakeholders", "spatial_query", "get_scenario_state",
   "extract_geo_references", "create_draft", "create_action_request",
 ]);
+
+// Registry inputs also admit this proposal-only legacy operation. It is not an executable
+// assistant tool and is intentionally absent from the agent definition vocabulary above.
+export const DEMO_REGISTERED_TOOL_NAMES: ReadonlySet<string> = new Set([
+  ...DEMO_AGENT_TOOL_NAMES, "cmms.create_work_order",
+]);
