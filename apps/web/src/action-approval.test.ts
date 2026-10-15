@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { api } from "./api-client";
 import {
   ActionDecisionError, createIdempotencyKeys, decideActionRequest, decisionBlock, failureKind, formatCountdown, isLoginFresh,
-  reauthDestination, type ActionRequest,
+  needsSecondApproval, reauthDestination, type ActionRequest,
 } from "./action-approval";
 
 afterEach(() => { vi.restoreAllMocks(); });
@@ -25,6 +25,13 @@ describe("approval gating helpers", () => {
     expect(isLoginFresh(at(4 * 60_000 + 31_000), now)).toBe(false);
     expect(isLoginFresh(at(10 * 60_000), now)).toBe(false);
     expect(isLoginFresh(at(-60_000), now)).toBe(false);
+  });
+  it("shows the labelled second-approver mock only for action types that need two Approvers", () => {
+    expect(needsSecondApproval("emergency_communication")).toBe(true);
+    expect(needsSecondApproval("external_submission")).toBe(true);
+    expect(needsSecondApproval("field_command")).toBe(true);
+    expect(needsSecondApproval("internal_record")).toBe(false);
+    expect(needsSecondApproval("system_of_record")).toBe(false);
   });
   it("counts the SLA down in mono mm:ss and stops at zero", () => {
     expect(formatCountdown("2026-10-15T10:01:05.000Z", now)).toBe("01:05");

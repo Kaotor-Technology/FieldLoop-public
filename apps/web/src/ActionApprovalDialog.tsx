@@ -4,7 +4,7 @@ import { ActionLevelBadge, Button, Modal, Textarea } from "@fieldloop/ui";
 import "./approval-dialog.css";
 import type { CurrentUser } from "./api-client";
 import {
-  createIdempotencyKeys, decideActionRequest, decisionBlock, failureKind, formatCountdown, isLoginFresh,
+  createIdempotencyKeys, decideActionRequest, decisionBlock, failureKind, formatCountdown, isLoginFresh, needsSecondApproval,
   reauthDestination, type ActionDecision, type ActionDecisionResult, type ActionRequest, type DecisionBlock, type FailureKind,
 } from "./action-approval";
 
@@ -56,6 +56,7 @@ export function ActionApprovalBody({ action, block, now, reason, onReason, failu
       <p>{action.rationale}</p>
       <ul className="approval-citations">{action.citations.map((citation) => <li key={citation} className="mono">{citation}</li>)}</ul>
     </section>
+    {needsSecondApproval(action.actionType) && <SecondApproverMock />}
     {block && <p className="approval-notice" role="status">{t(`approvalBlock.${block}`)}</p>}
     {!block && !decided && <>
       <Textarea label={t("approvalReason")} helper={t("approvalReasonHelper")} value={reason} required disabled={submitting}
@@ -65,6 +66,19 @@ export function ActionApprovalBody({ action, block, now, reason, onReason, failu
     {failure && <p className="approval-failure" role="alert">{t(`approvalFailure.${failure}`)}{failure === "payload_changed" && onReload && <> <Button type="button" variant="secondary" size="sm" onClick={onReload}>{t("approvalReload")}</Button></>}</p>}
     {decided && <p className="approval-notice" role="status">{t(decided.approval.decision === "approved" ? "approvalRecorded" : "approvalRejectedRecorded")}</p>}
   </div>;
+}
+
+// FL-208: a labelled mock. The two-person rule is Phase 1; the demo records exactly one real Approval (PRD Q61).
+function SecondApproverMock() {
+  const { t } = useTranslation();
+  return <section className="approval-mock" aria-labelledby="approval-mock-heading">
+    <h3 id="approval-mock-heading">{t("approvalSecondTitle")} <span className="approval-mock-tag" lang="en">MOCK</span></h3>
+    <p>{t("approvalSecondBody")}</p>
+    <ol className="approval-steps">
+      <li>{t("approvalStepFirst")}</li>
+      <li>{t("approvalStepSecond")}</li>
+    </ol>
+  </section>;
 }
 
 interface DialogProps {

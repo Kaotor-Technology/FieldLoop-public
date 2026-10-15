@@ -35,6 +35,13 @@ describe("approval dialog body", () => {
     expect(markup).not.toContain(">Reject<");
     expect(markup).toMatch(/<textarea[^>]*required/);
   });
+  it("labels the second-approver step as a mock for communications and submissions only, and states what the demo records", () => {
+    const markup = render();
+    expect(markup).toContain("Second approval required — Phase 1");
+    expect(markup).toContain("MOCK");
+    expect(markup).toContain("your decision is recorded as one approval");
+    expect(render({ action: action({ actionType: "internal_record", actionLevel: "l1", target: "fieldloop" }) })).not.toContain("Second approval required");
+  });
   it("replaces the form with the reason a decision is blocked and shows server failures as alerts", () => {
     const blocked = render({ block: "four_eyes" });
     expect(blocked).toContain("Another person must decide it.");
@@ -48,6 +55,8 @@ describe("approval dialog body", () => {
   });
   it("renders in Thai with the same structure", async () => {
     await i18n.changeLanguage("th");
-    expect(render()).toContain("สิ่งที่การอนุมัตินี้ทำ");
+    const markup = render();
+    expect(markup).toContain("สิ่งที่การอนุมัตินี้ทำ");
+    expect(markup).toContain("ต้องมีการอนุมัติครั้งที่สอง — Phase 1");
   });
 });

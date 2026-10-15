@@ -29,7 +29,7 @@ for (const theme of ["light", "dark"] as const) {
   }
 }
 
-test("says what will happen and shows the exact payload and hash in mono", async ({ page }) => {
+test("says what will happen, shows the exact payload in mono and labels the second-approver step as a mock", async ({ page }) => {
   const dialog = await openDialog(page);
   await expect(dialog.getByRole("heading", { name: "Approve sending the simulated warning to the sandbox inbox" })).toBeVisible();
   await expect(dialog.getByRole("heading", { name: "This does", exact: true })).toBeVisible();
@@ -39,6 +39,8 @@ test("says what will happen and shows the exact payload and hash in mono", async
   await expect(payload).toContainText('"channel": "sandbox-inbox"');
   expect(await payload.evaluate((node) => getComputedStyle(node).fontFamily)).toMatch(/mono/i);
   await expect(dialog.getByText("a".repeat(64))).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: /Second approval required — Phase 1/ })).toBeVisible();
+  await expect(dialog.getByText("MOCK", { exact: true })).toBeVisible();
 });
 
 test("never starts on Approve, ignores the scrim, closes with Escape and returns focus to the trigger", async ({ page }) => {

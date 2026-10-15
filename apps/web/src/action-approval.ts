@@ -20,6 +20,11 @@ export function isLoginFresh(authTime: string, now: number): boolean {
   return age >= -CLOCK_SKEW_MS && age < LOGIN_MAX_AGE_MS - LOGIN_SAFETY_MS;
 }
 
+// PRD §7.5 Q37 and Q61: these action types need a second Approver. The working two-person rule is Phase 1,
+// so the demo shows a labelled mock step and records one real Approval.
+const SECOND_APPROVAL_TYPES: ReadonlySet<ActionType> = new Set(["emergency_communication", "external_submission", "field_command"]);
+export const needsSecondApproval = (type: ActionType): boolean => SECOND_APPROVAL_TYPES.has(type);
+
 export function formatCountdown(expiresAt: string, now: number): string {
   const seconds = Math.max(0, Math.ceil((Date.parse(expiresAt) - now) / 1000));
   return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;

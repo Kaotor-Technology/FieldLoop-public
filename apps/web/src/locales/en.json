@@ -427,6 +427,10 @@
   "approvalReload": "Reload request",
   "approvalRecorded": "Approval recorded. The request is approved. Nothing has been sent yet.",
   "approvalRejectedRecorded": "Rejection recorded. The request is rejected and will not be acted on.",
+  "approvalSecondTitle": "Second approval required — Phase 1",
+  "approvalSecondBody": "Mock screen. A working system needs a second Approver for this action type. The two-person rule is built in Phase 1. In this demo, your decision is recorded as one approval.",
+  "approvalStepFirst": "First Approver: you, now.",
+  "approvalStepSecond": "Second Approver: not built in this demo (Phase 1).",
   "approvalTitle": {
     "internal_record": "Record this change in FieldLoop",
     "system_of_record": "Approve this entry for a person to make in {{target}}",
