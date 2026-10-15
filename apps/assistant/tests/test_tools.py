@@ -95,7 +95,12 @@ def tool(ctx: ToolContext, name: str, allowed: tuple[str, ...] | None = None):
 
 
 def test_only_allowed_tools_are_built() -> None:
-    names = [f.__name__ for f in build_tools(context(), ("get_barriers", "get_action_requests", "spatial_query"))]
+    names = [
+        f.__name__
+        for f in build_tools(
+            context(), ("get_barriers", "get_action_requests", "spatial_query")
+        )
+    ]
     assert names == ["get_barriers", "get_action_requests"]  # spatial_query remains vocabulary only
 
 
@@ -186,7 +191,12 @@ def test_create_draft_records_the_session_and_user_and_never_approves() -> None:
 
 def test_get_action_requests_reads_with_user_token_and_records_source_paths() -> None:
     action_id = "11111111-2222-4333-8444-555555555555"
-    action = {"id": action_id, "actionType": "system_of_record", "status": "open", "simulated": True}
+    action = {
+        "id": action_id,
+        "actionType": "system_of_record",
+        "status": "open",
+        "simulated": True,
+    }
     platform = Platform([action])
     ctx = context(platform=platform)
 
@@ -210,7 +220,14 @@ def test_management_summary_requires_cited_source_links_for_numeric_facts() -> N
     with pytest.raises(ToolInputError, match="unverified"):
         asyncio.run(create("management_summary", "Current score: 4", []))
     with pytest.raises(ToolInputError, match="source record"):
-        asyncio.run(create("management_summary", "Current score: [4](/api/v1/bowties/00000000-0000-4000-8000-000000000001/risk)", []))
+        asyncio.run(
+            create(
+                "management_summary",
+                "Current score: "
+                "[4](/api/v1/bowties/00000000-0000-4000-8000-000000000001/risk)",
+                [],
+            )
+        )
 
 
 def test_management_summary_can_label_unverified_numeric_judgement() -> None:

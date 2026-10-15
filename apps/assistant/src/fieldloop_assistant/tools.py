@@ -87,7 +87,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec("get_asset", "read", "Read an Asset by identifier."),
     ToolSpec("get_barriers", "read", "Read the Barriers and Barrier Health of a Bowtie."),
     ToolSpec("get_bowtie_risk", "read", "Read the current Risk Score of a Bowtie."),
-    ToolSpec("get_action_requests", "read", "Read current Action Requests visible to the signed-in user."),
+    ToolSpec(
+        "get_action_requests", "read", "Read current Action Requests visible to the signed-in user."
+    ),
     ToolSpec("get_scenario_state", "read", "Read the current simulation run state."),
     ToolSpec(
         "extract_geo_references", "propose",
@@ -151,19 +153,25 @@ def _uuid(value: str, name: str) -> str:
     return value
 
 
-def _validate_management_summary(content: str, citations: list[str], read_record_paths: set[str]) -> None:
+def _validate_management_summary(
+    content: str, citations: list[str], read_record_paths: set[str]
+) -> None:
     link_pattern = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
     links = list(link_pattern.finditer(content))
     for link in links:
         source_path = link.group(2)
         if source_path not in read_record_paths:
-            raise ToolInputError("summary links must point to a source record read during this turn")
+            raise ToolInputError(
+                "summary links must point to a source record read during this turn"
+            )
         if re.search(r"\d", link.group(1)) and source_path not in citations:
             raise ToolInputError("numeric source links must also appear in the Draft citations")
 
     for citation in citations:
         if citation not in read_record_paths:
-            raise ToolInputError("Draft citations must refer to source records read during this turn")
+            raise ToolInputError(
+                "Draft citations must refer to source records read during this turn"
+            )
 
     for line in content.splitlines():
         without_links = link_pattern.sub("", line)
@@ -171,7 +179,8 @@ def _validate_management_summary(content: str, citations: list[str], read_record
             r"judgement\s*(?:—|–|-)\s*unverified", line, re.IGNORECASE
         ):
             raise ToolInputError(
-                "numeric facts need a cited source record link or the label 'judgement — unverified'"
+                "numeric facts need a cited source record link or the label "
+                "'judgement — unverified'"
             )
 
 
@@ -282,7 +291,11 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
         if not isinstance(records, list):
             return {"action_requests": [], "error": "action_requests_unavailable"}
         for record in records:
-            if isinstance(record, dict) and isinstance(record.get("id"), str) and re.fullmatch(UUID_RE, record["id"]):
+            if (
+                isinstance(record, dict)
+                and isinstance(record.get("id"), str)
+                and re.fullmatch(UUID_RE, record["id"])
+            ):
                 ctx.state.read_record_paths.add(f"/api/v1/action-requests/{record['id']}")
         return {"action_requests": records}
 
@@ -348,7 +361,9 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
         clean_content = _text(content, "content", 20_000)
         clean_citations = [_text(c, "citation", 2048) for c in citations][:50]
         if clean_kind == "management_summary":
-            _validate_management_summary(clean_content, clean_citations, ctx.state.read_record_paths)
+            _validate_management_summary(
+                clean_content, clean_citations, ctx.state.read_record_paths
+            )
         digest = hashlib.sha256(
             json.dumps([clean_kind, clean_content, clean_citations]).encode("utf-8")
         ).hexdigest()

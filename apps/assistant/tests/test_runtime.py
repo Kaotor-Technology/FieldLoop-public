@@ -506,9 +506,10 @@ def test_repeated_identical_drafts_in_a_turn_are_stored_once() -> None:
     from .test_tools import Drafts, context, tool
 
     ctx = context()
+    ctx.state.read_record_paths.add(f"/api/v1/bowties/{BOWTIE}/risk")
     create = tool(ctx, "create_draft")
-    first = asyncio.run(create("management_summary", "text", ["EV-1"]))
-    second = asyncio.run(create("management_summary", "text", ["EV-1"]))
+    first = asyncio.run(create("management_summary", "text", [f"/api/v1/bowties/{BOWTIE}/risk"]))
+    second = asyncio.run(create("management_summary", "text", [f"/api/v1/bowties/{BOWTIE}/risk"]))
     assert first == second and len(ctx.drafts.created) == 1  # type: ignore[union-attr]
     assert isinstance(ctx.drafts, Drafts)
 
