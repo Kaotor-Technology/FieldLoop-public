@@ -591,11 +591,11 @@ html[lang="th"] small:lang(th) { font-size: var(--type-body-sm-font-size); }
 .audit-hashes dd { margin: 0; overflow-wrap: anywhere; }
 .draft-review-page { display: grid; align-content: start; gap: var(--spacing-space-4); min-height: 0; padding: var(--spacing-space-4) var(--spacing-page-margin-mobile); overflow: auto; }
 .draft-review-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--spacing-space-3); }
-.draft-review-heading p:last-child { max-width: 72ch; color: var(--muted); }
+.draft-review-heading p:last-child { max-width: var(--spacing-max-width-reading); color: var(--muted); }
 .draft-review-tabs { display: flex; flex-wrap: wrap; gap: var(--spacing-space-2); border-bottom: var(--spacing-border-hairline) solid var(--outline); }
 .draft-review-tabs button { min-height: var(--spacing-touch-target); padding: var(--spacing-space-2) var(--spacing-space-3); border: 0; border-bottom: var(--spacing-border-hairline) solid transparent; color: var(--ink); background: transparent; }
 .draft-review-tabs button[aria-selected="true"] { border-bottom-color: var(--action); color: var(--action); font-weight: var(--type-label-lg-font-weight); }
-.draft-review-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); align-items: start; gap: var(--spacing-space-4); }
+.draft-review-layout { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: var(--spacing-space-4); }
 .draft-review-list { display: grid; align-content: start; gap: var(--spacing-space-2); }
 .draft-review-list-item { display: grid; gap: var(--spacing-space-1); justify-items: start; min-height: var(--spacing-touch-target); padding: var(--spacing-space-3); border: var(--spacing-border-hairline) solid var(--outline); border-radius: var(--rounded-sm); color: var(--ink); background: var(--surface); text-align: start; overflow-wrap: anywhere; }
 .draft-review-list-item[aria-current="true"] { border-color: var(--action); background: var(--nav-active-background); }
@@ -631,7 +631,5 @@ html[lang="th"] small:lang(th) { font-size: var(--type-body-sm-font-size); }
 @media (min-width: 840px) {
   .audit-page { padding-inline: var(--spacing-page-margin-desktop); }
   .draft-review-page { padding-inline: var(--spacing-page-margin-desktop); }
-}
-@media (max-width: 839px) {
-  .draft-review-layout { grid-template-columns: minmax(0, 1fr); }
+  .draft-review-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
 }
