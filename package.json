@@ -25,6 +25,7 @@
     "check:i18n": "node scripts/check-i18n.mjs",
     "db:seed:dl-01": "node db/seed/dl-01/seed.mjs",
     "db:seed:bangkok": "node db/seed/bangkok/seed.mjs",
+    "generate:geo-reference": "uv run --locked scripts/generate-geo-reference.py",
     "db:migrate": "dbmate --migrations-table public.schema_migrations up",
     "test:migrations": "bash scripts/test-migrations.sh",
     "test:audit-api": "bash scripts/test-audit-api.sh",

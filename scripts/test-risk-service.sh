@@ -38,4 +38,4 @@ DATABASE_URL="${DATABASE_URL}" pnpm db:migrate
 echo "==> Running RiskService PostgreSQL integration tests"
 FIELDLOOP_RISK_TEST_DATABASE_URL="${DATABASE_URL}" \
 FIELDLOOP_IMPORT_TEST_DATABASE_URL="${DATABASE_URL}" \
-  pnpm --filter @fieldloop/api exec vitest run test/risk-service.integration.test.ts test/import-store.integration.test.ts
+  pnpm --filter @fieldloop/api exec vitest run test/risk-service.integration.test.ts test/import-store.integration.test.ts test/import-dl01-acceptance.integration.test.ts

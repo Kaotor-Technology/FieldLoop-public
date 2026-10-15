@@ -17,6 +17,8 @@ import type { AuditServicePort } from "./audit/model.js";
 import { registerHealthRoutes } from "./health/routes.js";
 import type { HealthServicePort } from "./health/model.js";
 import { registerLiveEventRoute } from "./live-events.js";
+import { registerGeoReferenceRoutes } from "./geo-references/routes.js";
+import type { GeoReferenceStore } from "./geo-references/model.js";
 import { registerImportRoutes } from "./imports/routes.js";
 import type { ImportPort } from "./imports/store.js";
 
@@ -38,6 +40,7 @@ export function buildApp(options: {
   simulator?: SimulationPort;
   risk?: RiskApiPort;
   health?: HealthServicePort;
+  geoReferences?: GeoReferenceStore;
   domainPacks?: LoadedDomainPack[];
   imports?: ImportPort;
 } = {}) {
@@ -57,6 +60,7 @@ export function buildApp(options: {
   registerImportRoutes(app, options.imports);
   registerAuditRoutes(app, options.audit);
   registerActionRoutes(app, options.actions);
+  registerGeoReferenceRoutes(app, options.geoReferences, options.baseUrl ?? process.env["FIELDLOOP_BASE_URL"]);
   registerLiveEventRoute(app, options.simulator, options.health, options.risk);
   return app;
 }

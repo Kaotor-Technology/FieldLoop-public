@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
 
-test.beforeEach(async ({ request }) => {
+test.beforeEach(async ({ page, request }) => {
+  await page.context().clearCookies();
   await request.get("/test/reset");
 });
 
 test("viewer role can open a Bowtie in read-only mode", async ({ page }) => {
   await page.goto("/map");
+  await expect(page.getByRole("heading", { name: "Scripted SSO" })).toBeVisible();
   await page.getByRole("link", { name: "Sign in as viewer" }).click();
   await expect(page.getByRole("heading", { name: "Geo Command Map", exact: true })).toBeVisible();
 

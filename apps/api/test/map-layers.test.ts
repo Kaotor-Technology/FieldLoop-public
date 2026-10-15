@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { AuthError, type AuthServicePort } from "../src/auth/service.js";
-import { ASSET_BY_ID_SQL, ASSET_LAYER_SQL, BARRIER_LAYER_SQL, RISK_INPUT_SQL, type AssetRecord, type MapFeatureCollection, type MapLayerStore } from "../src/map/layers.js";
+import { ASSET_BY_ID_SQL, ASSET_LAYER_SQL, BARRIER_LAYER_SQL, GEO_REFERENCE_LAYER_SQL, RISK_INPUT_SQL, type AssetRecord, type MapFeatureCollection, type MapLayerStore } from "../src/map/layers.js";
 
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
@@ -173,6 +173,25 @@ describe("map layer API", () => {
 
   it("does not place Barriers at an arbitrary point on their full linear Asset", () => {
     expect(BARRIER_LAYER_SQL).toContain("GeometryType(gr.geom) NOT IN ('LINESTRING', 'MULTILINESTRING')");
+  });
+
+  it("returns only confirmed, current, clearance-scoped Geo References on the Geo Reference layer", async () => {
+    const store = makeStore();
+    const app = makeApp({ getCurrentUser: vi.fn(async () => ({
+      sub: "synthetic-viewer", roles: ["fieldloop.viewer"], persona: "Executive", orgId: "synthetic-org",
+      clearance: "INTERNAL", csrfToken: "csrf-value", authTime: new Date(),
+    })) }, store);
+    const response = await app.inject({
+      method: "GET", url: "/api/v1/map/layers/geo-references?bbox=99,13,101,15&zoom=8",
+      cookies: { fl_session: "opaque-session-value" },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(store.getLayer).toHaveBeenCalledWith(expect.objectContaining({ layer: "geo-references" }));
+    expect(GEO_REFERENCE_LAYER_SQL).toContain("gr.status = 'confirmed'");
+    expect(GEO_REFERENCE_LAYER_SQL).toContain("gr.simulation_retired_at IS NULL");
+    expect(GEO_REFERENCE_LAYER_SQL).toContain("gr.org_id = $5");
+    expect(GEO_REFERENCE_LAYER_SQL).toContain("gr.classification = ANY($6::text[])");
+    expect(GEO_REFERENCE_LAYER_SQL).toContain("d.status = 'current' AND d.superseded_by IS NULL");
   });
 
   it("attaches each Segment's parent Asset ID for shared Bowtie risk coloring", () => {
