@@ -31,6 +31,22 @@
         "HIGHLY_RESTRICTED"
       ]
     },
+    "CommandPackagePayload": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["target", "action", "procedure", "barrierId", "preconditions"],
+      "properties": {
+        "target": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S" },
+        "action": { "type": "string", "minLength": 1, "maxLength": 2000, "pattern": "\\S" },
+        "procedure": { "type": "string", "minLength": 1, "maxLength": 2048, "pattern": "\\S" },
+        "barrierId": { "type": "string", "format": "uuid" },
+        "preconditions": {
+          "type": "array",
+          "maxItems": 50,
+          "items": { "type": "string", "minLength": 1, "maxLength": 500, "pattern": "\\S" }
+        }
+      }
+    },
     "ActionTarget": {
       "type": "string",
       "enum": [
@@ -107,7 +123,11 @@
           "type": "string",
           "format": "uuid"
         }
-      }
+      },
+      "allOf": [{
+        "if": { "properties": { "actionType": { "const": "field_command" } }, "required": ["actionType"] },
+        "then": { "properties": { "actionLevel": { "const": "l1" }, "target": { "enum": ["scada", "ot"] }, "payload": { "$ref": "#/$defs/CommandPackagePayload" } } }
+      }]
     },
     "ToolCallCheck": {
       "type": "object",
@@ -174,7 +194,20 @@
           "minLength": 1,
           "maxLength": 128
         }
-      }
+      },
+      "allOf": [{
+        "if": { "properties": { "actionType": { "const": "field_command" } }, "required": ["actionType"] },
+        "then": {
+          "required": ["actionLevel", "payload", "rationale", "citations"],
+          "properties": {
+            "actionLevel": { "const": "l1" },
+            "target": { "enum": ["scada", "ot"] },
+            "payload": { "$ref": "#/$defs/CommandPackagePayload" },
+            "rationale": { "type": "string", "minLength": 1, "maxLength": 2000, "pattern": "\\S" },
+            "citations": { "type": "array", "minItems": 1, "maxItems": 50, "items": { "type": "string", "minLength": 1, "maxLength": 2048, "pattern": "\\S" } }
+          }
+        }
+      }]
     },
     "ActionRequester": {
       "description": "Who requested the action (PRD AX-1). An assistant acts on behalf of requestedBy.",
@@ -301,6 +334,7 @@
           "enum": [
             "open",
             "in_review",
+            "awaiting_second",
             "approved",
             "rejected",
             "superseded",

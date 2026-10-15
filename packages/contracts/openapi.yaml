@@ -50,7 +50,67 @@ tags:
     description: Internal service-to-service OpenAI-compatible model gateway and Tier 1 content scan.
   - name: Actions
     description: Exact payload proposals and human action ceilings.
+  - name: Command Packages
+    description: Approval-gated operator records for L1 field command outcomes; never sends commands to equipment.
 paths:
+  /v1/command-packages:
+    get:
+      operationId: listCommandPackages
+      summary: List the Command Package queue
+      description: Lists Organisation and clearance scoped Command Packages. Queue entries are proposals only and do not communicate with equipment or systems of record.
+      tags: [Command Packages]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/CommandPackageExecutionStatus"
+          description: Queue lifecycle filter. Defaults to queued.
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Organisation scoped Command Package page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandPackagePage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/command-packages/{commandPackageId}/outcome:
+    post:
+      operationId: recordCommandPackageOutcome
+      summary: Record an operator reported outcome
+      description: Records executed or not executed for an approved L1 Command Package, creates scoped Evidence and an audit event, and never invokes a field device or external system.
+      tags: [Command Packages]
+      parameters:
+        - name: commandPackageId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommandPackageOutcomeCreate"
+      responses:
+        "200":
+          description: Recorded outcome and Evidence reference.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandPackage"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/assistant/sessions:
     post:
       operationId: createAgentSession
@@ -2910,6 +2970,42 @@ components:
         - INTERNAL
         - CONFIDENTIAL
         - HIGHLY_RESTRICTED
+    CommandPackagePayload:
+      type: object
+      additionalProperties: true
+      required:
+        - target
+        - action
+        - procedure
+        - barrierId
+        - preconditions
+      properties:
+        target:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: \S
+        action:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+        procedure:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          pattern: \S
+        barrierId:
+          type: string
+          format: uuid
+        preconditions:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 500
+            pattern: \S
     ActionTarget:
       type: string
       enum:
@@ -2972,6 +3068,23 @@ components:
         simulationRunId:
           type: string
           format: uuid
+      allOf:
+        - if:
+            properties:
+              actionType:
+                const: field_command
+            required:
+              - actionType
+          then:
+            properties:
+              actionLevel:
+                const: l1
+              target:
+                enum:
+                  - scada
+                  - ot
+              payload:
+                $ref: "#/components/schemas/CommandPackagePayload"
     ToolCallCheck:
       type: object
       additionalProperties: false
@@ -3023,6 +3136,42 @@ components:
           type: string
           minLength: 1
           maxLength: 128
+      allOf:
+        - if:
+            properties:
+              actionType:
+                const: field_command
+            required:
+              - actionType
+          then:
+            required:
+              - actionLevel
+              - payload
+              - rationale
+              - citations
+            properties:
+              actionLevel:
+                const: l1
+              target:
+                enum:
+                  - scada
+                  - ot
+              payload:
+                $ref: "#/components/schemas/CommandPackagePayload"
+              rationale:
+                type: string
+                minLength: 1
+                maxLength: 2000
+                pattern: \S
+              citations:
+                type: array
+                minItems: 1
+                maxItems: 50
+                items:
+                  type: string
+                  minLength: 1
+                  maxLength: 2048
+                  pattern: \S
     ActionRequester:
       description: Who requested the action (PRD AX-1). An assistant acts on behalf of
         requestedBy.
@@ -3119,6 +3268,7 @@ components:
           enum:
             - open
             - in_review
+            - awaiting_second
             - approved
             - rejected
             - superseded
@@ -3217,6 +3367,76 @@ components:
         approval:
           $ref: "#/components/schemas/ActionApproval"
     # END generated action schemas
+
+    CommandPackageExecutionStatus:
+      type: string
+      enum: [queued, executed, not_executed]
+    CommandPackageOutcomeCreate:
+      type: object
+      additionalProperties: false
+      required: [executionStatus, outcome]
+      properties:
+        executionStatus:
+          type: string
+          enum: [executed, not_executed]
+        outcome:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+    CommandPackage:
+      type: object
+      additionalProperties: false
+      required: [id, actionRequestId, target, action, rationale, citations, procedure, preconditions, barrierId, approvalCount, actionStatus, executionStatus, outcome, evidenceId, recordedBy, recordedAt, simulated, classification, createdAt, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        actionRequestId: { type: string, format: uuid }
+        target: { type: string, minLength: 1, maxLength: 256 }
+        action: { type: string, minLength: 1, maxLength: 2000 }
+        rationale: { type: string, minLength: 1, maxLength: 2000 }
+        citations:
+          type: array
+          items: { type: string, minLength: 1, maxLength: 2048 }
+        procedure: { type: string, minLength: 1, maxLength: 2048 }
+        preconditions:
+          type: array
+          maxItems: 50
+          items: { type: string, minLength: 1, maxLength: 500 }
+        barrierId: { type: string, format: uuid }
+        approvalCount: { type: integer, minimum: 0 }
+        actionStatus:
+          type: string
+          enum: [open, in_review, awaiting_second, approved, rejected, superseded, executed]
+        executionStatus:
+          $ref: "#/components/schemas/CommandPackageExecutionStatus"
+        outcome:
+          type: [string, "null"]
+          maxLength: 2000
+        evidenceId:
+          type: [string, "null"]
+          format: uuid
+        recordedBy:
+          type: [string, "null"]
+          maxLength: 512
+        recordedAt:
+          type: [string, "null"]
+          format: date-time
+        simulated: { type: boolean }
+        classification:
+          $ref: "#/components/schemas/ActionClassification"
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    CommandPackagePage:
+      type: object
+      additionalProperties: false
+      required: [items, limit, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CommandPackage"
+        limit: { type: integer, minimum: 1, maximum: 200 }
+        nextCursor: { type: [string, "null"], maxLength: 512 }
 
     GuardrailChatCompletionRequest:
       type: object
@@ -4049,6 +4269,9 @@ components:
         - conflict
         - idempotency_key_reused
         - payload_hash_mismatch
+        - approval_required
+        - action_request_expired
+        - simulation_required
         - rate_limited
         - internal_error
         - service_unavailable
