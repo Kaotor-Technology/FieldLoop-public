@@ -534,6 +534,11 @@ paths:
                 required: [redirectUrl]
                 properties:
                   redirectUrl: { type: string, format: uri }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    redirectUrl: https://example.test/synthetic
         "303":
           description: Redirect to Keycloak's logout endpoint and clear the session cookie.
           headers:
@@ -597,6 +602,17 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CurrentUser" }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    sub: synthetic-viewer
+                    roles: []
+                    persona: Synthetic illustration
+                    orgId: synthetic-record
+                    clearance: Synthetic illustration
+                    csrfToken: Synthetic illustration
+                    authTime: '2026-10-15T00:00:00Z'
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/map/config:
@@ -611,6 +627,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MapConfig" }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    mapsApiKey: Synthetic illustration
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/assets/{assetId}:
@@ -631,6 +652,19 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AssetRecord" }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: synthetic-record
+                    type: Synthetic illustration
+                    name: Synthetic illustration
+                    code: service_unavailable
+                    label: Synthetic illustration
+                    domainPack: Synthetic illustration
+                    simulated: true
+                    classification: PUBLIC
+                    geometry: Synthetic illustration
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -654,6 +688,21 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AssetStripBand" }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    schemaVersion: 1
+                    assetCode: Synthetic illustration
+                    lengthM: 1
+                    classification: PUBLIC
+                    simulated: true
+                    label: SYNTHETIC
+                    segments: []
+                    facilities: []
+                    barriers: []
+                    inspections: []
+                    threatCategories: []
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -713,6 +762,13 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/GeoReferencePage" }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    nextCursor: Synthetic illustration
+                    items: []
+                    limit: 1
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
@@ -734,12 +790,39 @@ paths:
         content:
           application/json:
             schema: { $ref: "#/components/schemas/GeoReferenceConfirm" }
+            examples:
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live record or measured result.
+                value: {}
       responses:
         "200":
           description: The confirmed Geo Reference.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/GeoReference" }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    documentId: 00000000-0000-4000-8000-000000000001
+                    documentTitle: Synthetic illustration
+                    kind: point
+                    geometry:
+                      type: Point
+                      coordinates:
+                      - 0
+                      - 0
+                    chainageFrom: 0
+                    chainageTo: 0
+                    proposedLabel: Synthetic illustration
+                    sourceSnippet: Synthetic illustration
+                    confidence: 0
+                    targetAssetId: 00000000-0000-4000-8000-000000000001
+                    status: draft
+                    simulated: true
+                    classification: PUBLIC
+                    createdAt: '2026-10-15T00:00:00Z'
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -765,6 +848,29 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/GeoReference" }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    documentId: 00000000-0000-4000-8000-000000000001
+                    documentTitle: Synthetic illustration
+                    kind: point
+                    geometry:
+                      type: Point
+                      coordinates:
+                      - 0
+                      - 0
+                    chainageFrom: 0
+                    chainageTo: 0
+                    proposedLabel: Synthetic illustration
+                    sourceSnippet: Synthetic illustration
+                    confidence: 0
+                    targetAssetId: 00000000-0000-4000-8000-000000000001
+                    status: draft
+                    simulated: true
+                    classification: PUBLIC
+                    createdAt: '2026-10-15T00:00:00Z'
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -790,6 +896,16 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/GeoSourceDocument" }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    title: Synthetic schema illustration
+                    folder: Synthetic illustration
+                    text: Synthetic illustration
+                    simulated: true
+                    classification: PUBLIC
         "401": { $ref: "#/components/responses/GuardrailUnauthenticated" }
         "403": { $ref: "#/components/responses/GuardrailForbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -815,12 +931,23 @@ paths:
         content:
           application/json:
             schema: { $ref: "#/components/schemas/GeoReferenceDraftCreate" }
+            examples:
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live record or measured result.
+                value:
+                  references: []
       responses:
         "201":
           description: Draft references created or the matching extraction replayed.
           content:
             application/json:
               schema: { $ref: "#/components/schemas/GeoReferenceDraftCreateResult" }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    references: []
+                    replayed: false
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/GuardrailUnauthenticated" }
         "403": { $ref: "#/components/responses/GuardrailForbidden" }
@@ -841,6 +968,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Jwks" }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    keys: []
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /guardrail/v1/chat/completions:
     post:
@@ -999,6 +1131,10 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ScenarioSummary'
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value: []
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1028,6 +1164,13 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/RunCreate'
+            examples:
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live record or measured result.
+                value:
+                  scenarioId: scenario-b-flood
+                  seed: 0
+                  speed: 1
       responses:
         '200':
           description: Server-authoritative simulation state.
@@ -1035,6 +1178,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SimulationRun'
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    orgId: synthetic-record
+                    scenarioId: scenario-b-flood
+                    scenarioName: Synthetic illustration
+                    seed: 0
+                    speed: 1
+                    clock: '2026-10-15T00:00:00Z'
+                    elapsedSeconds: 0
+                    durationSeconds: 0
+                    state: ready
+                    nextEventIndex: 0
+                    eventCount: 0
+                    simulated: true
+                    classification: PUBLIC
+                    bookmarks: []
+                    revision: 1
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1064,6 +1227,26 @@ paths:
                 anyOf:
                 - $ref: '#/components/schemas/SimulationRun'
                 - type: 'null'
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    orgId: synthetic-record
+                    scenarioId: scenario-b-flood
+                    scenarioName: Synthetic illustration
+                    seed: 0
+                    speed: 1
+                    clock: '2026-10-15T00:00:00Z'
+                    elapsedSeconds: 0
+                    durationSeconds: 0
+                    state: ready
+                    nextEventIndex: 0
+                    eventCount: 0
+                    simulated: true
+                    classification: PUBLIC
+                    bookmarks: []
+                    revision: 1
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1098,6 +1281,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SimulationRun'
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    orgId: synthetic-record
+                    scenarioId: scenario-b-flood
+                    scenarioName: Synthetic illustration
+                    seed: 0
+                    speed: 1
+                    clock: '2026-10-15T00:00:00Z'
+                    elapsedSeconds: 0
+                    durationSeconds: 0
+                    state: ready
+                    nextEventIndex: 0
+                    eventCount: 0
+                    simulated: true
+                    classification: PUBLIC
+                    bookmarks: []
+                    revision: 1
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1133,6 +1336,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PlayerCommand'
+            examples:
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live record or measured result.
+                value: {}
       responses:
         '200':
           description: Server-authoritative simulation state.
@@ -1140,6 +1347,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SimulationRun'
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    orgId: synthetic-record
+                    scenarioId: scenario-b-flood
+                    scenarioName: Synthetic illustration
+                    seed: 0
+                    speed: 1
+                    clock: '2026-10-15T00:00:00Z'
+                    elapsedSeconds: 0
+                    durationSeconds: 0
+                    state: ready
+                    nextEventIndex: 0
+                    eventCount: 0
+                    simulated: true
+                    classification: PUBLIC
+                    bookmarks: []
+                    revision: 1
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1175,6 +1402,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PlayerCommand'
+            examples:
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live record or measured result.
+                value: {}
       responses:
         '200':
           description: Server-authoritative simulation state.
@@ -1182,6 +1413,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SimulationRun'
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    orgId: synthetic-record
+                    scenarioId: scenario-b-flood
+                    scenarioName: Synthetic illustration
+                    seed: 0
+                    speed: 1
+                    clock: '2026-10-15T00:00:00Z'
+                    elapsedSeconds: 0
+                    durationSeconds: 0
+                    state: ready
+                    nextEventIndex: 0
+                    eventCount: 0
+                    simulated: true
+                    classification: PUBLIC
+                    bookmarks: []
+                    revision: 1
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1217,6 +1468,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PlayerCommand'
+            examples:
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live record or measured result.
+                value: {}
       responses:
         '200':
           description: Server-authoritative simulation state.
@@ -1224,6 +1479,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SimulationRun'
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    orgId: synthetic-record
+                    scenarioId: scenario-b-flood
+                    scenarioName: Synthetic illustration
+                    seed: 0
+                    speed: 1
+                    clock: '2026-10-15T00:00:00Z'
+                    elapsedSeconds: 0
+                    durationSeconds: 0
+                    state: ready
+                    nextEventIndex: 0
+                    eventCount: 0
+                    simulated: true
+                    classification: PUBLIC
+                    bookmarks: []
+                    revision: 1
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1259,6 +1534,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PlayerCommand'
+            examples:
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live record or measured result.
+                value: {}
       responses:
         '200':
           description: Server-authoritative simulation state.
@@ -1266,6 +1545,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SimulationRun'
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    orgId: synthetic-record
+                    scenarioId: scenario-b-flood
+                    scenarioName: Synthetic illustration
+                    seed: 0
+                    speed: 1
+                    clock: '2026-10-15T00:00:00Z'
+                    elapsedSeconds: 0
+                    durationSeconds: 0
+                    state: ready
+                    nextEventIndex: 0
+                    eventCount: 0
+                    simulated: true
+                    classification: PUBLIC
+                    bookmarks: []
+                    revision: 1
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1302,6 +1601,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PlayerCommand'
+            examples:
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live record or measured result.
+                value: {}
       responses:
         '200':
           description: Server-authoritative simulation state.
@@ -1309,6 +1612,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SimulationRun'
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    orgId: synthetic-record
+                    scenarioId: scenario-b-flood
+                    scenarioName: Synthetic illustration
+                    seed: 0
+                    speed: 1
+                    clock: '2026-10-15T00:00:00Z'
+                    elapsedSeconds: 0
+                    durationSeconds: 0
+                    state: ready
+                    nextEventIndex: 0
+                    eventCount: 0
+                    simulated: true
+                    classification: PUBLIC
+                    bookmarks: []
+                    revision: 1
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1345,6 +1668,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PlayerCommand'
+            examples:
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live record or measured result.
+                value: {}
       responses:
         '200':
           description: Server-authoritative simulation state.
@@ -1352,6 +1679,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SimulationRun'
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    orgId: synthetic-record
+                    scenarioId: scenario-b-flood
+                    scenarioName: Synthetic illustration
+                    seed: 0
+                    speed: 1
+                    clock: '2026-10-15T00:00:00Z'
+                    elapsedSeconds: 0
+                    durationSeconds: 0
+                    state: ready
+                    nextEventIndex: 0
+                    eventCount: 0
+                    simulated: true
+                    classification: PUBLIC
+                    bookmarks: []
+                    revision: 1
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1414,6 +1761,10 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/BowtieSummary' }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value: []
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
@@ -1434,6 +1785,58 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/BowtieCanvas' }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    hazard: Synthetic illustration
+                    topEvent: Synthetic illustration
+                    domain: Synthetic illustration
+                    status: Synthetic illustration
+                    simulated: true
+                    classification: PUBLIC
+                    severityCriteria:
+                      people:
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      environment:
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      financial:
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      serviceContinuity:
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      reputation:
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      legalRegulatory:
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                      - Synthetic illustration
+                    threats: []
+                    barriers: []
+                    consequences: []
+                    paths: []
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1456,6 +1859,29 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RiskSnapshotEnvelope' }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    createdAt: '2026-10-15T00:00:00Z'
+                    trigger: Synthetic illustration
+                    calibration:
+                      standardRef: Synthetic illustration
+                      standardVersion: Synthetic illustration
+                      approvedBy: Synthetic illustration
+                      approvedAt: '2026-10-15T00:00:00Z'
+                    snapshot:
+                      bowtieId: 00000000-0000-4000-8000-000000000001
+                      topEventFrequencyPerYear: 0
+                      threats: []
+                      consequences: []
+                      worstConsequenceId: 00000000-0000-4000-8000-000000000001
+                      cell:
+                        frequencyBand: 1
+                        severityBand: 1
+                        zone: green
+                        rank: 1
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1505,6 +1931,55 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RiskExplain' }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    bowtieId: 00000000-0000-4000-8000-000000000001
+                    hasPrevious: false
+                    summary: Synthetic illustration
+                    previous:
+                      id: 00000000-0000-4000-8000-000000000001
+                      createdAt: '2026-10-15T00:00:00Z'
+                      trigger: Synthetic illustration
+                      calibration:
+                        standardRef: Synthetic illustration
+                        standardVersion: Synthetic illustration
+                        approvedBy: Synthetic illustration
+                        approvedAt: '2026-10-15T00:00:00Z'
+                      snapshot:
+                        bowtieId: 00000000-0000-4000-8000-000000000001
+                        topEventFrequencyPerYear: 0
+                        threats: []
+                        consequences: []
+                        worstConsequenceId: 00000000-0000-4000-8000-000000000001
+                        cell:
+                          frequencyBand: 1
+                          severityBand: 1
+                          zone: green
+                          rank: 1
+                    current:
+                      id: 00000000-0000-4000-8000-000000000001
+                      createdAt: '2026-10-15T00:00:00Z'
+                      trigger: Synthetic illustration
+                      calibration:
+                        standardRef: Synthetic illustration
+                        standardVersion: Synthetic illustration
+                        approvedBy: Synthetic illustration
+                        approvedAt: '2026-10-15T00:00:00Z'
+                      snapshot:
+                        bowtieId: 00000000-0000-4000-8000-000000000001
+                        topEventFrequencyPerYear: 0
+                        threats: []
+                        consequences: []
+                        worstConsequenceId: 00000000-0000-4000-8000-000000000001
+                        cell:
+                          frequencyBand: 1
+                          severityBand: 1
+                          zone: green
+                          rank: 1
+                    changes: []
+                    riskInputChanges: []
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1554,6 +2029,17 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/EvidenceSummary' }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    barrierId: 00000000-0000-4000-8000-000000000001
+                    kind: Synthetic illustration
+                    source: Synthetic illustration
+                    observedAt: '2026-10-15T00:00:00Z'
+                    simulated: true
+                    classification: PUBLIC
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1693,6 +2179,13 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/NotificationPage' }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    nextCursor: Synthetic illustration
+                    items: []
+                    limit: 1
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1728,6 +2221,12 @@ paths:
                 contentBase64:
                   type: string
                   maxLength: 2796204
+            examples:
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live record or measured result.
+                value:
+                  format: kml
+                  contentBase64: PGttbCB4bWxucz0iaHR0cDovL3d3dy5vcGVuZ2lzLm5ldC9rbWwvMi4yIj48RG9jdW1lbnQvPjwva21sPg==
       responses:
         "200":
           description: Import state or available targets.
@@ -1735,6 +2234,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ImportPreview"
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    status: preview
+                    version: 1
+                    classification: Synthetic illustration
+                    fileHash: Synthetic illustration
+                    createdAt: '2026-10-15T00:00:00Z'
+                    mapping:
+                      assetId: 00000000-0000-4000-8000-000000000001
+                      toleranceMetres: 0
+                      nameField: Synthetic illustration
+                      descriptionField: Synthetic illustration
+                      categoryField: Synthetic illustration
+                      target: evidence
+                      barrierId: 00000000-0000-4000-8000-000000000001
+                    points: []
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1751,6 +2269,14 @@ paths:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/Problem"
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    type: about:blank
+                    title: Synthetic payload too large
+                    status: 413
+                    code: payload_too_large
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
   /v1/imports/options:
@@ -1770,6 +2296,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ImportOptions"
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    assets: []
+                    barriers: []
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1805,6 +2337,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ImportPreview"
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    status: preview
+                    version: 1
+                    classification: Synthetic illustration
+                    fileHash: Synthetic illustration
+                    createdAt: '2026-10-15T00:00:00Z'
+                    mapping:
+                      assetId: 00000000-0000-4000-8000-000000000001
+                      toleranceMetres: 0
+                      nameField: Synthetic illustration
+                      descriptionField: Synthetic illustration
+                      categoryField: Synthetic illustration
+                      target: evidence
+                      barrierId: 00000000-0000-4000-8000-000000000001
+                    points: []
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1850,6 +2401,19 @@ paths:
                   minimum: 1
                 mapping:
                   $ref: "#/components/schemas/ImportMapping"
+            examples:
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live record or measured result.
+                value:
+                  version: 1
+                  mapping:
+                    assetId: 00000000-0000-4000-8000-000000000001
+                    toleranceMetres: 0
+                    nameField: Synthetic illustration
+                    descriptionField: Synthetic illustration
+                    categoryField: Synthetic illustration
+                    target: evidence
+                    barrierId: 00000000-0000-4000-8000-000000000001
       responses:
         "200":
           description: Import state or available targets.
@@ -1857,6 +2421,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ImportPreview"
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    status: preview
+                    version: 1
+                    classification: Synthetic illustration
+                    fileHash: Synthetic illustration
+                    createdAt: '2026-10-15T00:00:00Z'
+                    mapping:
+                      assetId: 00000000-0000-4000-8000-000000000001
+                      toleranceMetres: 0
+                      nameField: Synthetic illustration
+                      descriptionField: Synthetic illustration
+                      categoryField: Synthetic illustration
+                      target: evidence
+                      barrierId: 00000000-0000-4000-8000-000000000001
+                    points: []
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1900,6 +2483,11 @@ paths:
                 version:
                   type: integer
                   minimum: 1
+            examples:
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live record or measured result.
+                value:
+                  version: 1
       responses:
         "200":
           description: Import state or available targets.
@@ -1907,6 +2495,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ImportPreview"
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    status: preview
+                    version: 1
+                    classification: Synthetic illustration
+                    fileHash: Synthetic illustration
+                    createdAt: '2026-10-15T00:00:00Z'
+                    mapping:
+                      assetId: 00000000-0000-4000-8000-000000000001
+                      toleranceMetres: 0
+                      nameField: Synthetic illustration
+                      descriptionField: Synthetic illustration
+                      categoryField: Synthetic illustration
+                      target: evidence
+                      barrierId: 00000000-0000-4000-8000-000000000001
+                    points: []
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1949,6 +2556,11 @@ paths:
                 version:
                   type: integer
                   minimum: 1
+            examples:
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live record or measured result.
+                value:
+                  version: 1
       responses:
         "200":
           description: Import state or available targets.
@@ -1956,6 +2568,25 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ImportPreview"
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    id: 00000000-0000-4000-8000-000000000001
+                    status: preview
+                    version: 1
+                    classification: Synthetic illustration
+                    fileHash: Synthetic illustration
+                    createdAt: '2026-10-15T00:00:00Z'
+                    mapping:
+                      assetId: 00000000-0000-4000-8000-000000000001
+                      toleranceMetres: 0
+                      nameField: Synthetic illustration
+                      descriptionField: Synthetic illustration
+                      categoryField: Synthetic illustration
+                      target: evidence
+                      barrierId: 00000000-0000-4000-8000-000000000001
+                    points: []
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1999,6 +2630,13 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/AuditEventPage' }
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; not a live record or measured result.
+                  value:
+                    nextCursor: Synthetic illustration
+                    items: []
+                    limit: 1
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -3500,36 +4138,84 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+          examples:
+            syntheticSchemaIllustration:
+              summary: Synthetic schema illustration; not a live record or measured result.
+              value:
+                type: about:blank
+                title: Synthetic validation failed
+                status: 400
+                code: validation_failed
     PayloadTooLarge:
       description: The request body exceeds the Guardrail request size limit (`payload_too_large`).
       content:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+          examples:
+            syntheticSchemaIllustration:
+              summary: Synthetic schema illustration; not a live record or measured result.
+              value:
+                type: about:blank
+                title: Synthetic payload too large
+                status: 413
+                code: payload_too_large
     UnsupportedMediaType:
       description: The request uses an unsupported content type (`unsupported_media_type`).
       content:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+          examples:
+            syntheticSchemaIllustration:
+              summary: Synthetic schema illustration; not a live record or measured result.
+              value:
+                type: about:blank
+                title: Synthetic unsupported media type
+                status: 415
+                code: unsupported_media_type
     Unauthenticated:
       description: No valid session (`unauthenticated`). The SPA sends the user to `/auth/login`.
       content:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+          examples:
+            syntheticSchemaIllustration:
+              summary: Synthetic schema illustration; not a live record or measured result.
+              value:
+                type: about:blank
+                title: Synthetic unauthenticated
+                status: 401
+                code: unauthenticated
     GuardrailUnauthenticated:
       description: The verified internal user token is missing or invalid (`unauthenticated`). This service-to-service response does not start a browser login flow.
       content:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+          examples:
+            syntheticSchemaIllustration:
+              summary: Synthetic schema illustration; not a live record or measured result.
+              value:
+                type: about:blank
+                title: Synthetic unauthenticated
+                status: 401
+                code: unauthenticated
     GuardrailForbidden:
       description: The token Organisation does not match this Guardrail service, or the caller's clearance or Guardrail policy blocks the request (`forbidden`, `clearance_denied`, or `guardrail_blocked`).
       content:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+          examples:
+            syntheticSchemaIllustration:
+              summary: Synthetic schema illustration; not a live record or measured result.
+              value:
+                type: about:blank
+                title: Synthetic forbidden
+                status: 403
+                code: forbidden
     Forbidden:
       description: |
         The session may not do this: `forbidden`, `csrf_token_invalid`, or
@@ -3538,12 +4224,28 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+          examples:
+            syntheticSchemaIllustration:
+              summary: Synthetic schema illustration; not a live record or measured result.
+              value:
+                type: about:blank
+                title: Synthetic forbidden
+                status: 403
+                code: forbidden
     NotFound:
       description: The resource does not exist or is outside the caller's scope (`not_found`).
       content:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+          examples:
+            syntheticSchemaIllustration:
+              summary: Synthetic schema illustration; not a live record or measured result.
+              value:
+                type: about:blank
+                title: Synthetic not found
+                status: 404
+                code: not_found
     Conflict:
       description: |
         The request conflicts with the current state: `conflict`,
@@ -3552,6 +4254,14 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+          examples:
+            syntheticSchemaIllustration:
+              summary: Synthetic schema illustration; not a live record or measured result.
+              value:
+                type: about:blank
+                title: Synthetic conflict
+                status: 409
+                code: conflict
     TooManyRequests:
       description: The caller is rate limited (`rate_limited`).
       headers:
@@ -3561,12 +4271,28 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+          examples:
+            syntheticSchemaIllustration:
+              summary: Synthetic schema illustration; not a live record or measured result.
+              value:
+                type: about:blank
+                title: Synthetic rate limited
+                status: 429
+                code: rate_limited
     InternalError:
       description: Unexpected server error (`internal_error`).
       content:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+          examples:
+            syntheticSchemaIllustration:
+              summary: Synthetic schema illustration; not a live record or measured result.
+              value:
+                type: about:blank
+                title: Synthetic internal error
+                status: 500
+                code: internal_error
     ServiceUnavailable:
       description: A dependency is unavailable (`service_unavailable`).
       headers:
@@ -3576,3 +4302,11 @@ components:
         application/problem+json:
           schema:
             $ref: "#/components/schemas/Problem"
+          examples:
+            syntheticSchemaIllustration:
+              summary: Synthetic schema illustration; not a live record or measured result.
+              value:
+                type: about:blank
+                title: Synthetic service unavailable
+                status: 503
+                code: service_unavailable
