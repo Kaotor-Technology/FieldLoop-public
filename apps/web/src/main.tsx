@@ -8,6 +8,7 @@ import { BowtieCanvasPage } from "./BowtieCanvasPage";
 import { AuditPage } from "./AuditPage";
 import { AgentWorkspace } from "./AgentWorkspace";
 import { ActionRequestPage } from "./ActionRequestPage";
+import { CommandPackageQueue } from "./CommandPackageQueue";
 import { usePreferences } from "./preferences";
 import "./i18n";
 import "@fontsource/ibm-plex-sans-thai/400.css";
@@ -32,6 +33,12 @@ const auditRoute = createRoute({
   validateSearch: (search: Record<string, unknown>) => search,
   component: AuditPage,
 });
+const commandPackagesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/command-packages",
+  validateSearch: (search: Record<string, unknown>) => search,
+  component: CommandPackageQueue,
+});
 const bowtieRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/bowties/$bowtieId",
@@ -55,7 +62,7 @@ const actionRequestRoute = createRoute({
   validateSearch: (search: Record<string, unknown>) => search,
   component: ActionRequestPage,
 });
-const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, mapRoute, auditRoute, bowtieRoute, legacyBowtieRoute, agentRoute, actionRequestRoute]) });
+const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, mapRoute, auditRoute, commandPackagesRoute, bowtieRoute, legacyBowtieRoute, agentRoute, actionRequestRoute]) });
 
 declare module "@tanstack/react-router" {
   interface Register { router: typeof router }
