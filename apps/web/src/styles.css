@@ -321,8 +321,8 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
   .wordmark { font-size: var(--type-headline-sm-font-size); }
   .preferences > button { min-height: var(--spacing-touch-target); font-size: var(--type-label-sm-font-size); }
   .account-switcher > summary { max-width: var(--spacing-list-pane-width); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .account-switcher[open] { flex: 1 1 100%; }
-  .account-switcher[open] .account-menu { position: static; width: 100%; }
+  .account-switcher[open] { flex: 1 1 100%; min-width: 0; }
+  .account-switcher[open] .account-menu { position: static; width: 100%; max-width: 100%; min-width: 0; overflow-wrap: anywhere; }
   .context-panel { max-height: 48dvh; }
   .context-panel:has(.context-hint) { max-height: 25dvh; }
   .map-legend { gap: var(--spacing-space-1) var(--spacing-space-2); font-size: var(--type-body-sm-font-size); }
