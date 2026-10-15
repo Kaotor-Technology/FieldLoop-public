@@ -263,7 +263,7 @@ class PostgresStore:
 
 
 class PostgresDraftStore:
-    """Drafts are platform records that wait for a person; status never leaves `needs_approval`."""
+    """The assistant inserts pending Drafts; web-api records human decisions."""
 
     def __init__(
         self, pool: AsyncConnectionPool[AsyncConnection[DictRow]], org_id: str,
