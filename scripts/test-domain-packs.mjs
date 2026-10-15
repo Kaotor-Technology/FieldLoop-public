@@ -1,4 +1,5 @@
 import { testGenAiSafetyRecords } from "./test-gen-ai-safety.mjs";
+import { testCatalogColdStart } from "./test-catalog-cold-start.mjs";
 import { testGuardrailAcceptance } from "./test-guardrail-acceptance.mjs";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
@@ -117,6 +118,7 @@ try {
   console.log(plan.rows.map((row) => row["QUERY PLAN"]).join("\n"));
   await testGenAiSafetyRecords(database, application, await loadDemoDomainPacks());
   await testGuardrailAcceptance(database, connectionString, await loadDemoDomainPacks());
+  await testCatalogColdStart(database, application, await loadDemoDomainPacks());
   console.log("Domain Pack PostGIS integration passed: application grants, restart, update, spatial persistence, Organisation isolation, rollback and unchanged Health.");
 } finally {
   await application.destroy();

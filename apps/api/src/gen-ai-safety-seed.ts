@@ -25,6 +25,11 @@ export async function registerGenAiSafetyRecords<Database>(database: Kysely<Data
   const aiSystemId = id("ai_system", aiSystem.id);
   const seedDefinitionHash = createHash("sha256")
     .update(JSON.stringify(canonicalDefinition({ content: pack.content, aiSafety: safety }))).digest("hex");
+  // Reset/run replacement locks this row too. A startup reload must not write a
+  // simulation baseline, even when INSERT would ultimately hit ON CONFLICT.
+  const workspace = (await sql<{ active_run_id: string | null }>`
+    SELECT active_run_id FROM app.simulation_workspace WHERE org_id = ${orgId} FOR SHARE`.execute(database)).rows[0];
+  const hasRun = workspace?.active_run_id != null;
   const metadata = { org_id: orgId, simulated: safety.simulated, classification: safety.classification, created_by: "domain-pack-loader" };
   async function upsert(table: string, values: RecordValues, preserve: string[] = []) {
     const keys = Object.keys(values);
@@ -35,23 +40,23 @@ export async function registerGenAiSafetyRecords<Database>(database: Kysely<Data
   }
   // Establish and lock the parent before checking review state. A concurrent
   // human review cannot commit between this check and the graph registration.
-  await sql`INSERT INTO app.bowtie (id, org_id, hazard, top_event, domain, status, version, simulated, classification, created_by)
+  if (!hasRun) await sql`INSERT INTO app.bowtie (id, org_id, hazard, top_event, domain, status, version, simulated, classification, created_by)
     VALUES (${bowtieId}::uuid, ${orgId}, ${bowtie.hazard}, ${bowtie.topEvent}, ${bowtie.domain}, ${bowtie.status},
       ${safety.version}, ${safety.simulated}, ${safety.classification}, 'domain-pack-loader')
     ON CONFLICT (id) DO NOTHING`.execute(database);
   const existing = (await sql<{ status: string | null }>`
     SELECT status FROM app.bowtie WHERE id = ${bowtieId}::uuid AND org_id = ${orgId} FOR UPDATE`.execute(database)).rows[0];
   if (!existing) throw new Error("Gen AI Safety Bowtie registration lost its Organisation-scoped parent");
-  if (existing.status !== "draft") {
+  if (existing.status !== "draft" || hasRun) {
     const proofs = (await sql<{ id: string; seed_definition_hash: string | null }>`SELECT id,
       config->>'seedDefinitionHash' AS seed_definition_hash FROM app.guardrail_policy
       WHERE org_id = ${orgId} AND ai_system_id = ${aiSystemId}::uuid AND config->>'bowtieId' = ${bowtieId}`.execute(database)).rows;
     const expected = new Set(policies.map((policy) => id("guardrail_policy", policy.id)));
     if (proofs.length !== expected.size
         || proofs.some((proof) => !expected.has(proof.id) || proof.seed_definition_hash !== seedDefinitionHash)) {
-      throw new Error(`Gen AI Safety seed cannot change reviewed Bowtie ${bowtie.id}; use the human review workflow`);
+      throw new Error(`Gen AI Safety seed cannot change reviewed Bowtie ${bowtie.id} or a simulation baseline; use the human review workflow`);
     }
-    return; // Identical seed: the reviewed graph and any reviewed local overrides stay authoritative.
+    return; // Identical seed: reviewed definitions and simulation state stay authoritative.
   }
   for (const category of pack.content.threatCategories) {
     await upsert("threat_category", { id: id("threat_category", category.code), ...metadata,
