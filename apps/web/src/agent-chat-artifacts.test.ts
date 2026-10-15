@@ -20,6 +20,7 @@ describe("Agent Chat artifacts", () => {
         known: [],
         unknown: [],
         assumptions: [],
+        draftIds: [],
         confidence: "medium",
         confidenceReason: "Fixture",
         actionRequestIds: [actionRequestId],
