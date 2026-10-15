@@ -277,6 +277,12 @@ describe("Guardrail gateway", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.headers["x-fieldloop-classification"]).toBe("HIGHLY_RESTRICTED");
+    const decisionsHeader = response.headers["x-fieldloop-guardrail-decisions"];
+    const decisions = typeof decisionsHeader === "string" ? JSON.parse(decisionsHeader) as unknown : [];
+    expect(decisions).toEqual(expect.arrayContaining([
+      expect.objectContaining({ decision: "redact", policyId: "injection-policy" }),
+      expect.objectContaining({ decision: "reroute", policyId: "routing-policy" }),
+    ]));
     expect(dependencies.model.complete).toHaveBeenCalledWith("configured-flash-model", expect.objectContaining({ messages: [{ role: "user", content: "Account [REDACTED]" }] }));
     expect(dependencies.store.recordIntercept).toHaveBeenCalledWith(expect.objectContaining({
       policy: expect.objectContaining({ id: "routing-policy" }), decision: "reroute", classification: "HIGHLY_RESTRICTED",

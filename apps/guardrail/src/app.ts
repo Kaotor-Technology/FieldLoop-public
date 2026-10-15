@@ -174,6 +174,7 @@ function sendResult(reply: FastifyReply, result: GuardrailHttpResult, requestedC
   if (result.policyId) reply.header("x-fieldloop-policy-id", result.policyId);
   if (result.interceptId) reply.header("x-fieldloop-intercept-id", result.interceptId);
   reply.header("x-fieldloop-classification", result.classification ?? requestedClassification);
+  if (result.decisions?.length) reply.header("x-fieldloop-guardrail-decisions", JSON.stringify(result.decisions));
   reply.code(result.statusCode);
   if (result.statusCode >= 400) reply.type("application/problem+json");
   if (stream && result.statusCode === 200) {

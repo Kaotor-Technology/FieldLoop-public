@@ -1099,6 +1099,9 @@ paths:
             X-FieldLoop-Policy-Id: { schema: { type: string, format: uuid } }
             X-FieldLoop-Intercept-Id: { schema: { type: string, format: uuid } }
             X-FieldLoop-Classification: { schema: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] } }
+            X-FieldLoop-Guardrail-Decisions:
+              description: JSON array of Guardrail outcomes applied to the request and response, with decision, policyId and reason.
+              schema: { type: string }
           content:
             application/json:
               schema:
