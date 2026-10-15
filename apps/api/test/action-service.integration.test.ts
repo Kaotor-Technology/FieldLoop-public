@@ -257,6 +257,20 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
       expect((await pool.query("SELECT status, rejection_reason FROM app.action_request WHERE id=$1", [action.id])).rows[0]).toEqual({ status: "rejected", rejection_reason: "sla_expired" });
       expect(await count("SELECT count(*) FROM app.action_escalation WHERE action_request_id=$1", [action.id])).toBe(1);
     });
+    it("reports a request that expires mid-decision as expired, records no Approval and never approves it", async () => {
+      const { action, approver, decision } = await pending();
+      await pool.query("UPDATE app.action_request SET expires_at = clock_timestamp() + interval '700 milliseconds' WHERE id=$1", [action.id]);
+      // Slows the Approval insert past the deadline, after the expiry sweep has already found the request still open.
+      await pool.query("CREATE FUNCTION app.fl96_slow_approval() RETURNS trigger AS $$ BEGIN PERFORM pg_sleep(1); RETURN NEW; END $$ LANGUAGE plpgsql");
+      await pool.query("CREATE TRIGGER zz_fl96_slow_approval BEFORE INSERT ON app.approval FOR EACH ROW EXECUTE FUNCTION app.fl96_slow_approval()");
+      try { await expect(store.decide(approver, action.id, "approved", decision, key())).rejects.toThrow("request_expired"); }
+      finally {
+        await pool.query("DROP TRIGGER zz_fl96_slow_approval ON app.approval");
+        await pool.query("DROP FUNCTION app.fl96_slow_approval()");
+      }
+      expect(await count("SELECT count(*) FROM app.approval WHERE action_request_id=$1", [action.id])).toBe(0);
+      expect((await pool.query("SELECT status FROM app.action_request WHERE id=$1", [action.id])).rows[0].status).toBe("open");
+    });
     it("rejects with a recorded reason and closes the linked Held Request, while an approval does not release it", async () => {
       const { user, check } = await fixture();
       const approver = manager(user);

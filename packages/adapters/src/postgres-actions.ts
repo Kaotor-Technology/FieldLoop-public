@@ -186,15 +186,21 @@ export class PostgresActionStore implements ActionServicePort, ActionDecisionPor
           VALUES (${user.orgId}, ${id}::uuid, ${user.sub}, ${decision}, ${body.reason}, ${row.payload_hash}, ${user.authTime.toISOString()}::timestamptz,
             ${row.simulated}, ${row.classification}, ${user.sub}) RETURNING *`.execute(trx)).rows[0];
       } catch (error) {
-        const code = error && typeof error === "object" && "code" in error ? error.code : undefined;
-        if (code === "23505") throw new ActionError(409, "already_decided");
-        if (code === "23514") throw new ActionError(409, "payload_changed");
+        if (pgCode(error) === "23505") throw new ActionError(409, "already_decided");
+        if (pgCode(error) === "23514") throw new ActionError(409, /payload_hash/.test(pgMessage(error)) ? "payload_changed" : "simulation_scope_invalid");
         throw error;
       }
       if (!approval) throw new Error("Approval was not inserted");
-      const updated = (decision === "approved"
-        ? await sql<ActionRow>`UPDATE app.action_request SET status = 'approved' WHERE id = ${id}::uuid RETURNING *`.execute(trx)
-        : await sql<ActionRow>`UPDATE app.action_request SET status = 'rejected', rejection_reason = 'approver_rejected' WHERE id = ${id}::uuid RETURNING *`.execute(trx)).rows[0];
+      let updated: ActionRow | undefined;
+      try {
+        updated = (decision === "approved"
+          ? await sql<ActionRow>`UPDATE app.action_request SET status = 'approved' WHERE id = ${id}::uuid RETURNING *`.execute(trx)
+          : await sql<ActionRow>`UPDATE app.action_request SET status = 'rejected', rejection_reason = 'approver_rejected' WHERE id = ${id}::uuid RETURNING *`.execute(trx)).rows[0];
+      } catch (error) {
+        // The database deadline guard refused a request that expired after the sweep above; the Scheduler records its expiry.
+        if (pgCode(error) === "23514" && /Expired/.test(pgMessage(error))) throw new ActionError(409, "request_expired");
+        throw error;
+      }
       if (!updated) throw new Error("Action Request was not updated");
       // A rejection also closes any linked Held Request, so a rejected payload can never be released.
       if (decision === "rejected") {
@@ -275,6 +281,8 @@ function toAction(row: ActionRow): ActionRequest {
     status: row.status, expiresAt: row.expires_at.toISOString(), simulated: row.simulated,
     classification: row.classification, ...(row.simulation_run_id ? { simulationRunId: row.simulation_run_id } : {}) };
 }
+const pgCode = (error: unknown): unknown => error && typeof error === "object" && "code" in error ? error.code : undefined;
+const pgMessage = (error: unknown): string => error instanceof Error ? error.message : "";
 function toApproval(row: ApprovalRow): ActionApproval {
   if (!row.reason) throw new Error("Approval has no reason");
   return { id: row.id, actionRequestId: row.action_request_id, approverSub: row.approver_sub, decision: row.decision, reason: row.reason,
