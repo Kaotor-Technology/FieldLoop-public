@@ -151,7 +151,7 @@ test.beforeEach(async ({ page, request }) => {
         }
         return Response.json({
           id: "00000000-0000-4000-8000-000000000097", orgId: "synthetic-org", actionType: "system_of_record",
-          actionLevel: "l1", target: "cmms", payload: { title: "Synthetic work order" },
+          actionLevel: sessionStorage.getItem("__actionLevel") ?? "l1", target: "cmms", payload: { title: "Synthetic work order" },
           payloadHash: "a".repeat(64), rationale: "Prepare for human review.", citations: ["synthetic:procedure-1"],
           requestedBy: "synthetic-operator", requester: { kind: "assistant", aiSystemId: "00000000-0000-4000-8000-000000000001" },
           status: sessionStorage.getItem("__actionRequestStatus") === "approved" ? "approved" : "open",
@@ -282,6 +282,21 @@ test("opens the approval dialog from an actionable Action Request card", async (
   await expect(page.getByRole("heading", { name: actionRequestId })).toBeVisible();
   await page.getByRole("button", { name: "Review and approve" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
+});
+
+test("shows an L2 badge and SLA on the Action Request card without an Approve control", async ({ page }) => {
+  const actionRequestId = "00000000-0000-4000-8000-000000000097";
+  await page.evaluate(() => sessionStorage.setItem("__actionLevel", "l2"));
+  await setAgentMode(page, "action");
+  await page.goto("/agent");
+  await page.getByRole("textbox", { name: "Message" }).fill("Prepare the synthetic district warning");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  const card = page.locator(".agent-chat-artifact-card");
+  await expect(card).toContainText("L2");
+  await expect(card).toContainText("SLA");
+  await expect(card.getByRole("link", { name: "Review and approve" })).toHaveAttribute("href", `/actions/${actionRequestId}`);
+  await expect(page.getByRole("button", { name: /approve/i })).toHaveCount(0);
 });
 
 test("shows distinct held and blocked Guardrail notices with policy IDs", async ({ page }) => {
