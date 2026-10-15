@@ -82,6 +82,7 @@ describe("Action contracts", () => {
       decision: "convert_l1", reason: "human_action_required",
       policyId: "22222222-2222-4333-8444-555555555555",
     })).toBe(true);
+    expect(isToolCallDecision({ decision: "block", reason: "no registered policy" })).toBe(true);
     expect(isToolCallDecision({ decision: "block", reason: "blocked", policyId: "not-a-uuid" })).toBe(false);
   });
 });

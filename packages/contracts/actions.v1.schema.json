@@ -369,7 +369,7 @@
         "policyId": {
           "type": "string",
           "format": "uuid",
-          "description": "Guardrail Policy applied to this tool-call decision."
+          "description": "Registered Guardrail Policy applied to this tool-call decision. Omitted when no registered policy produced the decision; never fabricated."
         },
         "ceiling": {
           "$ref": "#/$defs/ActionLevel"

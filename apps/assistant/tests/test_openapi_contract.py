@@ -59,9 +59,13 @@ def test_documented_sse_examples_and_actual_events_match_event_schemas() -> None
     response_contract = operation["responses"]["200"]
     examples = response_contract["content"]["text/event-stream"]["examples"]
     event_schemas = operation["x-fieldloop-sse-events"]
+    policy_id = "22222222-2222-4333-8444-555555555555"
     client, _ = make_client(
         [call("get_barriers", bowtie_id=BOWTIE), answer()],
         platform={rf"/api/v1/bowties/{BOWTIE}": {"id": BOWTIE, "barriers": []}},
+        guardrail=lambda body: {
+            "decision": "allow", "reason": "registered_read", "policyId": policy_id,
+        },
     )
     sid = client.post(SESSION, json={"agent": "integrity-orchestrator"}, headers=auth()).json()[
         "id"
@@ -74,13 +78,17 @@ def test_documented_sse_examples_and_actual_events_match_event_schemas() -> None
     for header, contract in response_contract["headers"].items():
         assert response.headers[header] == contract["schema"]["const"]
     streams = [example["value"] for example in examples.values()] + [response.text]
+    emitted_policy_ids = []
     for stream in streams:
         names = []
         for frame in stream.strip().split("\n\n"):
             fields = dict(line.split(": ", 1) for line in frame.splitlines())
             assert int(fields["id"]) > 0
             name = fields["event"]
-            Draft202012Validator(event_schemas[name]).validate(json.loads(fields["data"]))
+            data = json.loads(fields["data"])
+            Draft202012Validator(event_schemas[name]).validate(data)
+            if stream == response.text and name == "guardrail.decision":
+                emitted_policy_ids.append(data["policy_id"])
             names.append(name)
         assert {
             "agent.step",
@@ -95,6 +103,7 @@ def test_documented_sse_examples_and_actual_events_match_event_schemas() -> None
             < names.index("tool.result")
         )
         assert names[-1] == "answer.final"
+    assert emitted_policy_ids == [policy_id]
     # The current non-partial runtime must not advertise unimplemented token streaming.
     assert "answer.partial" not in event_schemas
 
