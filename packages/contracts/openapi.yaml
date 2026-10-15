@@ -20,6 +20,8 @@ servers:
 security:
   - sessionCookie: []
 tags:
+  - name: Imports
+    description: Safe point import workflow.
   - name: Auth
     description: OIDC sign-in, sign-out and session reauthentication.
   - name: Session
@@ -36,9 +38,137 @@ tags:
     description: Organisation-scoped source Evidence metadata.
   - name: Health
     description: Barrier Health decisions and in-app notifications.
+  - name: Audit
+    description: Read-only, hash-chained audit events within Organisation and clearance scope.
   - name: Guardrail
     description: Internal service-to-service OpenAI-compatible model gateway and Tier 1 content scan.
+  - name: Actions
+    description: Exact payload proposals and human action ceilings.
 paths:
+  /v1/action-requests:
+    post:
+      operationId: createActionRequest
+      summary: Prepare a proposed human action
+      description: Stores the exact L1/L2 payload with database-generated SHA-256,
+        rationale, citations, session identity and bounded SLA. L0 recommendations
+        have no record. Never executes the payload. Replays return the current
+        record.
+      tags:
+        - Actions
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionRequestCreate"
+      responses:
+        "201":
+          description: Action Request created or idempotently replayed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionRequest"
+        "400": &a1
+          $ref: "#/components/responses/BadRequest"
+        "401": &a2
+          $ref: "#/components/responses/Unauthenticated"
+        "403": &a3
+          $ref: "#/components/responses/Forbidden"
+        "409": &a4
+          $ref: "#/components/responses/Conflict"
+        "503": &a5
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/action-requests/{actionRequestId}:
+    get:
+      operationId: getActionRequest
+      summary: Read an Action Request
+      description: Returns an Organisation and clearance scoped current Action
+        Request; an expired request is rejected and escalated. Retired simulation
+        records are unavailable.
+      tags:
+        - Actions
+      parameters:
+        - name: actionRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Exact stored payload and generated hash.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionRequest"
+        "400": *a1
+        "401": *a2
+        "403": *a3
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409": *a4
+        "503": *a5
+  /guardrail/v1/tool-calls:check:
+    post:
+      servers:
+        - url: https://guardrail-{environment}-822853914340.asia-southeast1.run.app
+          description: Private Guardrail; Google service identity and verified internal
+            user token required.
+          variables:
+            environment:
+              default: demo
+              enum:
+                - dev
+                - demo
+      operationId: checkToolCall
+      summary: Check a registered tool call against Action Level ceilings
+      description: Uses registered AI System tools and target policy. Returns allow
+        for reads/recommendations, convert_l1 with an Action Request, hold_l2 with
+        an exact-payload Held Request, or block. Never invokes a tool or writes a
+        target system. Above-ceiling and unknown tools are blocked; policy/storage
+        failures fail closed.
+      tags:
+        - Guardrail
+      security:
+        - serviceIdentity: []
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: X-FieldLoop-Internal-User-Token
+          in: header
+          required: true
+          description: Five-minute server-to-server RS256 user token.
+          schema:
+            type: string
+            minLength: 16
+            maxLength: 8192
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ToolCallCheck"
+      responses:
+        "200":
+          description: Persisted decision and any proposed/held records. A block is a
+            successful check and forbids tool execution.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ToolCallDecision"
+        "400": *a1
+        "401":
+          $ref: "#/components/responses/GuardrailUnauthenticated"
+        "403":
+          $ref: "#/components/responses/GuardrailForbidden"
+        "409": *a4
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "503": *a5
   /auth/login:
     get:
       operationId: startLogin
@@ -187,6 +317,29 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MapConfig" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/assets/{assetId}:
+    get:
+      operationId: getAsset
+      summary: Read one Asset by identifier or asset code
+      description: Returns the Asset visible to the signed-in Organisation and clearance. Also readable with the five-minute internal user token as a Bearer credential. That credential is accepted only on the GET routes behind the assistant tools (this route, /v1/bowties/{bowtieId}, /v1/bowties/{bowtieId}/risk and /v1/simulation/runs/current) and never for a state change, a decision or the event stream.
+      tags: [Map]
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: Asset UUID or asset code, for example DL-01.
+          schema: { type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$' }
+      responses:
+        "200":
+          description: The scoped Asset.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetRecord" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/map/layers/{layer}:
     get:
@@ -964,6 +1117,312 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/imports:
+    post:
+      operationId: createImport
+      summary: Upload bounded base64 KML or compressed KML for safe parsing
+      description: Upload bounded base64 KML or compressed KML for safe parsing.
+        Synthetic/simulated demo records only; imports are scoped to their
+        uploader and Organisation.
+      tags:
+        - Imports
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - format
+                - contentBase64
+              properties:
+                format:
+                  type: string
+                  enum:
+                    - kml
+                    - kmz
+                contentBase64:
+                  type: string
+                  maxLength: 2796204
+      responses:
+        "200":
+          description: Import state or available targets.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          description: Upload limit exceeded.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/imports/options:
+    get:
+      operationId: getImportOptions
+      summary: List eligible simulated linear Assets and linked Barriers
+      description: List eligible simulated linear Assets and linked Barriers.
+        Synthetic/simulated demo records only; imports are scoped to their
+        uploader and Organisation.
+      tags:
+        - Imports
+      parameters: []
+      responses:
+        "200":
+          description: Import state or available targets.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportOptions"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/imports/{importId}/preview:
+    get:
+      operationId: getImportPreview
+      summary: Resume an import with persisted preview and mapping
+      description: Resume an import with persisted preview and mapping.
+        Synthetic/simulated demo records only; imports are scoped to their
+        uploader and Organisation.
+      tags:
+        - Imports
+      parameters:
+        - name: importId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Import state or available targets.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/imports/{importId}/mapping:
+    put:
+      operationId: mapImport
+      summary: Map attributes and calculate distance, Chainage and validation flags
+      description: Map attributes and calculate distance, Chainage and validation
+        flags. Synthetic/simulated demo records only; imports are scoped to their
+        uploader and Organisation.
+      tags:
+        - Imports
+      parameters:
+        - name: importId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - version
+                - mapping
+              properties:
+                version:
+                  type: integer
+                  minimum: 1
+                mapping:
+                  $ref: "#/components/schemas/ImportMapping"
+      responses:
+        "200":
+          description: Import state or available targets.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/imports/{importId}:commit:
+    post:
+      operationId: commitImport
+      summary: Commit an import batch without changing Barrier Health
+      description: Commit an import batch without changing Barrier Health.
+        Synthetic/simulated demo records only; imports are scoped to their
+        uploader and Organisation.
+      tags:
+        - Imports
+      parameters:
+        - name: importId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - version
+              properties:
+                version:
+                  type: integer
+                  minimum: 1
+      responses:
+        "200":
+          description: Import state or available targets.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/imports/{importId}:rollback:
+    post:
+      operationId: rollbackImport
+      summary: Roll back records created by one import batch
+      description: Roll back records created by one import batch. Synthetic/simulated
+        demo records only; imports are scoped to their uploader and Organisation.
+      tags:
+        - Imports
+      parameters:
+        - name: importId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - version
+              properties:
+                version:
+                  type: integer
+                  minimum: 1
+      responses:
+        "200":
+          description: Import state or available targets.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportPreview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+  /v1/audit:
+    get:
+      operationId: listAuditEvents
+      summary: List audit events, newest first
+      description: |
+        Returns audit events of the signed-in user's Organisation, within the user's clearance, newest
+        first. `entityType` is the namespace of the event action (`barrier` for `barrier.health_changed`)
+        and `entityId` is the audited entity identifier; both are optional exact-match filters. Events
+        are append-only; this endpoint never changes them. Restricted to operators and managers.
+      tags: [Audit]
+      parameters:
+      - name: entityType
+        in: query
+        description: Action namespace to match, for example `health_proposal`, `barrier` or `simulation`.
+        schema: { type: string, pattern: '^[a-z][a-z0-9_]{0,63}$' }
+      - name: entityId
+        in: query
+        description: Identifier of the audited entity to match exactly.
+        schema: { type: string, minLength: 1, maxLength: 256 }
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Audit events in reverse chronological order.
+          headers:
+            Cache-Control:
+              description: Always `private, no-store`.
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditEventPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
 components:
   securitySchemes:
     serviceIdentity:
@@ -1027,6 +1486,425 @@ components:
         minimum: 0
 
   schemas:
+    ImportMapping:
+      type: object
+      additionalProperties: false
+      required:
+        - assetId
+        - toleranceMetres
+        - nameField
+        - descriptionField
+        - categoryField
+        - target
+        - barrierId
+      properties:
+        assetId:
+          type: string
+          format: uuid
+        toleranceMetres:
+          type: number
+          minimum: 0
+          maximum: 1000
+        nameField:
+          type: string
+          maxLength: 200
+        descriptionField:
+          type: string
+          maxLength: 200
+        categoryField:
+          type: string
+          maxLength: 200
+        target:
+          type: string
+          enum:
+            - evidence
+            - facility
+        barrierId:
+          type:
+            - string
+            - "null"
+          format: uuid
+    ImportPoint:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - longitude
+        - latitude
+        - attributes
+        - distanceMetres
+        - chainageMetres
+        - flags
+      properties:
+        id:
+          type: string
+          format: uuid
+        longitude:
+          type: number
+          minimum: -180
+          maximum: 180
+        latitude:
+          type: number
+          minimum: -90
+          maximum: 90
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+        distanceMetres:
+          type:
+            - number
+            - "null"
+        chainageMetres:
+          type:
+            - number
+            - "null"
+        flags:
+          type: array
+          items:
+            type: string
+    ImportPreview:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - status
+        - version
+        - classification
+        - fileHash
+        - createdAt
+        - mapping
+        - points
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+            - preview
+            - mapped
+            - committed
+            - rolled_back
+        version:
+          type: integer
+          minimum: 1
+        classification:
+          type: string
+        fileHash:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        mapping:
+          anyOf:
+            - $ref: "#/components/schemas/ImportMapping"
+            - type: "null"
+        points:
+          type: array
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/ImportPoint"
+    ImportOptions:
+      type: object
+      additionalProperties: false
+      required:
+        - assets
+        - barriers
+      properties:
+        assets:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - id
+              - name
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+        barriers:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - id
+              - name
+              - assetId
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              assetId:
+                type: string
+
+    # BEGIN generated action schemas
+    ActionLevel:
+      type: string
+      enum:
+        - l0
+        - l1
+        - l2
+    ActionType:
+      type: string
+      enum:
+        - internal_record
+        - system_of_record
+        - field_command
+        - engineering_approval
+        - emergency_communication
+        - external_submission
+    ActionClassification:
+      type: string
+      enum:
+        - PUBLIC
+        - INTERNAL
+        - CONFIDENTIAL
+        - HIGHLY_RESTRICTED
+    ActionTarget:
+      type: string
+      enum:
+        - fieldloop
+        - cmms
+        - integrity-database
+        - gis
+        - asset-register
+        - siem
+        - historian
+        - scada
+        - ot
+        - engineering-authority
+        - stakeholders
+        - regulator
+        - external-party
+    ActionRequestCreate:
+      type: object
+      additionalProperties: false
+      required:
+        - actionType
+        - actionLevel
+        - target
+        - payload
+        - rationale
+        - citations
+        - simulated
+        - classification
+      properties:
+        actionType:
+          $ref: "#/components/schemas/ActionType"
+        actionLevel:
+          $ref: "#/components/schemas/ActionLevel"
+        target:
+          $ref: "#/components/schemas/ActionTarget"
+        payload:
+          type: object
+          additionalProperties: true
+        rationale:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+        citations:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 2048
+            pattern: \S
+        simulated:
+          type: boolean
+        classification:
+          $ref: "#/components/schemas/ActionClassification"
+        expiresAt:
+          type: string
+          format: date-time
+        simulationRunId:
+          type: string
+          format: uuid
+    ToolCallCheck:
+      type: object
+      additionalProperties: false
+      required:
+        - aiSystem
+        - tool
+        - target
+        - simulated
+        - classification
+      properties:
+        actionType:
+          $ref: "#/components/schemas/ActionType"
+        actionLevel:
+          $ref: "#/components/schemas/ActionLevel"
+        target:
+          $ref: "#/components/schemas/ActionTarget"
+        payload:
+          type: object
+          additionalProperties: true
+        rationale:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+        citations:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 2048
+            pattern: \S
+        simulated:
+          type: boolean
+        classification:
+          $ref: "#/components/schemas/ActionClassification"
+        expiresAt:
+          type: string
+          format: date-time
+        simulationRunId:
+          type: string
+          format: uuid
+        aiSystem:
+          type: string
+          minLength: 1
+          maxLength: 128
+        tool:
+          type: string
+          minLength: 1
+          maxLength: 128
+    ActionRequester:
+      description: Who requested the action (PRD AX-1). An assistant acts on behalf of
+        requestedBy.
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - kind
+          properties:
+            kind:
+              const: person
+        - type: object
+          additionalProperties: false
+          required:
+            - kind
+            - aiSystemId
+          properties:
+            kind:
+              const: assistant
+            aiSystemId:
+              type: string
+              format: uuid
+    ActionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - orgId
+        - actionType
+        - actionLevel
+        - target
+        - payload
+        - payloadHash
+        - rationale
+        - citations
+        - requestedBy
+        - requester
+        - status
+        - expiresAt
+        - simulated
+        - classification
+      properties:
+        actionType:
+          $ref: "#/components/schemas/ActionType"
+        actionLevel:
+          $ref: "#/components/schemas/ActionLevel"
+        target:
+          $ref: "#/components/schemas/ActionTarget"
+        payload:
+          type: object
+          additionalProperties: true
+        rationale:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+        citations:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 2048
+            pattern: \S
+        simulated:
+          type: boolean
+        classification:
+          $ref: "#/components/schemas/ActionClassification"
+        expiresAt:
+          type: string
+          format: date-time
+        simulationRunId:
+          type: string
+          format: uuid
+        id:
+          type: string
+          format: uuid
+        orgId:
+          type: string
+          minLength: 1
+          maxLength: 128
+        payloadHash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        requestedBy:
+          type: string
+          minLength: 1
+          maxLength: 512
+        requester:
+          $ref: "#/components/schemas/ActionRequester"
+        status:
+          type: string
+          enum:
+            - open
+            - in_review
+            - approved
+            - rejected
+            - superseded
+            - executed
+    ToolCallDecision:
+      type: object
+      additionalProperties: false
+      required:
+        - decision
+        - reason
+      properties:
+        decision:
+          type: string
+          enum:
+            - allow
+            - convert_l1
+            - hold_l2
+            - block
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        ceiling:
+          $ref: "#/components/schemas/ActionLevel"
+        actionRequest:
+          $ref: "#/components/schemas/ActionRequest"
+        heldRequestId:
+          type: string
+          format: uuid
+    # END generated action schemas
+
     GuardrailChatCompletionRequest:
       type: object
       required: [aiSystem, messages]
@@ -1082,6 +1960,21 @@ components:
         policyId: { type: string, format: uuid }
         reason: { type: string }
       additionalProperties: false
+
+    AssetRecord:
+      type: object
+      additionalProperties: false
+      required: [id, type, name, code, label, domainPack, simulated, classification, geometry]
+      properties:
+        id: { type: string }
+        type: { type: string }
+        name: { type: string }
+        code: { type: [string, 'null'] }
+        label: { type: [string, 'null'], description: SIMULATION or SYNTHETIC label shown with the Asset. }
+        domainPack: { type: [string, 'null'] }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+        geometry: { description: GeoJSON geometry or null. }
 
     MapConfig:
       type: object
@@ -1408,6 +2301,34 @@ components:
           items:
             type: array
             items: { $ref: '#/components/schemas/Notification' }
+          limit: { type: integer, minimum: 1, maximum: 200 }
+        required: [items, limit]
+    AuditEvent:
+      type: object
+      additionalProperties: false
+      description: One append-only audit record. `hash` is the v1 SHA-256 of the record; the next record of the Organisation carries it as `prevHash`.
+      properties:
+        id: { type: string, format: uuid }
+        entityType: { type: string, description: Action namespace, the text before the first dot of `action`. }
+        entity: { type: string }
+        action: { type: string }
+        actor: { type: string }
+        beforeHash: { type: [string, 'null'], pattern: '^[a-f0-9]{64}$' }
+        afterHash: { type: [string, 'null'], pattern: '^[a-f0-9]{64}$' }
+        prevHash: { type: [string, 'null'], pattern: '^[a-f0-9]{64}$' }
+        hash: { type: string, pattern: '^[a-f0-9]{64}$' }
+        createdAt: { type: string, format: date-time }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+      required: [id, entityType, entity, action, actor, beforeHash, afterHash, prevHash, hash, createdAt, simulated, classification]
+    AuditEventPage:
+      allOf:
+      - $ref: '#/components/schemas/CursorPage'
+      - type: object
+        properties:
+          items:
+            type: array
+            items: { $ref: '#/components/schemas/AuditEvent' }
           limit: { type: integer, minimum: 1, maximum: 200 }
         required: [items, limit]
     CurrentUser:

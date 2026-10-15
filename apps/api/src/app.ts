@@ -1,3 +1,5 @@
+import { registerActionRoutes } from "./actions/routes.js";
+import type { ActionServicePort } from "@fieldloop/adapters";
 import Fastify from "fastify";
 import { registerSimulationRoutes } from "./simulation/routes.js";
 import type { SimulationPort } from "./simulation/client.js";
@@ -8,9 +10,13 @@ import { registerMapLayerRoutes, UnavailableMapLayerStore, type MapLayerStore } 
 import type { LoadedDomainPack } from "@fieldloop/adapters";
 import { registerRiskRoutes } from "./risk/routes.js";
 import type { RiskApiPort } from "./risk/service.js";
+import { registerAuditRoutes } from "./audit/routes.js";
+import type { AuditServicePort } from "./audit/model.js";
 import { registerHealthRoutes } from "./health/routes.js";
 import type { HealthServicePort } from "./health/model.js";
 import { registerLiveEventRoute } from "./live-events.js";
+import { registerImportRoutes } from "./imports/routes.js";
+import type { ImportPort } from "./imports/store.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -20,6 +26,8 @@ declare module "fastify" {
 }
 
 export function buildApp(options: {
+  actions?: ActionServicePort;
+  audit?: AuditServicePort;
   auth?: AuthServicePort;
   baseUrl?: string;
   mapLayers?: MapLayerStore;
@@ -28,6 +36,7 @@ export function buildApp(options: {
   risk?: RiskApiPort;
   health?: HealthServicePort;
   domainPacks?: LoadedDomainPack[];
+  imports?: ImportPort;
 } = {}) {
   const app = Fastify({ logger: { serializers: { req: serializeRequestForLog } } });
   const auth = options.auth ?? new UnavailableAuthService();
@@ -41,6 +50,9 @@ export function buildApp(options: {
   registerSimulationRoutes(app, options.simulator);
   registerRiskRoutes(app, options.risk);
   registerHealthRoutes(app, options.health);
+  registerImportRoutes(app, options.imports);
+  registerAuditRoutes(app, options.audit);
+  registerActionRoutes(app, options.actions);
   registerLiveEventRoute(app, options.simulator, options.health, options.risk);
   return app;
 }

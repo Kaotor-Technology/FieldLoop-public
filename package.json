@@ -27,13 +27,16 @@
     "db:seed:bangkok": "node db/seed/bangkok/seed.mjs",
     "db:migrate": "dbmate --migrations-table public.schema_migrations up",
     "test:migrations": "bash scripts/test-migrations.sh",
+    "test:audit-api": "bash scripts/test-audit-api.sh",
     "test:risk-service": "bash scripts/test-risk-service.sh",
     "test:guardrail-store": "bash scripts/test-guardrail-store.sh",
     "test:seed": "bash scripts/test-seed.sh",
     "test:seed:legal": "node scripts/test-legal-seed.mjs",
     "test:seed:bangkok": "bash scripts/test-bangkok-seed.sh",
+    "test:audit-writer": "node scripts/test-audit-runner-safety.mjs && pnpm exec turbo run build --filter=@fieldloop/adapters... && node scripts/test-audit-writer.mjs",
     "test:signals": "pnpm exec turbo run build --filter=@fieldloop/signal-worker... --filter=@fieldloop/api... && node scripts/test-signal-worker.mjs",
-    "test:domain-packs": "pnpm exec turbo run build --filter=@fieldloop/api... --filter=@fieldloop/guardrail... && bash scripts/test-domain-packs.sh"
+    "test:domain-packs": "pnpm exec turbo run build --filter=@fieldloop/api... --filter=@fieldloop/guardrail... && bash scripts/test-domain-packs.sh",
+    "test:actions": "bash scripts/test-actions.sh"
   },
   "devDependencies": {
     "@fieldloop/config": "workspace:*",

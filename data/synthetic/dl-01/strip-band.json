@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "assetCode": "DL-01",
+  "lengthM": 180000,
+  "classification": "HIGHLY_RESTRICTED",
+  "simulated": true,
+  "label": "SYNTHETIC",
+  "barriers": [
+    {
+      "id": "depth-of-cover-and-markers",
+      "name": "Depth of cover & markers",
+      "health": "healthy",
+      "chainageM": null
+    },
+    {
+      "id": "right-of-way-patrol",
+      "name": "Right-of-Way patrol",
+      "health": "healthy",
+      "chainageM": null
+    },
+    {
+      "id": "excavation-permit-one-call",
+      "name": "Excavation permit / one-call",
+      "health": "healthy",
+      "chainageM": null
+    },
+    {
+      "id": "coating",
+      "name": "Coating",
+      "health": "healthy",
+      "chainageM": null
+    },
+    {
+      "id": "cathodic-protection",
+      "name": "Cathodic protection",
+      "health": "healthy",
+      "chainageM": null
+    },
+    {
+      "id": "in-line-inspection-and-response",
+      "name": "In-line inspection & response",
+      "health": "healthy",
+      "chainageM": null
+    },
+    {
+      "id": "slope-protection",
+      "name": "Slope protection",
+      "health": "healthy",
+      "chainageM": null
+    },
+    {
+      "id": "strain-inclinometer-monitoring",
+      "name": "Strain / inclinometer monitoring",
+      "health": "healthy",
+      "chainageM": null
+    },
+    {
+      "id": "post-rain-patrol",
+      "name": "Post-rain patrol",
+      "health": "healthy",
+      "chainageM": null
+    },
+    {
+      "id": "pressure-control",
+      "name": "Pressure control",
+      "health": "healthy",
+      "chainageM": null
+    },
+    {
+      "id": "overpressure-protection",
+      "name": "Overpressure protection",
+      "health": "healthy",
+      "chainageM": null
+    },
+    {
+      "id": "operating-limits-procedure",
+      "name": "Operating limits procedure",
+      "health": "healthy",
+      "chainageM": null
+    },
+    {
+      "id": "leak-detection-scada-alarm",
+      "name": "Leak detection & SCADA alarm",
+      "health": "healthy",
+      "chainageM": null
+    },
+    {
+      "id": "remote-automatic-valve-closure",
+      "name": "Remote / automatic valve closure",
+      "health": "healthy",
+      "chainageM": null
+    },
+    {
+      "id": "emergency-response-plan",
+      "name": "Emergency response plan",
+      "health": "healthy",
+      "chainageM": null
+    }
+  ],
+  "facilities": [
+    {
+      "id": "dl-01-bvs-001",
+      "name": "DL-01 Block Valve Station 001",
+      "chainageM": 45000
+    },
+    {
+      "id": "dl-01-bvs-002",
+      "name": "DL-01 Block Valve Station 002",
+      "chainageM": 90000
+    },
+    {
+      "id": "dl-01-bvs-003",
+      "name": "DL-01 Block Valve Station 003",
+      "chainageM": 135000
+    }
+  ],
+  "inspections": [],
+  "threatCategories": [],
+  "segments": [
+    {
+      "id": "dl-01-segment-001",
+      "name": "DL-01 Segment 001",
+      "chainageFromM": 0,
+      "chainageToM": 30000
+    },
+    {
+      "id": "dl-01-segment-002",
+      "name": "DL-01 Segment 002",
+      "chainageFromM": 30000,
+      "chainageToM": 60000
+    },
+    {
+      "id": "dl-01-segment-003",
+      "name": "DL-01 Segment 003",
+      "chainageFromM": 60000,
+      "chainageToM": 90000
+    },
+    {
+      "id": "dl-01-segment-004",
+      "name": "DL-01 Segment 004",
+      "chainageFromM": 90000,
+      "chainageToM": 120000
+    },
+    {
+      "id": "dl-01-segment-005",
+      "name": "DL-01 Segment 005",
+      "chainageFromM": 120000,
+      "chainageToM": 150000
+    },
+    {
+      "id": "dl-01-segment-006",
+      "name": "DL-01 Segment 006",
+      "chainageFromM": 150000,
+      "chainageToM": 180000
+    }
+  ]
+}

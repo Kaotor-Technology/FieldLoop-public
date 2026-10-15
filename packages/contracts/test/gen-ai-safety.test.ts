@@ -3,11 +3,24 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { isRiskSeverity } from "../src/risk.js";
 import { parseGenAiSafetyPack } from "../src/domain-pack.js";
+import { actionSchema } from "../src/actions.js";
+import { genAiSafetySchema } from "../src/generated/gen-ai-safety.js";
 
 function item<T>(values: T[], index = 0): T {
   const value = values[index];
   if (value === undefined) throw new Error("test fixture item missing");
   return value;
+}
+
+function findProperty(node: unknown, name: string): unknown {
+  if (node === null || typeof node !== "object") return undefined;
+  const properties: unknown = Reflect.get(node, "properties");
+  if (properties && typeof properties === "object" && name in properties) return Reflect.get(properties, name);
+  for (const child of Object.values(node)) {
+    const found = findProperty(child, name);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 }
 
 async function seed() {
@@ -21,6 +34,20 @@ describe("Gen AI Safety contracts (FL-85 / FL-36)", () => {
     expect(pack.aiSystem.dataClasses).toEqual(["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"]);
     expect(pack.policies.map(({ kind }) => kind)).toEqual(["injection", "classification-routing", "output-dlp", "tool-call"]);
     expect(pack.policies.every(({ mode, failMode }) => mode === "enforce" && failMode === "fail-closed")).toBe(true);
+  });
+
+  it("registers the UC-1 tool-call target allowlist from the Action target vocabulary (PRD GR-4)", async () => {
+    const pack = parseGenAiSafetyPack(await seed(), "ai-safety.yaml");
+    const toolCall = pack.policies.find((policy) => policy.kind === "tool-call");
+    if (toolCall?.kind !== "tool-call") throw new Error("expected tool-call policy");
+    expect(toolCall.settings.allowedTargets).toEqual(["fieldloop", "cmms", "integrity-database", "gis", "asset-register", "siem", "historian"]);
+    expect(findProperty(genAiSafetySchema, "allowedTargets")).toMatchObject({ items: { enum: actionSchema.$defs.ActionTarget.enum } });
+    const value = await seed();
+    const settings = (item(value["policies"] as Record<string, unknown>[], 3)["settings"]) as Record<string, unknown>;
+    for (const invalid of [undefined, [], ["https://example.test/write"]]) {
+      settings["allowedTargets"] = invalid;
+      expect(() => parseGenAiSafetyPack(value, "ai-safety.yaml")).toThrow(/ai-safety.yaml/);
+    }
   });
 
   it("keeps every authored Consequence compatible with shared RiskSeverity", async () => {

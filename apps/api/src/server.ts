@@ -18,9 +18,12 @@ try {
 }
 const app = buildApp({
   auth: authRuntime.auth,
+  ...(authRuntime.actions ? { actions: authRuntime.actions } : {}),
   mapLayers: authRuntime.mapLayers,
+  ...(authRuntime.audit ? { audit: authRuntime.audit } : {}),
   ...(authRuntime.health ? { health: authRuntime.health } : {}),
   ...(authRuntime.risk ? { risk: authRuntime.risk } : {}),
+  ...(authRuntime.imports ? { imports: authRuntime.imports } : {}),
   domainPacks,
   ...(simulator ? { simulator } : {}),
   ...(process.env["FIELDLOOP_BASE_URL"] ? { baseUrl: process.env["FIELDLOOP_BASE_URL"] } : {}),

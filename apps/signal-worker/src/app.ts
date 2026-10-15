@@ -65,6 +65,12 @@ export function buildApp(runtime?: WorkerRuntime) {
     await runtime.store.publishPending(runtime.publish);
     return result;
   });
+  app.post("/internal/jobs/sla-expiry", {
+    onRequest: async (request) => { await authenticate(request.headers.authorization, "scheduler"); },
+  }, async () => {
+    if (!runtime?.expireActions) throw new WorkerError("Action expiry is not configured", 503);
+    return { rejected: await runtime.expireActions() };
+  });
   if (runtime) app.addHook("onClose", runtime.close);
   return app;
 }

@@ -399,6 +399,7 @@
                 "additionalProperties": false,
                 "required": [
                   "allowedTools",
+                  "allowedTargets",
                   "blockedTargets",
                   "onSystemOfRecordWrite",
                   "onUnknownTool",
@@ -416,7 +417,31 @@
                     },
                     "uniqueItems": true
                   },
+                  "allowedTargets": {
+                    "description": "Per-AI-System target allowlist (PRD GR-4): targets a tool call may name, including targets of an Action Request proposal that a person carries out. Values match the Action contract's ActionTarget.",
+                    "type": "array",
+                    "minItems": 1,
+                    "uniqueItems": true,
+                    "items": {
+                      "enum": [
+                        "fieldloop",
+                        "cmms",
+                        "integrity-database",
+                        "gis",
+                        "asset-register",
+                        "siem",
+                        "historian",
+                        "scada",
+                        "ot",
+                        "engineering-authority",
+                        "stakeholders",
+                        "regulator",
+                        "external-party"
+                      ]
+                    }
+                  },
                   "blockedTargets": {
+                    "description": "Systems the AI System never writes to directly (ADR-0006). A proposal for one of them may still be allowed by allowedTargets and becomes an L1 Action Request for a person.",
                     "type": "array",
                     "minItems": 4,
                     "uniqueItems": true,

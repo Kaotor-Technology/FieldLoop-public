@@ -1,3 +1,5 @@
+import { ActionError } from "@fieldloop/adapters";
+import { isToolCallCheck } from "@fieldloop/contracts";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { isClassification, type ChatCompletionRequest, type ChatMessage, type GuardrailClassification, type GuardrailDependencies } from "./model.js";
 import { CONTENT_SCAN_STAGES, GuardrailEngine, type GuardrailHttpResult } from "./guardrail-engine.js";
@@ -41,6 +43,23 @@ export function buildApp(dependencies: GuardrailDependencies) {
     .send(errorBody("not_found", "Guardrail route not found", 404, "not_found")));
 
   app.get("/health", async () => ({ status: "ok" }));
+
+  app.post("/guardrail/v1/tool-calls:check", { onRequest: (request, reply) => authenticateUser(request, reply, dependencies) }, async (request, reply) => {
+    if (!isToolCallCheck(request.body) || request.body.simulated !== dependencies.simulated) return sendAuthProblem(reply, 400, "validation_failed", "Invalid tool call or simulation scope");
+    const identity = request.fieldLoopInternalUser;
+    if (!identity) return sendAuthProblem(reply, 401, "unauthenticated", "A valid internal user token is required");
+    const key = request.headers["idempotency-key"];
+    if (typeof key !== "string" || !/^[A-Za-z0-9._:-]{16,128}$/.test(key)) return sendAuthProblem(reply, 400, "validation_failed", "Idempotency-Key is required");
+    if (!dependencies.actions) return sendAuthProblem(reply, 503, "service_unavailable", "Tool-call service is unavailable");
+    try {
+      const result = await dependencies.actions.check(identity, request.body, key);
+      return reply.header("cache-control", "private, no-store").send(result);
+    } catch (error) {
+      if (error instanceof ActionError) return sendAuthProblem(reply, error.status, error.code, "Tool call could not be checked");
+      request.log.error({ errorType: error instanceof Error ? error.name : "unknown" }, "Tool-call check failed closed");
+      return sendAuthProblem(reply, 503, "service_unavailable", "Tool call could not be checked");
+    }
+  });
 
   app.post(CONTENT_SCAN_PATH, { onRequest: (request, reply) => authenticateUser(request, reply, dependencies) }, async (request, reply) => {
     if (!isJsonMediaType(request.headers["content-type"])) {

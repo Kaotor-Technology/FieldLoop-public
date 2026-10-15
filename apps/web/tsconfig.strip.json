@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/StripBand.tsx", "src/strip-band-data.ts", "test/strip-band.test.tsx",
+    "e2e/strip-band-fixture.ts", "e2e/strip-band-fixture.tsx", "e2e/strip-band.browser.ts",
+    "playwright.strip.config.ts", "vite.strip-fixture.config.ts"
+  ]
+}

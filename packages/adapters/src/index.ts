@@ -9,6 +9,7 @@ export { GooglePubSubTransport, createGooglePubSubTransport } from "./google-pub
 export { GoogleServiceIdentityVerifier, type ServiceIdentityVerifier } from "./google-service-identity.js";
 export { SignalPublisher, MAX_SIGNAL_BYTES, type MessageTransport, type SignalPublisherConfig, type SignalPublishResult } from "./signal-publisher.js";
 export { createCloudRunFetch, type ServiceFetch } from "./cloud-run-fetch.js";
+export { appendAuditEventAtomically, AuditCommitUnknownError, findCommittedAuditEvent, type AtomicAuditEventInput, type AuditEventLookup, type AuditEventReceipt } from "./audit-writer.js";
 export { appendAuditEvent, appendWorkerEvent, hashAuditSnapshot, insertWorkerEventOutbox, lockWorkerEventOutbox, workerEventOutboxRow, type AuditEventInput } from "./postgres-domain-events.js";
 export {
   GoogleModelArmorAdapter,
@@ -24,3 +25,6 @@ export {
   type VertexChatCompletions,
   type VertexChatCompletionsOptions,
 } from "./google-vertex-chat-completions.js";
+export { ACTION_CEILINGS, ActionError, effectiveCeiling, evaluateToolCall, targetMatches, levelRank } from "./action-policy.js";
+export type { ToolRegistration } from "./action-policy.js";
+export { PostgresActionStore, type ActionServicePort, type ActionIdentity } from "./postgres-actions.js";

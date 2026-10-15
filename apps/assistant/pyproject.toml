@@ -8,6 +8,13 @@ dependencies = [
     "fieldloop-common",
     "fieldloop-adapters",
     "psycopg[binary,pool]==3.3.6",
+    "asyncpg==0.32.0",
+    "google-adk[db]==2.11.0",
+    "litellm==1.104.2",
+    "httpx==0.28.1",
+    "pyyaml==6.0.3",
+    "jsonschema==4.26.0",
+    "pyjwt[crypto]==2.15.1",
 ]
 
 [tool.uv.sources]

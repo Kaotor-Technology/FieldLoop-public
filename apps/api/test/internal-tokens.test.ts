@@ -58,4 +58,36 @@ describe("internal user tokens", () => {
     expect(read).toHaveBeenCalledOnce();
     expect(read).toHaveBeenCalledWith("fieldloop-v2-internal-token-signing");
   });
+
+  it("verifies only its own unexpired tokens for this issuer and audience", async () => {
+    const { privateKey } = generateKeyPairSync("rsa", {
+      modulusLength: 2048, privateKeyEncoding: { type: "pkcs8", format: "pem" },
+      publicKeyEncoding: { type: "spki", format: "pem" },
+    });
+    const other = generateKeyPairSync("rsa", {
+      modulusLength: 2048, privateKeyEncoding: { type: "pkcs8", format: "pem" },
+      publicKeyEncoding: { type: "spki", format: "pem" },
+    });
+    const make = (pem: string, issuer: string, audience: string) =>
+      new SecretManagerInternalTokenService({ read: async () => pem }, issuer, audience, "k");
+    const issuer = "https://fieldloop-dev.kaotor.com";
+    const service = make(privateKey, issuer, "fieldloop-services");
+    const user = {
+      userId: "u", orgId: "fieldloop-demo", sub: "synthetic-subject", displayName: null, sid: null,
+      roles: ["fieldloop.operator"], clearance: "INTERNAL", csrfToken: "c", authTime: new Date(),
+      lastValidatedAt: new Date(), lastActiveAt: new Date(), accessExpiresAt: new Date(),
+      expiresAt: new Date(), wrappedDataKey: Buffer.from("k"), accessToken: Buffer.from("a"),
+      refreshToken: null, idToken: Buffer.from("i"),
+    } satisfies AuthUser;
+
+    const token = await service.sign(user);
+    expect(await service.verify(token)).toEqual({
+      sub: "synthetic-subject", roles: ["fieldloop.operator"], clearance: "INTERNAL", orgId: "fieldloop-demo",
+    });
+    // Signed by another key, minted for another audience or issuer, or not a token at all.
+    await expect(service.verify(await make(other.privateKey, issuer, "fieldloop-services").sign(user))).rejects.toThrow();
+    await expect(service.verify(await make(privateKey, issuer, "other-audience").sign(user))).rejects.toThrow();
+    await expect(service.verify(await make(privateKey, "https://evil.example", "fieldloop-services").sign(user))).rejects.toThrow();
+    await expect(service.verify("not-a-token")).rejects.toThrow();
+  });
 });

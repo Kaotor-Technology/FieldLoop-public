@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { sql, type Kysely, type RawBuilder, type Transaction } from "kysely";
 import type { WorkerEvent } from "@fieldloop/contracts";
+import type { AuditEventReceipt } from "./audit-writer.js";
 
 type PostgresConnection<Database> = Kysely<Database> | Transaction<Database>;
 
@@ -22,17 +23,19 @@ export function hashAuditSnapshot(value: unknown): string {
   return createHash("sha256").update(serialized).digest("hex");
 }
 
-export async function appendAuditEvent<Database>(connection: PostgresConnection<Database>, event: AuditEventInput): Promise<void> {
-  await sql`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify([event.orgId, "audit_event"])}, 0))`.execute(connection);
-  const previous = (await sql<{ content: string }>`SELECT to_jsonb(a)::text AS content
-    FROM app.audit_event a WHERE org_id = ${event.orgId} ORDER BY created_at DESC, id DESC LIMIT 1`.execute(connection)).rows[0];
-  const previousHash = previous ? createHash("sha256").update(previous.content).digest("hex") : null;
+/**
+ * Append one audit event through app.append_audit_event, which owns the Organisation lock, the
+ * hash chain and the UTC hashing. Call it last in the transaction, after domain row locks, and
+ * only on a READ COMMITTED transaction (the function rejects any other level).
+ */
+export async function appendAuditEvent<Database>(connection: PostgresConnection<Database>, event: AuditEventInput): Promise<AuditEventReceipt> {
   const beforeHash = event.before === null ? null : hashAuditSnapshot(event.before);
   const afterHash = hashAuditSnapshot(event.after);
-  await sql`INSERT INTO app.audit_event
-    (org_id, actor, action, entity, before_hash, after_hash, prev_hash, simulated, classification, created_by, created_at)
-    VALUES (${event.orgId}, ${event.actor}, ${event.action}, ${event.entity}, ${beforeHash}, ${afterHash}, ${previousHash},
-      ${event.simulated}, ${event.classification}, ${event.createdBy}, clock_timestamp())`.execute(connection);
+  const receipt = (await sql<{ event_id: string; previous_hash: string | null; event_hash: string }>`SELECT event_id, previous_hash, event_hash
+    FROM app.append_audit_event(${event.orgId}, ${event.actor}, ${event.action}, ${event.entity}, ${beforeHash}, ${afterHash},
+      ${event.simulated}, ${event.classification}, ${event.createdBy})`.execute(connection)).rows[0];
+  if (!receipt) throw new Error("Audit append returned no event");
+  return { id: receipt.event_id, prevHash: receipt.previous_hash, hash: receipt.event_hash };
 }
 
 // Pair with the API's initial stream cursor so a subscriber cannot advance past

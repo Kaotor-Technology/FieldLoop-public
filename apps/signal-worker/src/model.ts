@@ -11,6 +11,7 @@ export interface WorkerStore {
   publishPending(publish: (event: WorkerEvent) => Promise<void>): Promise<void>;
 }
 export interface WorkerRuntime {
+  expireActions?: () => Promise<number>;
   store: WorkerStore;
   identity: ServiceIdentityVerifier;
   audience: string;

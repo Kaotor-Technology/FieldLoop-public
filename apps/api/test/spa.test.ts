@@ -8,7 +8,7 @@ import { registerSpa } from "../src/spa.js";
 const cleanup: Array<() => Promise<unknown>> = [];
 afterEach(async () => { await Promise.all(cleanup.splice(0).map((close) => close())); });
 
-it("serves a direct /map navigation without exposing the SPA at missing API paths", async () => {
+it("serves direct app-route navigations without exposing the SPA at missing API paths", async () => {
   const root = await mkdtemp(join(tmpdir(), "fieldloop-spa-"));
   await writeFile(join(root, "index.html"), '<html><div id="root"></div></html>');
   const app = buildApp();
@@ -18,6 +18,13 @@ it("serves a direct /map navigation without exposing the SPA at missing API path
   expect(map.statusCode).toBe(200);
   expect(map.headers["content-type"]).toContain("text/html");
   expect(map.body).toContain('id="root"');
+  const audit = await app.inject("/audit?entityType=barrier");
+  expect(audit.statusCode).toBe(200);
+  expect(audit.body).toContain('id="root"');
+  const agent = await app.inject("/agent?scenario=synthetic-storm");
+  expect(agent.statusCode).toBe(200);
+  expect(agent.headers["content-type"]).toContain("text/html");
+  expect(agent.body).toContain('id="root"');
   const api = await app.inject({ url: "/api/v1/missing", headers: { accept: "text/html" } });
   expect(api.statusCode).toBe(404);
   expect(api.body).not.toContain('id="root"');
