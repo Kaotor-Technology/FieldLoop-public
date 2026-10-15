@@ -29,7 +29,7 @@ export function useActionRequestEvents(): void {
 function readActionRequestId(payload: unknown): string | undefined {
   if (!payload || typeof payload !== "object") return undefined;
   const record = payload as Record<string, unknown>;
-  for (const field of ["actionRequestId", "action_request_id", "id"]) {
+  for (const field of ["actionRequestId", "action_request_id", "entityId"]) {
     const value = record[field];
     if (typeof value === "string" && value.length > 0) return value;
   }

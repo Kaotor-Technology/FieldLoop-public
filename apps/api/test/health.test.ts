@@ -75,11 +75,16 @@ it("returns validated, owner-scoped open Health Proposal pages", async () => {
   expect((await app.inject({ method: "GET", url: "/api/v1/health-proposals?status=open", headers: {} })).statusCode).toBe(401);
 });
 
-it("streams health events and resumes with the returned cursor", async () => {
+it("streams Health and Action Request events and resumes with the returned cursor", async () => {
   const { app, headers, health } = fixture();
-  const event = { id: randomUUID(), type: "barrier.health_changed" as const, orgId: "test-org", entityId: randomUUID(),
+  const healthEvent = { id: randomUUID(), type: "barrier.health_changed" as const, orgId: "test-org", entityId: randomUUID(),
     barrierId: randomUUID(), simulated: true, classification: "CONFIDENTIAL" as const, health: "degraded" as const };
-  vi.mocked(health.listEvents).mockResolvedValueOnce([{ position: { createdAt: "2026-10-13 00:01:00+00", id: event.id }, event }]);
+  const actionEvent = { id: randomUUID(), type: "action_request.updated" as const, orgId: "test-org", entityId: randomUUID(),
+    status: "approved" as const, simulated: true, classification: "INTERNAL" as const };
+  vi.mocked(health.listEvents).mockResolvedValueOnce([
+    { position: { createdAt: "2026-10-13 00:01:00+00", id: healthEvent.id }, event: healthEvent },
+    { position: { createdAt: "2026-10-13 00:02:00+00", id: actionEvent.id }, event: actionEvent },
+  ]);
   const base = await app.listen({ host: "127.0.0.1", port: 0 });
   const abort = new AbortController();
   const response = await fetch(`${base}/api/v1/events`, { headers: { cookie: headers.cookie }, signal: abort.signal });
@@ -87,13 +92,14 @@ it("streams health events and resumes with the returned cursor", async () => {
   if (!response.body) throw new Error("Stream has no body");
   const reader = response.body.getReader(), decoder = new TextDecoder();
   let text = "";
-  while (!text.includes("event: barrier.health_changed")) {
+  while (!text.includes("event: action_request.updated")) {
     const chunk = await reader.read();
-    if (chunk.done) throw new Error("Stream ended before the health event");
+    if (chunk.done) throw new Error("Stream ended before the Action Request event");
     text += decoder.decode(chunk.value);
   }
-  expect(text).toContain(event.barrierId);
+  expect(text).toContain(`event: barrier.health_changed\ndata: ${JSON.stringify(healthEvent)}`);
   expect(text).toContain('"health":"degraded"');
+  expect(text).toContain(`event: action_request.updated\ndata: ${JSON.stringify(actionEvent)}`);
   expect(text).toMatch(/id: [A-Za-z0-9_-]+/);
   await reader.cancel(); abort.abort();
 });

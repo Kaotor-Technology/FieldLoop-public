@@ -246,16 +246,23 @@ test("renders Action Request cards without chat approval and refreshes status fr
   const timeline = page.locator(".agent-chat-timeline");
   await timeline.locator("summary").click();
   await expect(timeline.locator(".agent-chat-guardrail-converted")).toContainText("SYNTHETIC-POLICY-1");
-  await expect(card.getByRole("link", { name: "Review and approve" })).toHaveAttribute("href", `/action-requests/${actionRequestId}`);
+  const reviewLink = card.getByRole("link", { name: "Review and approve" });
+  await expect(reviewLink).toHaveAttribute("href", `/actions/${actionRequestId}`);
   await expect(page.getByText("SYNTHETIC-POLICY-1", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
 
   await page.evaluate((id) => {
     sessionStorage.setItem("__actionRequestStatus", "approved");
     const target = window as Window & { __fieldLoopEmit?: (name: string, data: Record<string, unknown>) => void };
-    target.__fieldLoopEmit?.("action_request.updated", { actionRequestId: id });
+    target.__fieldLoopEmit?.("action_request.updated", { id: "synthetic-event-id", entityId: id, status: "approved" });
   }, actionRequestId);
   await expect(card).toContainText("Approved");
+
+  await reviewLink.click();
+  await expect(page).toHaveURL(new RegExp(`/actions/${actionRequestId}$`));
+  await expect(page.getByRole("heading", { name: actionRequestId })).toBeVisible();
+  await page.getByRole("button", { name: "Review and approve" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
 });
 
 test("shows distinct held and blocked Guardrail notices with policy IDs", async ({ page }) => {

@@ -2,15 +2,21 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "WorkerEvent",
   "type": "object", "additionalProperties": false,
-  "required": ["id", "type", "orgId", "barrierId", "entityId", "simulated", "classification"],
+  "required": ["id", "type", "orgId", "entityId", "simulated", "classification"],
   "properties": {
     "id": {"type": "string", "format": "uuid"},
-    "type": {"enum": ["health_proposal.created", "barrier.health_changed", "evidence.created", "notification.delivered"]},
+    "type": {"enum": ["health_proposal.created", "barrier.health_changed", "evidence.created", "notification.delivered", "action_request.updated"]},
     "orgId": {"type": "string", "minLength": 1},
     "barrierId": {"type": "string", "format": "uuid"},
     "entityId": {"type": "string", "format": "uuid"},
     "simulated": {"type": "boolean"},
     "classification": {"enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"]},
-    "health": {"enum": ["healthy", "degraded", "failed", "unverified"]}
-  }
+    "health": {"enum": ["healthy", "degraded", "failed", "unverified"]},
+    "status": {"enum": ["open", "in_review", "approved", "rejected", "superseded", "executed"]}
+  },
+  "allOf": [{
+    "if": {"properties": {"type": {"const": "action_request.updated"}}, "required": ["type"]},
+    "then": {"properties": {"status": {"enum": ["open", "in_review", "approved", "rejected", "superseded", "executed"]}}, "required": ["status"]},
+    "else": {"properties": {"barrierId": {"type": "string", "format": "uuid"}}, "required": ["barrierId"]}
+  }]
 }

@@ -19,4 +19,13 @@ describe("Action Request live event cache invalidation", () => {
 
     expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({ queryKey: ["action-request"] });
   });
+
+  it("uses the event entityId instead of the outbox event ID", async () => {
+    const invalidateQueries = vi.fn().mockResolvedValue(undefined);
+    const client = { invalidateQueries } as unknown as Parameters<typeof invalidateActionRequestQueries>[0];
+
+    await invalidateActionRequestQueries(client, { id: "synthetic-event", entityId: "synthetic-action-request", status: "approved" });
+
+    expect(invalidateQueries).toHaveBeenCalledExactlyOnceWith({ queryKey: ["action-request", "synthetic-action-request"] });
+  });
 });

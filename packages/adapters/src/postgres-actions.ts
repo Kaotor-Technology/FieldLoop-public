@@ -208,6 +208,7 @@ export class PostgresActionStore implements ActionServicePort, ActionDecisionPor
           WHERE action_request_id = ${id}::uuid AND org_id = ${user.orgId} AND status IN ('held', 'allowed')`.execute(trx);
       }
       const decided = { actionRequest: toAction(updated), approval: toApproval(approval) };
+      await appendActionRequestUpdate(trx, decided.actionRequest);
       await appendAuditEvent(trx, { orgId: user.orgId, actor: user.sub, action: decision === "approved" ? "action_request.approved" : "action_request.rejected",
         entity: id, before: { status: row.status, payloadHash: row.payload_hash },
         after: { status: updated.status, approvalId: approval.id, approverSub: user.sub, payloadHash: row.payload_hash, reason: body.reason, authTime: user.authTime.toISOString() },
@@ -308,9 +309,14 @@ async function insertAction(trx: Tx, user: ActionIdentity, body: ActionRequestCr
       ${body.simulated}, ${body.classification}, ${user.sub}, ${body.simulationRunId ?? null}::uuid, ${now}::timestamptz) RETURNING *`.execute(trx)).rows[0];
   if (!row) throw new Error("Action Request was not inserted");
   const action = toAction(row);
+  await appendActionRequestUpdate(trx, action);
   await appendAuditEvent(trx, { orgId: user.orgId, actor: user.sub, action: "action_request.created", entity: action.id,
     before: null, after: action, simulated: body.simulated, classification: body.classification, createdBy: "action-service" });
   return action;
+}
+async function appendActionRequestUpdate(trx: Tx, action: Pick<ActionRequest, "id" | "orgId" | "status" | "simulated" | "classification">): Promise<void> {
+  await appendWorkerEvent(trx, { id: randomUUID(), type: "action_request.updated", orgId: action.orgId, entityId: action.id,
+    status: action.status, simulated: action.simulated, classification: action.classification }, "action-service");
 }
 interface Saved { request_hash: string; result: ToolCallDecision & { approvalId?: string }; action_request_id: string | null }
 type DecisionKey = ActionDecisionCreate & { actionRequestId: string; simulated: boolean; classification: ActionClassification };
@@ -338,6 +344,7 @@ async function expireRequests(trx: Tx, orgId: string, simulatedOnly: boolean): P
     await sql`INSERT INTO app.notification (org_id, action_request_id, channel, recipient_ref, status, receipt, sandbox, simulated, classification, created_by, simulation_run_id)
       VALUES (${orgId}, ${row.id}::uuid, 'in_app', ${row.simulated ? 'sandbox:ai-governance' : 'role:fieldloop.manager'}, 'pending',
         '{"reason":"sla_expired"}'::jsonb, ${row.simulated}, ${row.simulated}, ${row.classification}, 'sla-expiry', ${row.simulation_run_id}::uuid)`.execute(trx);
+    await appendActionRequestUpdate(trx, { id: row.id, orgId, status: "rejected", simulated: row.simulated, classification: row.classification });
     await appendAuditEvent(trx, { orgId, actor: "sla-expiry", action: "action_request.expired", entity: row.id,
       before: null, after: { status: "rejected", reason: "sla_expired", escalated: true }, simulated: row.simulated, classification: row.classification, createdBy: "action-service" });
   }

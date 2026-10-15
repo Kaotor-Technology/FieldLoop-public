@@ -54,16 +54,18 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
     const row = (await pool.query("SELECT * FROM app.held_request WHERE id=$1", [held.heldRequestId])).rows[0];
     expect(row.status).toBe("held"); expect(row.payload).toEqual(check.payload); expect(row.payload_hash).toBe(held.actionRequest?.payloadHash);
     expect(Number((await pool.query("SELECT count(*) FROM app.evidence WHERE org_id=$1 AND kind='guardrail.intercept'", [user.orgId])).rows[0].count)).toBe(3);
-    expect(Number((await pool.query("SELECT count(*) FROM app.signal_event_outbox WHERE org_id=$1", [user.orgId])).rows[0].count)).toBe(3);
+    expect(Number((await pool.query("SELECT count(*) FROM app.signal_event_outbox WHERE org_id=$1", [user.orgId])).rows[0].count)).toBe(5);
+    const actionEvents = await pool.query<{ status: string }>("SELECT event->>'status' AS status FROM app.signal_event_outbox WHERE org_id=$1 AND event->>'type'='action_request.updated' ORDER BY created_at, id", [user.orgId]);
+    expect(actionEvents.rows.map(({ status }) => status)).toEqual(["open", "open"]);
   });
   it("never executes or creates artifacts for L3, unknown write tools, spoofed targets or above ceilings", async () => {
-    const { user, check } = await fixture();
+    const { user, check, policyId } = await fixture();
     await expect(store.check(user, { ...check, actionLevel: "l3" } as unknown as ToolCallCheck, key())).rejects.toThrow("validation_failed");
     for (const body of [{ ...check, tool: "write_cmms" }, { ...check, actionLevel: "l2" as const }, { ...check, actionType: "internal_record" as const }]) {
       expect((await store.check(user, body, key())).decision).toBe("block");
     }
     // PRD GR-4: GIS is a valid system-of-record target but is not on this AI System's target allowlist.
-    expect(await store.check(user, { ...check, target: "gis" }, key())).toEqual({ decision: "block", reason: "target_not_registered" });
+    expect(await store.check(user, { ...check, target: "gis" }, key())).toEqual({ decision: "block", reason: "target_not_registered", policyId });
     expect(Number((await pool.query("SELECT count(*) FROM app.action_request WHERE org_id=$1", [user.orgId])).rows[0].count)).toBe(0);
   });
   it("converts the registered CMMS operation once without executing a CMMS write", async () => {
@@ -117,7 +119,7 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
     const { user, check, policyId } = await fixture(), savedKey = key();
     expect((await store.check(user, check, savedKey)).decision).toBe("convert_l1");
     await pool.query("UPDATE app.guardrail_policy SET config = jsonb_set(config, '{settings,allowedTargets}', '[\"fieldloop\"]') WHERE id=$1", [policyId]);
-    expect(await store.check(user, check, savedKey)).toEqual({ decision: "block", reason: "target_not_registered" });
+    expect(await store.check(user, check, savedKey)).toEqual({ decision: "block", reason: "target_not_registered", policyId });
   });
   it("fails closed on missing, ambiguous or monitor-only policy and incomplete action metadata", async () => {
     const { user, check, policyId } = await fixture();
@@ -159,6 +161,8 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
     expect(await store.expire(user.orgId, true)).toBe(1); expect(await store.expire(user.orgId, true)).toBe(0);
     expect((await store.get(user, held.actionRequest.id)).status).toBe("rejected");
     expect((await pool.query("SELECT status,rejection_reason FROM app.held_request WHERE id=$1", [held.heldRequestId])).rows[0]).toEqual({ status: "rejected", rejection_reason: "sla_expired" });
+    const actionEvents = await pool.query<{ status: string }>("SELECT event->>'status' AS status FROM app.signal_event_outbox WHERE org_id=$1 AND event->>'entityId'=$2 AND event->>'type'='action_request.updated' ORDER BY created_at, id", [user.orgId, held.actionRequest.id]);
+    expect(actionEvents.rows.map(({ status }) => status)).toEqual(["open", "rejected"]);
     expect(Number((await pool.query("SELECT count(*) FROM app.action_escalation WHERE org_id=$1", [user.orgId])).rows[0].count)).toBe(1);
     expect((await pool.query("SELECT channel,sandbox,recipient_ref FROM app.notification WHERE org_id=$1", [user.orgId])).rows[0]).toEqual({ channel: "in_app", sandbox: true, recipient_ref: "sandbox:ai-governance" });
     expect((await store.check(user, input, savedKey)).decision).toBe("block");
@@ -254,6 +258,8 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
       expect(stored).toHaveLength(1);
       expect(stored[0]).toMatchObject({ approver_sub: approver.sub, payload_hash: action.payloadHash, voided_at: null, simulated: true });
       expect(await count("SELECT count(*) FROM app.audit_event WHERE org_id=$1 AND action='action_request.approved' AND entity=$2", [approver.orgId, action.id])).toBe(1);
+      const actionEvents = await pool.query<{ status: string }>("SELECT event->>'status' AS status FROM app.signal_event_outbox WHERE org_id=$1 AND event->>'entityId'=$2 AND event->>'type'='action_request.updated' ORDER BY created_at, id", [approver.orgId, action.id]);
+      expect(actionEvents.rows.map(({ status }) => status)).toEqual(["open", "approved"]);
       await expect(store.decide(approver, action.id, "approved", { ...decision, reason: "Different reason" }, idempotencyKey)).rejects.toThrow("idempotency_key_reused");
     });
     it("refuses a stale or changed payload hash and any payload edit voids the Approval", async () => {
