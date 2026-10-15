@@ -64,14 +64,28 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AgentSessionCreate'
+              $ref: "#/components/schemas/AgentSessionCreate"
+            examples:
+              syntheticDemo:
+                summary: SYNTHETIC documentation fixture; no live action or approval
+                value:
+                  agent: integrity-orchestrator
       responses:
         '201':
           description: Session created.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AgentSession'
+                $ref: "#/components/schemas/AgentSession"
+              examples:
+                syntheticDemo:
+                  summary: SYNTHETIC documentation fixture; no live action or approval
+                  value:
+                    id: 00000000-0000-4000-8000-000000000095
+                    agent: integrity-orchestrator
+                    simulated: true
+                    classification: INTERNAL
+                    status: active
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -93,13 +107,42 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AgentMessageCreate'
+              $ref: "#/components/schemas/AgentMessageCreate"
+            examples:
+              syntheticDemo:
+                summary: SYNTHETIC documentation fixture; no live action or approval
+                value:
+                  message: Review the SYNTHETIC DL-01 barriers; cite source records.
       responses:
         '200':
           description: SSE agent.step, tool.call, tool.result, guardrail.decision and answer.final/incomplete/error events. Answer data follows the existing assistant runtime contract.
           content:
             text/event-stream:
-              schema: { type: string }
+              schema:
+                type: string
+              examples:
+                syntheticDemo:
+                  summary: SYNTHETIC documentation fixture; no live action or approval
+                  value: |+
+                    id: 1
+                    event: agent.step
+                    data: {"agent":"integrity-orchestrator","phase":"start","step":1}
+
+                    id: 2
+                    event: tool.call
+                    data: {"agent":"integrity-orchestrator","tool":"get_barriers","args_hash":"synthetic-argument-hash","step":2}
+
+                    id: 3
+                    event: guardrail.decision
+                    data: {"agent":"integrity-orchestrator","tool":"get_barriers","decision":"allow","reason":null,"ceiling":null,"action_request_id":null,"held_request_id":null,"source":"guardrail"}
+
+                    id: 4
+                    event: tool.result
+                    data: {"agent":"integrity-orchestrator","tool":"get_barriers","summary":"Synthetic empty barrier list","step":3}
+
+                    id: 5
+                    event: answer.final
+                    data: {"answer":"Synthetic example: no barriers in this fixture.","citations":[],"known":[],"unknown":[],"assumptions":[],"confidence":"low","confidence_reason":"Synthetic documentation fixture","retrieved_citations":[],"draft_ids":[],"action_request_ids":[],"held_request_ids":[]}
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -127,9 +170,16 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [cancelling]
+                required:
+                  - cancelling
                 properties:
-                  cancelling: { type: boolean }
+                  cancelling:
+                    type: boolean
+              examples:
+                syntheticDemo:
+                  summary: SYNTHETIC documentation fixture; no live action or approval
+                  value:
+                    cancelling: false
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -154,6 +204,20 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ActionRequestCreate"
+            examples:
+              syntheticWorkOrder:
+                summary: SYNTHETIC work order proposal; never sends to CMMS
+                description: Simulation-only L1 preparation. A human must review the exact payload; this endpoint does not execute it.
+                value:
+                  actionType: system_of_record
+                  actionLevel: l1
+                  target: cmms
+                  payload:
+                    title: Synthetic work order
+                  rationale: Prepare for the operator
+                  citations: ["synthetic:procedure-1"]
+                  simulated: true
+                  classification: INTERNAL
       responses:
         "201":
           description: Action Request created or idempotently replayed.
@@ -161,6 +225,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ActionRequest"
+              examples:
+                syntheticDemo:
+                  summary: SYNTHETIC documentation fixture; no live action or approval
+                  value:
+                    id: 00000000-0000-4000-8000-000000000095
+                    orgId: synthetic-org
+                    actionType: system_of_record
+                    actionLevel: l1
+                    target: cmms
+                    payload:
+                      title: Synthetic work order
+                    payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
+                    rationale: Prepare for the operator
+                    citations:
+                      - synthetic:procedure-1
+                    requestedBy: synthetic-user
+                    requester:
+                      kind: person
+                    status: open
+                    expiresAt: 2026-10-15T12:15:00Z
+                    simulated: true
+                    classification: INTERNAL
         "400": &a1
           $ref: "#/components/responses/BadRequest"
         "401": &a2
@@ -194,6 +280,28 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ActionRequest"
+              examples:
+                syntheticDemo:
+                  summary: SYNTHETIC documentation fixture; no live action or approval
+                  value:
+                    id: 00000000-0000-4000-8000-000000000095
+                    orgId: synthetic-org
+                    actionType: system_of_record
+                    actionLevel: l1
+                    target: cmms
+                    payload:
+                      title: Synthetic work order
+                    payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
+                    rationale: Prepare for the operator
+                    citations:
+                      - synthetic:procedure-1
+                    requestedBy: synthetic-user
+                    requester:
+                      kind: person
+                    status: open
+                    expiresAt: 2026-10-15T12:15:00Z
+                    simulated: true
+                    classification: INTERNAL
         "400": *a1
         "401": *a2
         "403": *a3
@@ -240,6 +348,15 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ToolCallCheck"
+            examples:
+              syntheticDemo:
+                summary: SYNTHETIC documentation fixture; no live action or approval
+                value:
+                  aiSystem: demo-uc-1
+                  tool: unknown_tool
+                  target: cmms
+                  simulated: true
+                  classification: INTERNAL
       responses:
         "200":
           description: Persisted decision and any proposed/held records. A block is a
@@ -248,6 +365,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ToolCallDecision"
+              examples:
+                syntheticDemo:
+                  summary: SYNTHETIC documentation fixture; no live action or approval
+                  value:
+                    decision: block
+                    reason: tool_not_registered
         "400": *a1
         "401":
           $ref: "#/components/responses/GuardrailUnauthenticated"
@@ -644,7 +767,18 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/GuardrailChatCompletionRequest" }
+            schema:
+              $ref: "#/components/schemas/GuardrailChatCompletionRequest"
+            examples:
+              syntheticDemo:
+                summary: SYNTHETIC documentation fixture; no live action or approval
+                value:
+                  aiSystem: demo-uc-1
+                  model: flash
+                  stream: false
+                  messages:
+                    - role: user
+                      content: Explain this SYNTHETIC demo record.
       responses:
         "200":
           description: OpenAI-compatible completion. Streaming requests receive a buffered SSE response after output scanning.
@@ -654,7 +788,20 @@ paths:
             X-FieldLoop-Classification: { schema: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] } }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/GuardrailChatCompletionResponse" }
+              schema:
+                $ref: "#/components/schemas/GuardrailChatCompletionResponse"
+              examples:
+                syntheticDemo:
+                  summary: SYNTHETIC documentation fixture; no live action or approval
+                  value:
+                    id: synthetic-completion
+                    object: chat.completion
+                    model: synthetic-test-model
+                    choices:
+                      - index: 0
+                        message:
+                          role: assistant
+                          content: SYNTHETIC documentation fixture; no live model result.
             text/event-stream:
               schema: { type: string }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -696,7 +843,14 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/GuardrailContentScanRequest" }
+            schema:
+              $ref: "#/components/schemas/GuardrailContentScanRequest"
+            examples:
+              syntheticDemo:
+                summary: SYNTHETIC documentation fixture; no live action or approval
+                value:
+                  aiSystem: demo-uc-1
+                  content: SYNTHETIC procedure fragment.
       responses:
         "200":
           description: Content scan outcome and detected classification.
@@ -705,7 +859,16 @@ paths:
             X-FieldLoop-Intercept-Id: { schema: { type: string, format: uuid } }
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/GuardrailContentScanResult" }
+              schema:
+                $ref: "#/components/schemas/GuardrailContentScanResult"
+              examples:
+                syntheticDemo:
+                  summary: SYNTHETIC documentation fixture; no live action or approval
+                  value:
+                    decision: allow
+                    content: SYNTHETIC procedure fragment.
+                    classification: INTERNAL
+                    policyId: 00000000-0000-4000-8000-000000000095
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/GuardrailUnauthenticated" }
         "403": { $ref: "#/components/responses/GuardrailForbidden" }
@@ -1192,7 +1355,33 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
+        '409':
+          description: Risk calibration or inputs are not approved or valid (`risk_matrix_unconfigured`, `risk_matrix_invalid`, `risk_input_invalid`). No Risk Score is returned.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              examples:
+                unconfiguredCalibration:
+                  summary: Fail-closed response when Organisation calibration has no approval
+                  value:
+                    type: about:blank
+                    status: 409
+                    title: Organisation Risk Matrix is not approved
+                    code: risk_matrix_unconfigured
+                invalidCalibration:
+                  summary: Fail-closed response when Organisation calibration is invalid
+                  value:
+                    type: about:blank
+                    status: 409
+                    title: Organisation risk calibration is invalid
+                    code: risk_matrix_invalid
+                invalidInputs:
+                  summary: Fail-closed response when Risk inputs cannot be validated
+                  value:
+                    type: about:blank
+                    status: 409
+                    title: Risk inputs could not be validated
+                    code: risk_input_invalid
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /v1/bowties/{bowtieId}/risk/explain:
     get:
@@ -1215,7 +1404,33 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
+        '409':
+          description: Risk calibration or inputs are not approved or valid (`risk_matrix_unconfigured`, `risk_matrix_invalid`, `risk_input_invalid`). No Risk Score is returned.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+              examples:
+                unconfiguredCalibration:
+                  summary: Fail-closed response when Organisation calibration has no approval
+                  value:
+                    type: about:blank
+                    status: 409
+                    title: Organisation Risk Matrix is not approved
+                    code: risk_matrix_unconfigured
+                invalidCalibration:
+                  summary: Fail-closed response when Organisation calibration is invalid
+                  value:
+                    type: about:blank
+                    status: 409
+                    title: Organisation risk calibration is invalid
+                    code: risk_matrix_invalid
+                invalidInputs:
+                  summary: Fail-closed response when Risk inputs cannot be validated
+                  value:
+                    type: about:blank
+                    status: 409
+                    title: Risk inputs could not be validated
+                    code: risk_input_invalid
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /v1/evidence/{evidenceId}:
     get:
@@ -1257,7 +1472,15 @@ paths:
           description: Current user's open Health Proposals in reverse chronological order.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/HealthProposalPage' }
+              schema:
+                $ref: "#/components/schemas/HealthProposalPage"
+              examples:
+                syntheticDemo:
+                  summary: SYNTHETIC documentation fixture; no live action or approval
+                  value:
+                    items: []
+                    limit: 50
+                    nextCursor: null
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1280,12 +1503,26 @@ paths:
         content:
           application/json:
             schema: { $ref: '#/components/schemas/HealthDecision' }
+            examples:
+              syntheticInspection:
+                summary: Synthetic inspection decision by the signed-in Barrier Owner
+                value:
+                  reason: Synthetic inspection evidence supports the proposed Health.
       responses:
         '200':
           description: Accepted decision and current Barrier Health.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/HealthDecisionResult' }
+              schema:
+                $ref: "#/components/schemas/HealthDecisionResult"
+              examples:
+                syntheticDemo:
+                  summary: SYNTHETIC documentation fixture; no live action or approval
+                  value:
+                    healthProposalId: 00000000-0000-4000-8000-000000000095
+                    status: accepted
+                    barrierId: 00000000-0000-4000-8000-000000000095
+                    health: degraded
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -1310,12 +1547,26 @@ paths:
         content:
           application/json:
             schema: { $ref: '#/components/schemas/HealthDecision' }
+            examples:
+              syntheticInspection:
+                summary: Synthetic inspection decision by the signed-in Barrier Owner
+                value:
+                  reason: Synthetic inspection evidence does not support the proposed Health.
       responses:
         '200':
           description: Rejected decision and unchanged Barrier Health.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/HealthDecisionResult' }
+              schema:
+                $ref: "#/components/schemas/HealthDecisionResult"
+              examples:
+                syntheticDemo:
+                  summary: SYNTHETIC documentation fixture; no live action or approval
+                  value:
+                    healthProposalId: 00000000-0000-4000-8000-000000000095
+                    status: rejected
+                    barrierId: 00000000-0000-4000-8000-000000000095
+                    health: healthy
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }

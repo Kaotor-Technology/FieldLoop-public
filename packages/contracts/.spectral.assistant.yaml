@@ -1,0 +1,10 @@
+extends: [spectral:oas]
+functions: [assistant-contract]
+rules:
+  operation-description: error
+  fieldloop-assistant-contract:
+    description: Preserve assistant internal identity and native FastAPI validation semantics.
+    severity: error
+    given: $
+    then:
+      function: assistant-contract

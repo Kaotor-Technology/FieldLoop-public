@@ -258,3 +258,12 @@ The stakeholder accepted these conventions on 10 October 2026; see
 200; idempotency keys are 16–128 characters. Runtime retry storage, expiry and
 scope must be specified by the feature that implements consequential operations.
 The base contract does not implement runtime CSRF or idempotency enforcement.
+
+
+## Demo API inventory and parity (FL-95)
+
+T47's implemented surface is 13 platform operations: Agent Chat session/message/cancel (3), Action Request create/read (2), Guardrail tool-check/completion/content-scan (3), Bowtie risk/explain (2), and Health Proposal list/accept/reject (3). `openapi.yaml` documents these with synthetic examples and explicit errors. Risk failure examples preserve missing/invalid calibration; they are not invented approved metrics. Action payload hashes in examples are calculated from the illustrated PostgreSQL jsonb text, not approval tokens.
+
+Signal ingestion is separately documented in `signal-worker.v1.openapi.json`; its example wraps the existing synthetic Signal fixture in a Pub/Sub envelope. Mock-source APIs retain the contracts listed above. Internal assistant session/message/cancel (3) are documented in `assistant.v1.openapi.json` with `.spectral.assistant.yaml`: signed internal-user header, native FastAPI422 and problem errors. These are not browser cookie endpoints or a new public service. Existing private Cloud Run ingress/IAM remains required outside the application-level header contract.
+
+`test/demo-examples.test.ts` inventories the platform denominator and validates examples/negative cases plus the decoded Signal using runtime validators. `apps/assistant/tests/test_openapi_contract.py` checks actual local HTTP/SSE responses against the internal contract with synthetic signed users and a scripted, Guardrail-backed test harness. Current non-partial model mode emits final/incomplete/error events; it does not emit `answer.partial`. Model-generated optional fields are not advertised as validated statistics. Existing contracts/Python CI discovery runs these tests without a new workflow or policy exemption. Local harness evidence does not certify live identity, deployment, model relevance or latency.

@@ -1,0 +1,975 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FieldLoop assistant internal service — session lifecycle slices",
+    "version": "0.0.0",
+    "description": "Internal service contract, not a browser API. Session creation, SSE messages and cooperative cancellation are documented. Runtime/spec parity remains separately verified.",
+    "contact": {
+      "name": "FieldLoop engineering",
+      "url": "https://github.com/Kaotor-Technology/FieldLoop-v2"
+    }
+  },
+  "paths": {
+    "/assistant/v1/sessions": {
+      "post": {
+        "operationId": "createAssistantSession",
+        "summary": "Create an assistant session",
+        "description": "Requires a verified internal user token. Only startable coordinators are accepted; identity and classification come from the verified token, not request fields. No approval or consequential action is performed.",
+        "security": [
+          {
+            "internalUserToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "agent"
+                ],
+                "properties": {
+                  "agent": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 64
+                  }
+                }
+              },
+              "example": {
+                "agent": "flood-situation"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Session bound to the authenticated internal user. Example is SYNTHETIC.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id",
+                    "agent",
+                    "simulated",
+                    "classification",
+                    "status"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "agent": {
+                      "type": "string"
+                    },
+                    "simulated": {
+                      "type": "boolean"
+                    },
+                    "classification": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "id": "synthetic-session",
+                  "agent": "flood-situation",
+                  "simulated": true,
+                  "classification": "INTERNAL",
+                  "status": "active"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "agent_not_startable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "agent_not_startable",
+                  "status": 400,
+                  "code": "agent_not_startable"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthenticated",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "unauthenticated",
+                  "status": 401,
+                  "code": "unauthenticated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "FastAPI request validation failure (not the shared Problem format).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ],
+                  "properties": {
+                    "detail": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "loc",
+                          "msg",
+                          "type"
+                        ],
+                        "properties": {
+                          "loc": {
+                            "type": "array",
+                            "items": {
+                              "oneOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "integer"
+                                }
+                              ]
+                            }
+                          },
+                          "msg": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "service_unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "service_unavailable",
+                  "status": 503,
+                  "code": "service_unavailable"
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Assistant"
+        ]
+      }
+    },
+    "/assistant/v1/sessions/{session_id}:cancel": {
+      "post": {
+        "operationId": "cancelAssistantSession",
+        "summary": "Request assistant turn cancellation",
+        "description": "Looks up the session for the authenticated organization and user. Requests cooperative cancellation only; no approval or consequential action is executed.",
+        "tags": [
+          "Assistant"
+        ],
+        "security": [
+          {
+            "internalUserToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Cancellation requested. A false value means no active turn was cancelled; this response does not assert completed cancellation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "cancelling"
+                  ],
+                  "properties": {
+                    "cancelling": {
+                      "type": "boolean"
+                    }
+                  }
+                },
+                "example": {
+                  "cancelling": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthenticated",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "unauthenticated",
+                  "status": 401,
+                  "code": "unauthenticated"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "not_found",
+                  "status": 404,
+                  "code": "not_found"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "FastAPI request validation failure (not the shared Problem format).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ],
+                  "properties": {
+                    "detail": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "loc",
+                          "msg",
+                          "type"
+                        ],
+                        "properties": {
+                          "loc": {
+                            "type": "array",
+                            "items": {
+                              "oneOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "integer"
+                                }
+                              ]
+                            }
+                          },
+                          "msg": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "service_unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "service_unavailable",
+                  "status": 503,
+                  "code": "service_unavailable"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistant/v1/sessions/{session_id}/messages": {
+      "post": {
+        "operationId": "sendAssistantMessage",
+        "summary": "Stream an assistant turn",
+        "description": "Requires signed internal user identity and a session owned by that user and organization, within clearance. Concurrent turns return 409 before streaming. Runtime events are SSE, not a JSON response; no approval or consequential action is performed by this endpoint. Events contain JSON data and monotonic per-turn IDs; errors after headers use answer.error, not a second HTTP status. Current runtime uses non-partial model output: answer.partial is reserved and is not emitted. The example is synthetic, not a live answer or approval. Optional structured model fields are not advertised as runtime-validated metrics.",
+        "tags": [
+          "Assistant"
+        ],
+        "security": [
+          {
+            "internalUserToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "message"
+                ],
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  }
+                }
+              },
+              "example": {
+                "message": "Summarize the SYNTHETIC flood scenario."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "SSE stream of assistant runtime events; successful transport does not imply completed work or approval.",
+            "headers": {
+              "Cache-Control": {
+                "description": "Do not cache user-scoped output.",
+                "schema": {
+                  "type": "string",
+                  "const": "private, no-store"
+                }
+              },
+              "X-Accel-Buffering": {
+                "description": "Disable proxy response buffering.",
+                "schema": {
+                  "type": "string",
+                  "const": "no"
+                }
+              }
+            },
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                },
+                "examples": {
+                  "syntheticGuardedRead": {
+                    "summary": "SYNTHETIC bounded read; Guardrail decision precedes tool result and final answer",
+                    "value": "id: 1\nevent: agent.step\ndata: {\"agent\":\"integrity-orchestrator\",\"phase\":\"start\",\"step\":1}\n\nid: 2\nevent: tool.call\ndata: {\"agent\":\"integrity-orchestrator\",\"tool\":\"get_barriers\",\"args_hash\":\"synthetic-argument-hash\",\"step\":2}\n\nid: 3\nevent: guardrail.decision\ndata: {\"agent\":\"integrity-orchestrator\",\"tool\":\"get_barriers\",\"decision\":\"allow\",\"reason\":null,\"ceiling\":null,\"action_request_id\":null,\"held_request_id\":null,\"source\":\"guardrail\"}\n\nid: 4\nevent: tool.result\ndata: {\"agent\":\"integrity-orchestrator\",\"tool\":\"get_barriers\",\"summary\":\"Synthetic empty barrier list\",\"step\":3}\n\nid: 5\nevent: answer.final\ndata: {\"answer\":\"Synthetic example: no barriers in this fixture.\",\"citations\":[],\"known\":[],\"unknown\":[],\"assumptions\":[],\"confidence\":\"low\",\"confidence_reason\":\"Synthetic documentation fixture\",\"retrieved_citations\":[],\"draft_ids\":[],\"action_request_ids\":[],\"held_request_ids\":[]}\n\n"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthenticated",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "unauthenticated",
+                  "status": 401,
+                  "code": "unauthenticated"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden (before streaming begins).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "forbidden",
+                  "status": 403,
+                  "code": "forbidden"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "not_found",
+                  "status": 404,
+                  "code": "not_found"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "turn_in_progress (before streaming begins).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "turn_in_progress",
+                  "status": 409,
+                  "code": "turn_in_progress"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "FastAPI request validation failure (not the shared Problem format).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "detail"
+                  ],
+                  "properties": {
+                    "detail": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "loc",
+                          "msg",
+                          "type"
+                        ],
+                        "properties": {
+                          "loc": {
+                            "type": "array",
+                            "items": {
+                              "oneOf": [
+                                {
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "integer"
+                                }
+                              ]
+                            }
+                          },
+                          "msg": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "service_unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "type",
+                    "title",
+                    "status",
+                    "code"
+                  ],
+                  "properties": {
+                    "type": {
+                      "type": "string"
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "integer"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "about:blank",
+                  "title": "service_unavailable",
+                  "status": 503,
+                  "code": "service_unavailable"
+                }
+              }
+            }
+          }
+        },
+        "x-fieldloop-sse-events": {
+          "agent.step": {
+            "type": "object",
+            "required": [
+              "phase"
+            ],
+            "properties": {
+              "phase": {
+                "type": "string"
+              },
+              "agent": {
+                "type": "string"
+              },
+              "step": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          },
+          "tool.call": {
+            "type": "object",
+            "required": [
+              "agent",
+              "tool",
+              "args_hash",
+              "step"
+            ],
+            "properties": {
+              "agent": {
+                "type": "string"
+              },
+              "tool": {
+                "type": "string"
+              },
+              "args_hash": {
+                "type": "string"
+              },
+              "step": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          },
+          "guardrail.decision": {
+            "type": "object",
+            "required": [
+              "agent",
+              "tool",
+              "decision",
+              "source"
+            ],
+            "properties": {
+              "agent": {
+                "type": "string"
+              },
+              "tool": {
+                "type": "string"
+              },
+              "decision": {
+                "enum": [
+                  "allow",
+                  "convert_l1",
+                  "hold_l2",
+                  "block"
+                ]
+              },
+              "source": {
+                "type": "string"
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "ceiling": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "action_request_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "held_request_id": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            }
+          },
+          "tool.result": {
+            "type": "object",
+            "required": [
+              "agent",
+              "tool",
+              "summary",
+              "step"
+            ],
+            "properties": {
+              "agent": {
+                "type": "string"
+              },
+              "tool": {
+                "type": "string"
+              },
+              "summary": {
+                "type": "string"
+              },
+              "step": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          },
+          "answer.final": {
+            "type": "object",
+            "required": [
+              "answer",
+              "citations",
+              "retrieved_citations",
+              "draft_ids",
+              "action_request_ids",
+              "held_request_ids"
+            ],
+            "properties": {
+              "answer": {
+                "type": "string"
+              },
+              "retrieved_citations": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                }
+              },
+              "draft_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "action_request_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "held_request_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "answer.incomplete": {
+            "type": "object",
+            "required": [
+              "answer",
+              "incomplete"
+            ],
+            "properties": {
+              "answer": {
+                "type": "string"
+              },
+              "incomplete": {
+                "type": "string"
+              }
+            }
+          },
+          "answer.error": {
+            "type": "object",
+            "required": [
+              "code"
+            ],
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "internalUserToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-fieldloop-internal-user-token",
+        "description": "Existing service-to-service signed user identity; never a browser bearer token."
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Internal service origin; not the browser BFF."
+    }
+  ],
+  "tags": [
+    {
+      "name": "Assistant",
+      "description": "Internal assistant session lifecycle."
+    }
+  ]
+}
