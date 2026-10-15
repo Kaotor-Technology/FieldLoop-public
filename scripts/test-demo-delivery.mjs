@@ -15,6 +15,13 @@ import {buildDataset as dlData} from '../data/synthetic/dl-01/generate.mjs';
 import {buildDataset as floodData} from '../data/synthetic/bangkok/generate.mjs';
 const container=`fieldloop-demo-bridge-${process.pid}`;
 const docker=(...args)=>execFileSync('docker',args,{encoding:'utf8',timeout:120000}).trim();
+const waitForDatabase=async(database,attempts=60,pause=()=>setTimeout(500))=>{
+ for(let attempt=0;attempt<attempts;attempt++){
+  try{assert.equal(docker('exec','-e','PGPASSWORD=fixture',container,'psql','-X','-h','127.0.0.1','-U','postgres','-d',database,'-tAc','SELECT 1'),'1');return;}
+  catch{if(attempt+1<attempts)await pause();}
+ }
+ throw new Error(`Fixture database ${database} not ready after ${attempts} attempts`);
+};
 let database,application,guardrail,app,finalRun;
 const workerRole='fl-v2-signal-worker-dev@example-project.iam';
 const intervals={'mock-historian':{months:3},'mock-patrol':{months:3},'mock-hydro':60,'mock-pumps':60};
@@ -30,7 +37,16 @@ const semantic=items=>items.map(item=>Object.fromEntries(Object.entries(item).fi
 try {
  docker('run','--rm','-d','--name',container,...(process.env.FIELDLOOP_DEMO_DOCKER_NETWORK?['--network',process.env.FIELDLOOP_DEMO_DOCKER_NETWORK]:[]),
   '-e','POSTGRES_PASSWORD=fixture','-e','POSTGRES_DB=fieldloop_dev','-p','127.0.0.1::5432','fieldloop-db-test:pg16');
- for(let i=0;i<60;i++){try{docker('exec',container,'pg_isready','-q','-U','postgres');break;}catch{await setTimeout(500);}}
+ await waitForDatabase('fieldloop_dev');
+ // A ready server is insufficient when the intended database does not exist.
+ assert.equal(docker('exec',container,'pg_isready','-q','-h','127.0.0.1','-U','postgres'),'');
+ await assert.rejects(waitForDatabase('fieldloop_readiness_probe',2,async()=>{}),/not ready after 2 attempts/);
+ let retries=0;
+ await waitForDatabase('fieldloop_readiness_probe',2,async()=>{
+  retries++;docker('exec',container,'psql','-U','postgres','-d','postgres','-c','CREATE DATABASE fieldloop_readiness_probe');
+ });
+ assert.equal(retries,1,'probe must retry until the target database exists');
+ docker('exec',container,'psql','-U','postgres','-d','postgres','-c','DROP DATABASE fieldloop_readiness_probe');
  docker('exec',container,'psql','-X','-v','ON_ERROR_STOP=1','-U','postgres','-d','fieldloop_dev','-c',`CREATE ROLE "${workerRole}" NOLOGIN`);
  const migrations=readdirSync('db/migrations').filter(f=>f.endsWith('.sql')).sort()
   .map(f=>readFileSync(`db/migrations/${f}`,'utf8').split('-- migrate:down')[0]).join('\n');
