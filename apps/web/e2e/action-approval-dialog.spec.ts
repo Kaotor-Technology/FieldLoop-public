@@ -43,6 +43,17 @@ test("says what will happen, shows the exact payload in mono and labels the seco
   await expect(dialog.getByText("MOCK", { exact: true })).toBeVisible();
 });
 
+test("reflows at 320 CSS pixels without page-level horizontal scrolling", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  const dialog = await openDialog(page);
+  const pageWidth = await page.evaluate(() => ({ client: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+  expect(pageWidth.scroll).toBeLessThanOrEqual(pageWidth.client);
+  const box = await dialog.boundingBox();
+  expect(box).not.toBeNull();
+  expect(box?.x).toBeGreaterThanOrEqual(0);
+  expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(320);
+});
+
 test("never starts on Approve, ignores the scrim, closes with Escape and returns focus to the trigger", async ({ page }) => {
   const trigger = page.getByRole("button", { name: "Open approval dialog", exact: true });
   const dialog = await openDialog(page);
