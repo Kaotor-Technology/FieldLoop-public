@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { sql, type Kysely } from "kysely";
-import { DEMO_AGENT_TOOL_NAMES, loadDomainPacks, type LoadedDomainPack } from "@fieldloop/adapters";
+import { DEMO_AGENT_TOOL_NAMES, DEMO_REGISTERED_TOOL_NAMES, loadDomainPacks, type LoadedDomainPack } from "@fieldloop/adapters";
 
 import { domainPackRecordId } from "./domain-pack-record-id.js";
 import { registerGenAiSafetyRecords } from "./gen-ai-safety-seed.js";
@@ -10,7 +10,7 @@ export const DEMO_PACK_IDS = ["pipeline-integrity", "flood-water", "gen-ai-safet
 
 export function loadDemoDomainPacks(root: URL | string = process.env["FIELDLOOP_DOMAIN_PACKS_DIR"]
     ?? fileURLToPath(new URL("../../../domain-packs/", import.meta.url))) {
-  return loadDomainPacks(root, DEMO_AGENT_TOOL_NAMES, DEMO_PACK_IDS);
+  return loadDomainPacks(root, DEMO_AGENT_TOOL_NAMES, DEMO_PACK_IDS, DEMO_REGISTERED_TOOL_NAMES);
 }
 
 export { domainPackRecordId } from "./domain-pack-record-id.js";

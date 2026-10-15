@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -143,4 +143,34 @@ describe("Domain Pack loading (FL-78 / D10 / D11)", () => {
     });
     await expect(loadDomainPacks(ring, tools)).rejects.toThrow(/pack.yaml.*closed/);
   });
+});
+
+it("separates registered proposal operations from executable agent tools", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "fl38-registries-"));
+  const { parse } = await import("yaml");
+  try {
+    for (const name of ["pipeline-integrity", "gen-ai-safety"]) {
+      await cp(new URL(name, root), join(directory, name), { recursive: true });
+    }
+    const safetyFile = join(directory, "gen-ai-safety", "ai-safety.yaml");
+    const safety = parse(await readFile(safetyFile, "utf8")) as {
+      aiSystem: { tools: string[] }; policies: { kind: string; settings: { allowedTools: string[] } }[];
+    };
+    const alias = "cmms.create_work_order";
+    safety.aiSystem.tools.push(alias);
+    const policy = safety.policies.find(({ kind }) => kind === "tool-call");
+    if (!policy) throw new Error("Missing fixture policy");
+    policy.settings.allowedTools.push(alias);
+    await writeFile(safetyFile, JSON.stringify(safety));
+    const registeredOperations = new Set([...tools, alias]);
+    const packs = await loadDomainPacks(directory, tools, ["pipeline-integrity", "gen-ai-safety"], registeredOperations);
+    expect(packs.find(({ aiSafety }) => aiSafety)?.aiSafety?.aiSystem.tools).toContain(alias);
+    expect(packs.flatMap(({ agents }) => agents).every(({ allowedTools }) => !allowedTools.includes(alias))).toBe(true);
+    const agentFile = join(directory, "pipeline-integrity", "agents", "code-standard.yaml");
+    const agent = parse(await readFile(agentFile, "utf8")) as { allowedTools: string[] };
+    agent.allowedTools.push(alias);
+    await writeFile(agentFile, JSON.stringify(agent));
+    await expect(loadDomainPacks(directory, tools, ["pipeline-integrity", "gen-ai-safety"], registeredOperations))
+      .rejects.toThrow(/code-standard.yaml.*unknown tool cmms.create_work_order/);
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });

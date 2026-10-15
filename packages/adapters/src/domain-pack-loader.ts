@@ -114,7 +114,7 @@ function validateAiSafety(safety: GenAiSafetyPack, content: DomainPack, file: st
 }
 
 /** Validate the complete catalog before exposing it to any runtime or database. */
-export async function loadDomainPacks(root: URL | string, toolRegistry: ReadonlySet<string>, requiredPacks: readonly string[] = []): Promise<LoadedDomainPack[]> {
+export async function loadDomainPacks(root: URL | string, toolRegistry: ReadonlySet<string>, requiredPacks: readonly string[] = [], registeredOperations: ReadonlySet<string> = toolRegistry): Promise<LoadedDomainPack[]> {
   const rootPath = await realpath(typeof root === "string" ? root : fileURLToPath(root));
   const packs: LoadedDomainPack[] = [];
   const sources = new Map<string, string>();
@@ -146,7 +146,7 @@ export async function loadDomainPacks(root: URL | string, toolRegistry: Readonly
     const aiSafety = content.aiSafetyFile
       ? parseGenAiSafetyPack(await readYaml(join(directory, content.aiSafetyFile), directory), join(directory, content.aiSafetyFile))
       : undefined;
-    if (aiSafety) validateAiSafety(aiSafety, content, join(directory, content.aiSafetyFile ?? "ai-safety.yaml"), toolRegistry);
+    if (aiSafety) validateAiSafety(aiSafety, content, join(directory, content.aiSafetyFile ?? "ai-safety.yaml"), registeredOperations);
     packs.push({ content, agents, ...(aiSafety ? { aiSafety } : {}) });
   }
   if (!packs.length) throw new Error(`${rootPath}: no Domain Packs found`);
