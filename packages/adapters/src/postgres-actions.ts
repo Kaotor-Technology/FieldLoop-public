@@ -20,6 +20,7 @@ export interface ActionDecisionPort {
 export interface ActionServicePort {
   create(user: ActionIdentity, body: ActionRequestCreate, key: string): Promise<ActionRequest>;
   check(user: ActionIdentity, body: ToolCallCheck, key: string): Promise<ToolCallDecision>;
+  list(user: ActionIdentity, limit: number): Promise<ActionRequest[]>;
   get(user: ActionIdentity, id: string): Promise<ActionRequest>;
   expire(orgId: string, simulatedOnly?: boolean): Promise<number>;
 }
@@ -228,6 +229,21 @@ export class PostgresActionStore implements ActionServicePort, ActionDecisionPor
       return readAction(trx, user, id);
     });
   }
+
+  async list(user: ActionIdentity, limit: number): Promise<ActionRequest[]> {
+    authorize(user, "PUBLIC", false);
+    return this.db.transaction().execute(async trx => {
+      await lockOrganisation(trx, user.orgId);
+      await expireRequests(trx, user.orgId, this.simulatedOnly);
+      const rows = (await sql<ActionRow>`SELECT * FROM app.action_request
+        WHERE org_id = ${user.orgId} AND simulation_retired_at IS NULL
+          AND array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], classification)
+            <= array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], ${user.clearance})
+        ORDER BY created_at DESC, id DESC LIMIT ${limit}`.execute(trx)).rows;
+      return rows.map(toAction);
+    });
+  }
+
   async expire(orgId: string, simulatedOnly = false): Promise<number> {
     return this.db.transaction().execute(async trx => {
       await lockOrganisation(trx, orgId);

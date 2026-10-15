@@ -29,6 +29,7 @@ const app = buildApp({
   ...(authRuntime.geoReferences ? { geoReferences: authRuntime.geoReferences } : {}),
   ...(authRuntime.risk ? { risk: authRuntime.risk } : {}),
   ...(authRuntime.imports ? { imports: authRuntime.imports } : {}),
+  ...(authRuntime.drafts ? { drafts: authRuntime.drafts } : {}),
   domainPacks,
   ...(simulator ? { simulator } : {}),
   ...(process.env["FIELDLOOP_BASE_URL"] ? { baseUrl: process.env["FIELDLOOP_BASE_URL"] } : {}),

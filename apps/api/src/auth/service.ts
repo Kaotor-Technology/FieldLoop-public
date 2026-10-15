@@ -57,6 +57,7 @@ export interface LoginCompletion {
 
 export interface CurrentUser {
   sub: string;
+  displayName?: string;
   roles: string[];
   persona: string;
   orgId: string;
@@ -183,6 +184,7 @@ export class BffAuthService implements AuthServicePort {
     const user = await this.requireUser(sessionCookieValue, forceIntrospection);
     return {
       sub: user.sub,
+      ...(user.displayName ? { displayName: user.displayName } : {}),
       roles: user.roles,
       persona: user.roles.map((role) => DEFAULT_PERSONA[role]).find(Boolean) ?? "User",
       orgId: user.orgId,

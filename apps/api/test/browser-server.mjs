@@ -78,6 +78,46 @@ const seedGeoReferenceDrafts = () => [{
   createdAt: "2026-10-15T00:01:00.000Z",
 }];
 let geoReferenceDrafts = seedGeoReferenceDrafts();
+const seedManagementDrafts = () => [{
+  id: "00000000-0000-4000-8000-000000000101",
+  kind: "management_summary",
+  content: "Current Risk Score: [4](/api/v1/bowties/00000000-0000-4000-8000-000000000111/risk)\nNo unsupported figures are included.",
+  citations: ["/api/v1/bowties/00000000-0000-4000-8000-000000000111/risk"],
+  confidence: 0.8,
+  status: "needs_approval",
+  approvedBy: null,
+  approvedAt: null,
+  approvalStamp: null,
+  decisionBy: null,
+  decisionAt: null,
+  decisionReason: null,
+  simulated: true,
+  classification: "INTERNAL",
+  createdAt: "2026-10-15T00:00:00.000Z",
+  createdBy: "agent:report-generator on_behalf_of:synthetic-author",
+}];
+let managementDrafts = seedManagementDrafts();
+let managementDraftDecisions = [];
+const drafts = {
+  list: async (_user, status, limit) => managementDrafts.filter((draft) => draft.status === status).slice(0, limit),
+  get: async (_user, draftId) => managementDrafts.find((draft) => draft.id === draftId) ?? null,
+  decide: async ({ user, draftId, decision, reason }) => {
+    const draft = managementDrafts.find((candidate) => candidate.id === draftId);
+    if (!draft || draft.status !== "needs_approval" || draft.createdBy.endsWith(`on_behalf_of:${user.sub}`)) throw new Error("Fixture Draft is unavailable");
+    const decidedAt = new Date().toISOString();
+    draft.status = decision === "approve" ? "approved" : "rejected";
+    draft.decisionBy = user.displayName;
+    draft.decisionAt = decidedAt;
+    draft.decisionReason = reason ?? null;
+    if (decision === "approve") {
+      draft.approvedBy = user.displayName;
+      draft.approvedAt = decidedAt;
+      draft.approvalStamp = `AI-assisted, approved by ${user.displayName}, ${decidedAt.slice(0, 10)}`;
+    }
+    managementDraftDecisions.push({ draftId, decision, reason: reason ?? null, approver: user.sub });
+    return draft;
+  },
+};
 const geoReferences = {
   getSource: async (documentId, scope) => ({
     id: documentId, title: "SYNTHETIC · inspection summary", folder: "Safety", text: "Valve marker at coordinates 13.756, 100.501.",
@@ -180,7 +220,7 @@ const auth = new BffAuthService({
       if (!role || grant.state !== input.state || !authorization || authorization.nonce !== input.nonce || authorization.codeChallenge !== challenge) throw new Error("Invalid scripted grant");
       return {
         accessToken: "server-only-access-token", refreshToken: "server-only-refresh-token", idToken: "server-only-id-token", expiresIn: 300,
-        claims: { sub: `synthetic-${role}`, sid: `synthetic-sid-${role}`, auth_time: Math.floor(now / 1000) },
+        claims: { sub: `synthetic-${role}`, sid: `synthetic-sid-${role}`, name: `Synthetic ${role}`, auth_time: Math.floor(now / 1000) },
         accessClaims: { clearance: "HIGHLY_RESTRICTED", exp: Math.floor(Date.now() / 1000) + 300, resource_access: { "kaotor-fieldloop": { roles: [`fieldloop.${role}`] } } },
       };
     },
@@ -225,7 +265,7 @@ const commandPackageService = {
     return item;
   },
 };
-const app = buildApp({ auth, baseUrl, simulator, health, risk, audit, geoReferences, mapLayers, commandPackages: commandPackageService });
+const app = buildApp({ auth, baseUrl, simulator, health, risk, audit, geoReferences, mapLayers, commandPackages: commandPackageService, drafts });
 await registerReference(app, fileURLToPath(new URL("reference/", import.meta.resolve("@fieldloop/contracts"))));
 await registerSpa(app, fileURLToPath(new URL("../../web/dist/", import.meta.url)));
 await app.ready();
@@ -239,12 +279,17 @@ const server = createServer({ key: await readFile(join(directory, "key.pem")), c
       resetSimulationFixture(); resetHealthFixture();
       commandPackages = seedCommandPackages();
       geoReferenceDrafts = seedGeoReferenceDrafts();
+      managementDrafts = seedManagementDrafts(); managementDraftDecisions = [];
       sessions.clear(); transactions.clear(); authorizations.clear(); codes.clear(); now = Date.now(); active = true; unavailable = false;
       response.end("reset"); return;
     }
     if (url.pathname === "/test/health-state") {
       response.setHeader("content-type", "application/json");
       response.end(JSON.stringify({ decisions: healthDecisions, eventCount: healthEvents.length })); return;
+    }
+    if (url.pathname === "/test/draft-state") {
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ decisions: managementDraftDecisions })); return;
     }
     if (url.pathname === "/test/health-owner") {
       const ownerSub = url.searchParams.get("sub");

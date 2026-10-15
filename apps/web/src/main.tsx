@@ -7,6 +7,7 @@ import { MapEntry } from "./MapEntry";
 import { BowtieCanvasPage } from "./BowtieCanvasPage";
 import { AuditPage } from "./AuditPage";
 import { AgentWorkspace } from "./AgentWorkspace";
+import { DraftReviewPage } from "./DraftReviewPage";
 import { ActionRequestPage } from "./ActionRequestPage";
 import { CommandPackageQueue } from "./CommandPackageQueue";
 import { commandPackageStatuses } from "./command-packages";
@@ -43,6 +44,14 @@ const commandPackagesRoute = createRoute({
   },
   component: CommandPackageQueue,
 });
+const draftsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/drafts",
+  validateSearch: (search: Record<string, unknown>) => ({
+    ...(typeof search["draftId"] === "string" ? { draftId: search["draftId"] } : {}),
+  }),
+  component: DraftReviewPage,
+});
 const bowtieRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/bowties/$bowtieId",
@@ -66,7 +75,7 @@ const actionRequestRoute = createRoute({
   validateSearch: (search: Record<string, unknown>) => search,
   component: ActionRequestPage,
 });
-const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, mapRoute, auditRoute, commandPackagesRoute, bowtieRoute, legacyBowtieRoute, agentRoute, actionRequestRoute]) });
+const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, mapRoute, auditRoute, commandPackagesRoute, draftsRoute, bowtieRoute, legacyBowtieRoute, agentRoute, actionRequestRoute]) });
 
 declare module "@tanstack/react-router" {
   interface Register { router: typeof router }

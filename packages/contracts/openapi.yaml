@@ -52,6 +52,8 @@ tags:
     description: Exact payload proposals and human action ceilings.
   - name: Command Packages
     description: Approval-gated operator records for L1 field command outcomes; never sends commands to equipment.
+  - name: Drafts
+    description: Management summary Drafts awaiting a human approval decision.
 paths:
   /v1/command-packages:
     get:
@@ -305,6 +307,52 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /v1/action-requests:
+    get:
+      operationId: listActionRequests
+      summary: List current Action Requests visible to the user
+      description: Returns a bounded Organisation and clearance scoped list. Retired simulation records are excluded.
+      tags:
+        - Actions
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Current Action Requests ordered newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 100
+                items:
+                  $ref: "#/components/schemas/ActionRequest"
+              examples:
+                syntheticRequests:
+                  summary: SYNTHETIC Action Request list; no live action or approval
+                  value:
+                    - id: 00000000-0000-4000-8000-000000000095
+                      orgId: synthetic-org
+                      actionType: system_of_record
+                      actionLevel: l1
+                      target: cmms
+                      payload:
+                        title: Synthetic work order
+                      payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
+                      rationale: Prepare for the operator
+                      citations: ["synthetic:procedure-1"]
+                      requestedBy: synthetic-user
+                      requester:
+                        kind: person
+                      status: open
+                      expiresAt: "2026-10-15T12:15:00Z"
+                      simulated: true
+                      classification: INTERNAL
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
     post:
       operationId: createActionRequest
       summary: Prepare a proposed human action
@@ -466,7 +514,7 @@ paths:
                 summary: Synthetic schema illustration; not a live approval or measured result.
                 value:
                   payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
-                  reason: Synthetic approval for contract illustration
+                  reason: Reviewed the exact synthetic payload
       responses:
         "201":
           description: Approval recorded, or idempotently replayed, with the Action
@@ -519,13 +567,12 @@ paths:
                         title: Synthetic work order
                       payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
                       rationale: Prepare for the operator
-                      citations:
-                        - synthetic:procedure-1
+                      citations: ["synthetic:procedure-1"]
                       requestedBy: synthetic-user
                       requester:
                         kind: person
                       status: approved
-                      expiresAt: '2026-10-15T12:15:00Z'
+                      expiresAt: "2026-10-15T12:15:00Z"
                       simulated: true
                       classification: INTERNAL
                     approval:
@@ -533,10 +580,10 @@ paths:
                       actionRequestId: 00000000-0000-4000-8000-000000000095
                       approverSub: synthetic-manager
                       decision: approved
-                      reason: Synthetic approval for contract illustration
+                      reason: Reviewed the exact synthetic payload
                       payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
-                      authTime: '2026-10-15T12:00:00Z'
-                      createdAt: '2026-10-15T12:00:30Z'
+                      authTime: "2026-10-15T09:15:00Z"
+                      createdAt: "2026-10-15T09:20:00Z"
         "400": *a1
         "401": *a2
         "403": *a3
@@ -578,7 +625,7 @@ paths:
                 summary: Synthetic schema illustration; not a live rejection or measured result.
                 value:
                   payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
-                  reason: Synthetic rejection for contract illustration
+                  reason: Requires additional synthetic source context
       responses:
         "200":
           description: Rejection recorded, or idempotently replayed, with the Action
@@ -631,13 +678,12 @@ paths:
                         title: Synthetic work order
                       payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
                       rationale: Prepare for the operator
-                      citations:
-                        - synthetic:procedure-1
+                      citations: ["synthetic:procedure-1"]
                       requestedBy: synthetic-user
                       requester:
                         kind: person
                       status: rejected
-                      expiresAt: '2026-10-15T12:15:00Z'
+                      expiresAt: "2026-10-15T12:15:00Z"
                       simulated: true
                       classification: INTERNAL
                     approval:
@@ -645,10 +691,10 @@ paths:
                       actionRequestId: 00000000-0000-4000-8000-000000000095
                       approverSub: synthetic-manager
                       decision: rejected
-                      reason: Synthetic rejection for contract illustration
+                      reason: Requires additional synthetic source context
                       payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
-                      authTime: '2026-10-15T12:00:00Z'
-                      createdAt: '2026-10-15T12:00:30Z'
+                      authTime: "2026-10-15T09:15:00Z"
+                      createdAt: "2026-10-15T09:20:00Z"
         "400": *a1
         "401": *a2
         "403": *a3
@@ -656,6 +702,196 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409": *a4
         "503": *a5
+  /v1/drafts:
+    get:
+      operationId: listDrafts
+      summary: List management summary Drafts for human review
+      description: Returns Organisation and clearance scoped management summary Drafts by status. Drafts are not approvals until a person decides.
+      tags: [Drafts]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [needs_approval, approved, rejected], default: needs_approval }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Current management summary Drafts ordered newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 100
+                items: { $ref: "#/components/schemas/Draft" }
+              examples:
+                syntheticDrafts:
+                  summary: SYNTHETIC management summary Draft list
+                  value:
+                    - id: 11111111-2222-4333-8444-555555555555
+                      kind: management_summary
+                      content: Summary derived from the cited synthetic risk snapshot.
+                      citations: ["/api/v1/bowties/11111111-2222-4333-8444-555555555555/risk"]
+                      confidence: 0.8
+                      status: needs_approval
+                      approvedBy: null
+                      approvedAt: null
+                      approvalStamp: null
+                      decisionBy: null
+                      decisionAt: null
+                      decisionReason: null
+                      simulated: true
+                      classification: INTERNAL
+                      createdAt: "2026-10-15T00:00:00.000Z"
+                      createdBy: "agent:report-generator on_behalf_of:synthetic-author"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/drafts/{draftId}:
+    get:
+      operationId: getDraft
+      summary: Read a management summary Draft
+      description: Returns a current Draft only when its Organisation and classification are visible to the signed-in user.
+      tags: [Drafts]
+      parameters:
+        - name: draftId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Current Draft and its human decision metadata.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Draft" }
+              examples:
+                syntheticDraft:
+                  summary: SYNTHETIC management summary Draft awaiting human review
+                  value:
+                    id: 11111111-2222-4333-8444-555555555555
+                    kind: management_summary
+                    content: Summary derived from the cited synthetic risk snapshot.
+                    citations: ["/api/v1/bowties/11111111-2222-4333-8444-555555555555/risk"]
+                    confidence: 0.8
+                    status: needs_approval
+                    approvedBy: null
+                    approvedAt: null
+                    approvalStamp: null
+                    decisionBy: null
+                    decisionAt: null
+                    decisionReason: null
+                    simulated: true
+                    classification: INTERNAL
+                    createdAt: "2026-10-15T00:00:00.000Z"
+                    createdBy: "agent:report-generator on_behalf_of:synthetic-author"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/drafts/{draftId}:approve:
+    post:
+      operationId: approveDraft
+      summary: Approve a management summary Draft
+      description: Requires a recently reauthenticated Operator or Manager who did not author the Draft. The returned approval stamp identifies the human decision.
+      tags: [Drafts]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: draftId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Approved Draft with the exact visible AI-assisted stamp.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Draft" }
+              examples:
+                syntheticApprovedDraft:
+                  summary: SYNTHETIC Draft with its immutable human approval stamp
+                  value:
+                    id: 11111111-2222-4333-8444-555555555555
+                    kind: management_summary
+                    content: Summary derived from the cited synthetic risk snapshot.
+                    citations: ["/api/v1/bowties/11111111-2222-4333-8444-555555555555/risk"]
+                    confidence: 0.8
+                    status: approved
+                    approvedBy: Synthetic Reviewer
+                    approvedAt: "2026-10-15T09:20:00.000Z"
+                    approvalStamp: "AI-assisted, approved by Synthetic Reviewer, 2026-10-15"
+                    decisionBy: Synthetic Reviewer
+                    decisionAt: "2026-10-15T09:20:00.000Z"
+                    decisionReason: null
+                    simulated: true
+                    classification: INTERNAL
+                    createdAt: "2026-10-15T00:00:00.000Z"
+                    createdBy: "agent:report-generator on_behalf_of:synthetic-author"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/drafts/{draftId}:reject:
+    post:
+      operationId: rejectDraft
+      summary: Reject a management summary Draft
+      description: Records a human rejection reason for a pending Draft.
+      tags: [Drafts]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: draftId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DraftRejection" }
+            examples:
+              syntheticRejection:
+                summary: SYNTHETIC Draft rejection reason
+                value:
+                  reason: Needs additional source context
+      responses:
+        "200":
+          description: Rejected Draft and recorded reason.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Draft" }
+              examples:
+                syntheticRejectedDraft:
+                  summary: SYNTHETIC Draft with a human rejection reason
+                  value:
+                    id: 11111111-2222-4333-8444-555555555555
+                    kind: management_summary
+                    content: Summary derived from the cited synthetic risk snapshot.
+                    citations: ["/api/v1/bowties/11111111-2222-4333-8444-555555555555/risk"]
+                    confidence: 0.8
+                    status: rejected
+                    approvedBy: null
+                    approvedAt: null
+                    approvalStamp: null
+                    decisionBy: Synthetic Reviewer
+                    decisionAt: "2026-10-15T09:20:00.000Z"
+                    decisionReason: Needs additional source context
+                    simulated: true
+                    classification: INTERNAL
+                    createdAt: "2026-10-15T00:00:00.000Z"
+                    createdBy: "agent:report-generator on_behalf_of:synthetic-author"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /guardrail/v1/tool-calls:check:
     post:
       servers:
@@ -3656,6 +3892,36 @@ components:
             $ref: "#/components/schemas/CommandPackage"
         limit: { type: integer, minimum: 1, maximum: 200 }
         nextCursor: { type: [string, "null"], maxLength: 512 }
+    Draft:
+      type: object
+      additionalProperties: false
+      required: [id, kind, content, citations, confidence, status, approvedBy, approvedAt, approvalStamp, decisionBy, decisionAt, decisionReason, simulated, classification, createdAt, createdBy]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, const: management_summary }
+        content: { type: string, minLength: 1, maxLength: 20000 }
+        citations:
+          type: array
+          maxItems: 50
+          items: { type: string, minLength: 1, maxLength: 2048 }
+        confidence: { type: [number, "null"], minimum: 0, maximum: 1 }
+        status: { type: string, enum: [needs_approval, approved, rejected] }
+        approvedBy: { type: [string, "null"] }
+        approvedAt: { type: [string, "null"], format: date-time }
+        approvalStamp: { type: [string, "null"] }
+        decisionBy: { type: [string, "null"] }
+        decisionAt: { type: [string, "null"], format: date-time }
+        decisionReason: { type: [string, "null"] }
+        simulated: { type: boolean }
+        classification: { $ref: "#/components/schemas/ActionClassification" }
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: string, minLength: 1, maxLength: 512 }
+    DraftRejection:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 2000, pattern: \S }
 
     GuardrailChatCompletionRequest:
       type: object
@@ -4232,6 +4498,7 @@ components:
       required: [sub, roles, persona, orgId, clearance, csrfToken, authTime]
       properties:
         sub: { type: string }
+        displayName: { type: [string, 'null'] }
         roles:
           type: array
           items: { type: string, enum: [fieldloop.viewer, fieldloop.operator, fieldloop.manager] }

@@ -7,7 +7,7 @@ const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map(app => app.close())); });
 function fixture() {
   const user = { sub: "synthetic-owner", orgId: "synthetic-org", roles: ["fieldloop.operator"], clearance: "HIGHLY_RESTRICTED" as const };
-  const actions: ActionServicePort = { create: vi.fn(), get: vi.fn(), check: vi.fn().mockResolvedValue({ decision: "allow", reason: "registered_read" }), expire: vi.fn() };
+  const actions: ActionServicePort = { create: vi.fn(), list: vi.fn(), get: vi.fn(), check: vi.fn().mockResolvedValue({ decision: "allow", reason: "registered_read" }), expire: vi.fn() };
   const dependencies: GuardrailDependencies = { actions, orgId: user.orgId, simulated: true, vertexModels: { flash: "synthetic-flash", pro: "synthetic-pro" },
     store: { loadSystem: vi.fn(), recordIntercept: vi.fn(), getContentScan: vi.fn(), recordContentScan: vi.fn() },
     scanner: { scanUserPrompt: vi.fn(), scanModelResponse: vi.fn() }, model: { complete: vi.fn() },

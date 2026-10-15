@@ -17,6 +17,7 @@ export function App() {
 function SignedInWorkspace({ user }: { user: CurrentUser }) {
   const { t, i18n } = useTranslation();
   const { language, nightShift, toggleLanguage, toggleNightShift } = usePreferences();
+  const canReadDrafts = user.roles.some((role) => role === "fieldloop.viewer" || role === "fieldloop.operator" || role === "fieldloop.manager");
   useLayoutEffect(() => {
     usePreferences.getState().loadUserLanguage(user.orgId, user.sub);
   }, [user.orgId, user.sub]);
@@ -32,6 +33,7 @@ function SignedInWorkspace({ user }: { user: CurrentUser }) {
       <a href="/map" className="wordmark" aria-label="FieldLoop-v2">FieldLoop-<span>v2</span></a>
       <div className="preferences">
         {canReadAudit(user.roles) && <Link to="/audit" className="top-bar-link">{t("auditNav")}</Link>}
+        {canReadDrafts && <Link to="/drafts" className="top-bar-link">{t("draftsNav")}</Link>}
         <AccountSwitcher user={user} />
         <Link className="top-bar-agent-link" to="/agent">{t("askAgent")}</Link>
         <button type="button" onClick={toggleLanguage} lang={language === "en" ? "th" : "en"} aria-label={t(language === "en" ? "languageThai" : "languageEnglish")}>{t("languageToggle")}</button>

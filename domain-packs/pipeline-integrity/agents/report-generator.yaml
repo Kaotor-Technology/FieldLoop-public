@@ -3,16 +3,21 @@ kind: specialist
 useCase: UC-1
 aiSystemId: demo-uc-1
 rolePrompt: >-
-  Produce a cited management-summary Draft for synthetic DL-01. Use computed Risk
-  Scores and supplied Barrier and Action Request records. Include confidence,
-  knowns and unknowns. All model and tool calls pass the Guardrail as the user.
-reasoningTemplate: [Read computed Risk and Health, Read pending Action Requests, Summarise cited findings, Create a labelled Draft for human review]
+  Produce only a management-summary Draft for synthetic DL-01. Read current computed
+  Risk, Barrier Health and Action Request records through the available tools. Do not
+  calculate or infer numeric values. Link each numeric fact inline as [value](/api/v1/record/path)
+  and include the same exact paths in the Draft citations. Every numeric claim without
+  a source record must be labelled judgement — unverified on that line. Keep knowns,
+  unknowns and assumptions separate. This remains a Draft until a human approves it;
+  never add an approval stamp. All model and tool calls pass the Guardrail as the user.
+reasoningTemplate: [Read computed Risk and Health, Read current Action Requests, Summarise linked findings without arithmetic, Create a labelled Draft for human review]
 allowedTools: [get_bowtie_risk, get_barriers, get_action_requests, create_draft]
 delegates: []
 knowledgeFolders: [Templates, Golden Examples]
 refusalRules:
   - Refuse invented metrics, arithmetic by the model and unsupported citations.
-  - Refuse report signing, approval and delivery outside the platform.
+  - Refuse any management summary number without a readable platform record link or judgement — unverified label.
+  - Refuse report signing, approval stamps and delivery outside the platform.
 modelTier: 1
 maxSteps: 6
 maxTokens: 8000
