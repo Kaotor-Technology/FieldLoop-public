@@ -34,8 +34,10 @@ def read_guardrail_decisions(headers: object) -> list[dict[str, str]]:
         _LOGGER.warning("Guardrail response decision header had an invalid structure")
         return []
     decisions: list[dict[str, str]] = []
+    malformed_entry = False
     for value in values:
         if not isinstance(value, dict):
+            malformed_entry = True
             continue
         decision = value.get("decision")
         policy_id = value.get("policyId")
@@ -46,6 +48,10 @@ def read_guardrail_decisions(headers: object) -> list[dict[str, str]]:
             and isinstance(reason, str) and reason
         ):
             decisions.append({"decision": decision, "policy_id": policy_id, "reason": reason})
+        else:
+            malformed_entry = True
+    if malformed_entry:
+        _LOGGER.warning("Guardrail response decision header contained malformed entries")
     return decisions
 
 

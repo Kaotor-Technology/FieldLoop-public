@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import httpx
 import litellm
@@ -38,6 +39,29 @@ def test_guardrail_response_header_keeps_only_candid_policy_decisions() -> None:
 
 def test_guardrail_response_header_fails_closed_to_no_displayed_decision_on_invalid_json() -> None:
     assert read_guardrail_decisions({"x-fieldloop-guardrail-decisions": "not-json"}) == []
+
+
+def test_guardrail_response_header_logs_once_when_discarding_malformed_entries(caplog) -> None:  # type: ignore[no-untyped-def]
+    encoded = json.dumps([
+        {
+            "decision": "redact",
+            "policyId": "synthetic-policy",
+            "reason": "SYNTHETIC input redacted.",
+        },
+        None,
+        {"decision": "unknown", "policyId": "synthetic-other", "reason": "SYNTHETIC ignored."},
+        {"decision": "block", "policyId": "", "reason": "SYNTHETIC missing policy."},
+    ])
+
+    with caplog.at_level("WARNING", logger="fieldloop_assistant.guardrail_model"):
+        decisions = read_guardrail_decisions({"x-fieldloop-guardrail-decisions": encoded})
+
+    assert decisions == [{
+        "decision": "redact",
+        "policy_id": "synthetic-policy",
+        "reason": "SYNTHETIC input redacted.",
+    }]
+    assert caplog.text.count("contained malformed entries") == 1
 
 
 def test_guardrail_response_header_logs_invalid_json(caplog) -> None:  # type: ignore[no-untyped-def]
