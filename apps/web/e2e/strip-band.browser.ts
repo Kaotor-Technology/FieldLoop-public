@@ -86,3 +86,35 @@ test("Barrier names and state cues remain visually separated", async ({ page }) 
   expect(gaps).toHaveLength(4);
   for (const gap of gaps) expect(gap).toBeGreaterThanOrEqual(4);
 });
+
+test("map dock appears at breakpoint-md and hides below it without collapsing the map or timeline", async ({ page }) => {
+  for (const [width, visible] of [[839, false], [840, true], [1280, true]] as const) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/strip-band-fixture.html?layout=map");
+    const dock = page.locator(".chainage-strip-dock");
+    const map = page.locator(".map-canvas-wrap");
+    const timeline = page.locator(".timeline-bar");
+    if (visible) {
+      await expect(dock).toBeVisible();
+      await expect(dock.locator(".strip-band")).toHaveCSS("height", "160px");
+      expect(await page.locator(".map-stage").evaluate(element => getComputedStyle(element).gridTemplateRows.split(" ").length)).toBe(3);
+      const bounds = await Promise.all([page.locator(".map-stage"), dock, page.locator(".context-panel")].map(locator => locator.boundingBox()));
+      const [mapBounds, dockBounds, contextBounds] = bounds;
+      if (!mapBounds || !dockBounds) throw new Error("The map or Chainage strip has no layout bounds");
+      expect(dockBounds.y).toBeGreaterThanOrEqual(mapBounds.y + mapBounds.height);
+      if (width === 840 && contextBounds) expect(contextBounds.y + contextBounds.height).toBeLessThanOrEqual(dockBounds.y);
+      if (width === 1280 && contextBounds) {
+        expect(dockBounds.x).toBe(mapBounds.x);
+        expect(dockBounds.x + dockBounds.width).toBe(contextBounds.x + contextBounds.width);
+      }
+      await page.screenshot({ path: `${process.env["FL93_EVIDENCE_DIR"] ?? "test-results/strip-band"}/map-strip-${width}.png`, fullPage: true });
+    } else {
+      await expect(dock).toBeHidden();
+      expect(await page.locator(".map-stage").evaluate(element => getComputedStyle(element).gridTemplateRows.split(" ").length)).toBe(3);
+    }
+    await expect(map).toBeVisible();
+    await expect(timeline).toBeVisible();
+    expect(await map.evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThan(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+});

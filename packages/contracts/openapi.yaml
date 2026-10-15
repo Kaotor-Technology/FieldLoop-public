@@ -431,6 +431,29 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/assets/{assetId}/strip:
+    get:
+      operationId: getAssetStrip
+      summary: Read the pre-authored Chainage strip for an Asset
+      description: Returns the server-authorized static seed strip for DL-01. The strip is a read-only snapshot and is not synchronized with the viewport or live Barrier Health.
+      tags: [Map]
+      parameters:
+        - name: assetId
+          in: path
+          required: true
+          description: Asset UUID or asset code, for example DL-01.
+          schema: { type: string, minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9][A-Za-z0-9._:-]*$' }
+      responses:
+        "200":
+          description: Static, scoped Chainage strip data.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssetStripBand" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/map/layers/{layer}:
     get:
       operationId: getMapLayer
@@ -2226,6 +2249,56 @@ components:
         simulated: { type: boolean }
         classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
         geometry: { description: GeoJSON geometry or null. }
+
+    AssetStripBand:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, assetCode, lengthM, classification, simulated, label, segments, facilities, barriers, inspections, threatCategories]
+      properties:
+        schemaVersion: { type: integer, const: 1 }
+        assetCode: { type: string }
+        lengthM: { type: number, exclusiveMinimum: 0 }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+        simulated: { type: boolean, const: true }
+        label: { type: string, const: SYNTHETIC }
+        segments:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, chainageFromM, chainageToM]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              chainageFromM: { type: number, minimum: 0 }
+              chainageToM: { type: number, exclusiveMinimum: 0 }
+        facilities:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, chainageM]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              chainageM: { type: number, minimum: 0 }
+        barriers:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, health, chainageM]
+            properties:
+              id: { type: string }
+              name: { type: string }
+              health: { type: string, enum: [healthy, degraded, failed, unverified] }
+              chainageM: { type: [number, 'null'], minimum: 0 }
+        inspections:
+          type: array
+          items: { type: object, additionalProperties: true }
+        threatCategories:
+          type: array
+          items: { type: object, additionalProperties: true }
 
     MapConfig:
       type: object

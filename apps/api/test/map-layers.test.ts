@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import { AuthError, type AuthServicePort } from "../src/auth/service.js";
 import { ASSET_BY_ID_SQL, ASSET_LAYER_SQL, BARRIER_LAYER_SQL, GEO_REFERENCE_LAYER_SQL, RISK_INPUT_SQL, type AssetRecord, type MapFeatureCollection, type MapLayerStore } from "../src/map/layers.js";
+import { DL01_STATIC_STRIP_BAND } from "../src/map/strip-band-seed.js";
 
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
@@ -47,6 +48,53 @@ describe("asset by id API", () => {
     expect(ASSET_BY_ID_SQL).toContain("a.org_id = $1");
     expect(ASSET_BY_ID_SQL).toContain("a.classification = ANY($3::text[])");
     expect(ASSET_BY_ID_SQL).toContain("a.created_by IN ('seed:dl-01', 'seed:bangkok')");
+  });
+});
+
+describe("static Asset Chainage strip API", () => {
+  it("requires an authorized session and returns the read-only synthetic seed", async () => {
+    const store = makeStore(DL01);
+    const app = makeApp({}, store);
+    const unauthorized = await app.inject({ method: "GET", url: "/api/v1/assets/DL-01/strip" });
+    expect(unauthorized.statusCode).toBe(401);
+    expect(store.getAsset).not.toHaveBeenCalled();
+
+    const response = await app.inject({
+      method: "GET", url: "/api/v1/assets/DL-01/strip", cookies: { fl_session: "opaque-session-value" },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(response.json()).toEqual(DL01_STATIC_STRIP_BAND);
+    expect(store.getAsset).toHaveBeenCalledWith({
+      assetId: "DL-01", orgId: "synthetic-org", clearance: "INTERNAL", allowSeededDemoGeometry: true,
+    });
+  });
+
+  it("does not expose a strip for an unavailable or non-synthetic Asset", async () => {
+    const missing = await makeApp({}, makeStore(null)).inject({
+      method: "GET", url: "/api/v1/assets/DL-99/strip", cookies: { fl_session: "opaque-session-value" },
+    });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.headers["content-type"]).toContain("application/problem+json");
+
+    for (const asset of [
+      { ...DL01, simulated: false },
+      { ...DL01, label: "SIMULATION" },
+      { ...DL01, code: "OTHER" },
+    ]) {
+      const response = await makeApp({}, makeStore(asset)).inject({
+        method: "GET", url: "/api/v1/assets/DL-01/strip", cookies: { fl_session: "opaque-session-value" },
+      });
+      expect(response.statusCode).toBe(404);
+    }
+  });
+
+  it("keeps Segment Chainage ordered and leaves unlocated Barriers without invented positions", () => {
+    expect(DL01_STATIC_STRIP_BAND.segments.map((segment) => segment.chainageFromM)).toEqual(
+      [...DL01_STATIC_STRIP_BAND.segments].map((segment) => segment.chainageFromM).sort((left, right) => left - right),
+    );
+    expect(DL01_STATIC_STRIP_BAND.barriers.length).toBeGreaterThan(0);
+    expect(DL01_STATIC_STRIP_BAND.barriers.every((barrier) => barrier.chainageM === null)).toBe(true);
   });
 });
 
