@@ -37,7 +37,7 @@ export function AgentArtifactCard({ actionRequestId }: { actionRequestId: string
         <dt>{t("agentActionSla")}</dt><dd className="mono"><time dateTime={actionRequest.data.expiresAt}>{formatSla(actionRequest.data.expiresAt, i18n.resolvedLanguage ?? "en")}</time></dd>
         <dt>{t("agentActionRequestId")}</dt><dd className="mono">{actionRequest.data.id}</dd>
       </dl>
-      <a className="agent-chat-review-link" href={`/action-requests/${encodeURIComponent(actionRequest.data.id)}`}>{t("agentReviewAndApprove")}</a>
+      <a className="agent-chat-review-link" href={`/actions/${encodeURIComponent(actionRequest.data.id)}`}>{t("agentReviewAndApprove")}</a>
     </> : null}
   </section>;
 }

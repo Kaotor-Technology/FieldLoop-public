@@ -25,6 +25,10 @@ it("serves direct app-route navigations without exposing the SPA at missing API 
   expect(agent.statusCode).toBe(200);
   expect(agent.headers["content-type"]).toContain("text/html");
   expect(agent.body).toContain('id="root"');
+  const action = await app.inject("/actions/synthetic-action-request");
+  expect(action.statusCode).toBe(200);
+  expect(action.headers["content-type"]).toContain("text/html");
+  expect(action.body).toContain('id="root"');
   const api = await app.inject({ url: "/api/v1/missing", headers: { accept: "text/html" } });
   expect(api.statusCode).toBe(404);
   expect(api.body).not.toContain('id="root"');

@@ -7,4 +7,5 @@ export async function registerSpa(app: FastifyInstance, root: string): Promise<v
   for (const path of ["/map", "/audit", "/agent"]) {
     app.get(path, async (_request, reply) => reply.header("cache-control", "no-store").sendFile("index.html"));
   }
+  app.get("/actions/:actionRequestId", async (_request, reply) => reply.header("cache-control", "no-store").sendFile("index.html"));
 }
