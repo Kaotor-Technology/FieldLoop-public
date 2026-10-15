@@ -11,6 +11,7 @@ import { PostgresImportStore, type ImportMapping } from "../src/imports/store.js
 // FL-48 acceptance: the synthetic DL-01 seed, the wizard store and the committed KML fixtures together.
 const url = process.env["FIELDLOOP_IMPORT_TEST_DATABASE_URL"];
 const root = fileURLToPath(new URL("../../../", import.meta.url));
+const AUTHORED_CHAINAGES = [4_500, 18_250, 31_000, 47_500, 62_250, 79_000, 95_500, 112_750, 131_500, 160_250];
 const fixture = (name: string) => readFileSync(new URL(`../../../data/synthetic/dl-01/${name}`, import.meta.url));
 
 describe.skipIf(!url)("FL-48 DL-01 encroachment KML import against the seeded PostGIS", () => {
@@ -40,7 +41,9 @@ describe.skipIf(!url)("FL-48 DL-01 encroachment KML import against the seeded Po
     const mapped = await store.map(user, created.id, created.version, mapping);
     const chainages = mapped.points.map((point) => point.chainageMetres);
     expect(chainages.every((value) => typeof value === "number")).toBe(true);
-    expect(chainages).toEqual([...chainages].sort((a, b) => (a as number) - (b as number)));
+    // Authored Chainages from encroachment-kml.mjs; the seed's Segment length differs slightly from the
+    // spheroidal geometry, so allow 100 m of drift over the 180 km route.
+    AUTHORED_CHAINAGES.forEach((authored, index) => expect(Math.abs((chainages[index] as number) - authored)).toBeLessThan(100));
     expect(mapped.points.every((point) => (point.distanceMetres as number) <= 50)).toBe(true);
     expect(mapped.points.flatMap((point) => point.flags)).toEqual([]);
     const healthBefore = (await pool.query("SELECT health FROM app.barrier WHERE id=$1", [barrierId])).rows;
