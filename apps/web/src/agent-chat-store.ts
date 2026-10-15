@@ -11,6 +11,7 @@ export interface AgentAnswer {
   known: unknown[];
   unknown: unknown[];
   assumptions: unknown[];
+  draftIds: string[];
   confidence: string;
   confidenceReason: string;
   incomplete?: string;

@@ -7,6 +7,7 @@ import { MapEntry } from "./MapEntry";
 import { BowtieCanvasPage } from "./BowtieCanvasPage";
 import { AuditPage } from "./AuditPage";
 import { AgentWorkspace } from "./AgentWorkspace";
+import { DraftReviewPage } from "./DraftReviewPage";
 import { usePreferences } from "./preferences";
 import "./i18n";
 import "@fontsource/ibm-plex-sans-thai/400.css";
@@ -31,6 +32,14 @@ const auditRoute = createRoute({
   validateSearch: (search: Record<string, unknown>) => search,
   component: AuditPage,
 });
+const draftsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/drafts",
+  validateSearch: (search: Record<string, unknown>) => ({
+    ...(typeof search["draftId"] === "string" ? { draftId: search["draftId"] } : {}),
+  }),
+  component: DraftReviewPage,
+});
 const bowtieRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/bowties/$bowtieId",
@@ -48,7 +57,7 @@ const agentRoute = createRoute({
   validateSearch: (search: Record<string, unknown>) => search,
   component: AgentWorkspace,
 });
-const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, mapRoute, auditRoute, bowtieRoute, legacyBowtieRoute, agentRoute]) });
+const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, mapRoute, auditRoute, draftsRoute, bowtieRoute, legacyBowtieRoute, agentRoute]) });
 
 declare module "@tanstack/react-router" {
   interface Register { router: typeof router }

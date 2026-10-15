@@ -193,6 +193,12 @@ export function AgentChat({
                   <KnownList title={t("agentAssumptions")} values={turn.answer.assumptions} />
                 </section>
                 <p className="agent-chat-confidence"><strong>{t("agentConfidenceLevel." + confidenceKey(turn.answer.confidence))}</strong><span> · </span>{renderMonoInline(turn.answer.confidenceReason || t("agentConfidenceReasonMissing"))}</p>
+                {turn.answer.draftIds.length > 0 && <div className="agent-chat-drafts" aria-label={t("agentDrafts")}>
+                  <p>{t("agentDrafts")}</p>
+                  <ul>{turn.answer.draftIds.map((draftId) => <li key={draftId}>
+                    <Link to="/drafts" search={{ draftId }}>{t("agentReviewDraft")} <span className="mono">{draftId}</span></Link>
+                  </li>)}</ul>
+                </div>}
               </> : null}
               {turn.status === "incomplete" ? <p className="agent-chat-incomplete"><strong>{t("agentIncomplete")}</strong> {incompleteReason(turn.answer?.incomplete, t)}</p> : null}
               {turn.status === "error" ? <div className="agent-chat-error" role="alert">
@@ -316,6 +322,7 @@ function normalizeAnswer(data: Record<string, unknown>): AgentAnswer {
     known: readArray(data["known"]),
     unknown: readArray(data["unknown"]),
     assumptions: readArray(data["assumptions"]),
+    draftIds: readArray(data["draft_ids"]).filter((value): value is string => typeof value === "string"),
     confidence: readString(data["confidence"]) ?? "low",
     confidenceReason: readString(data["confidence_reason"]) ?? "",
     ...(incomplete ? { incomplete } : {}),
