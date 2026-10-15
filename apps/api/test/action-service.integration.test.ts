@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Pool } from "pg";
 import { PostgresHealthStore } from "../src/health/postgres-store.js";
 import { Kysely, PostgresDialect } from "kysely";
-import { PostgresActionStore, type ActionIdentity } from "@fieldloop/adapters";
+import { PostgresActionStore, type ActionIdentity, type ApproverIdentity } from "@fieldloop/adapters";
 import type { ActionRequestCreate, ToolCallCheck } from "@fieldloop/contracts";
 const url = process.env["FIELDLOOP_ACTION_TEST_DATABASE_URL"];
 const integration = describe.skipIf(!url);
@@ -195,6 +195,92 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
     finally { await pool.query("ALTER TABLE app.evidence DROP CONSTRAINT fl87_synthetic_failure"); }
     expect(Number((await pool.query("SELECT count(*) FROM app.action_request WHERE org_id=$1", [user.orgId])).rows[0].count)).toBe(0);
     expect(Number((await pool.query("SELECT count(*) FROM app.audit_event WHERE org_id=$1", [user.orgId])).rows[0].count)).toBe(0);
+  });
+  describe("FL-96 Approver decisions on the exact payload", () => {
+    const manager = (user: ActionIdentity, overrides: Partial<ApproverIdentity> = {}): ApproverIdentity =>
+      ({ sub: "synthetic-manager", orgId: user.orgId, roles: ["fieldloop.manager"], clearance: "HIGHLY_RESTRICTED", authTime: new Date(), ...overrides });
+    async function pending() {
+      const f = await fixture();
+      const action = await store.create(f.user, f.body, key());
+      return { ...f, action, approver: manager(f.user), decision: { payloadHash: action.payloadHash, reason: "Reviewed the exact payload" } };
+    }
+    const count = async (sqlText: string, args: unknown[]) => Number((await pool.query(sqlText, args)).rows[0].count);
+    it("approves only the payload hash the Approver saw, records auth_time, audits and replays by Idempotency-Key", async () => {
+      const { action, approver, decision } = await pending(), idempotencyKey = key();
+      const results = await Promise.all(Array.from({ length: 4 }, () => store.decide(approver, action.id, "approved", decision, idempotencyKey)));
+      expect(new Set(results.map(x => x.approval.id)).size).toBe(1);
+      expect(results[0]).toMatchObject({ actionRequest: { id: action.id, status: "approved", payloadHash: action.payloadHash },
+        approval: { decision: "approved", approverSub: approver.sub, payloadHash: action.payloadHash, reason: decision.reason, authTime: approver.authTime.toISOString() } });
+      const stored = (await pool.query("SELECT * FROM app.approval WHERE action_request_id=$1", [action.id])).rows;
+      expect(stored).toHaveLength(1);
+      expect(stored[0]).toMatchObject({ approver_sub: approver.sub, payload_hash: action.payloadHash, voided_at: null, simulated: true });
+      expect(await count("SELECT count(*) FROM app.audit_event WHERE org_id=$1 AND action='action_request.approved' AND entity=$2", [approver.orgId, action.id])).toBe(1);
+      await expect(store.decide(approver, action.id, "approved", { ...decision, reason: "Different reason" }, idempotencyKey)).rejects.toThrow("idempotency_key_reused");
+    });
+    it("refuses a stale or changed payload hash and any payload edit voids the Approval", async () => {
+      const { action, approver, decision } = await pending();
+      await expect(store.decide(approver, action.id, "approved", { ...decision, payloadHash: "0".repeat(64) }, key())).rejects.toThrow("payload_changed");
+      expect(await count("SELECT count(*) FROM app.approval WHERE action_request_id=$1", [action.id])).toBe(0);
+      await store.decide(approver, action.id, "approved", decision, key());
+      await pool.query("UPDATE app.action_request SET payload = payload || '{\"edited\":true}'::jsonb WHERE id=$1", [action.id]);
+      const after = (await pool.query("SELECT status, payload_hash FROM app.action_request WHERE id=$1", [action.id])).rows[0];
+      expect(after.status).toBe("open"); expect(after.payload_hash).not.toBe(action.payloadHash);
+      expect(await count("SELECT count(*) FROM app.approval WHERE action_request_id=$1 AND voided_at IS NULL", [action.id])).toBe(0);
+      await expect(store.decide(manager({ ...approver, orgId: approver.orgId }, { sub: "synthetic-manager-two" }), action.id, "approved", decision, key())).rejects.toThrow("payload_changed");
+    });
+    it("enforces four-eyes, the manager role, recent re-login, clearance and Organisation scope before any write", async () => {
+      const { user, action, approver, decision } = await pending();
+      // The requester, even holding the manager role, can never decide their own request; nor can an assistant's delegating user.
+      await expect(store.decide({ ...approver, sub: user.sub }, action.id, "approved", decision, key())).rejects.toThrow("four_eyes_required");
+      await expect(store.decide({ ...approver, roles: ["fieldloop.operator"] }, action.id, "approved", decision, key())).rejects.toThrow("forbidden");
+      await expect(store.decide({ ...approver, roles: ["fieldloop.viewer"] }, action.id, "rejected", decision, key())).rejects.toThrow("forbidden");
+      for (const authTime of [new Date(Date.now() - 6 * 60_000), new Date(Date.now() + 5 * 60_000), new Date(0)]) {
+        await expect(store.decide({ ...approver, authTime }, action.id, "approved", decision, key())).rejects.toThrow("reauthentication_required");
+      }
+      await expect(store.decide({ ...approver, clearance: "PUBLIC" }, action.id, "approved", decision, key())).rejects.toThrow("forbidden");
+      await expect(store.decide({ ...approver, orgId: `other-${randomUUID()}` }, action.id, "approved", decision, key())).rejects.toThrow("not_found");
+      expect(await count("SELECT count(*) FROM app.approval WHERE action_request_id=$1", [action.id])).toBe(0);
+      expect((await store.get(approver, action.id)).status).toBe("open");
+    });
+    it("lets one Approver decide once, even concurrently under different keys", async () => {
+      const { action, approver, decision } = await pending();
+      const outcomes = await Promise.allSettled([store.decide(approver, action.id, "approved", decision, key()), store.decide(approver, action.id, "rejected", decision, key())]);
+      expect(outcomes.filter(x => x.status === "fulfilled")).toHaveLength(1);
+      expect(await count("SELECT count(*) FROM app.approval WHERE action_request_id=$1", [action.id])).toBe(1);
+      await expect(store.decide(approver, action.id, "approved", decision, key())).rejects.toThrow("not_pending");
+    });
+    it("treats an expired request as rejected and escalated, never approvable", async () => {
+      const { action, approver, decision } = await pending();
+      await pool.query("UPDATE app.action_request SET expires_at = clock_timestamp() - interval '1 second' WHERE id=$1", [action.id]);
+      await expect(store.decide(approver, action.id, "approved", decision, key())).rejects.toThrow("request_expired");
+      expect(await count("SELECT count(*) FROM app.approval WHERE action_request_id=$1", [action.id])).toBe(0);
+      expect((await pool.query("SELECT status, rejection_reason FROM app.action_request WHERE id=$1", [action.id])).rows[0]).toEqual({ status: "rejected", rejection_reason: "sla_expired" });
+      expect(await count("SELECT count(*) FROM app.action_escalation WHERE action_request_id=$1", [action.id])).toBe(1);
+    });
+    it("rejects with a recorded reason and closes the linked Held Request, while an approval does not release it", async () => {
+      const { user, check } = await fixture();
+      const approver = manager(user);
+      const l2 = { ...check, actionType: "emergency_communication" as const, actionLevel: "l2" as const, target: "stakeholders" as const };
+      const first = await store.check(user, l2, key()), second = await store.check(user, { ...l2, payload: { message: "SIMULATION drill two" } }, key());
+      if (!first.actionRequest || !second.actionRequest || !first.heldRequestId || !second.heldRequestId) throw new Error("Missing held L2 request");
+      const approved = await store.decide(approver, first.actionRequest.id, "approved", { payloadHash: first.actionRequest.payloadHash, reason: "Reviewed" }, key());
+      expect(approved.actionRequest.status).toBe("approved");
+      expect((await pool.query("SELECT status FROM app.held_request WHERE id=$1", [first.heldRequestId])).rows[0].status).toBe("held");
+      const rejected = await store.decide(approver, second.actionRequest.id, "rejected", { payloadHash: second.actionRequest.payloadHash, reason: "Not needed for the drill" }, key());
+      expect(rejected).toMatchObject({ actionRequest: { status: "rejected" }, approval: { decision: "rejected", reason: "Not needed for the drill" } });
+      expect((await pool.query("SELECT status, rejection_reason FROM app.held_request WHERE id=$1", [second.heldRequestId])).rows[0]).toEqual({ status: "rejected", rejection_reason: "approver_rejected" });
+      expect(await count("SELECT count(*) FROM app.audit_event WHERE org_id=$1 AND action='action_request.rejected'", [user.orgId])).toBe(1);
+    });
+    it("rolls back the Approval, status and audit if the decision cannot be fully recorded", async () => {
+      const { action, approver, decision } = await pending();
+      const ddl = (await pool.query("SELECT format('ALTER TABLE app.action_check_result ADD CONSTRAINT fl96_synthetic_failure CHECK (org_id <> %L OR operation <> ''approve'') NOT VALID', $1::text) AS statement", [approver.orgId])).rows[0].statement;
+      await pool.query(ddl);
+      try { await expect(store.decide(approver, action.id, "approved", decision, key())).rejects.toThrow(); }
+      finally { await pool.query("ALTER TABLE app.action_check_result DROP CONSTRAINT fl96_synthetic_failure"); }
+      expect(await count("SELECT count(*) FROM app.approval WHERE action_request_id=$1", [action.id])).toBe(0);
+      expect((await store.get(approver, action.id)).status).toBe("open");
+      expect(await count("SELECT count(*) FROM app.audit_event WHERE org_id=$1 AND action='action_request.approved'", [approver.orgId])).toBe(0);
+    });
   });
   it("records local service timing and real query plans without a Cloud Run latency claim", async () => {
     const { user,check } = await fixture();
