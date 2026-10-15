@@ -1,4 +1,4 @@
-import { PostgresActionStore, type ActionDecisionPort, type ActionServicePort, GoogleCloudKmsEnvelopeKeyService, GoogleCloudSecretReader, type LoadedDomainPack } from "@fieldloop/adapters";
+import { PostgresActionStore, type ActionDecisionPort, type ActionServicePort, PostgresCommandPackageStore, type CommandPackageServicePort, GoogleCloudKmsEnvelopeKeyService, GoogleCloudSecretReader, type LoadedDomainPack } from "@fieldloop/adapters";
 import { registerDomainPackRecords } from "../domain-packs.js";
 import { AuthError, BffAuthService, type AuthServicePort } from "./service.js";
 import { KmsEnvelopeCrypto } from "./envelope-crypto.js";
@@ -42,6 +42,7 @@ export async function createProductionAuthRuntime(): Promise<{
   audit?: AuditServicePort;
   health?: HealthServicePort;
   actions?: ActionServicePort & ActionDecisionPort;
+  commandPackages?: CommandPackageServicePort;
   close: () => Promise<void>;
   registerPacks?: (packs: LoadedDomainPack[]) => Promise<void>;
   risk?: PostgresRiskService;
@@ -75,6 +76,7 @@ export async function createProductionAuthRuntime(): Promise<{
     mapLayers: new PostgresMapLayerStore(database.db),
     geoReferences: new PostgresGeoReferenceStore(database.db),
     actions: new PostgresActionStore(database.db as unknown as Kysely<Record<string, never>>),
+    commandPackages: new PostgresCommandPackageStore(database.db as unknown as Kysely<Record<string, never>>),
     audit: new PostgresAuditStore(database.db as unknown as Kysely<Record<string, never>>),
     health: new PostgresHealthStore(database.db as unknown as Kysely<Record<string, never>>),
     imports: new PostgresImportStore(database.db as unknown as Kysely<Record<string, never>>),

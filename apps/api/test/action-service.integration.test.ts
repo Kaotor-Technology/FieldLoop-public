@@ -5,6 +5,7 @@ import { loadDemoDomainPacks, registerDomainPackRecords } from "../src/domain-pa
 import { PostgresHealthStore } from "../src/health/postgres-store.js";
 import { Kysely, PostgresDialect } from "kysely";
 import { PostgresActionStore, type ActionIdentity, type ApproverIdentity } from "@fieldloop/adapters";
+import { PostgresCommandPackageStore } from "@fieldloop/adapters";
 import type { ActionRequestCreate, ToolCallCheck } from "@fieldloop/contracts";
 const url = process.env["FIELDLOOP_ACTION_TEST_DATABASE_URL"];
 const integration = describe.skipIf(!url);
@@ -392,6 +393,79 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
       expect((await store.get(approver, action.id)).status).toBe("open");
       expect(await count("SELECT count(*) FROM app.audit_event WHERE org_id=$1 AND action='action_request.approved'", [approver.orgId])).toBe(0);
     });
+  });
+  it("queues approved L1 field commands and records each outcome as scoped Evidence", async () => {
+    const { user, barrierId } = await fixture();
+    const packages = new PostgresCommandPackageStore(db);
+    const commandBody: ActionRequestCreate = {
+      actionType: "field_command", actionLevel: "l1", target: "ot",
+      payload: { target: "SYNTHETIC-PUMP-3", action: "Deploy mobile pump", procedure: "PROC-SYN-7", barrierId, preconditions: ["Pump is isolated from live grid"], expectedEffect: "Reduce standing water at the synthetic hospital access route." },
+      rationale: "Reduce simulated flood exposure", citations: ["synthetic:procedure-7"], classification: "INTERNAL", simulated: true,
+    };
+    const pending = await store.create(user, commandBody, key());
+    const queued = await packages.list(user, "queued", undefined, 50);
+    expect(queued.items).toHaveLength(1);
+    const packageId = queued.items[0]?.id;
+    if (!packageId) throw new Error("Command Package was not created");
+    expect(queued.items[0]).toMatchObject({ actionRequestId: pending.id, target: "SYNTHETIC-PUMP-3", action: "Deploy mobile pump",
+      rationale: commandBody.rationale, procedure: "PROC-SYN-7", preconditions: commandBody.payload.preconditions,
+      expectedEffect: commandBody.payload.expectedEffect,
+      barrierId, approvalCount: 0, actionStatus: "open", executionStatus: "queued", simulated: true });
+    const confidential = await store.create(user, { ...commandBody, classification: "CONFIDENTIAL" }, key());
+    const internalQueue = await packages.list({ ...user, clearance: "INTERNAL" }, "queued", undefined, 50);
+    expect(internalQueue.items.map((item) => item.actionRequestId)).toContain(pending.id);
+    expect(internalQueue.items.map((item) => item.actionRequestId)).not.toContain(confidential.id);
+    expect((await packages.list(user, "queued", undefined, 50)).items.map((item) => item.actionRequestId)).toContain(confidential.id);
+    await expect(packages.recordOutcome(user, packageId, { executionStatus: "executed", outcome: "Completed" }, key())).rejects.toThrow("approval_required");
+
+    await pool.query("INSERT INTO app.approval (org_id,action_request_id,approver_sub,decision,payload_hash,auth_time,simulated,classification) VALUES ($1,$2,$3,'approved',$4,now(),true,'INTERNAL')", [user.orgId, pending.id, user.sub, pending.payloadHash]);
+    await pool.query("INSERT INTO app.approval (org_id,action_request_id,approver_sub,decision,payload_hash,auth_time,simulated,classification) VALUES ($1,$2,'agent:synthetic-agent','approved',$3,now(),true,'INTERNAL')", [user.orgId, pending.id, pending.payloadHash]);
+    await pool.query("UPDATE app.action_request SET status='approved' WHERE id=$1", [pending.id]);
+    expect((await packages.list(user, "queued", undefined, 50)).items.find((item) => item.actionRequestId === pending.id)?.approvalCount).toBe(0);
+    await expect(packages.recordOutcome(user, packageId, { executionStatus: "executed", outcome: "Completed" }, key())).rejects.toThrow("approval_required");
+    await pool.query("INSERT INTO app.approval (org_id,action_request_id,approver_sub,decision,payload_hash,auth_time,simulated,classification) VALUES ($1,$2,'synthetic-approver','approved',$3,now(),true,'INTERNAL')", [user.orgId, pending.id, pending.payloadHash]);
+    expect((await packages.list(user, "queued", undefined, 50)).items.find((item) => item.actionRequestId === pending.id)?.approvalCount).toBe(1);
+    await expect(packages.recordOutcome(user, packageId, { executionStatus: "executed", outcome: "Completed" }, key())).rejects.toThrow("approval_required");
+    await pool.query("INSERT INTO app.approval (org_id,action_request_id,approver_sub,decision,payload_hash,auth_time,simulated,classification) VALUES ($1,$2,'synthetic-second-approver','approved',$3,now(),true,'INTERNAL')", [user.orgId, pending.id, pending.payloadHash]);
+    const externalCall = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Command Package outcome must not call a field system"));
+    try {
+      const input = { executionStatus: "executed" as const, outcome: "Pump deployed in the simulated run." };
+      const idempotencyKey = key();
+      const [first, replay] = await Promise.all([
+        packages.recordOutcome(user, packageId, input, idempotencyKey),
+        packages.recordOutcome(user, packageId, input, idempotencyKey),
+      ]);
+      expect(first).toMatchObject({ executionStatus: "executed", outcome: input.outcome, recordedBy: user.sub, evidenceId: expect.any(String) });
+      expect(replay).toEqual(first);
+      await expect(packages.recordOutcome(user, packageId, { ...input, outcome: "Changed result" }, idempotencyKey)).rejects.toThrow("idempotency_key_reused");
+      expect(externalCall).not.toHaveBeenCalled();
+    } finally { externalCall.mockRestore(); }
+
+    const evidence = (await pool.query("SELECT id,barrier_id,kind,source,details,simulated,classification,created_by FROM app.evidence WHERE org_id=$1 AND command_package_id=$2", [user.orgId, packageId])).rows[0];
+    expect(evidence).toMatchObject({ barrier_id: barrierId, kind: "command_package_outcome", source: "control_room", simulated: true, classification: "INTERNAL", created_by: user.sub,
+      details: { actionRequestId: pending.id, commandPackageId: packageId, executionStatus: "executed", outcome: "Pump deployed in the simulated run." } });
+    expect((await pool.query("SELECT status FROM app.action_request WHERE id=$1", [pending.id])).rows[0]).toEqual({ status: "executed" });
+    expect(Number((await pool.query("SELECT count(*)::int AS count FROM app.evidence WHERE command_package_id=$1", [packageId])).rows[0]?.count)).toBe(1);
+    expect(Number((await pool.query("SELECT count(*)::int AS count FROM app.signal_event_outbox WHERE org_id=$1 AND event->>'type'='evidence.created'", [user.orgId])).rows[0]?.count)).toBe(1);
+
+    const notExecuted = await store.create(user, commandBody, key());
+    const secondPackage = (await pool.query("SELECT id FROM app.command_package WHERE org_id=$1 AND action_request_id=$2", [user.orgId, notExecuted.id])).rows[0].id as string;
+    await pool.query("INSERT INTO app.approval (org_id,action_request_id,approver_sub,decision,payload_hash,auth_time,simulated,classification) VALUES ($1,$2,'synthetic-approver','approved',$3,now(),true,'INTERNAL')", [user.orgId, notExecuted.id, notExecuted.payloadHash]);
+    await pool.query("INSERT INTO app.approval (org_id,action_request_id,approver_sub,decision,payload_hash,auth_time,simulated,classification) VALUES ($1,$2,'synthetic-second-approver','approved',$3,now(),true,'INTERNAL')", [user.orgId, notExecuted.id, notExecuted.payloadHash]);
+    await pool.query("UPDATE app.action_request SET status='approved' WHERE id=$1", [notExecuted.id]);
+    await pool.query("UPDATE app.barrier SET classification='CONFIDENTIAL' WHERE org_id=$1 AND id=$2", [user.orgId, barrierId]);
+    await expect(packages.recordOutcome(user, secondPackage, { executionStatus: "not_executed", outcome: "Deployment deferred by the operator." }, key()))
+      .rejects.toThrow("classification_changed");
+    await expect(pool.query("UPDATE app.command_package SET execution_status='not_executed', outcome='Synthetic direct write', executed_by=$3, recorded_at=clock_timestamp(), outcome_actor=$3, outcome_key_hash=$4, outcome_request_hash=$5 WHERE org_id=$1 AND id=$2", [
+      user.orgId, secondPackage, user.sub, "a".repeat(64), "b".repeat(64),
+    ])).rejects.toThrow("Command Package metadata must follow its exact Action Request payload");
+    await pool.query("UPDATE app.barrier SET classification='INTERNAL' WHERE org_id=$1 AND id=$2", [user.orgId, barrierId]);
+    const noAction = await packages.recordOutcome(user, secondPackage, { executionStatus: "not_executed", outcome: "Deployment deferred by the operator." }, key());
+    expect(noAction).toMatchObject({ executionStatus: "not_executed", evidenceId: expect.any(String), recordedBy: user.sub });
+    expect((await pool.query("SELECT status,rejection_reason FROM app.action_request WHERE id=$1", [notExecuted.id])).rows[0]).toEqual({ status: "rejected", rejection_reason: "operator_not_executed" });
+    expect(Number((await pool.query("SELECT count(*)::int AS count FROM app.evidence WHERE command_package_id=$1", [secondPackage])).rows[0]?.count)).toBe(1);
+    await expect(packages.list({ ...user, roles: ["fieldloop.manager"] }, "queued", undefined, 50)).rejects.toThrow("forbidden");
+    await expect(packages.recordOutcome({ ...user, orgId: "other-org" }, packageId, { executionStatus: "executed", outcome: "No cross-tenant write" }, key())).rejects.toThrow("not_found");
   });
   it("records local service timing and real query plans without a Cloud Run latency claim", async () => {
     const { user,check } = await fixture();

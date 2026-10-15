@@ -8,14 +8,28 @@ DB_CONTAINER="fieldloop-bangkok-test-db-${SUFFIX}"
 DB_IMAGE="fieldloop-db-test:pg16"
 MIGRATE_IMAGE="fieldloop-db-migrate:test"
 SEED_IMAGE="fieldloop-seed-bangkok:test"
+IMAGE_TAR="${TMPDIR:-/tmp}/fieldloop-bangkok-${SUFFIX}.tar"
 cleanup() {
   docker rm -f "${DB_CONTAINER}" >/dev/null 2>&1 || true
   docker network rm "${NETWORK}" >/dev/null 2>&1 || true
+  rm -f "${IMAGE_TAR}"
 }
 trap cleanup EXIT
-docker build -q -t "${DB_IMAGE}" - < db/test/Dockerfile
-docker build -q -t "${MIGRATE_IMAGE}" -f db/Dockerfile .
-docker build -q -t "${SEED_IMAGE}" -f db/seed/bangkok/Dockerfile .
+load_image_tar() {
+  docker load --input "${IMAGE_TAR}" >/dev/null
+  rm -f "${IMAGE_TAR}"
+}
+docker buildx build --tag "${DB_IMAGE}" --file - \
+  --output "type=docker,dest=${IMAGE_TAR}" . < db/test/Dockerfile
+load_image_tar
+build_image() {
+  local tag="$1" dockerfile="$2"
+  docker buildx build --tag "${tag}" --file "${dockerfile}" \
+    --output "type=docker,dest=${IMAGE_TAR}" .
+  load_image_tar
+}
+build_image "${MIGRATE_IMAGE}" db/Dockerfile
+build_image "${SEED_IMAGE}" db/seed/bangkok/Dockerfile
 # A successful seed may reach this isolated database, but cannot reach a public API.
 docker network create --internal "${NETWORK}" >/dev/null
 docker run -d --name "${DB_CONTAINER}" --network "${NETWORK}" \

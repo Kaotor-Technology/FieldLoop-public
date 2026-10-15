@@ -9,6 +9,8 @@ import { AuditPage } from "./AuditPage";
 import { AgentWorkspace } from "./AgentWorkspace";
 import { DraftReviewPage } from "./DraftReviewPage";
 import { ActionRequestPage } from "./ActionRequestPage";
+import { CommandPackageQueue } from "./CommandPackageQueue";
+import { commandPackageStatuses } from "./command-packages";
 import { usePreferences } from "./preferences";
 import "./i18n";
 import "@fontsource/ibm-plex-sans-thai/400.css";
@@ -32,6 +34,15 @@ const auditRoute = createRoute({
   path: "/audit",
   validateSearch: (search: Record<string, unknown>) => search,
   component: AuditPage,
+});
+const commandPackagesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/command-packages",
+  validateSearch: (search: Record<string, unknown>) => {
+    const status = commandPackageStatuses.find((candidate) => candidate === search["status"]);
+    return status ? { status } : {};
+  },
+  component: CommandPackageQueue,
 });
 const draftsRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -64,7 +75,7 @@ const actionRequestRoute = createRoute({
   validateSearch: (search: Record<string, unknown>) => search,
   component: ActionRequestPage,
 });
-const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, mapRoute, auditRoute, draftsRoute, bowtieRoute, legacyBowtieRoute, agentRoute, actionRequestRoute]) });
+const router = createRouter({ routeTree: rootRoute.addChildren([indexRoute, mapRoute, auditRoute, commandPackagesRoute, draftsRoute, bowtieRoute, legacyBowtieRoute, agentRoute, actionRequestRoute]) });
 
 declare module "@tanstack/react-router" {
   interface Register { router: typeof router }

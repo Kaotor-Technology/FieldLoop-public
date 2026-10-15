@@ -50,9 +50,128 @@ tags:
     description: Internal service-to-service OpenAI-compatible model gateway and Tier 1 content scan.
   - name: Actions
     description: Exact payload proposals and human action ceilings.
+  - name: Command Packages
+    description: Approval-gated operator records for L1 field command outcomes; never sends commands to equipment.
   - name: Drafts
     description: Management summary Drafts awaiting a human approval decision.
 paths:
+  /v1/command-packages:
+    get:
+      operationId: listCommandPackages
+      summary: List the Command Package queue
+      description: Lists Organisation and clearance scoped Command Packages. Queue entries are proposals only and do not communicate with equipment or systems of record.
+      tags: [Command Packages]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/CommandPackageExecutionStatus"
+          description: Queue lifecycle filter. Defaults to queued.
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Organisation scoped Command Package page.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandPackagePage"
+              examples:
+                syntheticQueue:
+                  summary: SYNTHETIC queue fixture; no live field command
+                  value:
+                    items:
+                      - id: 00000000-0000-4000-8000-000000000099
+                        actionRequestId: 00000000-0000-4000-8000-000000000098
+                        target: SYNTHETIC-PUMP-3
+                        action: Deploy mobile pump
+                        rationale: Reduce simulated flood exposure
+                        citations: [synthetic:procedure-7]
+                        procedure: PROC-SYN-7
+                        preconditions: [Pump is isolated from the live grid]
+                        barrierId: 00000000-0000-4000-8000-000000000097
+                        expectedEffect: Reduce standing water at the synthetic hospital access route.
+                        approvalCount: 2
+                        actionStatus: approved
+                        executionStatus: queued
+                        outcome: null
+                        evidenceId: null
+                        recordedBy: null
+                        recordedAt: null
+                        simulated: true
+                        classification: INTERNAL
+                        createdAt: 2026-10-15T09:00:00.000Z
+                        expiresAt: 2026-10-15T09:15:00.000Z
+                    limit: 50
+                    nextCursor: null
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/command-packages/{commandPackageId}/outcome:
+    post:
+      operationId: recordCommandPackageOutcome
+      summary: Record an operator reported outcome
+      description: Records executed or not executed for an approved L1 Command Package, creates scoped Evidence and an audit event, and never invokes a field device or external system.
+      tags: [Command Packages]
+      parameters:
+        - name: commandPackageId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommandPackageOutcomeCreate"
+            examples:
+              syntheticExecution:
+                summary: SYNTHETIC operator outcome; no command was sent
+                value:
+                  executionStatus: executed
+                  outcome: Pump deployment was completed in the simulated run.
+      responses:
+        "200":
+          description: Recorded outcome and Evidence reference.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CommandPackage"
+              examples:
+                syntheticExecution:
+                  summary: SYNTHETIC recorded outcome and Evidence reference
+                  value:
+                    id: 00000000-0000-4000-8000-000000000099
+                    actionRequestId: 00000000-0000-4000-8000-000000000098
+                    target: SYNTHETIC-PUMP-3
+                    action: Deploy mobile pump
+                    rationale: Reduce simulated flood exposure
+                    citations: [synthetic:procedure-7]
+                    procedure: PROC-SYN-7
+                    preconditions: [Pump is isolated from the live grid]
+                    barrierId: 00000000-0000-4000-8000-000000000097
+                    expectedEffect: Reduce standing water at the synthetic hospital access route.
+                    approvalCount: 2
+                    actionStatus: executed
+                    executionStatus: executed
+                    outcome: Pump deployment was completed in the simulated run.
+                    evidenceId: 00000000-0000-4000-8000-000000000096
+                    recordedBy: synthetic-operator
+                    recordedAt: 2026-10-15T09:05:00.000Z
+                    simulated: true
+                    classification: INTERNAL
+                    createdAt: 2026-10-15T09:00:00.000Z
+                    expiresAt: 2026-10-15T09:15:00.000Z
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /v1/assistant/sessions:
     post:
       operationId: createAgentSession
@@ -387,7 +506,12 @@ paths:
               $ref: "#/components/schemas/ActionDecisionCreate"
             examples:
               syntheticApproval:
-                summary: SYNTHETIC schema illustration; no live approval or measured result.
+                summary: SYNTHETIC approval of the exact payload
+                value:
+                  payloadHash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                  reason: Reviewed the exact synthetic payload.
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live approval or measured result.
                 value:
                   payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
                   reason: Reviewed the exact synthetic payload
@@ -401,7 +525,37 @@ paths:
                 $ref: "#/components/schemas/ActionDecisionResult"
               examples:
                 syntheticApproval:
-                  summary: SYNTHETIC approval record; no live action executed.
+                  summary: SYNTHETIC approval result; no command was executed
+                  value:
+                    actionRequest:
+                      id: 00000000-0000-4000-8000-000000000098
+                      orgId: synthetic-org
+                      actionType: field_command
+                      actionLevel: l1
+                      target: ot
+                      payload:
+                        target: SYNTHETIC-PUMP-3
+                        action: Deploy mobile pump
+                      payloadHash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                      rationale: Reduce simulated flood exposure
+                      citations: [synthetic:procedure-7]
+                      requestedBy: synthetic-operator
+                      requester: { kind: person }
+                      status: approved
+                      expiresAt: 2026-10-15T09:15:00.000Z
+                      simulated: true
+                      classification: INTERNAL
+                    approval:
+                      id: 00000000-0000-4000-8000-000000000095
+                      actionRequestId: 00000000-0000-4000-8000-000000000098
+                      approverSub: synthetic-manager
+                      decision: approved
+                      reason: Reviewed the exact synthetic payload.
+                      payloadHash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                      authTime: 2026-10-15T09:04:00.000Z
+                      createdAt: 2026-10-15T09:04:01.000Z
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; no live action or approval.
                   value:
                     actionRequest:
                       id: 00000000-0000-4000-8000-000000000095
@@ -463,7 +617,12 @@ paths:
               $ref: "#/components/schemas/ActionDecisionCreate"
             examples:
               syntheticRejection:
-                summary: SYNTHETIC schema illustration; no live rejection or measured result.
+                summary: SYNTHETIC rejection of the exact payload
+                value:
+                  payloadHash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                  reason: Preconditions were not satisfied in the simulation.
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live rejection or measured result.
                 value:
                   payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
                   reason: Requires additional synthetic source context
@@ -477,7 +636,37 @@ paths:
                 $ref: "#/components/schemas/ActionDecisionResult"
               examples:
                 syntheticRejection:
-                  summary: SYNTHETIC rejection record; no live action executed.
+                  summary: SYNTHETIC rejection result; no command was executed
+                  value:
+                    actionRequest:
+                      id: 00000000-0000-4000-8000-000000000098
+                      orgId: synthetic-org
+                      actionType: field_command
+                      actionLevel: l1
+                      target: ot
+                      payload:
+                        target: SYNTHETIC-PUMP-3
+                        action: Deploy mobile pump
+                      payloadHash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                      rationale: Reduce simulated flood exposure
+                      citations: [synthetic:procedure-7]
+                      requestedBy: synthetic-operator
+                      requester: { kind: person }
+                      status: rejected
+                      expiresAt: 2026-10-15T09:15:00.000Z
+                      simulated: true
+                      classification: INTERNAL
+                    approval:
+                      id: 00000000-0000-4000-8000-000000000095
+                      actionRequestId: 00000000-0000-4000-8000-000000000098
+                      approverSub: synthetic-manager
+                      decision: rejected
+                      reason: Preconditions were not satisfied in the simulation.
+                      payloadHash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                      authTime: 2026-10-15T09:04:00.000Z
+                      createdAt: 2026-10-15T09:04:01.000Z
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; no live action or approval.
                   value:
                     actionRequest:
                       id: 00000000-0000-4000-8000-000000000095
@@ -3225,6 +3414,48 @@ components:
         - INTERNAL
         - CONFIDENTIAL
         - HIGHLY_RESTRICTED
+    CommandPackagePayload:
+      type: object
+      additionalProperties: true
+      required:
+        - target
+        - action
+        - procedure
+        - barrierId
+        - preconditions
+        - expectedEffect
+      properties:
+        target:
+          type: string
+          minLength: 1
+          maxLength: 256
+          pattern: \S
+        action:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+        procedure:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          pattern: \S
+        barrierId:
+          type: string
+          format: uuid
+        expectedEffect:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+        preconditions:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            minLength: 1
+            maxLength: 500
+            pattern: \S
     ActionTarget:
       type: string
       enum:
@@ -3287,6 +3518,23 @@ components:
         simulationRunId:
           type: string
           format: uuid
+      allOf:
+        - if:
+            properties:
+              actionType:
+                const: field_command
+            required:
+              - actionType
+          then:
+            properties:
+              actionLevel:
+                const: l1
+              target:
+                enum:
+                  - scada
+                  - ot
+              payload:
+                $ref: "#/components/schemas/CommandPackagePayload"
     ToolCallCheck:
       type: object
       additionalProperties: false
@@ -3338,6 +3586,42 @@ components:
           type: string
           minLength: 1
           maxLength: 128
+      allOf:
+        - if:
+            properties:
+              actionType:
+                const: field_command
+            required:
+              - actionType
+          then:
+            required:
+              - actionLevel
+              - payload
+              - rationale
+              - citations
+            properties:
+              actionLevel:
+                const: l1
+              target:
+                enum:
+                  - scada
+                  - ot
+              payload:
+                $ref: "#/components/schemas/CommandPackagePayload"
+              rationale:
+                type: string
+                minLength: 1
+                maxLength: 2000
+                pattern: \S
+              citations:
+                type: array
+                minItems: 1
+                maxItems: 50
+                items:
+                  type: string
+                  minLength: 1
+                  maxLength: 2048
+                  pattern: \S
     ActionRequester:
       description: Who requested the action (PRD AX-1). An assistant acts on behalf of
         requestedBy.
@@ -3434,6 +3718,7 @@ components:
           enum:
             - open
             - in_review
+            - awaiting_second
             - approved
             - rejected
             - superseded
@@ -3537,6 +3822,76 @@ components:
           $ref: "#/components/schemas/ActionApproval"
     # END generated action schemas
 
+    CommandPackageExecutionStatus:
+      type: string
+      enum: [queued, executed, not_executed]
+    CommandPackageOutcomeCreate:
+      type: object
+      additionalProperties: false
+      required: [executionStatus, outcome]
+      properties:
+        executionStatus:
+          type: string
+          enum: [executed, not_executed]
+        outcome:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+    CommandPackage:
+      type: object
+      additionalProperties: false
+      required: [id, actionRequestId, target, action, rationale, citations, procedure, preconditions, barrierId, expectedEffect, approvalCount, actionStatus, executionStatus, outcome, evidenceId, recordedBy, recordedAt, simulated, classification, createdAt, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        actionRequestId: { type: string, format: uuid }
+        target: { type: string, minLength: 1, maxLength: 256 }
+        action: { type: string, minLength: 1, maxLength: 2000 }
+        rationale: { type: string, minLength: 1, maxLength: 2000 }
+        citations:
+          type: array
+          items: { type: string, minLength: 1, maxLength: 2048 }
+        procedure: { type: string, minLength: 1, maxLength: 2048 }
+        preconditions:
+          type: array
+          maxItems: 50
+          items: { type: string, minLength: 1, maxLength: 500 }
+        barrierId: { type: string, format: uuid }
+        expectedEffect: { type: string, minLength: 1, maxLength: 2000 }
+        approvalCount: { type: integer, minimum: 0 }
+        actionStatus:
+          type: string
+          enum: [open, in_review, awaiting_second, approved, rejected, superseded, executed]
+        executionStatus:
+          $ref: "#/components/schemas/CommandPackageExecutionStatus"
+        outcome:
+          type: [string, "null"]
+          maxLength: 2000
+        evidenceId:
+          type: [string, "null"]
+          format: uuid
+        recordedBy:
+          type: [string, "null"]
+          maxLength: 512
+        recordedAt:
+          type: [string, "null"]
+          format: date-time
+        simulated: { type: boolean }
+        classification:
+          $ref: "#/components/schemas/ActionClassification"
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    CommandPackagePage:
+      type: object
+      additionalProperties: false
+      required: [items, limit, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CommandPackage"
+        limit: { type: integer, minimum: 1, maximum: 200 }
+        nextCursor: { type: [string, "null"], maxLength: 512 }
     Draft:
       type: object
       additionalProperties: false
@@ -4400,6 +4755,9 @@ components:
         - conflict
         - idempotency_key_reused
         - payload_hash_mismatch
+        - approval_required
+        - action_request_expired
+        - simulation_required
         - rate_limited
         - internal_error
         - service_unavailable

@@ -28,3 +28,12 @@ export {
 export { ACTION_CEILINGS, ActionError, effectiveCeiling, evaluateToolCall, targetMatches, levelRank } from "./action-policy.js";
 export type { ToolRegistration } from "./action-policy.js";
 export { APPROVAL_AUTH_CLOCK_SKEW_MS, APPROVAL_MAX_AUTH_AGE_MS, PostgresActionStore, type ActionDecision, type ActionDecisionPort, type ActionServicePort, type ActionIdentity, type ApproverIdentity } from "./postgres-actions.js";
+export {
+  PostgresCommandPackageStore,
+  CommandPackageError,
+  type CommandPackage,
+  type CommandPackageExecutionStatus,
+  type CommandPackageOutcomeInput,
+  type CommandPackagePage,
+  type CommandPackageServicePort,
+} from "./postgres-command-packages.js";

@@ -21,6 +21,10 @@ it("serves direct app-route navigations without exposing the SPA at missing API 
   const audit = await app.inject("/audit?entityType=barrier");
   expect(audit.statusCode).toBe(200);
   expect(audit.body).toContain('id="root"');
+  const commandPackages = await app.inject("/command-packages");
+  expect(commandPackages.statusCode).toBe(200);
+  expect(commandPackages.headers["content-type"]).toContain("text/html");
+  expect(commandPackages.body).toContain('id="root"');
   const agent = await app.inject("/agent?scenario=synthetic-storm");
   expect(agent.statusCode).toBe(200);
   expect(agent.headers["content-type"]).toContain("text/html");

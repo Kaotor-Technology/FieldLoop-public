@@ -34,6 +34,39 @@ describe("Action contracts", () => {
     expect(isActionRequestCreate({ ...input, simulationRunId: "another-run" })).toBe(false);
     expect(isActionRequestCreate({ ...input, target: "https://example.test/write" })).toBe(false);
   });
+  it("requires a complete non-commanding L1 package for field commands", () => {
+    const command = {
+      ...input,
+      actionType: "field_command",
+      actionLevel: "l1",
+      target: "ot",
+      payload: {
+        target: "SYNTHETIC-PUMP-3",
+        action: "Deploy the mobile pump",
+        procedure: "PROC-SYN-7",
+        barrierId: "00000000-0000-4000-8000-000000000001",
+        preconditions: ["Pump disconnected from live grid"],
+        expectedEffect: "Reduce standing water at the synthetic hospital access route.",
+      },
+    };
+    expect(isActionRequestCreate(command)).toBe(true);
+    expect(isActionRequestCreate({ ...command, actionLevel: "l2" })).toBe(false);
+    expect(isActionRequestCreate({ ...command, target: "cmms" })).toBe(false);
+    for (const key of ["target", "action", "procedure", "barrierId", "preconditions", "expectedEffect"]) {
+      const payload = Object.fromEntries(Object.entries(command.payload).filter(([candidate]) => candidate !== key));
+      expect(isActionRequestCreate({ ...command, payload })).toBe(false);
+    }
+    expect(isToolCallCheck({
+      aiSystem: "demo-uc-1", tool: "create_action_request", actionType: "field_command", actionLevel: "l1",
+      target: "ot", payload: command.payload, rationale: command.rationale, citations: command.citations,
+      simulated: true, classification: "INTERNAL",
+    })).toBe(true);
+    expect(isToolCallCheck({
+      aiSystem: "demo-uc-1", tool: "create_action_request", actionType: "field_command", actionLevel: "l1",
+      target: "ot", simulated: true, classification: "INTERNAL",
+    })).toBe(false);
+  });
+
   it("accepts the Guardrail policy identifier on a Tool Call Decision", () => {
     expect(isToolCallDecision({
       decision: "convert_l1", reason: "human_action_required",

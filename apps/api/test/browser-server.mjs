@@ -242,7 +242,30 @@ const risk = {
   riskEventsAfter: async () => [],
   processHealthChanges: async () => 0,
 };
-const app = buildApp({ auth, baseUrl, simulator, health, risk, audit, geoReferences, mapLayers, drafts });
+const commandPackageIds = {
+  waiting: "00000000-0000-4000-8000-000000000701",
+  approved: "00000000-0000-4000-8000-000000000702",
+};
+const seedCommandPackages = () => [
+  { id: commandPackageIds.waiting, actionRequestId: "00000000-0000-4000-8000-000000000711", target: "SYNTHETIC-PUMP-3", action: "Deploy mobile pump", rationale: "Reduce simulated flood exposure", citations: ["synthetic:procedure-7"], procedure: "PROC-SYN-7", preconditions: ["Pump isolated from live grid"], barrierId: "00000000-0000-4000-8000-000000000183", expectedEffect: "Reduce standing water at the synthetic hospital access route.", approvalCount: 1, actionStatus: "awaiting_second", executionStatus: "queued", outcome: null, evidenceId: null, recordedBy: null, recordedAt: null, simulated: true, classification: "INTERNAL", createdAt: "2026-10-15T00:00:00.000Z", expiresAt: "2026-10-15T01:00:00.000Z" },
+  { id: commandPackageIds.approved, actionRequestId: "00000000-0000-4000-8000-000000000712", target: "SYNTHETIC-GATE-2", action: "Inspect flood gate", rationale: "Verify simulated gate readiness", citations: ["synthetic:inspection-2"], procedure: "PROC-SYN-2", preconditions: ["Control-room operator confirms local safety"], barrierId: "00000000-0000-4000-8000-000000000184", expectedEffect: "Confirm simulated flood gate readiness before the next storm interval.", approvalCount: 2, actionStatus: "approved", executionStatus: "queued", outcome: null, evidenceId: null, recordedBy: null, recordedAt: null, simulated: true, classification: "INTERNAL", createdAt: "2026-10-15T00:01:00.000Z", expiresAt: "2026-10-15T01:00:00.000Z" },
+];
+let commandPackages = seedCommandPackages();
+const commandPackageService = {
+  list: async (_user, status, _cursor, limit) => ({ items: commandPackages.filter((item) => item.executionStatus === status).slice(0, limit), limit, nextCursor: null }),
+  recordOutcome: async (user, id, body) => {
+    const item = commandPackages.find((candidate) => candidate.id === id && candidate.executionStatus === "queued");
+    if (!item || item.actionStatus !== "approved" || item.approvalCount < 2) throw new Error("Command Package outcome is unavailable");
+    item.executionStatus = body.executionStatus;
+    item.actionStatus = body.executionStatus === "executed" ? "executed" : "rejected";
+    item.outcome = body.outcome;
+    item.evidenceId = randomUUID();
+    item.recordedBy = user.sub;
+    item.recordedAt = new Date().toISOString();
+    return item;
+  },
+};
+const app = buildApp({ auth, baseUrl, simulator, health, risk, audit, geoReferences, mapLayers, commandPackages: commandPackageService, drafts });
 await registerReference(app, fileURLToPath(new URL("reference/", import.meta.resolve("@fieldloop/contracts"))));
 await registerSpa(app, fileURLToPath(new URL("../../web/dist/", import.meta.url)));
 await app.ready();
@@ -254,6 +277,7 @@ const server = createServer({ key: await readFile(join(directory, "key.pem")), c
     const url = new URL(request.url, baseUrl);
     if (url.pathname === "/test/reset") {
       resetSimulationFixture(); resetHealthFixture();
+      commandPackages = seedCommandPackages();
       geoReferenceDrafts = seedGeoReferenceDrafts();
       managementDrafts = seedManagementDrafts(); managementDraftDecisions = [];
       sessions.clear(); transactions.clear(); authorizations.clear(); codes.clear(); now = Date.now(); active = true; unavailable = false;

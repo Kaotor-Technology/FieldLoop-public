@@ -56,6 +56,10 @@ test("the audit log has no axe violations in light and night shift themes", asyn
   await expect(page.getByRole("table", { name: "Audit events, newest first" })).toBeVisible();
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
   await page.getByRole("button", { name: "Night shift" }).click();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator(".simulation-controls")).toHaveCSS("color", "rgb(230, 239, 235)");
+  await expect(page.locator(".workspace-banner")).toHaveCSS("color", "rgb(232, 207, 138)");
+  await expect(page.locator('label[for="simulation-seed"]')).toHaveCSS("color", "rgb(230, 239, 235)");
   expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([]);
 });
 
