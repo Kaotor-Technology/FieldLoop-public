@@ -6,11 +6,17 @@ import threading
 import uuid
 from collections.abc import Callable
 from contextlib import AbstractContextManager
+from datetime import datetime
 from typing import Protocol
 
+from fieldloop_common.generated_scenario import Event
 from fieldloop_common.generated_simulation import PlayerCommand, RunCreate
 
+from fieldloop_simulator import storm_events
+from fieldloop_simulator.bangkok_storm import SIMULATION_STARTS_AT
 from fieldloop_simulator.mock_historian import DEMO_SEED, SimulatedHistorian
+from fieldloop_simulator.mock_hydro import SimulatedHydro
+from fieldloop_simulator.mock_pumps import SimulatedPumps
 from fieldloop_simulator.player import (
     Command,
     PlayerSnapshot,
@@ -30,10 +36,15 @@ class SimulationService:
         player: ScenarioPlayer,
         store: Callable[[], PlayerStore],
         historian: SimulatedHistorian,
+        hydro: SimulatedHydro,
+        pumps: SimulatedPumps,
     ) -> None:
         self.player = player
         self.store = store
+        # The sources whose reads follow the run; the app passes the ones its routes read.
         self.historian = historian
+        self.hydro = hydro
+        self.pumps = pumps
         self._projection_lock = threading.RLock()
 
     def current(self, run_id: uuid.UUID | None = None) -> dict[str, object] | None:
@@ -84,13 +95,29 @@ class SimulationService:
     def _hydrate(self, snapshot: PlayerSnapshot | None) -> None:
         # Rebuild from the committed index, including after a cold start or retry.
         self.historian.reset(snapshot.run.seed if snapshot else DEMO_SEED)
+        # A read that names no time is as of the run's clock, so it shows what the run applied.
+        clock = (
+            datetime.fromisoformat(snapshot.run.clock.replace("Z", "+00:00"))
+            if snapshot
+            else SIMULATION_STARTS_AT
+        )
+        applied: list[tuple[Event, object, datetime]] = []
         if snapshot:
             for event in snapshot.scenario.events[: snapshot.run.next_event_index]:
+                # Only an event that a read shows is worth its value: a derived rainfall
+                # re-reads every rain event before it, and a run may hold hundreds.
+                described = storm_events.describe(event)
+                held = described is not None and described.holds_state
+                if event.source != "mock-historian" and not held:
+                    continue
+                reading = observation(snapshot, event)
+                if held:
+                    applied.append((event, reading.value, reading.observed_at))
                 if event.source == "mock-historian":
-                    reading = observation(snapshot, event)
                     if isinstance(reading.value, (float, int)) and not isinstance(
                         reading.value, bool
                     ):
                         self.historian.add_override(
                             event.tag, start=reading.observed_at, value=float(reading.value)
                         )
+        storm_events.replay(applied, clock, self.hydro, self.pumps)

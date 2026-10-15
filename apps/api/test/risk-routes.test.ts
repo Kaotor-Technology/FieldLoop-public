@@ -1,0 +1,125 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { buildApp } from "../src/app.js";
+import { AuthError, type AuthServicePort, type CurrentUser } from "../src/auth/service.js";
+import { RiskServiceError, type RiskApiPort, type RiskExplain } from "../src/risk/service.js";
+
+const apps: ReturnType<typeof buildApp>[] = [];
+afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
+
+function fixture(riskOverrides: Partial<RiskApiPort> = {}) {
+  const user: CurrentUser = {
+    sub: "synthetic-reviewer", roles: ["fieldloop.viewer"], persona: "Executive",
+    orgId: "synthetic-org", clearance: "INTERNAL", csrfToken: "fixture-csrf", authTime: new Date("2026-10-13T00:00:00Z"),
+  };
+  const auth: AuthServicePort = {
+    getCurrentUser: async (cookie) => {
+      if (cookie !== "valid") throw new AuthError("Session required", 401);
+      return user;
+    },
+    startLogin: async () => new URL("https://example.test"),
+    startReauthentication: async () => new URL("https://example.test"),
+    completeLogin: async () => { throw new Error("unused"); },
+    issueInternalUserToken: async () => { throw new Error("unused"); },
+    logout: async () => new URL("https://example.test"),
+    backchannelLogout: async () => {},
+    jwks: async () => ({ keys: [] }),
+  };
+  let receivedOrgId = "";
+  const risk: RiskApiPort = {
+    listBowties: async (currentUser) => { receivedOrgId = currentUser.orgId; return []; },
+    getBowtie: async () => { throw new RiskServiceError(404, "not_found"); },
+    getRisk: async () => { throw new RiskServiceError(409, "risk_matrix_unconfigured"); },
+    explain: async () => { throw new RiskServiceError(409, "risk_matrix_unconfigured"); },
+    getEvidence: async () => { throw new RiskServiceError(404, "not_found"); },
+    riskEventsAfter: async () => [],
+    processHealthChanges: async () => 0,
+    ...riskOverrides,
+  };
+  const app = buildApp({ auth, risk });
+  apps.push(app);
+  return { app, user, headers: { cookie: "fl_session=valid" }, get receivedOrgId() { return receivedOrgId; } };
+}
+
+describe("risk API routes", () => {
+  it("requires a session and passes the session Organisation to the service", async () => {
+    const testFixture = fixture();
+    const { app, headers } = testFixture;
+    expect((await app.inject({ method: "GET", url: "/api/v1/bowties" })).statusCode).toBe(401);
+
+    const response = await app.inject({ method: "GET", url: "/api/v1/bowties", headers });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([]);
+    expect(testFixture.receivedOrgId).toBe("synthetic-org");
+  });
+
+  it("returns the explain-score response from the session Organisation", async () => {
+    const bowtieId = "19b46b91-1cec-4502-96da-7d6ec03af16e";
+    const explanation: RiskExplain = {
+      bowtieId, hasPrevious: false, summary: "No prior snapshot is available; no change is reported.", previous: null,
+      current: {
+        id: "39b46b91-1cec-4502-96da-7d6ec03af16e", createdAt: "2026-10-13T00:00:00.000Z", trigger: "initial",
+        calibration: { standardRef: "SYNTHETIC-ORG-RISK-STD", standardVersion: "2026.1", approvedBy: "synthetic-authority", approvedAt: "2026-10-13T00:00:00.000Z" },
+        snapshot: {
+          bowtieId, topEventFrequencyPerYear: 0, threats: [], consequences: [],
+          worstConsequenceId: "29b46b91-1cec-4502-96da-7d6ec03af16e",
+          cell: { frequencyBand: 1, severityBand: 1, zone: "green", rank: 1 },
+        },
+      },
+      changes: [], riskInputChanges: [],
+    };
+    let receivedOrgId = "";
+    let receivedBowtieId = "";
+    const { app, headers } = fixture({
+      explain: async (user, requestedBowtieId) => {
+        receivedOrgId = user.orgId;
+        receivedBowtieId = requestedBowtieId;
+        return explanation;
+      },
+    });
+
+    const url = `/api/v1/bowties/${bowtieId}/risk/explain`;
+    expect((await app.inject({ method: "GET", url })).statusCode).toBe(401);
+    const response = await app.inject({ method: "GET", url, headers });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(explanation);
+    expect(receivedOrgId).toBe("synthetic-org");
+    expect(receivedBowtieId).toBe(bowtieId);
+  });
+
+  it("returns a typed fail-closed problem when the Organisation has no approved calibration", async () => {
+    const { app, headers } = fixture();
+    const response = await app.inject({
+      method: "GET", url: "/api/v1/bowties/19b46b91-1cec-4502-96da-7d6ec03af16e/risk", headers,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.headers["content-type"]).toContain("application/problem+json");
+    expect(response.json()).toMatchObject({
+      status: 409, code: "risk_matrix_unconfigured", title: "Organisation Risk Matrix is not approved",
+    });
+  });
+
+  it.each([
+    { internalCode: "clearance_denied", status: 403, publicCode: "forbidden" },
+    { internalCode: "risk_snapshot_unavailable", status: 503, publicCode: "risk_service_unavailable" },
+  ])("maps internal $internalCode errors to the OpenAPI code $publicCode", async ({ internalCode, status, publicCode }) => {
+    const { app, headers } = fixture({
+      getBowtie: async () => { throw new RiskServiceError(status, internalCode); },
+    });
+    const response = await app.inject({ method: "GET", url: "/api/v1/bowties/19b46b91-1cec-4502-96da-7d6ec03af16e", headers });
+
+    expect(response.statusCode).toBe(status);
+    expect(response.headers["content-type"]).toContain("application/problem+json");
+    expect(response.json().code).toBe(publicCode);
+  });
+
+  it("rejects malformed Bowtie IDs before calling the service", async () => {
+    const { app, headers } = fixture();
+    const response = await app.inject({ method: "GET", url: "/api/v1/bowties/not-a-uuid/risk", headers });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.headers["content-type"]).toContain("application/problem+json");
+    expect(response.json().code).toBe("validation_failed");
+  });
+});

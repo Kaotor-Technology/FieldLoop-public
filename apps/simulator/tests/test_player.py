@@ -14,6 +14,8 @@ from fieldloop_common.generated_simulation import PlayerCommand, RunCreate
 from fieldloop_common.memory_transport import InMemoryTransport
 from fieldloop_common.signal_publisher import SignalPublisher
 from fieldloop_simulator.mock_historian import SimulatedHistorian
+from fieldloop_simulator.mock_hydro import SimulatedHydro
+from fieldloop_simulator.mock_pumps import SimulatedPumps
 from fieldloop_simulator.mock_signals import SimulatedSignalEmitter
 from fieldloop_simulator.player import PlayerError, PlayerSnapshot, ScenarioPlayer
 from fieldloop_simulator.player_service import SimulationService
@@ -261,7 +263,9 @@ def test_persistent_snapshot_survives_rebuilding_the_player() -> None:
 def test_reset_projection_cannot_be_overwritten_by_an_older_read() -> None:
     player, store, _, _ = fixture()
     historian = SimulatedHistorian(org_id="test-org")
-    service = SimulationService(player, lambda: store, historian)
+    service = SimulationService(
+        player, lambda: store, historian, SimulatedHydro(), SimulatedPumps()
+    )
     created = service.execute(
         "/v1/simulation/runs",
         "create-player-test-01",

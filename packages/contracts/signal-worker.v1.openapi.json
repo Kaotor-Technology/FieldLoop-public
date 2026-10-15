@@ -1,0 +1,298 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FieldLoop Signal Worker",
+    "version": "1.0.0",
+    "description": "Internal authenticated Signal ingestion and periodic source-silence detection. No Signal applies a proposed Health change.",
+    "contact": {
+      "name": "FieldLoop engineering",
+      "url": "https://github.com/Kaotor-Technology/FieldLoop-v2"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Local worker; Cloud Run uses its configured service audience."
+    }
+  ],
+  "security": [
+    {
+      "serviceIdentity": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Signals",
+      "description": "Read-only Signal ingestion"
+    },
+    {
+      "name": "Jobs",
+      "description": "Periodic source checks"
+    }
+  ],
+  "paths": {
+    "/internal/pubsub/signals": {
+      "post": {
+        "operationId": "ingestSignalPush",
+        "summary": "Store a Signal and create proposals",
+        "description": "Requires the pinned Pub/Sub service email and audience. Producer Signal ID deduplicates redelivery even if the Pub/Sub message ID changes. Errors remain unacknowledged for configured dead-letter handling.",
+        "tags": [
+          "Signals"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PubSubPush"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Signal and effects committed; events dispatched. At-least-once events retain their stable ID."
+          },
+          "400": {
+            "description": "Invalid push envelope or Signal",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid service identity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unexpected provenance",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Signal ID content conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Worker or dependency unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/jobs/silent-sources": {
+      "post": {
+        "operationId": "detectSilentSources",
+        "summary": "Detect missing periodic measurements",
+        "description": "Requires the Scheduler identity. Healthy and Degraded become Unverified after the configured interval; Failed stays Failed. Scheduler clock uses receipt time, not Scenario time.",
+        "tags": [
+          "Jobs"
+        ],
+        "responses": {
+          "200": {
+            "description": "Number of Health changes committed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "changed"
+                  ],
+                  "properties": {
+                    "changed": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid service identity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Worker or dependency unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/internal/jobs/sla-expiry": {
+      "post": {
+        "operationId": "expireActionRequests",
+        "summary": "Reject and escalate expired actions",
+        "description": "Pinned Scheduler identity rejects expired Action Requests and linked Held Requests; one durable escalation, in-app notification and audit record is created atomically. Repeated runs have no duplicate effects.",
+        "tags": [
+          "Jobs"
+        ],
+        "responses": {
+          "200": {
+            "description": "Requests rejected and escalated.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "rejected"
+                  ],
+                  "properties": {
+                    "rejected": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid service identity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Worker or dependency unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "./openapi.yaml#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "serviceIdentity": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "Google OIDC ID token"
+      }
+    },
+    "schemas": {
+      "PubSubPush": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message",
+          "subscription"
+        ],
+        "properties": {
+          "subscription": {
+            "type": "string",
+            "minLength": 1
+          },
+          "message": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "data",
+              "messageId",
+              "attributes"
+            ],
+            "properties": {
+              "data": {
+                "type": "string",
+                "minLength": 4,
+                "maxLength": 349528
+              },
+              "messageId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "publishTime": {
+                "type": "string"
+              },
+              "orderingKey": {
+                "type": "string"
+              },
+              "attributes": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "required": [
+                  "environment",
+                  "orgId",
+                  "schemaVersion",
+                  "signalId",
+                  "simulated",
+                  "classification"
+                ],
+                "properties": {
+                  "environment": {
+                    "type": "string"
+                  },
+                  "orgId": {
+                    "type": "string"
+                  },
+                  "schemaVersion": {
+                    "type": "string"
+                  },
+                  "signalId": {
+                    "type": "string"
+                  },
+                  "simulated": {
+                    "type": "string"
+                  },
+                  "classification": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isRiskSnapshot, type RiskInput, type RiskSnapshot } from "@fieldloop/contracts";
-import { calculateRisk } from "./index.js";
+import { calculateRisk, calculateRiskChangeImpact, isEvidenceExpired, RiskInputError, validateRiskMatrix } from "./index.js";
 import { seedInput, testMatrix } from "./test-fixtures.js";
 
 const BOWTIE_A = "../../../../data/synthetic/dl-01/bowtie-a.json";
@@ -10,6 +10,28 @@ function expectBinary64Equal(actual: number, expected: number): void {
   // Bound relative error by eight machine epsilons; no decimal rounding in the engine.
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(Math.abs(expected) * Number.EPSILON * 8);
 }
+
+describe("Organisation Risk Matrix validation and explanation impact", () => {
+  it("accepts the calibrated 5 by 5 matrix and rejects non-monotonic cells", () => {
+    expect(() => validateRiskMatrix(testMatrix())).not.toThrow();
+    const invalid = testMatrix();
+    invalid.cells = invalid.cells.map((row, rowIndex) => rowIndex === 4
+      ? row.map((cell, columnIndex) => columnIndex === 4 ? { zone: "green", rank: 1 } : cell)
+      : row);
+    expect(() => validateRiskMatrix(invalid)).toThrow(RiskInputError);
+  });
+
+  it("ranks changes by the sum of absolute consequence-frequency deltas", () => {
+    expect(calculateRiskChangeImpact([0.25, -0.5, 0])).toBe(0.75);
+  });
+
+  it("expires Evidence only when it is older than the configured interval", () => {
+    expect(isEvidenceExpired(null, 10_000, null)).toBe(false);
+    expect(isEvidenceExpired(null, 10_000, 5)).toBe(true);
+    expect(isEvidenceExpired(5_000, 10_000, 5)).toBe(false);
+    expect(isEvidenceExpired(4_999, 10_000, 5)).toBe(true);
+  });
+});
 
 /** Assert every non-frequency field against the authored synthetic input and
  * explicit hand-selected common-cause credits, not a generated snapshot.

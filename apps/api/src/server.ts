@@ -18,11 +18,29 @@ try {
 }
 const app = buildApp({
   auth: authRuntime.auth,
+  ...(authRuntime.actions ? { actions: authRuntime.actions } : {}),
+  mapLayers: authRuntime.mapLayers,
+  ...(authRuntime.audit ? { audit: authRuntime.audit } : {}),
+  ...(authRuntime.health ? { health: authRuntime.health } : {}),
+  ...(authRuntime.risk ? { risk: authRuntime.risk } : {}),
+  ...(authRuntime.imports ? { imports: authRuntime.imports } : {}),
   domainPacks,
   ...(simulator ? { simulator } : {}),
   ...(process.env["FIELDLOOP_BASE_URL"] ? { baseUrl: process.env["FIELDLOOP_BASE_URL"] } : {}),
 });
-app.addHook("onClose", authRuntime.close);
+let processingRisk = false;
+const riskTimer = authRuntime.risk ? setInterval(() => {
+  if (processingRisk) return;
+  processingRisk = true;
+  void authRuntime.risk?.processHealthChanges().catch((error: unknown) => {
+    app.log.error({ errorType: error instanceof Error ? error.name : "unknown" }, "Risk recalculation worker failed");
+  }).finally(() => { processingRisk = false; });
+}, 500) : undefined;
+riskTimer?.unref();
+app.addHook("onClose", async () => {
+  if (riskTimer) clearInterval(riskTimer);
+  await authRuntime.close();
+});
 app.log.info({ packs: domainPacks.map(({ content }) => `${content.id}@${content.version}`), persisted: Boolean(authRuntime.registerPacks) }, "Domain Packs loaded");
 const port = Number(process.env["PORT"] ?? "8080");
 if (!Number.isInteger(port) || port < 1 || port > 65535) {

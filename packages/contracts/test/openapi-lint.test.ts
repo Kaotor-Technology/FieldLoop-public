@@ -272,9 +272,9 @@ const mockViolations: { name: string; rule: string; mutate: (contract: MockContr
 ];
 
 describe("FieldLoop mock-source conventions", () => {
-  it("lints every JSON OpenAPI contract of the package as a mock source", () => {
+  it("routes mock and worker JSON contracts to their own service conventions", () => {
     expect(mockContracts.length).toBeGreaterThan(0);
-    expect(mockContracts.filter((name) => !/^mock-.+\.openapi\.json$/.test(name))).toEqual([]);
+    expect(mockContracts.filter((name) => !/^mock-.+\.openapi\.json$/.test(name))).toEqual(["signal-worker.v1.openapi.json"]);
   });
 
   it("runs from pnpm lint:api", async () => {
@@ -284,7 +284,7 @@ describe("FieldLoop mock-source conventions", () => {
     expect(scripts["lint:openapi"]).toContain(`lint "mock-*.openapi.json" --ruleset ${mockRuleset}`);
   });
 
-  for (const contract of mockContracts) {
+  for (const contract of mockContracts.filter((name) => name.startsWith("mock-"))) {
     it(`accepts ${contract}`, async () => {
       expect(await lint(contract, mockRuleset)).toEqual([]);
     }, timeoutMs);
@@ -307,5 +307,13 @@ describe("FieldLoop mock-source conventions", () => {
       operation(contract).operationId = "read_mock_tag";
     });
     expect(findings.map((finding) => finding.code)).toContain("fieldloop-operation-id-camel-case");
+  }, timeoutMs);
+});
+
+describe("FieldLoop worker conventions", () => {
+  it("lints the internal worker contract with service identity and shared errors", async () => {
+    expect(await lint("signal-worker.v1.openapi.json", ".spectral.worker.yaml")).toEqual([]);
+    const { scripts } = JSON.parse(await readFile(resolve(packageRoot, "package.json"), "utf8")) as { scripts: Record<string, string> };
+    expect(scripts["lint:openapi"]).toContain("signal-worker.v1.openapi.json --ruleset .spectral.worker.yaml");
   }, timeoutMs);
 });

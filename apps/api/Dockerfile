@@ -6,6 +6,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc turbo.json ./
 COPY DESIGN.md ./
 COPY packages ./packages
 COPY apps/web ./apps/web
+COPY data/synthetic/dl-01/bowtie-a.json ./data/synthetic/dl-01/bowtie-a.json
+COPY data/synthetic/bangkok/bowtie-d.json ./data/synthetic/bangkok/bowtie-d.json
 COPY apps/api ./apps/api
 COPY apps/guardrail ./apps/guardrail
 COPY apps/signal-worker ./apps/signal-worker

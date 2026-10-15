@@ -70,6 +70,8 @@ export interface AuthServicePort {
   startReauthentication(sessionCookieValue: string | undefined, returnPath: string): Promise<URL>;
   completeLogin(callbackUrl: URL, existingCookieValue?: string): Promise<LoginCompletion>;
   getCurrentUser(sessionCookieValue: string | undefined, forceIntrospection?: boolean): Promise<CurrentUser>;
+  /** Read-only identity for server-to-server calls made on behalf of a user (assistant tools). */
+  getCurrentUserFromInternalToken?(token: string): Promise<CurrentUser>;
   issueInternalUserToken(sessionCookieValue: string | undefined): Promise<string>;
   logout(sessionCookieValue: string | undefined): Promise<URL>;
   backchannelLogout(token: string): Promise<void>;
@@ -187,6 +189,31 @@ export class BffAuthService implements AuthServicePort {
       clearance: user.clearance,
       csrfToken: user.csrfToken,
       authTime: user.authTime,
+    };
+  }
+
+  async getCurrentUserFromInternalToken(token: string): Promise<CurrentUser> {
+    const verify = this.options.internalTokens.verify?.bind(this.options.internalTokens);
+    if (!verify) throw new AuthError("Internal user tokens cannot be verified", 503);
+    let claims;
+    try {
+      claims = await verify(token);
+    } catch {
+      throw new AuthError("Internal user token failed verification", 401);
+    }
+    const roles = claims.roles.filter((role) => ALLOWED_ROLES.has(role));
+    if (roles.length === 0 || claims.orgId !== this.options.defaultOrgId) {
+      throw new AuthError("Internal user token is not valid for this Organisation", 403);
+    }
+    return {
+      sub: claims.sub,
+      roles,
+      persona: roles.map((role) => DEFAULT_PERSONA[role]).find(Boolean) ?? "User",
+      orgId: claims.orgId,
+      clearance: claims.clearance,
+      // Never usable for a state change: no CSRF secret and no recent authentication.
+      csrfToken: "",
+      authTime: new Date(0),
     };
   }
 

@@ -2,6 +2,8 @@ import { StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ActionLevelBadge, Button, Card, EmptyState, HealthBadge, Input, MapMarker, Modal, MultiSelect, Navigation, Select, SimulationBanner, Skeleton, Tabs, Textarea, Toast, ToastProvider, TopBar } from "@fieldloop/ui";
 import type { BarrierHealth, ToastProps } from "@fieldloop/ui";
+import { HealthProposalReview } from "./HealthProposalReview";
+import i18n from "./i18n";
 import "@fontsource/ibm-plex-sans-thai/400.css";
 import "@fontsource/ibm-plex-sans-thai/500.css";
 import "@fontsource/ibm-plex-sans-thai/600.css";
@@ -29,10 +31,12 @@ function Preview() {
   const [toastOpen, setToastOpen] = useState(false);
   const [marker, setMarker] = useState("");
   const [previewAction, setPreviewAction] = useState("");
+  const [proposalDecision, setProposalDecision] = useState("");
   useEffect(() => {
     if (theme === "system") delete document.documentElement.dataset["theme"];
     else document.documentElement.dataset["theme"] = theme;
     document.documentElement.lang = language;
+    void i18n.changeLanguage(language);
   }, [theme, language]);
   const th = language === "th";
   const navItems = [{ href: "#controls", label: "Controls", icon: "C", active: true }, { href: "#feedback", label: "Feedback", icon: "F" }, { href: "#domain", label: "Domain", icon: "D" }];
@@ -84,6 +88,15 @@ function Preview() {
         </section>
         <section id="domain" className="preview-section" aria-labelledby="domain-title"><h2 id="domain-title" lang={language}>{th ? "สถานะและการนำทาง" : "Domain and navigation"}</h2>
           <Card><h3>Barrier Health</h3><div className="preview-row">{healths.map(health => <HealthBadge key={health} health={health} />)}</div><h3>Action Levels</h3><div className="preview-row">{(["l0", "l1", "l2"] as const).map(level => <ActionLevelBadge key={level} level={level} />)}</div></Card>
+          <Card variant="divided"><HealthProposalReview
+            proposals={[
+              { id: "synthetic-proposal-001", barrierId: "SYNTHETIC-B-001", barrierName: "Rectifier output", currentHealth: "healthy", proposedHealth: "degraded", sourceReason: "SIMULATION · synthetic signal", simulated: true },
+              { id: "synthetic-proposal-002", barrierId: "SYNTHETIC-B-002", currentHealth: "degraded", proposedHealth: "failed", sourceReason: "SIMULATION · synthetic signal", simulated: true },
+            ]}
+            onDecision={async ({ proposalId, decision, reason }) => {
+              setProposalDecision(`${proposalId}|${decision}|${reason}`);
+            }}
+          /><output aria-label="Last Health Proposal decision">{proposalDecision}</output></Card>
           <Card variant="divided"><h3>Map markers</h3><div className="preview-row">{(["degraded", "failed", "unverified"] as const).map(health => <MapMarker key={health} health={health} label={`${health} Barrier marker`} onClick={() => setMarker(health)} />)}<MapMarker health="failed" label="Disabled Barrier marker" disabled /></div><p role="status" className="fl-helper">{marker ? `Selected ${marker} Barrier fixture` : "Keyboard-operable marker examples. Production maps also need a list equivalent."}</p></Card>
           <Card variant="subtle"><h3>Navigation drawer</h3><Navigation variant="drawer" label="Drawer preview" items={[...navItems, { href: "#unavailable", label: "Offline", icon: "O", disabled: true, disabledReason: "Requires a connection" }]} /><h3>Bottom navigation</h3><Navigation variant="bottom" label="Bottom preview" items={navItems} /></Card>
         </section>

@@ -52,7 +52,7 @@ interface OidcLoginTransactionTable {
   expires_at: Timestamp;
 }
 
-interface AuthDatabase {
+export interface AuthDatabase {
   app_user: AppUserTable;
   user_session: UserSessionTable;
   oidc_login_transaction: OidcLoginTransactionTable;

@@ -17,6 +17,7 @@ function generatorSchema(value) {
 for (const [file, typeName, schemaName] of [
   ["domain-pack", "DomainPack", "domainPackSchema"],
   ["agent-definition", "AgentDefinition", "agentDefinitionSchema"],
+  ["gen-ai-safety", "GenAiSafetyPack", "genAiSafetySchema"],
 ]) {
   const schema = JSON.parse(await readFile(new URL(`../${file}.v1.schema.json`, import.meta.url), "utf8"));
   const types = await compile(generatorSchema(schema), typeName, { additionalProperties: false });

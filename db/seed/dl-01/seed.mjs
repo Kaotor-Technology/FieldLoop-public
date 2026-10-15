@@ -226,6 +226,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
   statements.push(upsert("app.bowtie", {
     id: bowtieId,
     org_id: orgId,
+    code: bowtieSeed.id,
     hazard: bowtieSeed.hazard,
     top_event: bowtieSeed.topEvent,
     domain: bowtieSeed.domain,
@@ -309,6 +310,7 @@ export function buildSeedQueries(database, dataset, orgId, bowtieSeed = readBowt
       independence_group_id: barrier.independenceGroupId
         ? databaseIdFor("independence_group", barrier.independenceGroupId)
         : null,
+      code: barrier.id,
       triad: jsonbExpression(barrier.triad),
       simulated,
       classification,

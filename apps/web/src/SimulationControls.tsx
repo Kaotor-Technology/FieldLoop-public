@@ -15,7 +15,12 @@ const commandPaths = {
 } as const;
 
 export function SimulationControls({ user }: { user: CurrentUser }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const selectLabels = {
+    lang: i18n.resolvedLanguage ?? "en",
+    searchLabel: t("searchOptions"), emptyLabel: t("noMatchingOptions"),
+    scrollUpLabel: t("scrollOptionsUp"), scrollDownLabel: t("scrollOptionsDown"),
+  };
   const client = useQueryClient();
   const current = useSimulation();
   const connected = useSimulationEvents();
@@ -68,10 +73,10 @@ export function SimulationControls({ user }: { user: CurrentUser }) {
         <button disabled={pending || !connected || run.state === "playing" || run.state === "finished"} onClick={() => command.mutate({ name: "play" })}>{t("play")}</button>
         <button disabled={pending || !connected || run.state !== "playing"} onClick={() => command.mutate({ name: "pause" })}>{t("pause")}</button>
         <button disabled={pending || !connected || !canStep} onClick={() => command.mutate({ name: "step" })}>{t("step")}</button>
-        <Select label={t("speed")} mono value={String(run.speed)} disabled={pending || !connected}
+        <Select {...selectLabels} label={t("speed")} mono value={String(run.speed)} disabled={pending || !connected}
           options={[...new Set([1, 10, 60, 3600, run.speed])].map((speed) => ({ value: String(speed), label: `${speed}×` }))}
           onValueChange={(value) => command.mutate({ name: "speed", body: { speed: Number(value) } })} />
-        <Select label={t("bookmark")} placeholder={t("chooseBookmark")} value={draft.bookmarkId}
+        <Select {...selectLabels} label={t("bookmark")} placeholder={t("chooseBookmark")} value={draft.bookmarkId}
           disabled={pending || !canJumpToBookmark} options={run.bookmarks.map((bookmark) => ({
             value: bookmark.id, label: bookmark.name,
           }))} onValueChange={draft.selectBookmark} />
@@ -81,7 +86,7 @@ export function SimulationControls({ user }: { user: CurrentUser }) {
     </> : null}
     {canControl && (!run || (run.state === "ready" && run.nextEventIndex === 0)) ? <form className="simulation-setup" onSubmit={(event) => { event.preventDefault(); create.mutate(); }}>
       {catalog.data?.length ? <>
-        <Select label={t("scenario")} placeholder={t("chooseScenario")} value={draft.scenarioId}
+        <Select {...selectLabels} label={t("scenario")} placeholder={t("chooseScenario")} value={draft.scenarioId}
           options={catalog.data.map((scenario) => ({ value: scenario.id, label: scenario.name }))}
           onValueChange={draft.selectScenario} disabled={pending} />
         <div className="simulation-field"><label htmlFor="simulation-seed">{t("seed")}</label><input id="simulation-seed" className="mono" type="number" min="0" max="2147483647" step="1" value={draft.seed} required disabled={pending} onChange={(event) => draft.setSeed(event.target.value)} aria-describedby={error ? "simulation-error" : undefined} /></div>

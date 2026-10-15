@@ -71,7 +71,7 @@ test("failed commands retain confirmed state and show an error", async ({ page }
   await createRun(page);
   await page.route("**/api/v1/simulation/runs/*:step", (route) => route.fulfill({ status: 503, contentType: "application/problem+json", body: JSON.stringify({ type: "about:blank", status: 503, title: "Fixture unavailable" }) }));
   await page.getByRole("button", { name: "Step", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("Simulation could not be updated");
+  await expect(page.locator("#simulation-error")).toContainText("Simulation could not be updated");
   await expect(page.getByRole("progressbar")).toHaveAttribute("value", "0");
 });
 for (const theme of ["light", "dark"]) for (const width of [390, 1280]) {

@@ -1,0 +1,6 @@
+* { box-sizing: border-box; }
+body { margin: var(--spacing-space-0); background: var(--fl-canvas); color: var(--fl-ink); font-family: var(--type-body-md-font-family), sans-serif; font-size: var(--type-body-md-font-size); line-height: var(--type-body-md-line-height); }
+h1 { font-size: var(--type-headline-sm-font-size); margin: var(--spacing-space-4); }
+.strip-fixture-skip { position: absolute; transform: translateY(-200%); color: var(--fl-ink); background: var(--fl-surface); }
+.strip-fixture-skip:focus { transform: none; }
+:focus-visible { outline: var(--spacing-focus-ring-width) solid var(--fl-focus); outline-offset: var(--spacing-focus-ring-offset); }
