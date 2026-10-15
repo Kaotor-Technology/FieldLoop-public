@@ -1,4 +1,4 @@
-import { PostgresActionStore, type ActionServicePort, GoogleCloudKmsEnvelopeKeyService, GoogleCloudSecretReader, type LoadedDomainPack } from "@fieldloop/adapters";
+import { PostgresActionStore, type ActionDecisionPort, type ActionServicePort, GoogleCloudKmsEnvelopeKeyService, GoogleCloudSecretReader, type LoadedDomainPack } from "@fieldloop/adapters";
 import { registerDomainPackRecords } from "../domain-packs.js";
 import { AuthError, BffAuthService, type AuthServicePort } from "./service.js";
 import { KmsEnvelopeCrypto } from "./envelope-crypto.js";
@@ -39,7 +39,7 @@ export async function createProductionAuthRuntime(): Promise<{
   geoReferences?: GeoReferenceStore;
   audit?: AuditServicePort;
   health?: HealthServicePort;
-  actions?: ActionServicePort;
+  actions?: ActionServicePort & ActionDecisionPort;
   close: () => Promise<void>;
   registerPacks?: (packs: LoadedDomainPack[]) => Promise<void>;
   risk?: PostgresRiskService;

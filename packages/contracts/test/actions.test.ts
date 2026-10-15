@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isActionRequestCreate, isToolCallCheck, isToolCallDecision } from "../src/actions.js";
+import { isActionDecisionCreate, isActionRequestCreate, isToolCallCheck, isToolCallDecision } from "../src/actions.js";
 const input = { actionType: "system_of_record", actionLevel: "l1", target: "cmms", payload: { title: "Synthetic work order" },
   rationale: "Prepare for the operator", citations: ["synthetic:procedure-1"], simulated: true, classification: "INTERNAL" };
 describe("Action contracts", () => {
@@ -16,6 +16,18 @@ describe("Action contracts", () => {
     expect(isActionRequestCreate({ ...input, rationale: "   " })).toBe(false);
     expect(isActionRequestCreate({ ...input, citations: [" "] })).toBe(false);
     expect(isActionRequestCreate({ ...input, citations: [] })).toBe(false);
+  });
+  it("binds a decision to the exact payload hash and a reason", () => {
+    const decision = { payloadHash: "a".repeat(64), reason: "Reviewed the payload" };
+    expect(isActionDecisionCreate(decision)).toBe(true);
+    for (const bad of [{ reason: "x" }, { payloadHash: "a".repeat(64) }, { ...decision, reason: "   " },
+      { ...decision, payloadHash: "A".repeat(64) }, { ...decision, payloadHash: "abc" }]) {
+      expect(isActionDecisionCreate(bad)).toBe(false);
+    }
+  });
+  it("rejects caller-controlled approver, status and timing on a decision", () => {
+    const decision = { payloadHash: "a".repeat(64), reason: "Reviewed the payload" };
+    for (const key of ["approverSub", "status", "decision", "authTime", "orgId"]) expect(isActionDecisionCreate({ ...decision, [key]: "spoofed" })).toBe(false);
   });
   it("rejects invalid expiry, simulation IDs and external URL targets", () => {
     expect(isActionRequestCreate({ ...input, expiresAt: "tomorrow" })).toBe(false);

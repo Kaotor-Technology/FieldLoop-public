@@ -102,6 +102,8 @@ run_psql_database fieldloop_dev < db/test/assistant_roles.sql
 run_psql_database fieldloop_demo < db/test/assistant_roles.sql
 run_psql_database fieldloop_dev < db/test/action_requests.sql
 run_psql_database fieldloop_demo < db/test/action_requests.sql
+run_psql_database fieldloop_dev < db/test/action_decisions.sql
+run_psql_database fieldloop_demo < db/test/action_decisions.sql
 run_psql_database fieldloop_dev < db/test/audit_append_roles.sql
 run_psql_database fieldloop_demo < db/test/audit_append_roles.sql
 

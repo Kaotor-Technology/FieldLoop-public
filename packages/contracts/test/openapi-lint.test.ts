@@ -272,9 +272,9 @@ const mockViolations: { name: string; rule: string; mutate: (contract: MockContr
 ];
 
 describe("FieldLoop mock-source conventions", () => {
-  it("routes mock and worker JSON contracts to their own service conventions", () => {
+  it("routes mock, worker and assistant JSON contracts to their own service conventions", () => {
     expect(mockContracts.length).toBeGreaterThan(0);
-    expect(mockContracts.filter((name) => !/^mock-.+\.openapi\.json$/.test(name))).toEqual(["signal-worker.v1.openapi.json"]);
+    expect(mockContracts.filter((name) => !/^mock-.+\.openapi\.json$/.test(name))).toEqual(["assistant.v1.openapi.json", "signal-worker.v1.openapi.json"]);
   });
 
   it("runs from pnpm lint:api", async () => {
@@ -316,4 +316,31 @@ describe("FieldLoop worker conventions", () => {
     const { scripts } = JSON.parse(await readFile(resolve(packageRoot, "package.json"), "utf8")) as { scripts: Record<string, string> };
     expect(scripts["lint:openapi"]).toContain("signal-worker.v1.openapi.json --ruleset .spectral.worker.yaml");
   }, timeoutMs);
+});
+
+
+describe("FieldLoop assistant conventions", () => {
+  it("includes assistant-specific lint in the production lint command", async () => {
+    const { scripts } = JSON.parse(await readFile(resolve(packageRoot, "package.json"), "utf8")) as { scripts: Record<string, string> };
+    expect(scripts["lint:openapi"]).toContain("assistant.v1.openapi.json --ruleset .spectral.assistant.yaml");
+  });
+  it("accepts the internal contract including native validation responses", async () => {
+    expect(await lint("assistant.v1.openapi.json", ".spectral.assistant.yaml")).toEqual([]);
+  }, timeoutMs);
+  for (const mutation of ["public", "cookie", "prefix", "validation"]) {
+    it(`rejects assistant ${mutation} contract drift`, async () => {
+      const contract = JSON.parse(await readFile(resolve(packageRoot, "assistant.v1.openapi.json"), "utf8"));
+      const operation = contract.paths["/assistant/v1/sessions"].post;
+      if (mutation === "public") operation.security = [];
+      if (mutation === "cookie") contract.components.securitySchemes.internalUserToken.in = "cookie";
+      if (mutation === "prefix") contract.paths = { "/v1/sessions": { post: operation } };
+      if (mutation === "validation") delete operation.responses["422"].content["application/json"];
+      const fixture = resolve(packageRoot, `temporary-${randomUUID()}.json`);
+      try {
+        await writeFile(fixture, JSON.stringify(contract));
+        const findings = await lint(fixture, ".spectral.assistant.yaml");
+        expect(findings.map((finding) => finding.code)).toContain("fieldloop-assistant-contract");
+      } finally { await unlink(fixture); }
+    }, timeoutMs);
+  }
 });
