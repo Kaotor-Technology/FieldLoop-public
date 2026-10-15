@@ -1,0 +1,17 @@
+.approval-page { display: grid; gap: var(--spacing-space-4); align-content: start; max-width: var(--spacing-max-width-reading); margin-inline: auto; padding: var(--spacing-space-6) var(--spacing-space-4); }
+.approval-page h1 { margin: 0; font-size: var(--type-headline-lg-font-size); line-height: var(--type-headline-lg-line-height); }
+.approval-summary { display: grid; gap: var(--spacing-space-3); justify-items: start; padding: var(--spacing-space-5); background: var(--surface); border: var(--spacing-border-hairline) solid var(--outline); border-radius: var(--rounded-lg); }
+.approval-summary-id { margin: 0; overflow-wrap: anywhere; font-size: var(--type-mono-md-font-size); font-weight: 400; }
+.approval-body { display: grid; gap: var(--spacing-space-4); }
+.approval-body h3 { margin: 0 0 var(--spacing-space-1); font-size: var(--type-label-md-font-size); font-weight: 600; }
+.approval-body p, .approval-body ul, .approval-body ol { margin: 0; }
+.approval-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-space-2) var(--spacing-space-4); margin: 0; }
+.approval-simulation { padding: var(--spacing-space-1) var(--spacing-space-2); border-radius: var(--rounded-sm); background: var(--fl-simulation-bg); color: var(--fl-simulation); font-size: var(--type-label-md-font-size); font-weight: 600; }
+.approval-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-space-4); }
+.approval-payload { margin: 0; padding: var(--spacing-space-4); overflow: auto; max-height: var(--spacing-max-width-reading); white-space: pre-wrap; overflow-wrap: anywhere; background: var(--fl-canvas); color: var(--fl-ink); border-radius: var(--rounded-md); }
+.approval-hash { display: grid; gap: var(--spacing-space-1); margin-top: var(--spacing-space-2); color: var(--fl-muted); font-size: var(--type-body-sm-font-size); }
+.approval-hash code { overflow-wrap: anywhere; color: var(--fl-ink); }
+.approval-citations { padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: var(--spacing-space-1) var(--spacing-space-3); color: var(--fl-muted); }
+.approval-notice { color: var(--fl-muted); }
+.approval-failure { color: var(--fl-error); }
+@media (max-width: 600px) { .approval-pair { grid-template-columns: minmax(0, 1fr); } }

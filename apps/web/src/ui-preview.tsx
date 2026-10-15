@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import { ActionLevelBadge, Button, Card, EmptyState, HealthBadge, Input, MapMarker, Modal, MultiSelect, Navigation, Select, SimulationBanner, Skeleton, Tabs, Textarea, Toast, ToastProvider, TopBar } from "@fieldloop/ui";
 import type { BarrierHealth, ToastProps } from "@fieldloop/ui";
 import { HealthProposalReview } from "./HealthProposalReview";
+import { ActionApprovalDialog } from "./ActionApprovalDialog";
+import type { ActionRequest } from "./action-approval";
 import i18n from "./i18n";
 import "@fontsource/ibm-plex-sans-thai/400.css";
 import "@fontsource/ibm-plex-sans-thai/500.css";
@@ -15,6 +17,19 @@ const shortOptions = [{ value: "evidence", label: "Evidence" }, { value: "barrie
 const longOptions = ["Inspection", "Patrol", "Maintenance", "Pressure", "Flow", "Rain", "Water level", "Tide", "Pump", "Gate", "Sensor", "Integrity"].map(label => ({ value: label, label }));
 const thaiOptions = ["หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า", "สิบ"].map((label, index) => ({ value: String(index + 1), label: `ตัวเลือก${label}` }));
 const healths: BarrierHealth[] = ["healthy", "degraded", "failed", "unverified"];
+// SYNTHETIC fixture: one simulated district warning and three Approver sessions (fresh login, old login, the requester).
+const approvalAction: ActionRequest = {
+  id: "96000000-0000-4000-8000-000000000001", orgId: "synthetic-org", actionType: "emergency_communication", actionLevel: "l2", target: "stakeholders",
+  payload: { scenario: "storm-b", district: "demo-zone-3", simulated: true, channel: "sandbox-inbox", recipients: ["demo-response-lead", "demo-incident-commander"], message: "SIMULATION: Zone Z3 may flood in Storm B. Review the demo response plan. This is a drill." },
+  payloadHash: "a".repeat(64), rationale: "SIMULATION: Storm B rain gauge series crosses the demo threshold.", citations: ["synthetic:flood-plan-1"],
+  requestedBy: "synthetic-operator", requester: { kind: "person" }, status: "open", expiresAt: new Date(Date.now() + 15 * 60_000).toISOString(), simulated: true, classification: "INTERNAL",
+};
+const approver = { sub: "synthetic-manager", roles: ["fieldloop.manager"], csrfToken: "synthetic-csrf" };
+const approvalFixtures = [
+  { label: "Open approval dialog", user: { ...approver, authTime: new Date().toISOString() } },
+  { label: "Open approval dialog (old login)", user: { ...approver, authTime: new Date(Date.now() - 10 * 60_000).toISOString() } },
+  { label: "Open approval dialog (own request)", user: { ...approver, sub: "synthetic-operator", authTime: new Date().toISOString() } },
+];
 
 function Preview() {
   const [theme, setTheme] = useState<"light" | "dark" | "system">("system");
@@ -27,6 +42,7 @@ function Preview() {
   const [tab, setTab] = useState("evidence");
   const [open, setOpen] = useState(false);
   const [approvalOpen, setApprovalOpen] = useState(false);
+  const [approvalDialog, setApprovalDialog] = useState<string | null>(null);
   const [notification, setNotification] = useState<ToastProps["variant"]>("info");
   const [toastOpen, setToastOpen] = useState(false);
   const [marker, setMarker] = useState("");
@@ -97,6 +113,11 @@ function Preview() {
               setProposalDecision(`${proposalId}|${decision}|${reason}`);
             }}
           /><output aria-label="Last Health Proposal decision">{proposalDecision}</output></Card>
+          <Card variant="divided"><h3>Approval dialog</h3><div className="preview-row">
+            {approvalFixtures.map(({ label, user }) => <ActionApprovalDialog key={label} action={approvalAction} user={user} open={approvalDialog === label}
+              onOpenChange={next => setApprovalDialog(next ? label : null)} onDecided={result => setPreviewAction(`Approval ${result.approval.decision}`)}
+              onReload={() => setPreviewAction("Approval request reloaded")} returnPath="/actions/synthetic?review=1" trigger={<Button variant="secondary">{label}</Button>} />)}
+          </div></Card>
           <Card variant="divided"><h3>Map markers</h3><div className="preview-row">{(["degraded", "failed", "unverified"] as const).map(health => <MapMarker key={health} health={health} label={`${health} Barrier marker`} onClick={() => setMarker(health)} />)}<MapMarker health="failed" label="Disabled Barrier marker" disabled /></div><p role="status" className="fl-helper">{marker ? `Selected ${marker} Barrier fixture` : "Keyboard-operable marker examples. Production maps also need a list equivalent."}</p></Card>
           <Card variant="subtle"><h3>Navigation drawer</h3><Navigation variant="drawer" label="Drawer preview" items={[...navItems, { href: "#unavailable", label: "Offline", icon: "O", disabled: true, disabledReason: "Requires a connection" }]} /><h3>Bottom navigation</h3><Navigation variant="bottom" label="Bottom preview" items={navItems} /></Card>
         </section>
