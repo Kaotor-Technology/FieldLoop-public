@@ -309,6 +309,88 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409": *a4
         "503": *a5
+  /v1/action-requests/{actionRequestId}/approvals:
+    post:
+      operationId: approveActionRequest
+      summary: Approve the exact Action Request payload
+      description: Records one Approval bound to the `payloadHash` the Approver saw.
+        Requires the manager role, a session whose `auth_time` is under 5 minutes old
+        (forced re-login through `/auth/reauth`), a fresh Keycloak introspection and a
+        different person from the requester. An AI subject can never approve. A stale
+        hash, an expired request or a second decision by the same Approver is refused.
+        One Approval is recorded in the demo; the working two-person rule is Phase 1.
+        Never executes the payload.
+      tags:
+        - Actions
+      parameters:
+        - name: actionRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionDecisionCreate"
+      responses:
+        "201":
+          description: Approval recorded, or idempotently replayed, with the Action
+            Request as it now stands.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionDecisionResult"
+        "400": *a1
+        "401": *a2
+        "403": *a3
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409": *a4
+        "503": *a5
+  /v1/action-requests/{actionRequestId}:reject:
+    post:
+      operationId: rejectActionRequest
+      summary: Reject the Action Request payload
+      description: Records a rejection with a reason for the exact payload the Approver
+        saw. Uses the same manager role, recent-authentication, four-eyes and
+        idempotency rules as an approval.
+      tags:
+        - Actions
+      parameters:
+        - name: actionRequestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActionDecisionCreate"
+      responses:
+        "200":
+          description: Rejection recorded, or idempotently replayed, with the Action
+            Request as it now stands.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionDecisionResult"
+        "400": *a1
+        "401": *a2
+        "403": *a3
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409": *a4
+        "503": *a5
   /guardrail/v1/tool-calls:check:
     post:
       servers:
@@ -2428,6 +2510,74 @@ components:
         heldRequestId:
           type: string
           format: uuid
+    ActionDecisionCreate:
+      type: object
+      additionalProperties: false
+      required:
+        - payloadHash
+        - reason
+      properties:
+        payloadHash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+    ActionApproval:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - actionRequestId
+        - approverSub
+        - decision
+        - reason
+        - payloadHash
+        - authTime
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        actionRequestId:
+          type: string
+          format: uuid
+        approverSub:
+          type: string
+          minLength: 1
+          maxLength: 512
+        decision:
+          type: string
+          enum:
+            - approved
+            - rejected
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
+        payloadHash:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        authTime:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    ActionDecisionResult:
+      type: object
+      additionalProperties: false
+      required:
+        - actionRequest
+        - approval
+      properties:
+        actionRequest:
+          $ref: "#/components/schemas/ActionRequest"
+        approval:
+          $ref: "#/components/schemas/ActionApproval"
     # END generated action schemas
 
     GuardrailChatCompletionRequest:

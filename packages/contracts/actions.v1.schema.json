@@ -342,6 +342,96 @@
           "format": "uuid"
         }
       }
+    },
+    "ActionDecisionCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "payloadHash",
+        "reason"
+      ],
+      "properties": {
+        "payloadHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "\\S"
+        }
+      }
+    },
+    "ActionApproval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "actionRequestId",
+        "approverSub",
+        "decision",
+        "reason",
+        "payloadHash",
+        "authTime",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "actionRequestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "approverSub": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "rejected"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "\\S"
+        },
+        "payloadHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "authTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "ActionDecisionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actionRequest",
+        "approval"
+      ],
+      "properties": {
+        "actionRequest": {
+          "$ref": "#/$defs/ActionRequest"
+        },
+        "approval": {
+          "$ref": "#/$defs/ActionApproval"
+        }
+      }
     }
   },
   "oneOf": [
@@ -356,6 +446,12 @@
     },
     {
       "$ref": "#/$defs/ToolCallDecision"
+    },
+    {
+      "$ref": "#/$defs/ActionDecisionCreate"
+    },
+    {
+      "$ref": "#/$defs/ActionDecisionResult"
     }
   ]
 }
