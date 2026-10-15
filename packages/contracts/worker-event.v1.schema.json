@@ -12,7 +12,7 @@
     "simulated": {"type": "boolean"},
     "classification": {"enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "HIGHLY_RESTRICTED"]},
     "health": {"enum": ["healthy", "degraded", "failed", "unverified"]},
-    "status": {"enum": ["open", "in_review", "approved", "rejected", "superseded", "executed"]}
+    "status": {"enum": ["open", "in_review", "awaiting_second", "approved", "rejected", "superseded", "executed"]}
   },
   "allOf": [{
     "if": {"properties": {"type": {"const": "action_request.updated"}}, "required": ["type"]},
