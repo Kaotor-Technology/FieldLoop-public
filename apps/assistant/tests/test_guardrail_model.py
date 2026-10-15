@@ -79,12 +79,14 @@ def test_guardrail_client_recovers_block_decision_from_litellm_mapped_403(
         except openai.PermissionDeniedError as original:
             # This is LiteLLM 1.81's mapping shape: the APIError loses the HTTP
             # response/body and retains the original exception as __context__.
-            raise litellm.exceptions.APIError(
+            mapped = litellm.exceptions.APIError(
                 status_code=403,
                 message=str(original),
                 llm_provider="openai",
                 model="synthetic-model",
-            ) from original
+            )
+            mapped.__context__ = original
+        raise mapped
 
     monkeypatch.setattr(LiteLLMClient, "acompletion", blocked_completion)
     client = GuardrailResponseClient()
@@ -97,7 +99,8 @@ def test_guardrail_client_recovers_block_decision_from_litellm_mapped_403(
 
     assert getattr(caught.value, "response", None) is None
     assert getattr(caught.value, "body", None) is None
-    assert isinstance(caught.value.__cause__, openai.PermissionDeniedError)
+    assert caught.value.__cause__ is None
+    assert isinstance(caught.value.__context__, openai.PermissionDeniedError)
     assert guardrail_error_decisions(caught.value) == [
         {
             "decision": "block",

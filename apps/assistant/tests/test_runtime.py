@@ -448,10 +448,12 @@ def test_litellm_mapped_guardrail_block_emits_policy_notice_before_answer_error(
                 "403 Guardrail blocked request", response=response, body=problem
             )
         except openai.PermissionDeniedError as original:
-            raise litellm.exceptions.APIError(
+            mapped = litellm.exceptions.APIError(
                 status_code=403, message=str(original), llm_provider="openai",
                 model="synthetic-model",
-            ) from original
+            )
+            mapped.__context__ = original
+        raise mapped
 
     monkeypatch.setattr(LiteLLMClient, "acompletion", mapped_block)
     model = GuardrailLiteLlm(
