@@ -7,9 +7,9 @@ export type CommandPackageOutcome = components["schemas"]["CommandPackageOutcome
 
 export const commandPackageQueryKey = (status: CommandPackageStatus) => ["command-packages", status] as const;
 
-export async function getCommandPackages(signal: AbortSignal, status: CommandPackageStatus): Promise<components["schemas"]["CommandPackagePage"]> {
+export async function getCommandPackages(signal: AbortSignal, status: CommandPackageStatus, cursor?: string): Promise<components["schemas"]["CommandPackagePage"]> {
   const { data, response } = await api.GET("/v1/command-packages", {
-    params: { query: { status, limit: 50 } }, signal,
+    params: { query: { status, limit: 50, ...(cursor ? { cursor } : {}) } }, signal,
   });
   if (!response.ok || !data) throw new Error("Command Packages are unavailable");
   return data;

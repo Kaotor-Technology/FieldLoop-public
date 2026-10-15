@@ -607,6 +607,8 @@ html[lang="th"] small:lang(th) { font-size: var(--type-body-sm-font-size); }
 .command-package-help, .command-package-pending { color: var(--muted); }
 .command-package-submit, .command-package-alert button { min-height: var(--spacing-touch-target); padding: var(--spacing-space-2) var(--spacing-space-4); color: var(--on-action); background: var(--action); border: 0; border-radius: var(--rounded-md); font-weight: var(--type-label-lg-font-weight); }
 .command-package-submit:disabled { color: var(--disabled-ink); background: var(--disabled); }
+.command-package-load-more { justify-self: center; min-height: var(--spacing-touch-target); padding: var(--spacing-space-2) var(--spacing-space-4); color: var(--action); background: var(--surface); border: var(--spacing-border-hairline) solid var(--action); border-radius: var(--rounded-md); font-weight: var(--type-label-lg-font-weight); }
+.command-package-load-more:disabled { color: var(--disabled-ink); border-color: var(--disabled); }
 .command-package-alert, .command-package-success, .command-package-empty, .command-package-status { padding: var(--spacing-space-3) var(--spacing-space-4); border-radius: var(--rounded-sm); }
 .command-package-alert { color: var(--color-error); background: var(--color-error-subtle); }
 .command-package-success { color: var(--color-success); background: var(--color-success-subtle); }

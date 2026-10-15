@@ -385,6 +385,8 @@
   "commandPackagesFilters": "กรองชุดคำสั่ง",
   "commandPackagesLoading": "กำลังโหลดชุดคำสั่ง",
   "commandPackagesLoadFailed": "ไม่สามารถโหลดชุดคำสั่งได้ ลองอีกครั้งเมื่อมีการเชื่อมต่อ",
+  "commandPackagesLoadMore": "โหลดชุดคำสั่งเพิ่มเติม",
+  "commandPackagesLoadingMore": "กำลังโหลดชุดคำสั่งเพิ่มเติม",
   "commandPackagesNotAvailable": "คิวชุดคำสั่งเปิดให้ผู้ปฏิบัติงานห้องควบคุมเท่านั้น",
   "commandPackageFilter": { "queued": "คิวรอดำเนินการ", "executed": "ดำเนินการแล้ว", "not_executed": "ไม่ได้ดำเนินการ" },
   "commandPackageEmpty": { "queued": "ไม่มีชุดคำสั่งที่รอในองค์กรและระดับสิทธิ์ของคุณ", "executed": "ยังไม่มีการบันทึกผลว่าดำเนินการแล้ว", "not_executed": "ยังไม่มีการบันทึกผลว่าไม่ได้ดำเนินการ" },

@@ -385,6 +385,8 @@
   "commandPackagesFilters": "Filter Command Packages",
   "commandPackagesLoading": "Loading Command Packages",
   "commandPackagesLoadFailed": "Command Packages could not be loaded. Try again when the connection is available.",
+  "commandPackagesLoadMore": "Load more Command Packages",
+  "commandPackagesLoadingMore": "Loading Command Packages",
   "commandPackagesNotAvailable": "The Command Package queue is available to control-room operators.",
   "commandPackageFilter": { "queued": "Queue", "executed": "Executed", "not_executed": "Not executed" },
   "commandPackageEmpty": { "queued": "No Command Packages are waiting in your Organisation and clearance.", "executed": "No executed outcomes are recorded.", "not_executed": "No not-executed outcomes are recorded." },

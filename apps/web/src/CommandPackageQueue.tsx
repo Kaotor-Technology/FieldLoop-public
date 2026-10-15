@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import type { TFunction } from "i18next";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useCurrentSession } from "./SessionGate";
 import { commandPackageQueryKey, getCommandPackages, recordCommandPackageOutcome, type CommandPackage, type CommandPackageOutcome, type CommandPackageStatus } from "./command-packages";
@@ -15,9 +15,11 @@ export function CommandPackageQueue() {
   const [status, setStatus] = useState<CommandPackageStatus>("queued");
   const user = session.data;
   const operator = Boolean(user && !user.sub.startsWith("agent:") && user.roles.includes("fieldloop.operator"));
-  const page = useQuery({
+  const pages = useInfiniteQuery({
     queryKey: commandPackageQueryKey(status),
-    queryFn: ({ signal }) => getCommandPackages(signal, status),
+    queryFn: ({ signal, pageParam }) => getCommandPackages(signal, status, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: operator,
     retry: 1,
   });
@@ -29,6 +31,7 @@ export function CommandPackageQueue() {
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["command-packages"] }); },
   });
   const language = i18n.language.startsWith("th") ? "th" : "en";
+  const items = pages.data?.pages.flatMap((page) => page.items) ?? [];
 
   if (user && !operator) return <main id="main-content" className="command-package-page" lang={language}>
     <h1>{t("commandPackagesTitle")}</h1>
@@ -51,19 +54,22 @@ export function CommandPackageQueue() {
       </button>)}
     </nav>
 
-    {page.isPending && <p className="command-package-status" role="status">{t("commandPackagesLoading")}</p>}
-    {page.isError && <div className="command-package-alert" role="alert">
+    {pages.isPending && <p className="command-package-status" role="status">{t("commandPackagesLoading")}</p>}
+    {pages.isError && <div className="command-package-alert" role="alert">
       <p>{t("commandPackagesLoadFailed")}</p>
-      <button type="button" onClick={() => { void page.refetch(); }}>{t("retry")}</button>
+      <button type="button" onClick={() => { void pages.refetch(); }}>{t("retry")}</button>
     </div>}
-    {page.data?.items.length === 0 && <p className="command-package-empty" role="status">{t(`commandPackageEmpty.${status}`)}</p>}
-    <div className="command-package-list" aria-busy={page.isFetching}>
-      {page.data?.items.map((item) => <CommandPackageCard key={item.id} item={item} t={t} onSubmit={(body) => outcome.mutate({ id: item.id, body })}
+    {pages.data && items.length === 0 && <p className="command-package-empty" role="status">{t(`commandPackageEmpty.${status}`)}</p>}
+    <div className="command-package-list" aria-busy={pages.isFetching}>
+      {items.map((item) => <CommandPackageCard key={item.id} item={item} t={t} onSubmit={(body) => outcome.mutate({ id: item.id, body })}
         isSubmitting={outcome.isPending && outcome.variables?.id === item.id}
         {...(outcome.isError && outcome.variables?.id === item.id ? { error: t("commandPackageOutcomeFailed") } : {})}
         {...(outcome.isSuccess && outcome.variables?.id === item.id ? { success: t("commandPackageOutcomeSaved") } : {})}
       />)}
     </div>
+    {pages.hasNextPage && <button className="command-package-load-more" type="button" disabled={pages.isFetchingNextPage} onClick={() => { void pages.fetchNextPage(); }}>
+      {pages.isFetchingNextPage ? t("commandPackagesLoadingMore") : t("commandPackagesLoadMore")}
+    </button>}
   </main>;
 }
 

@@ -10,6 +10,32 @@ async function signInAsOperator(page: Page) {
   await expect(page.getByRole("heading", { name: "Geo Command Map", exact: true })).toBeVisible();
 }
 
+function commandPackageFixture(id: string, target: string) {
+  return {
+    id,
+    actionRequestId: "00000000-0000-4000-8000-000000000711",
+    target,
+    action: "Inspect synthetic equipment",
+    rationale: "Confirm simulated readiness",
+    citations: ["synthetic:procedure-7"],
+    procedure: "PROC-SYN-7",
+    preconditions: ["Equipment is isolated from live systems"],
+    barrierId: "00000000-0000-4000-8000-000000000183",
+    expectedEffect: "Confirm simulated equipment readiness.",
+    approvalCount: 2,
+    actionStatus: "approved",
+    executionStatus: "queued",
+    outcome: null,
+    evidenceId: null,
+    recordedBy: null,
+    recordedAt: null,
+    simulated: true,
+    classification: "INTERNAL",
+    createdAt: "2026-10-15T00:00:00.000Z",
+    expiresAt: "2026-10-15T01:00:00.000Z",
+  };
+}
+
 test("Command Package queue shows required details and locks outcomes before two approvals", async ({ page }) => {
   await signInAsOperator(page);
   await page.getByRole("link", { name: "Command Packages", exact: true }).click();
@@ -26,6 +52,25 @@ test("Command Package queue shows required details and locks outcomes before two
   await expect(pending.getByRole("status")).toContainText("1 of 2");
   const approved = page.locator(".command-package-card").filter({ hasText: "SYNTHETIC-GATE-2" });
   await expect(approved.getByRole("textbox", { name: "Outcome and reason" })).toBeEnabled();
+});
+
+test("queue loads the next page using the returned cursor", async ({ page }) => {
+  await signInAsOperator(page);
+  const cursors: (string | null)[] = [];
+  await page.route("**/api/v1/command-packages*", async (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get("cursor");
+    cursors.push(cursor);
+    const items = cursor === "second-page"
+      ? [commandPackageFixture("00000000-0000-4000-8000-000000000722", "SYNTHETIC-GATE-SECOND-PAGE")]
+      : [commandPackageFixture("00000000-0000-4000-8000-000000000721", "SYNTHETIC-PUMP-FIRST-PAGE")];
+    await route.fulfill({ status: 200, json: { items, limit: 50, nextCursor: cursor ? null : "second-page" } });
+  });
+
+  await page.goto("/command-packages");
+  await expect(page.getByText("SYNTHETIC-PUMP-FIRST-PAGE", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Load more Command Packages" }).click();
+  await expect(page.getByText("SYNTHETIC-GATE-SECOND-PAGE", { exact: true })).toBeVisible();
+  expect(cursors).toEqual([null, "second-page"]);
 });
 
 test("operator records executed or not executed and the result becomes Evidence", async ({ page }) => {
