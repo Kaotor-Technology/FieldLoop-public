@@ -70,12 +70,15 @@ test("inactive introspection deletes the session and hides cached identity on th
 });
 
 test("back-channel logout by sid makes the next API call unauthenticated", async ({ page, request }) => {
+  await page.clock.install();
   await signIn(page);
   const logout = await request.post("/api/auth/backchannel-logout", { form: { logout_token: "fixture-signed:synthetic-sid-operator" } });
   expect(logout.status()).toBe(204);
   expect((await page.request.get("/api/v1/me")).status()).toBe(401);
-  await page.reload();
+  // Revalidate through the app so a second navigation cannot race its SSO redirect.
+  await page.clock.fastForward(60_000);
   await expect(page.getByRole("heading", { name: "Scripted SSO" })).toBeVisible();
+  expect(await (await request.get("/test/status")).json()).toEqual({ sessions: 0 });
 });
 
 test("an unavailable IdP shows a retry state, then recovers without a login loop", async ({ page, request }) => {

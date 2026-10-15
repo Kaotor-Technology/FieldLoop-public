@@ -11,7 +11,7 @@ from fieldloop_assistant.events import StreamEvent
 from fieldloop_assistant.geo_extraction import HttpGeoExtractionPlatform
 from fieldloop_assistant.guardrail_client import GuardrailClient
 from fieldloop_assistant.runtime import AgentRuntime, RuntimeDeps
-from fieldloop_assistant.tools import HttpPlatformReader
+from fieldloop_assistant.tools import HttpPlatformReader, KnowledgeProvider
 from fieldloop_assistant.trace import MemoryStore, SessionRecord
 from google.adk.models.base_llm import BaseLlm
 from google.adk.models.llm_request import LlmRequest
@@ -73,6 +73,7 @@ class Harness:
         guardrail: Callable[[dict[str, Any]], dict[str, Any] | int] | None = None,
         platform: dict[str, Any] | None = None,
         simulated: bool = False,
+        knowledge: KnowledgeProvider | None = None,
     ) -> None:
         self.guardrail_requests: list[httpx.Request] = []
         self.platform_requests: list[httpx.Request] = []
@@ -94,6 +95,7 @@ class Harness:
             catalog=catalog(), guardrail=GuardrailClient(client, "http://guardrail"),
             platform=HttpPlatformReader(client, "http://platform"), sessions=self.store,
             trace=self.store, adk_sessions=self.adk, model_factory=lambda _: self.llm,
+            knowledge=lambda _: knowledge,
             geo_platform=HttpGeoExtractionPlatform(client, "http://platform"),
         ))
 

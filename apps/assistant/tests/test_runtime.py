@@ -511,3 +511,55 @@ def test_repeated_identical_drafts_in_a_turn_are_stored_once() -> None:
     second = asyncio.run(create("management_summary", "text", ["EV-1"]))
     assert first == second and len(ctx.drafts.created) == 1  # type: ignore[union-attr]
     assert isinstance(ctx.drafts, Drafts)
+
+
+class _CpKnowledge:
+    async def search(self, query, folders, bbox):  # type: ignore[no-untyped-def]
+        return [{"content": "SYNTHETIC CP survey guidance; verify the approved interval.",
+                 "citation": {"document_id": "DOC-SYNTHETIC-CP-01",
+                              "title": "Synthetic CP Survey Guidance",
+                              "revision": "R2", "page": 4, "clause": "5.1"}}]
+
+
+def test_cp_survey_answer_preserves_retrieved_revision_through_the_real_runtime() -> None:
+    h = Harness([
+        call("transfer_to_agent", agent_name="code_standard"),
+        call("search_knowledge", query="CP survey interval"),
+        answer(answer="Verify the approved CP survey interval.", citations=["DOC-SYNTHETIC-CP-01"],
+               known=["Current synthetic guidance exists"], unknown=["Approved interval"],
+               assumptions=["DL-01 scope"], confidence_reason="One current synthetic reference"),
+    ], knowledge=_CpKnowledge(), simulated=True)
+    result = run(h, message="What CP survey interval applies to DL-01?")
+    last = final(result)
+    assert last.name == "answer.final"
+    assert last.data["citations"] == ["DOC-SYNTHETIC-CP-01"]
+    assert last.data["retrieved_citations"][0]["revision"] == "R2"
+    assert last.data["retrieved_citations"][0]["page"] == 4
+    assert last.data["known"] and last.data["unknown"] and last.data["assumptions"]
+    assert last.data["confidence_reason"]
+    assert any(e.data.get("phase") == "handoff" for e in result)
+    assert any(r.url.path.endswith("content:scan") for r in h.guardrail_requests)
+    for request in h.llm.requests:
+        instructions = str(request.config.system_instruction)  # type: ignore[union-attr]
+        assert "not verified against source text" in instructions
+        assert "never quote source text" in instructions
+
+
+def test_model_failure_keeps_steps_and_returns_a_safe_inline_error_event() -> None:
+    def broken_model(request):  # type: ignore[no-untyped-def]
+        raise RuntimeError("private Vertex failure details")
+
+    h = Harness([broken_model])
+    events = run(h)
+    assert events[0].name == "agent.step"
+    assert final(events).name == "answer.error"
+    assert "private Vertex" not in json.dumps([e.data for e in events])
+
+
+def test_wall_clock_limit_returns_incomplete(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from fieldloop_assistant.limits import TurnBudget
+
+    monkeypatch.setattr(TurnBudget, "check_time", lambda self: self._hit("wall_clock"))
+    h = Harness([answer()])
+    last = final(run(h))
+    assert last.name == "answer.incomplete" and last.data["incomplete"] == "wall_clock"

@@ -1,3 +1,5 @@
+import { registerAssistantRoutes } from "./assistant/routes.js";
+import type { AssistantPort } from "./assistant/client.js";
 import { registerActionRoutes } from "./actions/routes.js";
 import type { ActionServicePort } from "@fieldloop/adapters";
 import Fastify from "fastify";
@@ -28,6 +30,7 @@ declare module "fastify" {
 }
 
 export function buildApp(options: {
+  assistant?: AssistantPort;
   actions?: ActionServicePort;
   audit?: AuditServicePort;
   auth?: AuthServicePort;
@@ -51,6 +54,7 @@ export function buildApp(options: {
   registerAuthRoutes(app, auth, options.baseUrl ?? process.env["FIELDLOOP_BASE_URL"]);
   registerMapLayerRoutes(app, options.mapLayers ?? new UnavailableMapLayerStore(), options.mapsApiKey ?? process.env["FIELDLOOP_MAPS_API_KEY"]);
   registerSimulationRoutes(app, options.simulator);
+  registerAssistantRoutes(app, options.assistant);
   registerRiskRoutes(app, options.risk);
   registerHealthRoutes(app, options.health);
   registerImportRoutes(app, options.imports);

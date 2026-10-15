@@ -101,6 +101,7 @@
   "agentConfidenceReasonMissing": "ไม่ได้ระบุเหตุผล",
   "agentSourcesPane": "แหล่งข้อมูลที่อ้างอิง",
   "agentCitedSources": "แหล่งข้อมูลที่อ้างอิง",
+  "agentReferenceOnly": "อ้างอิงเฉพาะชื่อมาตรฐาน — ยังไม่ได้ตรวจสอบกับต้นฉบับ",
   "agentSourceReference": "รายการอ้างอิง",
   "agentSourceRevision": "Revision",
   "agentSourcePage": "หน้า",
