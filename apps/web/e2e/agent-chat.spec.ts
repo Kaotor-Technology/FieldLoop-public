@@ -13,21 +13,23 @@ test.beforeEach(async ({ page, request }) => {
     };
     const eventChunk = (name: string, data: Record<string, unknown>) => new TextEncoder().encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
     class TestEventSource extends EventTarget {
-      static latest: TestEventSource | undefined;
+      static readonly instances = new Set<TestEventSource>();
       onopen: ((this: EventSource, event: Event) => unknown) | null = null;
       onerror: ((this: EventSource, event: Event) => unknown) | null = null;
       constructor(readonly url: string) {
         super();
-        TestEventSource.latest = this;
+        TestEventSource.instances.add(this);
         queueMicrotask(() => this.onopen?.call(this as unknown as EventSource, new Event("open")));
       }
-      close() {}
+      close() { TestEventSource.instances.delete(this); }
       emit(name: string, data: Record<string, unknown>) {
         this.dispatchEvent(new MessageEvent(name, { data: JSON.stringify(data) }));
       }
     }
     Object.defineProperty(window, "EventSource", { configurable: true, value: TestEventSource });
-    mockWindow.__fieldLoopEmit = (name, data) => TestEventSource.latest?.emit(name, data);
+    mockWindow.__fieldLoopEmit = (name, data) => {
+      for (const stream of TestEventSource.instances) stream.emit(name, data);
+    };
     if (!sessionStorage.getItem("__agentRequests")) sessionStorage.setItem("__agentRequests", "[]");
     if (!sessionStorage.getItem("__agentMode")) sessionStorage.setItem("__agentMode", "normal");
     const originalFetch = window.fetch.bind(window);
@@ -234,9 +236,13 @@ test("renders Action Request cards without chat approval and refreshes status fr
   await page.getByRole("button", { name: "Send" }).click();
 
   const card = page.locator(".agent-chat-artifact-card");
+  await expect(card).toBeVisible();
   await expect(card).toContainText("L1");
   await expect(card).toContainText("SLA");
   await expect(card).toContainText("Open");
+  await card.scrollIntoViewIfNeeded();
+  await expect(card).toBeInViewport({ ratio: 0.8 });
+  await page.screenshot({ path: "e2e/evidence/agent-chat-action-request.png", fullPage: true });
   const timeline = page.locator(".agent-chat-timeline");
   await timeline.locator("summary").click();
   await expect(timeline.locator(".agent-chat-guardrail-converted")).toContainText("SYNTHETIC-POLICY-1");
