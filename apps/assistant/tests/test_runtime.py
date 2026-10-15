@@ -417,6 +417,32 @@ def test_guardrail_model_redaction_and_route_outcomes_are_emitted_in_agent_strea
     ]
 
 
+def test_blocked_guardrail_model_completion_emits_policy_notice_before_answer_error() -> None:
+    def blocked_completion(_request):  # type: ignore[no-untyped-def]
+        error = RuntimeError("synthetic Guardrail HTTP 403")
+        error._fieldloop_guardrail_decisions = [{  # type: ignore[attr-defined]
+            "decision": "block",
+            "policy_id": "completion-policy",
+            "reason": "Completion was blocked by policy.",
+        }]
+        raise error
+
+    h = Harness([blocked_completion])
+
+    events = run(h)
+
+    decision = next(event for event in events if event.name == "guardrail.decision")
+    error = next(event for event in events if event.name == "answer.error")
+    assert decision.data == {
+        "agent": "integrity-orchestrator", "decision": "block",
+        "reason": "Completion was blocked by policy.",
+        "policy_id": "completion-policy", "source": "model",
+    }
+    assert decision.seq < error.seq
+    assert error.data["type"] == "RuntimeError"
+    assert not any(event.name == "answer.final" for event in events)
+
+
 def test_idempotency_key_is_stable_within_a_turn_and_new_per_turn() -> None:
     proposal = call("create_action_request", action_type="internal_record", action_level="l2",
                     target="fieldloop", payload={"n": 1}, rationale="r", citations=["c"])

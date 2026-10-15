@@ -1,6 +1,7 @@
 """Carry Guardrail completion outcomes from the private gateway into the agent turn."""
 
 import json
+import logging
 from collections.abc import AsyncGenerator, Mapping
 from typing import Any
 
@@ -10,7 +11,9 @@ from google.adk.models.llm_response import LlmResponse
 
 DECISION_HEADER = "x-fieldloop-guardrail-decisions"
 DECISIONS_METADATA_KEY = "fieldloop_guardrail_decisions"
-_DECISIONS = frozenset({"allow", "redact", "block", "reroute"})
+GUARDRAIL_DECISIONS = frozenset({"allow", "redact", "block", "reroute"})
+_ERROR_DECISIONS_ATTRIBUTE = "_fieldloop_guardrail_decisions"
+_LOGGER = logging.getLogger(__name__)
 
 
 def read_guardrail_decisions(headers: object) -> list[dict[str, str]]:
@@ -25,8 +28,10 @@ def read_guardrail_decisions(headers: object) -> list[dict[str, str]]:
     try:
         values = json.loads(encoded)
     except ValueError:
+        _LOGGER.warning("Guardrail response decision header contained invalid JSON")
         return []
     if not isinstance(values, list):
+        _LOGGER.warning("Guardrail response decision header had an invalid structure")
         return []
     decisions: list[dict[str, str]] = []
     for value in values:
@@ -36,7 +41,7 @@ def read_guardrail_decisions(headers: object) -> list[dict[str, str]]:
         policy_id = value.get("policyId")
         reason = value.get("reason")
         if (
-            isinstance(decision, str) and decision in _DECISIONS
+            isinstance(decision, str) and decision in GUARDRAIL_DECISIONS
             and isinstance(policy_id, str) and policy_id
             and isinstance(reason, str) and reason
         ):
@@ -54,13 +59,53 @@ class GuardrailResponseClient(LiteLLMClient):
         self, model: Any, messages: Any, tools: Any, **kwargs: Any
     ) -> Any:
         self._decisions = []
-        response = await super().acompletion(model=model, messages=messages, tools=tools, **kwargs)
+        try:
+            response = await super().acompletion(
+                model=model, messages=messages, tools=tools, **kwargs
+            )
+        except Exception as error:
+            self._decisions = _read_error_decisions(error)
+            if self._decisions:
+                setattr(error, _ERROR_DECISIONS_ATTRIBUTE, self._decisions)
+            raise
         self._decisions = read_guardrail_decisions(getattr(response, "_response_headers", None))
         return response
 
     def take_decisions(self) -> list[dict[str, str]]:
         decisions, self._decisions = self._decisions, []
         return decisions
+
+
+def _read_error_decisions(error: Exception) -> list[dict[str, str]]:
+    response = getattr(error, "response", None)
+    decisions = read_guardrail_decisions(getattr(response, "headers", None))
+    if decisions:
+        return decisions
+
+    # LiteLLM may turn the HTTP response into an APIError and retain its JSON body
+    # without the response headers. The Guardrail's 403 problem body still carries
+    # the policy ID and reason needed for the user-facing block notice.
+    body = getattr(error, "body", None)
+    status = getattr(error, "status_code", getattr(response, "status_code", None))
+    if not isinstance(body, Mapping) or status != 403:
+        return []
+    error_body = body.get("error")
+    if (
+        body.get("code") != "guardrail_blocked"
+        or not isinstance(error_body, Mapping)
+        or error_body.get("code") != "guardrail_blocked"
+    ):
+        return []
+    policy_id = body.get("policyId") or error_body.get("policy_id")
+    reason = body.get("detail") or error_body.get("message")
+    if isinstance(policy_id, str) and policy_id and isinstance(reason, str) and reason:
+        return [{"decision": "block", "policy_id": policy_id, "reason": reason}]
+    return []
+
+
+def guardrail_error_decisions(error: object) -> object:
+    """Return decision metadata preserved on a failed Guardrail completion."""
+    return getattr(error, _ERROR_DECISIONS_ATTRIBUTE, None)
 
 
 class GuardrailLiteLlm(LiteLlm):
