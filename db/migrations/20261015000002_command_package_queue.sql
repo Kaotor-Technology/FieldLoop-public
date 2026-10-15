@@ -106,7 +106,9 @@ BEGIN
         OR NEW.preconditions IS DISTINCT FROM parent.payload->'preconditions'
         OR NEW.procedure_ref IS DISTINCT FROM parent.payload->>'procedure'
         OR NOT EXISTS (SELECT 1 FROM app.barrier b WHERE b.org_id = NEW.org_id AND b.id = NEW.barrier_id
-            AND b.id::text = parent.payload->>'barrierId' AND b.simulated = NEW.simulated) THEN
+            AND b.id::text = parent.payload->>'barrierId' AND b.simulated = NEW.simulated
+            AND array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], b.classification)
+                <= array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], NEW.classification)) THEN
         RAISE EXCEPTION 'Command Package metadata must follow its exact Action Request payload' USING ERRCODE = 'check_violation';
     END IF;
     IF (NEW.execution_status, NEW.outcome, NEW.executed_by, NEW.recorded_at, NEW.outcome_actor, NEW.outcome_key_hash, NEW.outcome_request_hash)

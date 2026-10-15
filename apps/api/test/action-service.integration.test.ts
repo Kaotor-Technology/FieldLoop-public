@@ -395,6 +395,13 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
     await pool.query("INSERT INTO app.approval (org_id,action_request_id,approver_sub,decision,payload_hash,auth_time,simulated,classification) VALUES ($1,$2,'synthetic-approver','approved',$3,now(),true,'INTERNAL')", [user.orgId, notExecuted.id, notExecuted.payloadHash]);
     await pool.query("INSERT INTO app.approval (org_id,action_request_id,approver_sub,decision,payload_hash,auth_time,simulated,classification) VALUES ($1,$2,'synthetic-second-approver','approved',$3,now(),true,'INTERNAL')", [user.orgId, notExecuted.id, notExecuted.payloadHash]);
     await pool.query("UPDATE app.action_request SET status='approved' WHERE id=$1", [notExecuted.id]);
+    await pool.query("UPDATE app.barrier SET classification='CONFIDENTIAL' WHERE org_id=$1 AND id=$2", [user.orgId, barrierId]);
+    await expect(packages.recordOutcome(user, secondPackage, { executionStatus: "not_executed", outcome: "Deployment deferred by the operator." }, key()))
+      .rejects.toThrow("classification_changed");
+    await expect(pool.query("UPDATE app.command_package SET execution_status='not_executed', outcome='Synthetic direct write', executed_by=$3, recorded_at=clock_timestamp(), outcome_actor=$3, outcome_key_hash=$4, outcome_request_hash=$5 WHERE org_id=$1 AND id=$2", [
+      user.orgId, secondPackage, user.sub, "a".repeat(64), "b".repeat(64),
+    ])).rejects.toThrow("Command Package metadata must follow its exact Action Request payload");
+    await pool.query("UPDATE app.barrier SET classification='INTERNAL' WHERE org_id=$1 AND id=$2", [user.orgId, barrierId]);
     const noAction = await packages.recordOutcome(user, secondPackage, { executionStatus: "not_executed", outcome: "Deployment deferred by the operator." }, key());
     expect(noAction).toMatchObject({ executionStatus: "not_executed", evidenceId: expect.any(String), recordedBy: user.sub });
     expect((await pool.query("SELECT status,rejection_reason FROM app.action_request WHERE id=$1", [notExecuted.id])).rows[0]).toEqual({ status: "rejected", rejection_reason: "operator_not_executed" });

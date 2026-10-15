@@ -156,6 +156,9 @@ export class PostgresCommandPackageStore implements CommandPackageServicePort {
       const row = (await readCommandPackage(trx, user, id, true, this.simulatedOnly)).row;
       authorize(user, row.classification);
       authorize(user, row.barrier_classification);
+      if (classificationRank(row.classification) < classificationRank(row.barrier_classification)) {
+        throw new CommandPackageError(409, "classification_changed");
+      }
       if (this.simulatedOnly && !row.simulated) throw new CommandPackageError(403, "simulation_required");
 
       if (row.execution_status !== "queued" || row.outcome !== null) {
