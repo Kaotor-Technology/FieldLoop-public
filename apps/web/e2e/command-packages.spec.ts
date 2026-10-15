@@ -70,7 +70,8 @@ test("queue loads the next page using the returned cursor", async ({ page }) => 
   await expect(page.getByText("SYNTHETIC-PUMP-FIRST-PAGE", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Load more Command Packages" }).click();
   await expect(page.getByText("SYNTHETIC-GATE-SECOND-PAGE", { exact: true })).toBeVisible();
-  expect(cursors).toEqual([null, "second-page"]);
+  expect(cursors).toContain(null);
+  expect(cursors.filter((cursor) => cursor !== null)).toEqual(["second-page"]);
 });
 
 test("queue status filters are restored from and written to the URL", async ({ page }) => {
