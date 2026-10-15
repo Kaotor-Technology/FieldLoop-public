@@ -3,6 +3,8 @@
 import json
 from typing import Any
 
+from fastapi import FastAPI
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from fieldloop_assistant.service import create_service
 from jsonschema import Draft202012Validator
@@ -95,3 +97,25 @@ def test_documented_sse_examples_and_actual_events_match_event_schemas() -> None
         assert names[-1] == "answer.final"
     # The current non-partial runtime must not advertise unimplemented token streaming.
     assert "answer.partial" not in event_schemas
+
+
+def native_operations(service: FastAPI) -> set[tuple[str, str]]:
+    return {(method.lower(), route.path) for route in service.routes
+            if isinstance(route, APIRoute) and route.path.startswith("/assistant/v1/")
+            for method in route.methods}
+
+
+def test_every_registered_native_assistant_operation_is_documented() -> None:
+    documented = {(method, path) for path, item in SPEC["paths"].items()
+                  for method in item if method in {"get", "post", "put", "patch", "delete"}}
+    assert native_operations(create_service(None, None, None)) == documented
+
+
+def test_hidden_native_operation_cannot_escape_inventory() -> None:
+    service = create_service(None, None, None)
+
+    @service.get("/assistant/v1/synthetic-undocumented", include_in_schema=False)
+    def hidden() -> dict[str, str]:
+        return {"status": "synthetic"}
+
+    assert ("get", "/assistant/v1/synthetic-undocumented") in native_operations(service)
