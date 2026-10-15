@@ -60,6 +60,22 @@ const seedGeoReferenceDrafts = () => [{
   simulated: true,
   classification: "INTERNAL",
   createdAt: "2026-10-15T00:00:00.000Z",
+}, {
+  id: "00000000-0000-4000-8000-000000000093",
+  documentId: "00000000-0000-4000-8000-000000000091",
+  documentTitle: "SYNTHETIC · inspection summary",
+  kind: "asset",
+  geometry: null,
+  chainageFrom: null,
+  chainageTo: null,
+  proposedLabel: "ท่าน้ำ",
+  sourceSnippet: "พบรอยรั่วใกล้ท่าน้ำ",
+  confidence: 0.35,
+  targetAssetId: null,
+  status: "draft",
+  simulated: true,
+  classification: "INTERNAL",
+  createdAt: "2026-10-15T00:01:00.000Z",
 }];
 let geoReferenceDrafts = seedGeoReferenceDrafts();
 const geoReferences = {

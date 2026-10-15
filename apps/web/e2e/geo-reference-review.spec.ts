@@ -76,3 +76,20 @@ test("Geo Reference Draft exposes source, confidence, simulation label and keybo
     }),
   ]));
 });
+
+test("low-confidence ambiguous Thai place is flagged, stays off the map and cannot be confirmed without a target", async ({ page }) => {
+  await signInAsOperator(page);
+  const panel = page.getByRole("complementary", { name: "Map context panel" });
+  const row = panel.locator(".geo-reference-row").filter({ hasText: "ท่าน้ำ" });
+  await expect(row).toContainText("พบรอยรั่วใกล้ท่าน้ำ");
+  await expect(row).toContainText("35%");
+  await expect(row.getByText("Low confidence", { exact: true })).toBeVisible();
+  await expect(row.getByRole("button", { name: "Confirm and place on map" })).toBeDisabled();
+
+  const layer = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/map/layers/geo-references?bbox=99,13,101,15&zoom=13");
+    return { status: response.status, collection: await response.json() };
+  });
+  expect(layer.status).toBe(200);
+  expect(layer.collection.features).toEqual([]);
+});
