@@ -24,6 +24,7 @@ export interface CommandPackage {
   procedure: string;
   preconditions: string[];
   barrierId: string;
+  expectedEffect: string;
   approvalCount: number;
   actionStatus: ActionRequest["status"];
   executionStatus: CommandPackageExecutionStatus;
@@ -65,6 +66,7 @@ interface CommandPackageRow {
   procedure_ref: string;
   preconditions: string[];
   barrier_id: string;
+  expected_effect: string;
   approval_count: number;
   action_status: string;
   rejection_reason: string | null;
@@ -110,7 +112,7 @@ export class PostgresCommandPackageStore implements CommandPackageServicePort {
       : sql``;
     const rows = (await sql<CommandPackageRow>`SELECT p.id::text, p.action_request_id::text, p.target,
         a.payload->>'action' AS action, COALESCE(a.rationale, '') AS rationale, a.citations,
-        p.procedure_ref, p.preconditions, p.barrier_id::text,
+        p.procedure_ref, p.preconditions, p.barrier_id::text, a.payload->>'expectedEffect' AS expected_effect,
         (SELECT count(DISTINCT ap.approver_sub)::int FROM app.approval ap WHERE ap.org_id = a.org_id
           AND ap.action_request_id = a.id AND ap.decision = 'approved' AND ap.voided_at IS NULL AND ap.payload_hash = a.payload_hash
           AND ap.approver_sub <> a.requested_by AND ap.approver_sub NOT LIKE 'agent:%'
@@ -214,7 +216,7 @@ async function readCommandPackage(trx: Tx, user: ActionIdentity, id: string, for
   const lock = forUpdate ? sql`FOR UPDATE OF p, a, b` : sql``;
   const row = (await sql<CommandPackageRow>`SELECT p.id::text, p.action_request_id::text, p.target,
       a.payload->>'action' AS action, COALESCE(a.rationale, '') AS rationale, a.citations,
-      p.procedure_ref, p.preconditions, p.barrier_id::text,
+      p.procedure_ref, p.preconditions, p.barrier_id::text, a.payload->>'expectedEffect' AS expected_effect,
       (SELECT count(DISTINCT ap.approver_sub)::int FROM app.approval ap WHERE ap.org_id = a.org_id
         AND ap.action_request_id = a.id AND ap.decision = 'approved' AND ap.voided_at IS NULL AND ap.payload_hash = a.payload_hash
         AND ap.approver_sub <> a.requested_by AND ap.approver_sub NOT LIKE 'agent:%'
@@ -247,7 +249,7 @@ function toCommandPackage(row: CommandPackageRow): CommandPackage {
   return {
     id: row.id, actionRequestId: row.action_request_id, target: row.target, action: row.action,
     rationale: row.rationale, citations: row.citations, procedure: row.procedure_ref,
-    preconditions: row.preconditions, barrierId: row.barrier_id,
+    preconditions: row.preconditions, barrierId: row.barrier_id, expectedEffect: row.expected_effect,
     approvalCount: row.approval_count,
     actionStatus: row.action_status as ActionRequest["status"], executionStatus: row.execution_status,
     outcome: row.outcome, evidenceId: row.evidence_id, recordedBy: row.executed_by,
@@ -260,7 +262,8 @@ function assertPayloadMatches(row: CommandPackageRow): void {
   const payload = row.payload;
   if (payload["target"] !== row.target || payload["action"] !== row.action
     || payload["procedure"] !== row.procedure_ref || payload["barrierId"] !== row.barrier_id
-    || JSON.stringify(payload["preconditions"]) !== JSON.stringify(row.preconditions)) {
+    || JSON.stringify(payload["preconditions"]) !== JSON.stringify(row.preconditions)
+    || payload["expectedEffect"] !== row.expected_effect) {
     throw new CommandPackageError(409, "payload_hash_mismatch");
   }
 }

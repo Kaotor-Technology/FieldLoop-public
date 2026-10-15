@@ -2979,6 +2979,7 @@ components:
         - procedure
         - barrierId
         - preconditions
+        - expectedEffect
       properties:
         target:
           type: string
@@ -2998,6 +2999,11 @@ components:
         barrierId:
           type: string
           format: uuid
+        expectedEffect:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: \S
         preconditions:
           type: array
           maxItems: 50
@@ -3387,7 +3393,7 @@ components:
     CommandPackage:
       type: object
       additionalProperties: false
-      required: [id, actionRequestId, target, action, rationale, citations, procedure, preconditions, barrierId, approvalCount, actionStatus, executionStatus, outcome, evidenceId, recordedBy, recordedAt, simulated, classification, createdAt, expiresAt]
+      required: [id, actionRequestId, target, action, rationale, citations, procedure, preconditions, barrierId, expectedEffect, approvalCount, actionStatus, executionStatus, outcome, evidenceId, recordedBy, recordedAt, simulated, classification, createdAt, expiresAt]
       properties:
         id: { type: string, format: uuid }
         actionRequestId: { type: string, format: uuid }
@@ -3403,6 +3409,7 @@ components:
           maxItems: 50
           items: { type: string, minLength: 1, maxLength: 500 }
         barrierId: { type: string, format: uuid }
+        expectedEffect: { type: string, minLength: 1, maxLength: 2000 }
         approvalCount: { type: integer, minimum: 0 }
         actionStatus:
           type: string

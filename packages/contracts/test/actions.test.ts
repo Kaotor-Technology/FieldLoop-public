@@ -46,12 +46,13 @@ describe("Action contracts", () => {
         procedure: "PROC-SYN-7",
         barrierId: "00000000-0000-4000-8000-000000000001",
         preconditions: ["Pump disconnected from live grid"],
+        expectedEffect: "Reduce standing water at the synthetic hospital access route.",
       },
     };
     expect(isActionRequestCreate(command)).toBe(true);
     expect(isActionRequestCreate({ ...command, actionLevel: "l2" })).toBe(false);
     expect(isActionRequestCreate({ ...command, target: "cmms" })).toBe(false);
-    for (const key of ["target", "action", "procedure", "barrierId", "preconditions"]) {
+    for (const key of ["target", "action", "procedure", "barrierId", "preconditions", "expectedEffect"]) {
       const payload = Object.fromEntries(Object.entries(command.payload).filter(([candidate]) => candidate !== key));
       expect(isActionRequestCreate({ ...command, payload })).toBe(false);
     }

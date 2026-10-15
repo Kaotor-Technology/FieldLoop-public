@@ -19,7 +19,7 @@ function fixture() {
   const commandPackage: CommandPackage = {
     id: randomUUID(), actionRequestId: randomUUID(), target: "SYNTHETIC-PUMP-3", action: "Deploy mobile pump",
     rationale: "Reduce simulated flood exposure", citations: ["synthetic:procedure-7"], procedure: "PROC-SYN-7",
-    preconditions: ["Pump disconnected from live grid"], barrierId: randomUUID(), approvalCount: 2, actionStatus: "approved",
+    preconditions: ["Pump disconnected from live grid"], barrierId: randomUUID(), expectedEffect: "Reduce standing water at the synthetic hospital access route.", approvalCount: 2, actionStatus: "approved",
     executionStatus: "queued", outcome: null, evidenceId: null, recordedBy: null, recordedAt: null,
     simulated: true, classification: "INTERNAL", createdAt: "2026-10-15T00:00:00.000Z", expiresAt: "2026-10-15T00:15:00.000Z",
   };

@@ -340,7 +340,7 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
     const packages = new PostgresCommandPackageStore(db);
     const commandBody: ActionRequestCreate = {
       actionType: "field_command", actionLevel: "l1", target: "ot",
-      payload: { target: "SYNTHETIC-PUMP-3", action: "Deploy mobile pump", procedure: "PROC-SYN-7", barrierId, preconditions: ["Pump is isolated from live grid"] },
+      payload: { target: "SYNTHETIC-PUMP-3", action: "Deploy mobile pump", procedure: "PROC-SYN-7", barrierId, preconditions: ["Pump is isolated from live grid"], expectedEffect: "Reduce standing water at the synthetic hospital access route." },
       rationale: "Reduce simulated flood exposure", citations: ["synthetic:procedure-7"], classification: "INTERNAL", simulated: true,
     };
     const pending = await store.create(user, commandBody, key());
@@ -350,6 +350,7 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
     if (!packageId) throw new Error("Command Package was not created");
     expect(queued.items[0]).toMatchObject({ actionRequestId: pending.id, target: "SYNTHETIC-PUMP-3", action: "Deploy mobile pump",
       rationale: commandBody.rationale, procedure: "PROC-SYN-7", preconditions: commandBody.payload.preconditions,
+      expectedEffect: commandBody.payload.expectedEffect,
       barrierId, approvalCount: 0, actionStatus: "open", executionStatus: "queued", simulated: true });
     await expect(packages.recordOutcome(user, packageId, { executionStatus: "executed", outcome: "Completed" }, key())).rejects.toThrow("approval_required");
 

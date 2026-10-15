@@ -34,12 +34,13 @@
     "CommandPackagePayload": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["target", "action", "procedure", "barrierId", "preconditions"],
+      "required": ["target", "action", "procedure", "barrierId", "preconditions", "expectedEffect"],
       "properties": {
         "target": { "type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S" },
         "action": { "type": "string", "minLength": 1, "maxLength": 2000, "pattern": "\\S" },
         "procedure": { "type": "string", "minLength": 1, "maxLength": 2048, "pattern": "\\S" },
         "barrierId": { "type": "string", "format": "uuid" },
+        "expectedEffect": { "type": "string", "minLength": 1, "maxLength": 2000, "pattern": "\\S" },
         "preconditions": {
           "type": "array",
           "maxItems": 50,

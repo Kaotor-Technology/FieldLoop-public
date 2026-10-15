@@ -37,6 +37,7 @@ WHERE a.action_type = 'field_command' AND a.action_level = 'l1'
     AND COALESCE(NULLIF(btrim(a.payload->>'target'), ''), '') <> ''
     AND COALESCE(NULLIF(btrim(a.payload->>'action'), ''), '') <> ''
     AND COALESCE(NULLIF(btrim(a.payload->>'procedure'), ''), '') <> ''
+    AND COALESCE(NULLIF(btrim(a.payload->>'expectedEffect'), ''), '') <> ''
     AND jsonb_typeof(a.payload->'preconditions') = 'array'
 ON CONFLICT (org_id, action_request_id) DO NOTHING;
 
@@ -50,6 +51,7 @@ BEGIN
         OR COALESCE(NULLIF(btrim(NEW.payload->>'target'), ''), '') = ''
         OR COALESCE(NULLIF(btrim(NEW.payload->>'action'), ''), '') = ''
         OR COALESCE(NULLIF(btrim(NEW.payload->>'procedure'), ''), '') = ''
+        OR COALESCE(NULLIF(btrim(NEW.payload->>'expectedEffect'), ''), '') = ''
         OR jsonb_typeof(NEW.payload->'preconditions') IS DISTINCT FROM 'array' THEN
         RAISE EXCEPTION 'Field Command must be a complete L1 Command Package' USING ERRCODE = 'check_violation';
     END IF;
