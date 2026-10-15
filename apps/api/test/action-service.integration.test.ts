@@ -352,15 +352,20 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
       rationale: commandBody.rationale, procedure: "PROC-SYN-7", preconditions: commandBody.payload.preconditions,
       expectedEffect: commandBody.payload.expectedEffect,
       barrierId, approvalCount: 0, actionStatus: "open", executionStatus: "queued", simulated: true });
+    const confidential = await store.create(user, { ...commandBody, classification: "CONFIDENTIAL" }, key());
+    const internalQueue = await packages.list({ ...user, clearance: "INTERNAL" }, "queued", undefined, 50);
+    expect(internalQueue.items.map((item) => item.actionRequestId)).toContain(pending.id);
+    expect(internalQueue.items.map((item) => item.actionRequestId)).not.toContain(confidential.id);
+    expect((await packages.list(user, "queued", undefined, 50)).items.map((item) => item.actionRequestId)).toContain(confidential.id);
     await expect(packages.recordOutcome(user, packageId, { executionStatus: "executed", outcome: "Completed" }, key())).rejects.toThrow("approval_required");
 
     await pool.query("INSERT INTO app.approval (org_id,action_request_id,approver_sub,decision,payload_hash,auth_time,simulated,classification) VALUES ($1,$2,$3,'approved',$4,now(),true,'INTERNAL')", [user.orgId, pending.id, user.sub, pending.payloadHash]);
     await pool.query("INSERT INTO app.approval (org_id,action_request_id,approver_sub,decision,payload_hash,auth_time,simulated,classification) VALUES ($1,$2,'agent:synthetic-agent','approved',$3,now(),true,'INTERNAL')", [user.orgId, pending.id, pending.payloadHash]);
     await pool.query("UPDATE app.action_request SET status='approved' WHERE id=$1", [pending.id]);
-    expect((await packages.list(user, "queued", undefined, 50)).items[0]?.approvalCount).toBe(0);
+    expect((await packages.list(user, "queued", undefined, 50)).items.find((item) => item.actionRequestId === pending.id)?.approvalCount).toBe(0);
     await expect(packages.recordOutcome(user, packageId, { executionStatus: "executed", outcome: "Completed" }, key())).rejects.toThrow("approval_required");
     await pool.query("INSERT INTO app.approval (org_id,action_request_id,approver_sub,decision,payload_hash,auth_time,simulated,classification) VALUES ($1,$2,'synthetic-approver','approved',$3,now(),true,'INTERNAL')", [user.orgId, pending.id, pending.payloadHash]);
-    expect((await packages.list(user, "queued", undefined, 50)).items[0]?.approvalCount).toBe(1);
+    expect((await packages.list(user, "queued", undefined, 50)).items.find((item) => item.actionRequestId === pending.id)?.approvalCount).toBe(1);
     await expect(packages.recordOutcome(user, packageId, { executionStatus: "executed", outcome: "Completed" }, key())).rejects.toThrow("approval_required");
     await pool.query("INSERT INTO app.approval (org_id,action_request_id,approver_sub,decision,payload_hash,auth_time,simulated,classification) VALUES ($1,$2,'synthetic-second-approver','approved',$3,now(),true,'INTERNAL')", [user.orgId, pending.id, pending.payloadHash]);
     const externalCall = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Command Package outcome must not call a field system"));

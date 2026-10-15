@@ -131,7 +131,7 @@ export class PostgresCommandPackageStore implements CommandPackageServicePort {
         AND (e.id IS NULL OR e.simulation_retired_at IS NULL)
         AND array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], p.classification)
           >= array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], b.classification)
-        AND array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], p.classification) <= ${classificationRank(user.clearance) + 1}
+        AND array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], p.classification) <= ${classificationRank(user.clearance)}
         AND (NOT ${this.simulatedOnly} OR p.simulated)
         ${statusFilter} ${after}
       ORDER BY p.created_at DESC, p.id DESC LIMIT ${limit + 1}`.execute(this.db)).rows;
