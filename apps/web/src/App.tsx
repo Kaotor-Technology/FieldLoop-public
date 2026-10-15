@@ -32,11 +32,11 @@ function SignedInWorkspace({ user }: { user: CurrentUser }) {
       <a href="/map" className="wordmark" aria-label="FieldLoop-v2">FieldLoop-<span>v2</span></a>
       <div className="preferences">
         {canReadAudit(user.roles) && <Link to="/audit" className="top-bar-link">{t("auditNav")}</Link>}
-        {user.roles.includes("fieldloop.operator") && <Link to="/command-packages" className="top-bar-link">{t("commandPackagesNav")}</Link>}
         <AccountSwitcher user={user} />
         <Link className="top-bar-agent-link" to="/agent">{t("askAgent")}</Link>
         <button type="button" onClick={toggleLanguage} lang={language === "en" ? "th" : "en"} aria-label={t(language === "en" ? "languageThai" : "languageEnglish")}>{t("languageToggle")}</button>
         <button onClick={toggleNightShift} aria-pressed={nightShift}>{t("nightShift")}</button>
+        {user.roles.includes("fieldloop.operator") && <Link to="/command-packages" className="top-bar-link">{t("commandPackagesNav")}</Link>}
       </div>
     </header>
     <SimulationBanner />
