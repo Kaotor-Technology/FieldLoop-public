@@ -57,7 +57,7 @@ export function ActionApprovalBody({ action, block, now, reason, onReason, failu
       <ul className="approval-citations">{action.citations.map((citation) => <li key={citation} className="mono">{citation}</li>)}</ul>
     </section>
     {needsSecondApproval(action.actionType) && <SecondApproverMock />}
-    {block && <p className="approval-notice" role="status">{t(`approvalBlock.${block}`)}</p>}
+    {block && !decided && <p className="approval-notice" role="status">{t(`approvalBlock.${block}`)}</p>}
     {!block && !decided && <>
       <Textarea label={t("approvalReason")} helper={t("approvalReasonHelper")} value={reason} required disabled={submitting}
         onChange={(event) => onReason(event.currentTarget.value)} />

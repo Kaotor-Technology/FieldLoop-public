@@ -50,6 +50,13 @@ describe("approval dialog body", () => {
     expect(failed).toContain('role="alert"');
     expect(failed).toContain("Reload request");
   });
+  it("shows only the recorded result, not a closed-request notice, once the server has returned the decision", () => {
+    const decided = { actionRequest: action({ status: "approved" }), approval: { id: "x", actionRequestId: action().id, approverSub: "synthetic-manager", decision: "approved" as const, reason: "Reviewed", payloadHash: hash, authTime: "2026-10-15T09:58:00.000Z", createdAt: "2026-10-15T10:00:00.000Z" } };
+    const markup = render({ action: decided.actionRequest, block: "closed", decided });
+    expect(markup).toContain("Approval recorded");
+    expect(markup).not.toContain("already been decided or closed");
+    expect(markup).not.toContain("<textarea");
+  });
   it("asks for a fresh login instead of offering a decision when the login is old", () => {
     expect(render({ needsLogin: true })).toContain("sign in again");
   });
