@@ -2,6 +2,8 @@ import { registerAssistantRoutes } from "./assistant/routes.js";
 import type { AssistantPort } from "./assistant/client.js";
 import { registerActionRoutes } from "./actions/routes.js";
 import type { ActionDecisionPort, ActionServicePort } from "@fieldloop/adapters";
+import { registerCommandPackageRoutes } from "./command-packages/routes.js";
+import type { CommandPackageServicePort } from "@fieldloop/adapters";
 import Fastify from "fastify";
 import { registerSimulationRoutes } from "./simulation/routes.js";
 import type { SimulationPort } from "./simulation/client.js";
@@ -32,6 +34,7 @@ declare module "fastify" {
 export function buildApp(options: {
   assistant?: AssistantPort;
   actions?: ActionServicePort & ActionDecisionPort;
+  commandPackages?: CommandPackageServicePort;
   audit?: AuditServicePort;
   auth?: AuthServicePort;
   baseUrl?: string;
@@ -60,6 +63,7 @@ export function buildApp(options: {
   registerImportRoutes(app, options.imports);
   registerAuditRoutes(app, options.audit);
   registerActionRoutes(app, options.actions);
+  registerCommandPackageRoutes(app, options.commandPackages);
   registerGeoReferenceRoutes(app, options.geoReferences, options.baseUrl ?? process.env["FIELDLOOP_BASE_URL"]);
   registerLiveEventRoute(app, options.simulator, options.health, options.risk);
   return app;

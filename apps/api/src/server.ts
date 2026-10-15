@@ -22,6 +22,7 @@ const app = buildApp({
   auth: authRuntime.auth,
   ...(assistant ? { assistant } : {}),
   ...(authRuntime.actions ? { actions: authRuntime.actions } : {}),
+  ...(authRuntime.commandPackages ? { commandPackages: authRuntime.commandPackages } : {}),
   mapLayers: authRuntime.mapLayers,
   ...(authRuntime.audit ? { audit: authRuntime.audit } : {}),
   ...(authRuntime.health ? { health: authRuntime.health } : {}),
