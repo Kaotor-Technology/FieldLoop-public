@@ -1,7 +1,7 @@
 import { registerAssistantRoutes } from "./assistant/routes.js";
 import type { AssistantPort } from "./assistant/client.js";
 import { registerActionRoutes } from "./actions/routes.js";
-import type { ActionServicePort } from "@fieldloop/adapters";
+import type { ActionDecisionPort, ActionServicePort } from "@fieldloop/adapters";
 import Fastify from "fastify";
 import { registerSimulationRoutes } from "./simulation/routes.js";
 import type { SimulationPort } from "./simulation/client.js";
@@ -33,7 +33,7 @@ declare module "fastify" {
 
 export function buildApp(options: {
   assistant?: AssistantPort;
-  actions?: ActionServicePort;
+  actions?: ActionServicePort & ActionDecisionPort;
   audit?: AuditServicePort;
   auth?: AuthServicePort;
   baseUrl?: string;

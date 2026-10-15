@@ -169,7 +169,7 @@ def test_litellm_sends_the_user_token_header_on_the_wire() -> None:
     """The header set in before_model_callback must reach the Guardrail's HTTP request."""
     import asyncio
 
-    from fieldloop_assistant.guardrail_client import TOKEN_HEADER
+    from fieldloop_assistant.identity import TOKEN_HEADER
     from fieldloop_assistant.main import guardrail_model
     from google.adk.models.llm_request import LlmRequest
     from google.genai import types

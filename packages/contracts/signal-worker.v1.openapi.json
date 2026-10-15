@@ -45,6 +45,26 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PubSubPush"
+              },
+              "examples": {
+                "syntheticRectifierFailure": {
+                  "summary": "SYNTHETIC existing Signal golden fixture, Pub/Sub transport envelope",
+                  "value": {
+                    "subscription": "projects/synthetic-project/subscriptions/signals",
+                    "message": {
+                      "messageId": "synthetic-message-95",
+                      "data": "eyJzY2hlbWFWZXJzaW9uIjoic2lnbmFsLnYxIiwiaWQiOiIwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwNzMiLCJvcmdJZCI6ImZpZWxkbG9vcC1kZW1vIiwic291cmNlIjoibW9jay1oaXN0b3JpYW4iLCJ0YWciOiJETC0wMS5yZWN0aWZpZXIub3V0cHV0IiwidmFsdWUiOjAsIm9ic2VydmVkQXQiOiIyMDI2LTEwLTEyVDAwOjAwOjAwWiIsInNpbXVsYXRlZCI6dHJ1ZSwiY2xhc3NpZmljYXRpb24iOiJDT05GSURFTlRJQUwifQ==",
+                      "attributes": {
+                        "environment": "dev",
+                        "orgId": "fieldloop-demo",
+                        "schemaVersion": "signal.v1",
+                        "signalId": "00000000-0000-4000-8000-000000000073",
+                        "simulated": "true",
+                        "classification": "CONFIDENTIAL"
+                      }
+                    }
+                  }
+                }
               }
             }
           }

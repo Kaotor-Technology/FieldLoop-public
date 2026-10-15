@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { undocumentedRoutes } from "../../../scripts/openapi-coverage.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GuardrailClassification, Tier1ScanResult } from "@fieldloop/adapters";
 import { buildApp } from "../src/app.js";
@@ -5,9 +7,19 @@ import { InternalUserTokenVerifierUnavailableError, InvalidInternalUserTokenErro
 import { UnknownGuardrailSystemError } from "../src/postgres-store.js";
 import type { GuardrailDependencies, GuardrailPolicy, GuardrailSystem, RecordContentScanInput, StoredContentScan } from "../src/model.js";
 
+const { registered } = vi.hoisted(() => ({ registered: [] as { method: string | readonly string[]; url: string }[] }));
+vi.mock("fastify", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("fastify")>();
+  return { ...actual, default: (options?: import("fastify").FastifyServerOptions) => {
+    const app = actual.default({ ...options, exposeHeadRoutes: false });
+    app.addHook("onRoute", route => { registered.push({ method: route.method, url: route.url }); });
+    return app;
+  } };
+});
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
+  registered.length = 0;
 });
 
 describe("Guardrail gateway", () => {
@@ -483,3 +495,14 @@ function createDependencies(options: {
     vertexModels: { flash: "configured-flash-model", pro: "configured-pro-model" },
   };
 }
+
+it("keeps every actual Guardrail operation in the main reference and detects new undocumented operations", async () => {
+  const app = buildApp(createDependencies());
+  apps.push(app);
+  const spec = JSON.parse(readFileSync(new URL("../../../packages/contracts/dist/reference/openapi.json", import.meta.url), "utf8"));
+  app.post("/guardrail/v1/synthetic-undocumented", async () => ({}));
+  app.head("/guardrail/v1/synthetic-undocumented", async () => ({}));
+  await app.ready();
+  expect(undocumentedRoutes(registered, spec, "/guardrail/v1/")).toEqual(["HEAD /guardrail/v1/synthetic-undocumented", "POST /guardrail/v1/synthetic-undocumented"]);
+  expect(registered.filter(route => route.method === "POST")).toHaveLength(4);
+});
