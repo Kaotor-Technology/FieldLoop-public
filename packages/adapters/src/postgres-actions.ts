@@ -182,8 +182,8 @@ export class PostgresActionStore implements ActionServicePort, ActionDecisionPor
   // releases a Held Request; the working two-person rule is Phase 1, so one Approval authorises in the demo.
   async decide(user: ApproverIdentity, id: string, decision: ActionDecision, body: ActionDecisionCreate, key: string): Promise<ActionDecisionResult> {
     if (!isActionDecisionCreate(body)) throw new ActionError(400, "validation_failed");
-    // Only a person with the manager role decides; an AI subject has no session or role and can never reach this (AX-9).
-    if (!user.roles.includes("fieldloop.manager") || !user.orgId || !user.sub) throw new ActionError(403, "forbidden");
+    // Only a person with the manager role decides. Reject AI subjects explicitly even if a malformed identity grants one a role (AX-9).
+    if (!user.roles.includes("fieldloop.manager") || !user.orgId || !user.sub || user.sub.startsWith("agent:")) throw new ActionError(403, "forbidden");
     const operation = decision === "approved" ? "approve" : "reject";
     // Reporting an expired request must not roll back the rejection and escalation that expiry just recorded (PRD AX-4).
     let expired = false;
@@ -196,7 +196,7 @@ export class PostgresActionStore implements ActionServicePort, ActionDecisionPor
       const now = (await sql<{ now: Date }>`SELECT clock_timestamp() AS now`.execute(trx)).rows[0]?.now;
       if (!now) throw new Error("Database clock unavailable");
       const authAge = now.getTime() - user.authTime.getTime();
-      if (!(authAge >= -APPROVAL_AUTH_CLOCK_SKEW_MS && authAge < APPROVAL_MAX_AUTH_AGE_MS)) throw new ActionError(403, "reauthentication_required");
+      if (!(authAge >= -APPROVAL_AUTH_CLOCK_SKEW_MS && authAge < APPROVAL_MAX_AUTH_AGE_MS)) throw new ActionError(401, "reauthentication_required");
       const keyed = { actionRequestId: id, ...body, simulated: row.simulated, classification: row.classification };
       const previous = await replay(trx, user, operation, keyed, key);
       if (previous) {

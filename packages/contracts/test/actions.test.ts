@@ -1,5 +1,8 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { parse } from "yaml";
 import { isActionDecisionCreate, isActionRequestCreate, isToolCallCheck, isToolCallDecision } from "../src/actions.js";
+const openapi = parse(readFileSync(new URL("../openapi.yaml", import.meta.url), "utf8"));
 const input = { actionType: "system_of_record", actionLevel: "l1", target: "cmms", payload: { title: "Synthetic work order" },
   rationale: "Prepare for the operator", citations: ["synthetic:procedure-1"], simulated: true, classification: "INTERNAL" };
 describe("Action contracts", () => {
@@ -28,6 +31,13 @@ describe("Action contracts", () => {
   it("rejects caller-controlled approver, status and timing on a decision", () => {
     const decision = { payloadHash: "a".repeat(64), reason: "Reviewed the payload" };
     for (const key of ["approverSub", "status", "decision", "authTime", "orgId"]) expect(isActionDecisionCreate({ ...decision, [key]: "spoofed" })).toBe(false);
+  });
+  it("documents stale Action Request authentication as 401 and forbidden Approvers as 403", () => {
+    const responses = openapi.paths["/v1/action-requests/{actionRequestId}/approvals"].post.responses;
+    expect(responses["401"]).toEqual({ $ref: "#/components/responses/Unauthenticated" });
+    expect(responses["403"]).toEqual({ $ref: "#/components/responses/Forbidden" });
+    expect(openapi.components.responses.Unauthenticated.content["application/problem+json"].examples.reauthenticationRequired.value)
+      .toMatchObject({ status: 401, code: "reauthentication_required" });
   });
   it("rejects invalid expiry, simulation IDs and external URL targets", () => {
     expect(isActionRequestCreate({ ...input, expiresAt: "tomorrow" })).toBe(false);

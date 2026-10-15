@@ -90,8 +90,18 @@ it("requires a login under 5 minutes old before the service is reached", async (
     user.authTime = authTime;
     for (const url of [approvals, reject]) {
       const stale = await inject(url, decision);
-      expect(stale.statusCode).toBe(403); expect(stale.json()).toMatchObject({ code: "reauthentication_required" });
+      expect(stale.statusCode).toBe(401); expect(stale.json()).toMatchObject({ code: "reauthentication_required" });
     }
+  }
+  expect(actions.decide).not.toHaveBeenCalled();
+});
+it("forbids an agent subject even when it presents a manager cookie session", async () => {
+  const { actions, inject, approvals, reject, user } = approver();
+  user.sub = "agent:synthetic-incident-commander";
+  for (const url of [approvals, reject]) {
+    const result = await inject(url, decision);
+    expect(result.statusCode).toBe(403);
+    expect(result.json()).toMatchObject({ code: "forbidden" });
   }
   expect(actions.decide).not.toHaveBeenCalled();
 });

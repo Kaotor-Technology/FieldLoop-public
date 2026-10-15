@@ -4880,7 +4880,10 @@ components:
                 status: 415
                 code: unsupported_media_type
     Unauthenticated:
-      description: No valid session (`unauthenticated`). The SPA sends the user to `/auth/login`.
+      description: |
+        No valid session (`unauthenticated`), or an Action Request decision needs a
+        fresh login (`reauthentication_required`). The SPA sends an unauthenticated
+        user to `/auth/login` and a stale Approver session to `/auth/reauth`.
       content:
         application/problem+json:
           schema:
@@ -4893,6 +4896,13 @@ components:
                 title: Synthetic unauthenticated
                 status: 401
                 code: unauthenticated
+            reauthenticationRequired:
+              summary: The Approver must sign in again before deciding.
+              value:
+                type: about:blank
+                title: Recent reauthentication is required
+                status: 401
+                code: reauthentication_required
     GuardrailUnauthenticated:
       description: The verified internal user token is missing or invalid (`unauthenticated`). This service-to-service response does not start a browser login flow.
       content:
@@ -4923,8 +4933,7 @@ components:
                 code: forbidden
     Forbidden:
       description: |
-        The session may not do this: `forbidden`, `csrf_token_invalid`, or
-        `reauthentication_required` when an approval needs a fresh login.
+        The session may not do this: `forbidden` or `csrf_token_invalid`.
       content:
         application/problem+json:
           schema:

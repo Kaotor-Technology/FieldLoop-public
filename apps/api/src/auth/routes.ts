@@ -61,7 +61,8 @@ export function registerAuthRoutes(app: FastifyInstance, auth: AuthServicePort, 
       const currentUser = await auth.getCurrentUser(request.cookies[SESSION_COOKIE], consequential);
       request.fieldLoopCurrentUser = currentUser;
       if (consequential && !isRecentAuthTime(currentUser.authTime, new Date())) {
-        return sendProblem(request, reply, 403, "reauthentication_required", "Recent reauthentication is required");
+        const status = request.routeOptions.url?.startsWith("/api/v1/action-requests/") ? 401 : 403;
+        return sendProblem(request, reply, status, "reauthentication_required", "Recent reauthentication is required");
       }
       if (request.method !== "GET") {
         const csrfToken = request.headers["x-csrf-token"];

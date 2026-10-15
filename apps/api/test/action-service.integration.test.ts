@@ -330,6 +330,7 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
       const { user, action, approver, decision } = await pending();
       // The requester, even holding the manager role, can never decide their own request; nor can an assistant's delegating user.
       await expect(store.decide({ ...approver, sub: user.sub }, action.id, "approved", decision, key())).rejects.toThrow("four_eyes_required");
+      await expect(store.decide({ ...approver, sub: "agent:synthetic-incident-commander" }, action.id, "approved", decision, key())).rejects.toThrow("forbidden");
       await expect(store.decide({ ...approver, roles: ["fieldloop.operator"] }, action.id, "approved", decision, key())).rejects.toThrow("forbidden");
       await expect(store.decide({ ...approver, roles: ["fieldloop.viewer"] }, action.id, "rejected", decision, key())).rejects.toThrow("forbidden");
       for (const authTime of [new Date(Date.now() - 6 * 60_000), new Date(Date.now() + 5 * 60_000), new Date(0)]) {

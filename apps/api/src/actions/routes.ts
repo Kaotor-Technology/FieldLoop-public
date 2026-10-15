@@ -49,6 +49,7 @@ export function registerActionRoutes(app: FastifyInstance, actions?: ActionServi
     const decide = (decision: ActionDecision, status: 200 | 201) => async (request: FastifyRequest, reply: FastifyReply) => {
       const user = request.fieldLoopCurrentUser;
       if (!user) throw new ActionError(401, "unauthenticated");
+      if (user.sub.startsWith("agent:")) throw new ActionError(403, "forbidden");
       if (!user.roles.includes("fieldloop.manager")) throw new ActionError(403, "forbidden");
       const { actionRequestId: id } = request.params as { actionRequestId: string };
       if (!uuid.test(id) || !isActionDecisionCreate(request.body)) throw new ActionError(400, "validation_failed");

@@ -127,7 +127,7 @@ describe("BFF auth routes", () => {
     });
 
     expect(getCurrentUser).toHaveBeenCalledWith("opaque-session-value", true);
-    expect(response.statusCode).toBe(403);
+    expect(response.statusCode).toBe(401);
     expect(response.json().code).toBe("reauthentication_required");
     expect(response.json().title).toBe("Recent reauthentication is required");
   });
@@ -154,11 +154,11 @@ describe("BFF auth routes", () => {
   });
 
   it.each([
-    ["an encoded verb separator", "/api/v1/action-requests/action-1%3Aapprove", "/api/v1/action-requests/action-1:approve"],
+    ["an encoded verb separator", "/api/v1/action-requests/action-1%3Aapprove", "/api/v1/action-requests/action-1:approve", 401],
     // Static stub: the real approvals route (FL-96) is registered under the parametric pattern and covered in action-routes.test.ts.
-    ["the approvals sub-resource", "/api/v1/action-requests/action-1/approvals", "/api/v1/action-requests/action-1/approvals"],
-    ["a query string", "/api/v1/held-requests/held-1:reject?x=1", "/api/v1/held-requests/held-1:reject"],
-  ])("requires fresh reauthentication for a decision sent with %s", async (_label, url, route) => {
+    ["the approvals sub-resource", "/api/v1/action-requests/action-1/approvals", "/api/v1/action-requests/action-1/approvals", 401],
+    ["a query string", "/api/v1/held-requests/held-1:reject?x=1", "/api/v1/held-requests/held-1:reject", 403],
+  ])("requires fresh reauthentication for a decision sent with %s", async (_label, url, route, status) => {
     const getCurrentUser = vi.fn(async () => ({
       sub: "synthetic-subject",
       roles: ["fieldloop.manager"],
@@ -179,7 +179,7 @@ describe("BFF auth routes", () => {
     });
 
     expect(getCurrentUser).toHaveBeenCalledWith("opaque-session-value", true);
-    expect(response.statusCode).toBe(403);
+    expect(response.statusCode).toBe(status);
     expect(response.json().code).toBe("reauthentication_required");
   });
 
