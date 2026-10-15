@@ -75,4 +75,22 @@ describe("assistant message streaming service contract", () => {
     }
     expect(operation.responses["422"].content["application/json"].schema.required).toContain("detail");
   });
+
+  it("documents a nullable Guardrail Policy ID on decision events", () => {
+    const events = spec.paths["/assistant/v1/sessions/{session_id}/messages"]?.post["x-fieldloop-sse-events"];
+    const decisionSchema = events["guardrail.decision"];
+    const validate = new Ajv({ strict: false }).compile(decisionSchema);
+    const base = { agent: "integrity-orchestrator", tool: "get_barriers", decision: "allow", source: "guardrail" };
+
+    expect(decisionSchema.properties.policy_id).toMatchObject({
+      type: ["string", "null"],
+      description: expect.stringContaining("null means the source did not provide an ID"),
+    });
+    expect(decisionSchema.required).toContain("policy_id");
+    expect(validate({ ...base, policy_id: "22222222-2222-4333-8444-555555555555" })).toBe(true);
+    expect(validate({ ...base, source: "model", policy_id: "routing-policy" })).toBe(true);
+    expect(validate({ ...base, policy_id: null })).toBe(true);
+    expect(validate(base)).toBe(false);
+    expect(validate({ ...base, policy_id: 123 })).toBe(false);
+  });
 });

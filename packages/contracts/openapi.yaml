@@ -236,7 +236,7 @@ paths:
                   message: Review the SYNTHETIC DL-01 barriers; cite source records.
       responses:
         '200':
-          description: SSE agent.step, tool.call, tool.result, guardrail.decision and answer.final/incomplete/error events. Answer data follows the existing assistant runtime contract.
+          description: SSE agent.step, tool.call, tool.result, guardrail.decision and answer.final/incomplete/error events. Tool-call guardrail.decision events include the registered Policy ID when available and null otherwise; other decision sources may provide their own policy identifier. Answer data follows the existing assistant runtime contract.
           content:
             text/event-stream:
               schema:
@@ -255,7 +255,7 @@ paths:
 
                     id: 3
                     event: guardrail.decision
-                    data: {"agent":"integrity-orchestrator","tool":"get_barriers","decision":"allow","reason":null,"ceiling":null,"action_request_id":null,"held_request_id":null,"source":"guardrail"}
+                    data: {"agent":"integrity-orchestrator","tool":"get_barriers","decision":"allow","reason":null,"ceiling":null,"policy_id":"22222222-2222-4333-8444-555555555555","action_request_id":null,"held_request_id":null,"source":"guardrail"}
 
                     id: 4
                     event: tool.result
@@ -3744,7 +3744,9 @@ components:
         policyId:
           type: string
           format: uuid
-          description: Guardrail Policy applied to this tool-call decision.
+          description: Registered Guardrail Policy applied to this tool-call decision.
+            Omitted when no registered policy produced the decision; never
+            fabricated.
         ceiling:
           $ref: "#/components/schemas/ActionLevel"
         actionRequest:

@@ -499,7 +499,7 @@
         },
         "responses": {
           "200": {
-            "description": "SSE stream of assistant runtime events; successful transport does not imply completed work or approval.",
+            "description": "SSE stream of assistant runtime events; successful transport does not imply completed work or approval. Tool-call decisions carry the registered Policy ID when available; other decision sources may provide their own identifier.",
             "headers": {
               "Cache-Control": {
                 "description": "Do not cache user-scoped output.",
@@ -524,7 +524,7 @@
                 "examples": {
                   "syntheticGuardedRead": {
                     "summary": "SYNTHETIC bounded read; Guardrail decision precedes tool result and final answer",
-                    "value": "id: 1\nevent: agent.step\ndata: {\"agent\":\"integrity-orchestrator\",\"phase\":\"start\",\"step\":1}\n\nid: 2\nevent: tool.call\ndata: {\"agent\":\"integrity-orchestrator\",\"tool\":\"get_barriers\",\"args_hash\":\"synthetic-argument-hash\",\"step\":2}\n\nid: 3\nevent: guardrail.decision\ndata: {\"agent\":\"integrity-orchestrator\",\"tool\":\"get_barriers\",\"decision\":\"allow\",\"reason\":null,\"ceiling\":null,\"action_request_id\":null,\"held_request_id\":null,\"source\":\"guardrail\"}\n\nid: 4\nevent: tool.result\ndata: {\"agent\":\"integrity-orchestrator\",\"tool\":\"get_barriers\",\"summary\":\"Synthetic empty barrier list\",\"step\":3}\n\nid: 5\nevent: answer.final\ndata: {\"answer\":\"Synthetic example: no barriers in this fixture.\",\"citations\":[],\"known\":[],\"unknown\":[],\"assumptions\":[],\"confidence\":\"low\",\"confidence_reason\":\"Synthetic documentation fixture\",\"retrieved_citations\":[],\"draft_ids\":[],\"action_request_ids\":[],\"held_request_ids\":[]}\n\n"
+                    "value": "id: 1\nevent: agent.step\ndata: {\"agent\":\"integrity-orchestrator\",\"phase\":\"start\",\"step\":1}\n\nid: 2\nevent: tool.call\ndata: {\"agent\":\"integrity-orchestrator\",\"tool\":\"get_barriers\",\"args_hash\":\"synthetic-argument-hash\",\"step\":2}\n\nid: 3\nevent: guardrail.decision\ndata: {\"agent\":\"integrity-orchestrator\",\"tool\":\"get_barriers\",\"decision\":\"allow\",\"reason\":null,\"ceiling\":null,\"policy_id\":\"22222222-2222-4333-8444-555555555555\",\"action_request_id\":null,\"held_request_id\":null,\"source\":\"guardrail\"}\n\nid: 4\nevent: tool.result\ndata: {\"agent\":\"integrity-orchestrator\",\"tool\":\"get_barriers\",\"summary\":\"Synthetic empty barrier list\",\"step\":3}\n\nid: 5\nevent: answer.final\ndata: {\"answer\":\"Synthetic example: no barriers in this fixture.\",\"citations\":[],\"known\":[],\"unknown\":[],\"assumptions\":[],\"confidence\":\"low\",\"confidence_reason\":\"Synthetic documentation fixture\",\"retrieved_citations\":[],\"draft_ids\":[],\"action_request_ids\":[],\"held_request_ids\":[]}\n\n"
                   }
                 }
               }
@@ -807,7 +807,8 @@
               "agent",
               "tool",
               "decision",
-              "source"
+              "source",
+              "policy_id"
             ],
             "properties": {
               "agent": {
@@ -850,6 +851,13 @@
                   "string",
                   "null"
                 ]
+              },
+              "policy_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Policy identifier associated with this decision. Tool-call decisions use the registered Guardrail Policy ID; null means the source did not provide an ID."
               }
             }
           },

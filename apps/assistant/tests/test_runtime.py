@@ -35,6 +35,8 @@ def test_read_tool_runs_after_allow_with_user_identity_and_streams_every_event()
     # tool.call precedes the decision, which precedes the result.
     order = [n for n in h.names(events) if n in {"tool.call", "guardrail.decision", "tool.result"}]
     assert order == ["tool.call", "guardrail.decision", "tool.result"]
+    decision = next(event for event in events if event.name == "guardrail.decision")
+    assert "policy_id" in decision.data and decision.data["policy_id"] is None
     check = h.guardrail_requests[0]
     body = json.loads(check.content)
     assert body["tool"] == "get_barriers" and body["target"] == "fieldloop"
