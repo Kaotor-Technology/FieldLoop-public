@@ -49,14 +49,20 @@
       ],
       "properties": {
         "id": {
-          "const": "demo-uc-1"
+          "enum": [
+            "demo-uc-1",
+            "demo-uc-4"
+          ]
         },
         "name": {
           "type": "string",
           "minLength": 1
         },
         "useCase": {
-          "const": "UC-1"
+          "enum": [
+            "UC-1",
+            "UC-4"
+          ]
         },
         "modelTier": {
           "const": "private"
@@ -125,7 +131,10 @@
           }
         },
         "agentPack": {
-          "const": "pipeline-integrity"
+          "enum": [
+            "pipeline-integrity",
+            "flood-water"
+          ]
         },
         "agentIds": {
           "type": "array",
@@ -494,7 +503,10 @@
       ],
       "properties": {
         "id": {
-          "const": "uc-1-bowtie-c"
+          "enum": [
+            "uc-1-bowtie-c",
+            "uc-4-bowtie-c"
+          ]
         },
         "hazard": {
           "type": "string",
@@ -888,5 +900,59 @@
         }
       }
     }
-  }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "aiSystem": {
+          "properties": {
+            "id": {
+              "const": "demo-uc-1"
+            },
+            "useCase": {
+              "const": "UC-1"
+            },
+            "agentPack": {
+              "const": "pipeline-integrity"
+            }
+          },
+          "type": "object"
+        },
+        "bowtie": {
+          "properties": {
+            "id": {
+              "const": "uc-1-bowtie-c"
+            }
+          },
+          "type": "object"
+        }
+      }
+    },
+    {
+      "properties": {
+        "aiSystem": {
+          "properties": {
+            "id": {
+              "const": "demo-uc-4"
+            },
+            "useCase": {
+              "const": "UC-4"
+            },
+            "agentPack": {
+              "const": "flood-water"
+            }
+          },
+          "type": "object"
+        },
+        "bowtie": {
+          "properties": {
+            "id": {
+              "const": "uc-4-bowtie-c"
+            }
+          },
+          "type": "object"
+        }
+      }
+    }
+  ]
 }

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Pool } from "pg";
+import { loadDemoDomainPacks, registerDomainPackRecords } from "../src/domain-packs.js";
 import { PostgresHealthStore } from "../src/health/postgres-store.js";
 import { Kysely, PostgresDialect } from "kysely";
 import { PostgresActionStore, type ActionIdentity, type ApproverIdentity } from "@fieldloop/adapters";
@@ -29,6 +30,57 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
     return { user, body, check, policyId, systemId, barrierId };
   }
   const key = () => randomUUID();
+  it("registers the UC-4 Guardrail with independent IDs, private routes and unchanged source classification", async () => {
+    const orgId = `synthetic-${randomUUID()}`;
+    const packs = await loadDemoDomainPacks();
+    const flood = packs.find(p => p.content.id === "flood-water");
+    expect(flood?.aiSafety?.aiSystem.id).toBe("demo-uc-4");
+    expect(flood?.aiSafety?.aiSystem.tools).toContain("prepare_public_warning");
+    expect(flood?.aiSafety?.classification).toBe("CONFIDENTIAL");
+    expect(flood?.aiSafety?.aiSystem.modelRoutes.some(r => r.tier === "public-saas" && r.enabled)).toBe(false);
+    await registerDomainPackRecords(db, orgId, packs);
+    const systems = (await pool.query("SELECT id,classification,tools FROM app.ai_system WHERE org_id=$1 ORDER BY id",[orgId])).rows;
+    expect(systems).toHaveLength(2);
+    expect(systems.every(r=>r.classification === "CONFIDENTIAL")).toBe(true);
+    const policy = (await pool.query("SELECT config FROM app.guardrail_policy WHERE org_id=$1 AND config->>'aiSystemCode'='demo-uc-4' AND config->>'kind'='tool-call'",[orgId])).rows[0].config;
+    expect(policy.settings.allowedTools).toEqual(flood?.agents[0]?.allowedTools);
+    expect(policy.settings.allowedTargets).toEqual(["fieldloop", "stakeholders"]);
+    await registerDomainPackRecords(db, orgId, packs);
+    expect((await pool.query("SELECT id,classification,tools FROM app.ai_system WHERE org_id=$1 ORDER BY id",[orgId])).rows).toEqual(systems);
+    expect((await pool.query("SELECT count(*)::int AS n FROM app.signal_rule WHERE org_id=$1 AND pack='flood-water'",[orgId])).rows[0].n).toBe(2);
+  });
+  it("holds an independent Public template while retaining classified registry and source trace", async () => {
+    const { user, check, systemId, policyId } = await fixture();
+    const tools = ["create_action_request", "prepare_public_warning"];
+    await pool.query("UPDATE app.ai_system SET classification='CONFIDENTIAL',tools=$2::jsonb WHERE id=$1", [systemId, JSON.stringify(tools)]);
+    await pool.query("UPDATE app.guardrail_policy SET config=jsonb_set(config,'{settings,allowedTools}',$2::jsonb) WHERE id=$1", [policyId, JSON.stringify(tools)]);
+    const scenarioId = randomUUID(), runId = randomUUID();
+    await pool.query("INSERT INTO app.scenario (id,org_id,file,simulated,classification) VALUES ($1,$2,'synthetic.json',true,'CONFIDENTIAL')", [scenarioId,user.orgId]);
+    await pool.query("INSERT INTO app.simulation_run (id,org_id,scenario_id,state,simulated,classification) VALUES ($1,$2,$3,'paused',true,'CONFIDENTIAL')", [runId,user.orgId,scenarioId]);
+    await pool.query("SELECT app.capture_simulation_baseline($1)", [user.orgId]);
+    await pool.query("UPDATE app.simulation_workspace SET active_run_id=$1 WHERE org_id=$2", [runId,user.orgId]);
+    const validate = vi.fn(async () => {});
+    const guarded = new PostgresActionStore(db, true, { validate });
+    const input: ToolCallCheck = { ...check, classification: "CONFIDENTIAL", simulationRunId: runId,
+      tool: "prepare_public_warning", actionType: "emergency_communication", actionLevel: "l2", target: "stakeholders",
+      payload: { templateId: "district-z3-exercise-v1", channels: ["telegram", "discord"], recipientRefs: ["sandbox:district-z3"] },
+      rationale: "CONFIDENTIAL caller rationale must not enter the Public artifact", citations: ["confidential:source"] };
+    await expect(store.check(user,input,key())).rejects.toThrow("notifications_unavailable");
+    const held = await guarded.check(user,input,key());
+    expect(held.decision).toBe("hold_l2");
+    expect(held.actionRequest?.classification).toBe("PUBLIC");
+    expect(held.actionRequest?.requester).toEqual({ kind: "assistant", aiSystemId: systemId });
+    expect(JSON.stringify(held.actionRequest)).not.toContain("confidential:source");
+    expect(JSON.stringify(held.actionRequest)).not.toContain("caller rationale");
+    expect(validate).toHaveBeenCalledOnce();
+    const traces = (await pool.query("SELECT classification,reason FROM app.intercept WHERE org_id=$1 ORDER BY classification", [user.orgId])).rows;
+    expect(traces).toEqual([{classification:"CONFIDENTIAL",reason:"human_action_required"},{classification:"PUBLIC",reason:"authored_public_template"}]);
+    expect((await pool.query("SELECT classification FROM app.ai_system WHERE id=$1", [systemId])).rows[0].classification).toBe("CONFIDENTIAL");
+    await expect(guarded.check(user,{...input,payload:{...input.payload,message:"secret"}},key())).rejects.toThrow("invalid_public_warning_selection");
+    validate.mockRejectedValueOnce(new Error("no_enabled_notification_channel"));
+    await expect(guarded.check(user,input,key())).rejects.toThrow("no_enabled_notification_channel");
+    expect((await pool.query("SELECT count(*)::int AS n FROM app.action_request WHERE org_id=$1",[user.orgId])).rows[0].n).toBe(1);
+  });
   it("creates database-hashed exact proposals, authenticated requester and idempotent concurrent replay", async () => {
     const { user, body } = await fixture(), idempotencyKey = key();
     const results = await Promise.all(Array.from({ length: 5 }, () => store.create(user, body, idempotencyKey)));

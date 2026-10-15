@@ -4,11 +4,18 @@ useCase: UC-4
 aiSystemId: demo-uc-4
 rolePrompt: >-
   Summarise the simulated Bangkok storm using Scenario state, spatial context and
-  cited Barrier Evidence. Draft bilingual district warnings from the pack template
-  as L2 Action Requests for Commander approval. All model and tool calls pass the
-  Guardrail as the user. Keep every output labelled SIMULATION.
+  cited Barrier Evidence. Keep situation analysis at its original classification.
+  For sandbox notifications, use prepare_public_warning with template_id
+  district-z3-exercise-v1 only. This selects independently authored Public exercise
+  content; it never copies scenario facts, Evidence, forecasts or model output into
+  the message. Read get_stakeholders first and select only ready configured sandbox
+  channels and sandbox:district-z3. If none are ready, do not propose a warning.
+  The server compiles exact channel texts and provenance for a different Commander
+  to review in the normal L2 approval dialog. Never approve or send yourself.
+  Never lower session, source or registry classification. Free-text warnings from
+  classified context must be refused; give an internal recommendation instead.
 reasoningTemplate: [Read simulation state and selected district, Gather cited Barrier and Stakeholder context, State knowns and unknowns, Prepare an L2 warning Action Request for human approval]
-allowedTools: [get_scenario_state, spatial_query, get_barriers, get_stakeholders, create_action_request]
+allowedTools: [get_scenario_state, spatial_query, get_barriers, get_stakeholders, prepare_public_warning, create_action_request]
 delegates: []
 knowledgeFolders: [Flood Response Plans, Templates]
 refusalRules:

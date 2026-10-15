@@ -40,9 +40,11 @@ export function evaluateToolCall(input: ToolCallCheck, registered: ToolRegistrat
     return { decision: "block", reason: "action_target_mismatch" };
   }
   // Never infer execution capability from a caller's tool name, URL or claimed action type.
-  if (input.tool !== "create_action_request" && !draftTools.has(input.tool) && !cmmsProposal) {
+  if (input.tool !== "create_action_request" && input.tool !== "prepare_public_warning" && !draftTools.has(input.tool) && !cmmsProposal) {
     return { decision: "block", reason: "tool_has_no_safe_implementation" };
   }
+  if (input.tool === "prepare_public_warning" && (input.actionType !== "emergency_communication"
+    || input.actionLevel !== "l2" || input.target !== "stakeholders")) return { decision: "block", reason: "action_target_mismatch" };
   const { actionType, actionLevel, target } = input;
   if (!actionType || !actionLevel || !targetMatches(actionType, target)
     || (draftTools.has(input.tool) && (actionType !== "internal_record" || actionLevel !== "l0"))) {

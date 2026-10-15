@@ -70,3 +70,14 @@ it("converts only an explicitly registered CMMS work-order operation into fixed 
     { ...alias, tool: "cmms.delete_work_order" },
   ]) expect(evaluateToolCall(input, registered([input.tool])).decision).toBe("block");
 });
+
+it("holds only the registered fixed L2 Public warning operation", () => {
+  const input: ToolCallCheck = { ...base, tool: "prepare_public_warning", target: "stakeholders", actionType: "emergency_communication", actionLevel: "l2" };
+  expect(evaluateToolCall(input, registered([input.tool])).decision).toBe("hold_l2");
+  for (const changed of [{ ...input, actionLevel: "l0" as const }, { ...input, actionLevel: "l1" as const },
+    { ...input, actionType: "system_of_record" as const }, { ...input, target: "fieldloop" as const }]) {
+    expect(evaluateToolCall(changed, registered([input.tool])).decision).toBe("block");
+  }
+  expect(evaluateToolCall(input, registered([])).decision).toBe("block");
+  expect(evaluateToolCall(input, registered([input.tool]), "l1").decision).toBe("block");
+});

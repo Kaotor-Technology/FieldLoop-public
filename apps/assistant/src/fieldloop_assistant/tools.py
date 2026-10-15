@@ -92,6 +92,10 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         "extract_geo_references", "propose",
         "Extract grounded location references into human-reviewable drafts.",
     ),
+    ToolSpec(
+        "prepare_public_warning", "propose",
+        "Select an authored Public sandbox exercise warning; no free text.",
+    ),
     ToolSpec("create_action_request", "propose", "Propose an L1/L2 Action Request for a person."),
     ToolSpec("create_draft", "propose", "Save a Draft that needs human approval."),
 )
@@ -267,6 +271,19 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
         )
         return {"status": "needs_human_confirmation", **result}
 
+    async def prepare_public_warning(
+        template_id: str, channels: list[str], recipient_refs: list[str],
+    ) -> dict[str, Any]:
+        """Select district-z3-exercise-v1 for Commander approval. Never supply source text.
+
+        Args:
+            template_id: Authored Public source ID: district-z3-exercise-v1.
+            channels: Ready sandbox channels from the directory: telegram or discord.
+            recipient_refs: Public sandbox directory references; sandbox:district-z3 only.
+        """
+        # The Guardrail must hold this fixed L2 operation. An erroneous allow never sends.
+        return {"error": "public_warning_requires_hold"}
+
     async def create_action_request(
         action_type: str, action_level: str, target: str, payload: dict[str, Any],
         rationale: str, citations: list[str],
@@ -317,6 +334,7 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
         "search_knowledge": search_knowledge, "get_asset": get_asset, "get_barriers": get_barriers,
         "get_bowtie_risk": get_bowtie_risk, "get_scenario_state": get_scenario_state,
         "extract_geo_references": extract_geo_references,
+        "prepare_public_warning": prepare_public_warning,
         "create_action_request": create_action_request, "create_draft": create_draft,
     }
     return [available[name] for name in allowed if name in available]

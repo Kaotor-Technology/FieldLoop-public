@@ -31,7 +31,9 @@ try {
   await loadDlSeed(database, buildDl(), orgId);
   await loadBangkokSeed(database, buildBangkok(), orgId);
   const healthBefore = (await sql`SELECT id, health FROM app.barrier ORDER BY id`.execute(database)).rows;
-  const packs = (await loadDemoDomainPacks()).filter(({ aiSafety }) => !aiSafety);
+  // Raw content baseline remains separate from the derived UC-4 Guardrail registration.
+  const packs = (await loadDomainPacks(new URL("../domain-packs/", import.meta.url), DEMO_AGENT_TOOL_NAMES))
+    .filter(({ aiSafety }) => !aiSafety);
   // Also exercise the optional spatial field accepted by the same loader schema.
   packs[0].content.signalRules[0].spatialGeometry = {
     type: "Polygon", coordinates: [[[100, 13], [101, 13], [101, 14], [100, 14], [100, 13]]],

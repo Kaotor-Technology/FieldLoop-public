@@ -3,11 +3,11 @@ import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import type { GenAiSafetyPack } from "@fieldloop/contracts";
+import { parseGenAiSafetyPack, type GenAiSafetyPack } from "@fieldloop/contracts";
 import { loadDomainPacks } from "../src/domain-pack-loader.js";
 
 const root = new URL("../../../domain-packs/", import.meta.url);
-const tools = new Set(["get_asset", "get_barriers", "get_bowtie_risk", "get_action_requests", "get_stakeholders", "get_scenario_state", "search_knowledge", "get_document", "spatial_query", "extract_geo_references", "create_draft", "create_action_request"]);
+const tools = new Set(["get_asset", "get_barriers", "get_bowtie_risk", "get_action_requests", "get_stakeholders", "get_scenario_state", "search_knowledge", "get_document", "spatial_query", "extract_geo_references", "create_draft", "create_action_request", "prepare_public_warning"]);
 const directories: string[] = [];
 afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true, force: true }))); });
 function item<T>(values: T[], index = 0): T {
@@ -72,4 +72,15 @@ describe("Gen AI Safety pack (FL-85)", () => {
     await expect(loadDomainPacks(directory, tools)).rejects.toThrow(error);
     await expect(loadDomainPacks(directory, tools)).rejects.toThrow("ai-safety.yaml");
   });
+});
+
+it("requires UC-4 identity, use case, agent pack and Bowtie to agree", async () => {
+  const packs = await loadDomainPacks(root, tools);
+  const source = packs.find(p => p.aiSafety)?.aiSafety;
+  if (!source) throw new Error("missing source");
+  const uc4 = { ...source, aiSystem: { ...source.aiSystem, id: "demo-uc-4", useCase: "UC-4", agentPack: "flood-water" },
+    bowtie: { ...source.bowtie, id: "uc-4-bowtie-c" } };
+  expect(parseGenAiSafetyPack(uc4, "test").aiSystem.id).toBe("demo-uc-4");
+  expect(() => parseGenAiSafetyPack({ ...uc4, aiSystem: { ...uc4.aiSystem, useCase: "UC-1" } }, "test")).toThrow();
+  expect(() => parseGenAiSafetyPack({ ...uc4, classification: "PUBLIC" }, "test")).toThrow();
 });

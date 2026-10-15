@@ -143,6 +143,14 @@ def build_envelope(
             target=args.get("target"), payload=args.get("payload") or {},
             rationale=args.get("rationale"), citations=args.get("citations") or [],
         )
+    elif tool == "prepare_public_warning":
+        # Keep session classification; only the server's constant-source compiler emits Public.
+        envelope.update(
+            actionType="emergency_communication", actionLevel="l2", target="stakeholders",
+            payload={"templateId": args.get("template_id"), "channels": args.get("channels"),
+                     "recipientRefs": args.get("recipient_refs")},
+            rationale="Authored Public exercise template selection", citations=["public-warning"],
+        )
     elif tool == "create_draft":
         # A Draft is an internal record that waits for a person: recommendation-only at L0.
         envelope.update(

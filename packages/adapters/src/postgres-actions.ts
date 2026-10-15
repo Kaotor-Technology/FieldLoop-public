@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { sql, type Kysely, type Transaction } from "kysely";
 import { isActionDecisionCreate, isActionRequestCreate, isToolCallCheck, type ActionApproval, type ActionClassification, type ActionDecisionCreate, type ActionDecisionResult, type ActionLevel, type ActionRequest, type ActionRequestCreate, type ActionRequester, type ActionType, type ToolCallCheck, type ToolCallDecision } from "@fieldloop/contracts";
 import { ActionError, effectiveCeiling, evaluateToolCall, levelRank, targetMatches } from "./action-policy.js";
+import { publicWarningAction } from "./public-warning.js";
 import { appendAuditEvent, appendWorkerEvent } from "./postgres-domain-events.js";
 
 type Database = Record<string, never>;
@@ -42,8 +43,12 @@ export function canonicalActionJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalActionJson).join(",")}]`;
   return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalActionJson(Reflect.get(value, key))}`).join(",")}}`;
 }
+/** Readiness/recipient validation supplied by the notification backend (FL-98). No transport runs here. */
+export interface WarningValidationPort {
+  validate(tx: Tx, orgId: string, body: ActionRequestCreate): Promise<void>;
+}
 export class PostgresActionStore implements ActionServicePort, ActionDecisionPort {
-  constructor(private readonly db: Kysely<Database>, private readonly simulatedOnly = true) {}
+  constructor(private readonly db: Kysely<Database>, private readonly simulatedOnly = true, private readonly notifications?: WarningValidationPort) {}
 
   async create(user: ActionIdentity, body: ActionRequestCreate, key: string): Promise<ActionRequest> {
     if (!isActionRequestCreate(body)) throw new ActionError(400, "validation_failed");
@@ -121,8 +126,18 @@ export class PostgresActionStore implements ActionServicePort, ActionDecisionPor
       const interceptId = randomUUID();
       let heldRequestId: string | undefined;
       if (result.decision === "convert_l1" || result.decision === "hold_l2") {
-        const actionInput = actionBody({ ...body, classification });
+        const publicSelection = body.tool === "prepare_public_warning";
+        if (publicSelection && (!body.simulated || !body.simulationRunId)) throw new ActionError(400, "public_warning_simulation_required");
+        // Only this constant-source compiler can emit Public from a classified session.
+        // Intercept/Evidence/audit retain the inherited classification below.
+        const actionInput = publicSelection
+          ? { ...publicWarningAction(body.payload), simulationRunId: body.simulationRunId }
+          : actionBody({ ...body, classification });
         if (!isActionRequestCreate(actionInput)) throw new ActionError(400, "action_metadata_required");
+        if (publicSelection) {
+          if (!this.notifications) throw new ActionError(503, "notifications_unavailable");
+          await this.notifications.validate(trx, user.orgId, actionInput);
+        }
         action = await insertAction(trx, user, actionInput, policy?.slaSeconds ?? 900, { kind: "assistant", aiSystemId: registry.id });
       }
       await sql`INSERT INTO app.intercept (id, org_id, policy_id, ai_system_id, decision, reason, latency_ms, simulated, classification, created_by)
@@ -134,9 +149,24 @@ export class PostgresActionStore implements ActionServicePort, ActionDecisionPor
           ${body.simulated}, ${classification}, 'guardrail', ${body.simulationRunId ?? null}::uuid)`.execute(trx);
       await appendWorkerEvent(trx, { id: randomUUID(), type: "evidence.created", orgId: user.orgId, entityId: evidenceId, barrierId: registry.barrier_id, simulated: body.simulated, classification }, "guardrail");
       if (result.decision === "hold_l2" && action) {
+        // A separate decision covers only the compiled Public artifact. The classified
+        // source decision above stays unchanged; no free text crosses into this record.
+        let heldInterceptId = interceptId;
+        if (body.tool === "prepare_public_warning") {
+          heldInterceptId = randomUUID();
+          await sql`INSERT INTO app.intercept (id, org_id, policy_id, ai_system_id, decision, reason, latency_ms, simulated, classification, created_by)
+            VALUES (${heldInterceptId}::uuid, ${user.orgId}, ${registry.policy_id}::uuid, ${registry.id}::uuid,
+              'hold_l2', 'authored_public_template', ${Math.round(performance.now() - started)}, true, 'PUBLIC', ${user.sub})`.execute(trx);
+          const publicEvidenceId = randomUUID();
+          await sql`INSERT INTO app.evidence (id, org_id, barrier_id, kind, source, observed_at, simulated, classification, created_by, simulation_run_id)
+            VALUES (${publicEvidenceId}::uuid, ${user.orgId}, ${registry.barrier_id}::uuid, 'guardrail.intercept', 'guardrail', clock_timestamp(),
+              true, 'PUBLIC', 'guardrail', ${body.simulationRunId ?? null}::uuid)`.execute(trx);
+          await appendWorkerEvent(trx, { id: randomUUID(), type: "evidence.created", orgId: user.orgId, entityId: publicEvidenceId,
+            barrierId: registry.barrier_id, simulated: true, classification: "PUBLIC" }, "guardrail");
+        }
         heldRequestId = randomUUID();
         await sql`INSERT INTO app.held_request (id, org_id, intercept_id, action_request_id, payload, status, expires_at, simulated, classification, created_by)
-          VALUES (${heldRequestId}::uuid, ${user.orgId}, ${interceptId}::uuid, ${action.id}::uuid, ${JSON.stringify(action.payload)}::jsonb,
+          VALUES (${heldRequestId}::uuid, ${user.orgId}, ${heldInterceptId}::uuid, ${action.id}::uuid, ${JSON.stringify(action.payload)}::jsonb,
             'held', ${action.expiresAt}::timestamptz, ${action.simulated}, ${action.classification}, ${user.sub})`.execute(trx);
       }
       const response: ToolCallDecision = { ...result, policyId: registry.policy_id, ...(action ? { actionRequest: action } : {}), ...(heldRequestId ? { heldRequestId } : {}) };

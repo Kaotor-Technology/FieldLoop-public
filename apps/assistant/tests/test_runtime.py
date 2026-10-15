@@ -688,3 +688,38 @@ def test_wall_clock_limit_returns_incomplete(monkeypatch) -> None:  # type: igno
     h = Harness([answer()])
     last = final(run(h))
     assert last.name == "answer.incomplete" and last.data["incomplete"] == "wall_clock"
+
+
+def test_public_warning_selection_preserves_session_classification_and_never_executes() -> None:
+    h = Harness(
+        [call("prepare_public_warning", template_id="district-z3-exercise-v1",
+              channels=["telegram", "discord"], recipient_refs=["sandbox:district-z3"]), answer()],
+        guardrail=lambda body: {"decision": "hold_l2", "reason": "human_action_required",
+                                "heldRequestId": "99999999-2222-4333-8444-555555555555"},
+        platform={"/api/v1/simulation/runs/current": {"id": RUN_ID}}, simulated=True,
+    )
+    events = run(h, "flood-situation", "CONFIDENTIAL situation detail")
+    envelope = json.loads(h.guardrail_requests[0].content)
+    assert envelope["classification"] == "INTERNAL"  # Harness session: never relabelled Public
+    assert envelope["target"] == "stakeholders" and envelope["actionLevel"] == "l2"
+    assert envelope["simulationRunId"] == RUN_ID
+    assert envelope["payload"] == {"templateId": "district-z3-exercise-v1",
+                                    "channels": ["telegram", "discord"],
+                                    "recipientRefs": ["sandbox:district-z3"]}
+    assert "CONFIDENTIAL situation detail" not in json.dumps(envelope)
+    assert final(events).data["held_request_ids"]
+    result = next(e for e in events if e.name == "tool.result")
+    assert "hold_l2" in str(result.data)
+    assert "public_warning_requires_hold" not in str(result.data)
+
+
+def test_public_warning_erroneous_allow_still_never_sends() -> None:
+    h = Harness(
+        [call("prepare_public_warning", template_id="district-z3-exercise-v1",
+              channels=["telegram"], recipient_refs=["sandbox:district-z3"]), answer()],
+        platform={"/api/v1/simulation/runs/current": {"id": RUN_ID}}, simulated=True,
+    )
+    events = run(h, "flood-situation")
+    result = next(e for e in events if e.name == "tool.result")
+    assert "public_warning_requires_hold" in str(result.data)
+    assert len(h.platform_requests) == 1  # Only current-run read; no notification/action POST

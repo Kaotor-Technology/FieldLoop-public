@@ -3,7 +3,7 @@
 export const DEMO_AGENT_TOOL_NAMES: ReadonlySet<string> = new Set([
   "search_knowledge", "get_document", "get_asset", "get_barriers", "get_bowtie_risk",
   "get_action_requests", "get_stakeholders", "spatial_query", "get_scenario_state",
-  "extract_geo_references", "create_draft", "create_action_request",
+  "extract_geo_references", "create_draft", "create_action_request", "prepare_public_warning",
 ]);
 
 // Registry inputs also admit this proposal-only legacy operation. It is not an executable

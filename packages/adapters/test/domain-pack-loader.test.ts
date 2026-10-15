@@ -6,7 +6,7 @@ import type { Signal } from "@fieldloop/contracts";
 import { loadDomainPacks } from "../src/domain-pack-loader.js";
 
 const root = new URL("../../../domain-packs/", import.meta.url);
-const tools = new Set(["get_asset", "get_barriers", "get_bowtie_risk", "get_action_requests", "get_stakeholders", "get_scenario_state", "search_knowledge", "get_document", "spatial_query", "extract_geo_references", "create_draft", "create_action_request"]);
+const tools = new Set(["get_asset", "get_barriers", "get_bowtie_risk", "get_action_requests", "get_stakeholders", "get_scenario_state", "search_knowledge", "get_document", "spatial_query", "extract_geo_references", "create_draft", "create_action_request", "prepare_public_warning"]);
 
 async function fixture(change: (pack: Record<string, unknown>, agent: Record<string, unknown>) => void) {
   const directory = await mkdtemp(join(tmpdir(), "fl78-pack-"));
