@@ -120,5 +120,7 @@ const isMain =
   process.argv[1] !== undefined && pathToFileURL(resolve(process.argv[1])).href === import.meta.url;
 if (isMain) {
   const flag = process.argv.indexOf("--output-dir");
-  await writeEncroachmentFixtures(flag === -1 ? DEFAULT_OUTPUT_DIR : process.argv[flag + 1]);
+  const directory = flag === -1 ? DEFAULT_OUTPUT_DIR : process.argv[flag + 1];
+  if (directory === undefined) throw new Error("--output-dir needs a directory.");
+  await writeEncroachmentFixtures(directory);
 }

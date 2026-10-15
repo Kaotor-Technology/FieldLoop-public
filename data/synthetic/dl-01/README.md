@@ -18,6 +18,18 @@ The generator writes **route.geojson**, **segments.geojson** and
 **facilities.geojson** in this directory. It accepts **--output-dir** for
 temporary or review copies.
 
+## Generate the encroachment KML fixtures
+
+```sh
+node data/synthetic/dl-01/encroachment-kml.mjs
+```
+
+The generator reads **route.geojson** and writes **encroachment-points.kml**
+(10 SYNTHETIC findings 8-35 m from the route, inside the 50 m snap tolerance)
+and **encroachment-outside-tolerance.kml** (one finding 80 m away). They are
+test inputs for the KML import wizard (FL-48) and carry no real site data. It
+also accepts **--output-dir**.
+
 ## Load the seed
 
 The target database must have the FL-60 schema and Bowtie seed fields migrated.
