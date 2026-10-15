@@ -13,7 +13,7 @@ describe("agent chat transport", () => {
     const firstCall = fetcher.mock.calls[0];
     expect(firstCall).toBeDefined();
     const [url, init] = firstCall ?? ["", undefined];
-    expect(url).toBe("/api/assistant/v1/sessions");
+    expect(url).toBe("/api/v1/assistant/sessions");
     expect(init?.credentials).toBe("same-origin");
     expect(new Headers(init?.headers).get("x-csrf-token")).toBe("csrf-fixture");
     expect(new Headers(init?.headers).has("authorization")).toBe(false);
@@ -54,8 +54,8 @@ describe("agent chat transport", () => {
     await streamAgentMessage("session/id", "Question", "csrf", (event) => events.push(event.name), fetcher);
     await cancelAgentTurn("session/id", "csrf", fetcher);
 
-    expect(fetcher.mock.calls[0]?.[0]).toBe("/api/assistant/v1/sessions/session%2Fid/messages");
-    expect(fetcher.mock.calls[1]?.[0]).toBe("/api/assistant/v1/sessions/session%2Fid:cancel");
+    expect(fetcher.mock.calls[0]?.[0]).toBe("/api/v1/assistant/sessions/session%2Fid/messages");
+    expect(fetcher.mock.calls[1]?.[0]).toBe("/api/v1/assistant/sessions/session%2Fid:cancel");
     expect(events).toEqual(["answer.final"]);
   });
 });

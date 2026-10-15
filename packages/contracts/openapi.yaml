@@ -20,6 +20,8 @@ servers:
 security:
   - sessionCookie: []
 tags:
+  - name: Assistant
+    description: Guardrail-backed Agent Chat sessions, live turns and cancellation.
   - name: Imports
     description: Safe point import workflow.
   - name: Auth
@@ -45,6 +47,90 @@ tags:
   - name: Actions
     description: Exact payload proposals and human action ceilings.
 paths:
+  /v1/assistant/sessions:
+    post:
+      operationId: createAgentSession
+      summary: Start an Agent Chat session
+      description: Starts a demo coordinator session as the cookie-authenticated user. Internal credentials remain in the BFF.
+      tags: [Assistant]
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentSessionCreate'
+      responses:
+        '201':
+          description: Session created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentSession'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/assistant/sessions/{sessionId}/messages:
+    post:
+      operationId: sendAgentMessage
+      summary: Stream an Agent turn
+      description: Streams live steps and the final structured answer from the Guardrail-backed assistant. A session runs one turn at a time.
+      tags: [Assistant]
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentMessageCreate'
+      responses:
+        '200':
+          description: SSE agent.step, tool.call, tool.result, guardrail.decision and answer.final/incomplete/error events. Answer data follows the existing assistant runtime contract.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/assistant/sessions/{sessionId}:cancel:
+    post:
+      operationId: cancelAgentTurn
+      summary: Stop a running Agent turn
+      description: Requests cancellation between steps. Existing proposals remain in their human approval flow.
+      x-idempotency-exempt: Repeated cancellation only sets the same cancelling status and has no additional effect.
+      tags: [Assistant]
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '202':
+          description: Cancellation requested.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [cancelling]
+                properties:
+                  cancelling: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /v1/action-requests:
     post:
       operationId: createActionRequest
@@ -1486,6 +1572,28 @@ components:
         minimum: 0
 
   schemas:
+    AgentSessionCreate:
+      type: object
+      additionalProperties: false
+      required: [agent]
+      properties:
+        agent: { type: string, enum: [integrity-orchestrator, flood-situation] }
+    AgentMessageCreate:
+      type: object
+      additionalProperties: false
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1, maxLength: 4000 }
+    AgentSession:
+      type: object
+      additionalProperties: false
+      required: [id, agent, simulated, classification, status]
+      properties:
+        id: { type: string, format: uuid }
+        agent: { type: string, enum: [integrity-orchestrator, flood-situation] }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+        status: { type: string }
     ImportMapping:
       type: object
       additionalProperties: false
