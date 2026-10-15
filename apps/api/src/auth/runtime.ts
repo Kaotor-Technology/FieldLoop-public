@@ -16,6 +16,8 @@ import { createRiskDatabase } from "../risk/database.js";
 import { PostgresGeoReferenceStore } from "../geo-references/postgres-store.js";
 import type { GeoReferenceStore } from "../geo-references/model.js";
 import { PostgresImportStore } from "../imports/store.js";
+import { PostgresDraftStore } from "../drafts/postgres-store.js";
+import type { DraftServicePort } from "../drafts/model.js";
 
 export class UnavailableAuthService implements AuthServicePort {
   async startLogin(): Promise<URL> { return this.unavailable(); }
@@ -44,6 +46,7 @@ export async function createProductionAuthRuntime(): Promise<{
   registerPacks?: (packs: LoadedDomainPack[]) => Promise<void>;
   risk?: PostgresRiskService;
   imports?: PostgresImportStore;
+  drafts?: DraftServicePort;
 }> {
   const baseUrl = process.env["FIELDLOOP_BASE_URL"];
   const defaultOrgId = process.env["FIELDLOOP_DEFAULT_ORG_ID"];
@@ -75,6 +78,7 @@ export async function createProductionAuthRuntime(): Promise<{
     audit: new PostgresAuditStore(database.db as unknown as Kysely<Record<string, never>>),
     health: new PostgresHealthStore(database.db as unknown as Kysely<Record<string, never>>),
     imports: new PostgresImportStore(database.db as unknown as Kysely<Record<string, never>>),
+    drafts: new PostgresDraftStore(database.db as unknown as Kysely<Record<string, never>>),
     risk: new PostgresRiskService(createRiskDatabase(database.pool)),
     close: async () => {
       if ("close" in database && typeof database.close === "function") await database.close();

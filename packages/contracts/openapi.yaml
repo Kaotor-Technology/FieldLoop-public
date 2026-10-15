@@ -50,6 +50,8 @@ tags:
     description: Internal service-to-service OpenAI-compatible model gateway and Tier 1 content scan.
   - name: Actions
     description: Exact payload proposals and human action ceilings.
+  - name: Drafts
+    description: Management summary Drafts awaiting a human approval decision.
 paths:
   /v1/assistant/sessions:
     post:
@@ -226,6 +228,111 @@ paths:
           $ref: "#/components/responses/NotFound"
         "409": *a4
         "503": *a5
+  /v1/drafts:
+    get:
+      operationId: listDrafts
+      summary: List management summary Drafts for human review
+      description: Returns Organisation and clearance scoped management summary Drafts by status. Drafts are not approvals until a person decides.
+      tags: [Drafts]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: string, enum: [needs_approval, approved, rejected], default: needs_approval }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Current management summary Drafts ordered newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 100
+                items: { $ref: "#/components/schemas/Draft" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/drafts/{draftId}:
+    get:
+      operationId: getDraft
+      summary: Read a management summary Draft
+      description: Returns a current Draft only when its Organisation and classification are visible to the signed-in user.
+      tags: [Drafts]
+      parameters:
+        - name: draftId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Current Draft and its human decision metadata.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Draft" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/drafts/{draftId}:approve:
+    post:
+      operationId: approveDraft
+      summary: Approve a management summary Draft
+      description: Requires a recently reauthenticated Operator or Manager who did not author the Draft. The returned approval stamp identifies the human decision.
+      tags: [Drafts]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: draftId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Approved Draft with the exact visible AI-assisted stamp.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Draft" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/drafts/{draftId}:reject:
+    post:
+      operationId: rejectDraft
+      summary: Reject a management summary Draft
+      description: Records a human rejection reason for a pending Draft.
+      tags: [Drafts]
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+        - name: draftId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DraftRejection" }
+      responses:
+        "200":
+          description: Rejected Draft and recorded reason.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Draft" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /guardrail/v1/tool-calls:check:
     post:
       servers:
@@ -2204,6 +2311,37 @@ components:
           format: uuid
     # END generated action schemas
 
+    Draft:
+      type: object
+      additionalProperties: false
+      required: [id, kind, content, citations, confidence, status, approvedBy, approvedAt, approvalStamp, decisionBy, decisionAt, decisionReason, simulated, classification, createdAt, createdBy]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, const: management_summary }
+        content: { type: string, minLength: 1, maxLength: 20000 }
+        citations:
+          type: array
+          maxItems: 50
+          items: { type: string, minLength: 1, maxLength: 2048 }
+        confidence: { type: [number, "null"], minimum: 0, maximum: 1 }
+        status: { type: string, enum: [needs_approval, approved, rejected] }
+        approvedBy: { type: [string, "null"] }
+        approvedAt: { type: [string, "null"], format: date-time }
+        approvalStamp: { type: [string, "null"] }
+        decisionBy: { type: [string, "null"] }
+        decisionAt: { type: [string, "null"], format: date-time }
+        decisionReason: { type: [string, "null"] }
+        simulated: { type: boolean }
+        classification: { $ref: "#/components/schemas/ActionClassification" }
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: string, minLength: 1, maxLength: 512 }
+    DraftRejection:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason: { type: string, minLength: 1, maxLength: 2000, pattern: \S }
+
     GuardrailChatCompletionRequest:
       type: object
       required: [aiSystem, messages]
@@ -2779,6 +2917,7 @@ components:
       required: [sub, roles, persona, orgId, clearance, csrfToken, authTime]
       properties:
         sub: { type: string }
+        displayName: { type: [string, 'null'] }
         roles:
           type: array
           items: { type: string, enum: [fieldloop.viewer, fieldloop.operator, fieldloop.manager] }

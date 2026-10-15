@@ -21,6 +21,8 @@ import { registerGeoReferenceRoutes } from "./geo-references/routes.js";
 import type { GeoReferenceStore } from "./geo-references/model.js";
 import { registerImportRoutes } from "./imports/routes.js";
 import type { ImportPort } from "./imports/store.js";
+import { registerDraftRoutes } from "./drafts/routes.js";
+import type { DraftServicePort } from "./drafts/model.js";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -43,6 +45,7 @@ export function buildApp(options: {
   geoReferences?: GeoReferenceStore;
   domainPacks?: LoadedDomainPack[];
   imports?: ImportPort;
+  drafts?: DraftServicePort;
 } = {}) {
   const app = Fastify({ logger: { serializers: { req: serializeRequestForLog } } });
   const auth = options.auth ?? new UnavailableAuthService();
@@ -60,6 +63,7 @@ export function buildApp(options: {
   registerImportRoutes(app, options.imports);
   registerAuditRoutes(app, options.audit);
   registerActionRoutes(app, options.actions);
+  registerDraftRoutes(app, options.drafts);
   registerGeoReferenceRoutes(app, options.geoReferences, options.baseUrl ?? process.env["FIELDLOOP_BASE_URL"]);
   registerLiveEventRoute(app, options.simulator, options.health, options.risk);
   return app;
