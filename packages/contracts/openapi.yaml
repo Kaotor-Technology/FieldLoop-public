@@ -337,6 +337,12 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ActionDecisionCreate"
+            examples:
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live approval or measured result.
+                value:
+                  payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
+                  reason: Synthetic approval for contract illustration
       responses:
         "201":
           description: Approval recorded, or idempotently replayed, with the Action
@@ -345,6 +351,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ActionDecisionResult"
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; no live action or approval.
+                  value:
+                    actionRequest:
+                      id: 00000000-0000-4000-8000-000000000095
+                      orgId: synthetic-org
+                      actionType: system_of_record
+                      actionLevel: l1
+                      target: cmms
+                      payload:
+                        title: Synthetic work order
+                      payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
+                      rationale: Prepare for the operator
+                      citations:
+                        - synthetic:procedure-1
+                      requestedBy: synthetic-user
+                      requester:
+                        kind: person
+                      status: approved
+                      expiresAt: '2026-10-15T12:15:00Z'
+                      simulated: true
+                      classification: INTERNAL
+                    approval:
+                      id: 00000000-0000-4000-8000-000000000096
+                      actionRequestId: 00000000-0000-4000-8000-000000000095
+                      approverSub: synthetic-manager
+                      decision: approved
+                      reason: Synthetic approval for contract illustration
+                      payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
+                      authTime: '2026-10-15T12:00:00Z'
+                      createdAt: '2026-10-15T12:00:30Z'
         "400": *a1
         "401": *a2
         "403": *a3
@@ -376,6 +414,12 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ActionDecisionCreate"
+            examples:
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live rejection or measured result.
+                value:
+                  payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
+                  reason: Synthetic rejection for contract illustration
       responses:
         "200":
           description: Rejection recorded, or idempotently replayed, with the Action
@@ -384,6 +428,38 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ActionDecisionResult"
+              examples:
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; no live action or approval.
+                  value:
+                    actionRequest:
+                      id: 00000000-0000-4000-8000-000000000095
+                      orgId: synthetic-org
+                      actionType: system_of_record
+                      actionLevel: l1
+                      target: cmms
+                      payload:
+                        title: Synthetic work order
+                      payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
+                      rationale: Prepare for the operator
+                      citations:
+                        - synthetic:procedure-1
+                      requestedBy: synthetic-user
+                      requester:
+                        kind: person
+                      status: rejected
+                      expiresAt: '2026-10-15T12:15:00Z'
+                      simulated: true
+                      classification: INTERNAL
+                    approval:
+                      id: 00000000-0000-4000-8000-000000000097
+                      actionRequestId: 00000000-0000-4000-8000-000000000095
+                      approverSub: synthetic-manager
+                      decision: rejected
+                      reason: Synthetic rejection for contract illustration
+                      payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
+                      authTime: '2026-10-15T12:00:00Z'
+                      createdAt: '2026-10-15T12:00:30Z'
         "400": *a1
         "401": *a2
         "403": *a3
