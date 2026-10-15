@@ -16,6 +16,7 @@ from psycopg.rows import DictRow, dict_row
 from psycopg_pool import AsyncConnectionPool
 
 from .catalog import AgentDefinition, load_catalog
+from .geo_extraction import HttpGeoExtractionPlatform
 from .guardrail_client import GuardrailClient
 from .identity import InternalTokenVerifier
 from .knowledge import KnowledgeScope, KnowledgeSearch
@@ -123,6 +124,7 @@ def build_app(settings: Settings | None) -> FastAPI:
         platform=HttpPlatformReader(http, settings.platform_url), sessions=store, trace=store,
         adk_sessions=adk_sessions,
         model_factory=lambda d: guardrail_model(d, settings.guardrail_url),
+        geo_platform=HttpGeoExtractionPlatform(http, settings.platform_url),
         knowledge=knowledge, reference_catalog=references,
         drafts=lambda s: PostgresDraftStore(pool, s.org_id, s.simulated, s.classification),
     )

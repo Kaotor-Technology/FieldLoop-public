@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>DL-01 encroachment findings (SYNTHETIC)</name>
+    <Folder>
+      <name>Right-of-Way patrol (SYNTHETIC)</name>
+    <Placemark>
+      <name>Synthetic encroachment 01</name>
+      <description>SYNTHETIC finding. Not a real encroachment.</description>
+      <ExtendedData>
+        <Data name="category"><value>vehicle track</value></Data>
+      </ExtendedData>
+      <Point><coordinates>99.2239584,18.1334556,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Synthetic encroachment 02</name>
+      <description>SYNTHETIC finding. Not a real encroachment.</description>
+      <ExtendedData>
+        <Data name="category"><value>excavation</value></Data>
+      </ExtendedData>
+      <Point><coordinates>99.2975921,18.2354219,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Synthetic encroachment 03</name>
+      <description>SYNTHETIC finding. Not a real encroachment.</description>
+      <ExtendedData>
+        <Data name="category"><value>structure</value></Data>
+      </ExtendedData>
+      <Point><coordinates>99.3654918,18.3302435,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Synthetic encroachment 04</name>
+      <description>SYNTHETIC finding. Not a real encroachment.</description>
+      <ExtendedData>
+        <Data name="category"><value>excavation</value></Data>
+      </ExtendedData>
+      <Point><coordinates>99.4512521,18.4543097,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Synthetic encroachment 05</name>
+      <description>SYNTHETIC finding. Not a real encroachment.</description>
+      <ExtendedData>
+        <Data name="category"><value>tree planting</value></Data>
+      </ExtendedData>
+      <Point><coordinates>99.5267443,18.5659852,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Synthetic encroachment 06</name>
+      <description>SYNTHETIC finding. Not a real encroachment.</description>
+      <ExtendedData>
+        <Data name="category"><value>vehicle track</value></Data>
+      </ExtendedData>
+      <Point><coordinates>99.6117243,18.6932808,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Synthetic encroachment 07</name>
+      <description>SYNTHETIC finding. Not a real encroachment.</description>
+      <ExtendedData>
+        <Data name="category"><value>structure</value></Data>
+      </ExtendedData>
+      <Point><coordinates>99.6938778,18.8196443,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Synthetic encroachment 08</name>
+      <description>SYNTHETIC finding. Not a real encroachment.</description>
+      <ExtendedData>
+        <Data name="category"><value>excavation</value></Data>
+      </ExtendedData>
+      <Point><coordinates>99.78405,18.9491625,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Synthetic encroachment 09</name>
+      <description>SYNTHETIC finding. Not a real encroachment.</description>
+      <ExtendedData>
+        <Data name="category"><value>fence line</value></Data>
+      </ExtendedData>
+      <Point><coordinates>99.8847763,19.0883221,0</coordinates></Point>
+    </Placemark>
+    <Placemark>
+      <name>Synthetic encroachment 10</name>
+      <description>SYNTHETIC finding. Not a real encroachment.</description>
+      <ExtendedData>
+        <Data name="category"><value>tree planting</value></Data>
+      </ExtendedData>
+      <Point><coordinates>99.7761634,19.3077333,0</coordinates></Point>
+    </Placemark>
+    </Folder>
+  </Document>
+</kml>

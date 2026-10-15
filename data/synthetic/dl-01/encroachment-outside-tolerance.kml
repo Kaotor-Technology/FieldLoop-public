@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>DL-01 finding outside snap tolerance (SYNTHETIC)</name>
+    <Folder>
+      <name>Right-of-Way patrol (SYNTHETIC)</name>
+    <Placemark>
+      <name>Synthetic finding outside tolerance 01</name>
+      <description>SYNTHETIC finding. Not a real encroachment.</description>
+      <ExtendedData>
+        <Data name="category"><value>excavation</value></Data>
+      </ExtendedData>
+      <Point><coordinates>99.5659848,18.6249147,0</coordinates></Point>
+    </Placemark>
+    </Folder>
+  </Document>
+</kml>

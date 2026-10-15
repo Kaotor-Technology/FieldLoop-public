@@ -8,9 +8,10 @@ from typing import Any
 
 import httpx
 from fieldloop_assistant.events import StreamEvent
+from fieldloop_assistant.geo_extraction import HttpGeoExtractionPlatform
 from fieldloop_assistant.guardrail_client import GuardrailClient
 from fieldloop_assistant.runtime import AgentRuntime, RuntimeDeps
-from fieldloop_assistant.tools import HttpPlatformReader
+from fieldloop_assistant.tools import HttpPlatformReader, KnowledgeProvider
 from fieldloop_assistant.trace import MemoryStore, SessionRecord
 from google.adk.models.base_llm import BaseLlm
 from google.adk.models.llm_request import LlmRequest
@@ -22,6 +23,8 @@ from pydantic import PrivateAttr
 from .support import BOWTIE, REPO, RUN_ID, USER_TOKEN, catalog
 
 __all__ = ["BOWTIE", "REPO", "RUN_ID", "USER_TOKEN"]
+
+GEO_SOURCE_TEXT = "Latitude 13.75, Longitude 100.5 at Ban Klang"
 
 def call(name: str, **args: Any) -> LlmResponse:
     part = types.Part(function_call=types.FunctionCall(name=name, args=args))
@@ -70,9 +73,11 @@ class Harness:
         guardrail: Callable[[dict[str, Any]], dict[str, Any] | int] | None = None,
         platform: dict[str, Any] | None = None,
         simulated: bool = False,
+        knowledge: KnowledgeProvider | None = None,
     ) -> None:
         self.guardrail_requests: list[httpx.Request] = []
         self.platform_requests: list[httpx.Request] = []
+        self.request_order: list[str] = []
         self._guardrail = guardrail or (
             lambda body: {"decision": "allow", "reason": "registered_read"}
         )
@@ -90,9 +95,12 @@ class Harness:
             catalog=catalog(), guardrail=GuardrailClient(client, "http://guardrail"),
             platform=HttpPlatformReader(client, "http://platform"), sessions=self.store,
             trace=self.store, adk_sessions=self.adk, model_factory=lambda _: self.llm,
+            knowledge=lambda _: knowledge,
+            geo_platform=HttpGeoExtractionPlatform(client, "http://platform"),
         ))
 
     def _route(self, request: httpx.Request) -> httpx.Response:
+        self.request_order.append(f"{request.url.host}{request.url.path}")
         if request.url.host == "guardrail":
             self.guardrail_requests.append(request)
             body = json.loads(request.content)
@@ -101,11 +109,27 @@ class Harness:
                 if isinstance(outcome, int):
                     return httpx.Response(outcome)
                 return httpx.Response(200, json=outcome)
+            if request.url.path.endswith("chat/completions"):
+                completion = json.dumps({"references": [{
+                    "latitude": 13.75, "longitude": 100.5, "chainageFrom": None,
+                    "chainageTo": None, "assetCode": None, "placeName": "Ban Klang",
+                    "sourceSnippet": GEO_SOURCE_TEXT, "confidence": 0.91,
+                }]})
+                return httpx.Response(200, json={"choices": [{"message": {"content": completion}}]})
             result = self._guardrail(body)
             if isinstance(result, int):
                 return httpx.Response(result)
             return httpx.Response(200, json=result)
         self.platform_requests.append(request)
+        if request.url.path.endswith("/geo-source"):
+            document_id = request.url.path.split("/")[-2]
+            return httpx.Response(200, json={
+                "id": document_id, "title": "SYNTHETIC inspection note", "folder": "Integrity",
+                "text": GEO_SOURCE_TEXT, "simulated": True, "classification": "INTERNAL",
+            })
+        if request.url.path.endswith("/geo-references"):
+            body = json.loads(request.content)
+            return httpx.Response(201, json={"references": body["references"], "replayed": False})
         for pattern, payload in self._platform.items():
             if re.fullmatch(pattern, request.url.path):
                 return httpx.Response(200, json=payload)

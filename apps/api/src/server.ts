@@ -1,3 +1,4 @@
+import { assistantClientFromEnvironment } from "./assistant/client.js";
 import { simulationClientFromEnvironment } from "./simulation/client.js";
 import { buildApp } from "./app.js";
 import { createProductionAuthRuntime } from "./auth/runtime.js";
@@ -10,6 +11,7 @@ import { loadDemoDomainPacks } from "./domain-packs.js";
 const domainPacks = await loadDemoDomainPacks();
 const authRuntime = await createProductionAuthRuntime();
 const simulator = simulationClientFromEnvironment();
+const assistant = assistantClientFromEnvironment();
 try {
   if (authRuntime.registerPacks) await authRuntime.registerPacks(domainPacks);
 } catch (error) {
@@ -18,10 +20,12 @@ try {
 }
 const app = buildApp({
   auth: authRuntime.auth,
+  ...(assistant ? { assistant } : {}),
   ...(authRuntime.actions ? { actions: authRuntime.actions } : {}),
   mapLayers: authRuntime.mapLayers,
   ...(authRuntime.audit ? { audit: authRuntime.audit } : {}),
   ...(authRuntime.health ? { health: authRuntime.health } : {}),
+  ...(authRuntime.geoReferences ? { geoReferences: authRuntime.geoReferences } : {}),
   ...(authRuntime.risk ? { risk: authRuntime.risk } : {}),
   ...(authRuntime.imports ? { imports: authRuntime.imports } : {}),
   domainPacks,

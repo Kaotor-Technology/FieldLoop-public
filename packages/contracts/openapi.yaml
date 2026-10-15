@@ -20,6 +20,8 @@ servers:
 security:
   - sessionCookie: []
 tags:
+  - name: Assistant
+    description: Guardrail-backed Agent Chat sessions, live turns and cancellation.
   - name: Imports
     description: Safe point import workflow.
   - name: Auth
@@ -28,6 +30,10 @@ tags:
     description: Current signed-in user's BFF session.
   - name: Map
     description: Organisation-scoped map configuration and viewport layers.
+  - name: Geo References
+    description: Human-reviewed locations extracted from controlled documents.
+  - name: Agent Tools
+    description: Restricted service-to-service endpoints used by the assistant runtime.
   - name: Internal Auth
     description: Internal token verification keys; contains no user data.
   - name: Simulation
@@ -45,6 +51,90 @@ tags:
   - name: Actions
     description: Exact payload proposals and human action ceilings.
 paths:
+  /v1/assistant/sessions:
+    post:
+      operationId: createAgentSession
+      summary: Start an Agent Chat session
+      description: Starts a demo coordinator session as the cookie-authenticated user. Internal credentials remain in the BFF.
+      tags: [Assistant]
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentSessionCreate'
+      responses:
+        '201':
+          description: Session created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentSession'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/assistant/sessions/{sessionId}/messages:
+    post:
+      operationId: sendAgentMessage
+      summary: Stream an Agent turn
+      description: Streams live steps and the final structured answer from the Guardrail-backed assistant. A session runs one turn at a time.
+      tags: [Assistant]
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentMessageCreate'
+      responses:
+        '200':
+          description: SSE agent.step, tool.call, tool.result, guardrail.decision and answer.final/incomplete/error events. Answer data follows the existing assistant runtime contract.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
+  /v1/assistant/sessions/{sessionId}:cancel:
+    post:
+      operationId: cancelAgentTurn
+      summary: Stop a running Agent turn
+      description: Requests cancellation between steps. Existing proposals remain in their human approval flow.
+      x-idempotency-exempt: Repeated cancellation only sets the same cancelling status and has no additional effect.
+      tags: [Assistant]
+      parameters:
+        - $ref: '#/components/parameters/CsrfToken'
+        - name: sessionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '202':
+          description: Cancellation requested.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [cancelling]
+                properties:
+                  cancelling: { type: boolean }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /v1/action-requests:
     post:
       operationId: createActionRequest
@@ -351,7 +441,7 @@ paths:
         - name: layer
           in: path
           required: true
-          schema: { type: string, enum: [assets, barriers, consequences] }
+          schema: { type: string, enum: [assets, barriers, consequences, geo-references] }
         - name: bbox
           in: query
           required: true
@@ -375,6 +465,140 @@ paths:
               schema: { $ref: "#/components/schemas/MapFeatureCollection" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthenticated" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/geo-references:
+    get:
+      operationId: listDraftGeoReferences
+      summary: List Geo Reference drafts awaiting human review
+      description: Returns only Draft Geo References visible to the signed-in user's Organisation and clearance. Drafts are never returned by the map layer.
+      tags: [Geo References]
+      parameters:
+        - name: status
+          in: query
+          required: true
+          schema: { type: string, const: draft }
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: A bounded page of Geo Reference drafts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeoReferencePage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/geo-references/{geoReferenceId}:confirm:
+    post:
+      operationId: confirmGeoReference
+      summary: Confirm a Geo Reference draft
+      description: Confirms a human-reviewed location. An optional Asset ID lets the reviewer locate a Chainage reference on the selected Asset. Only confirmed records with geometry appear on the map.
+      tags: [Geo References]
+      parameters:
+        - name: geoReferenceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GeoReferenceConfirm" }
+      responses:
+        "200":
+          description: The confirmed Geo Reference.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeoReference" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /v1/geo-references/{geoReferenceId}:reject:
+    post:
+      operationId: rejectGeoReference
+      summary: Reject a Geo Reference draft
+      description: Records a human decision to reject an extracted location. Rejected records are not shown on the map.
+      tags: [Geo References]
+      parameters:
+        - name: geoReferenceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: The rejected Geo Reference.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeoReference" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /internal/assistant/documents/{documentId}/geo-source:
+    get:
+      operationId: getAssistantGeoSource
+      summary: Read a controlled document for geo-extraction
+      description: Returns bounded, clearance-checked document text to the assistant service. Requires a signed five-minute internal user token and is not a browser endpoint.
+      tags: [Agent Tools]
+      security:
+        - internalUserToken: []
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: The controlled document text and provenance.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeoSourceDocument" }
+        "401": { $ref: "#/components/responses/GuardrailUnauthenticated" }
+        "403": { $ref: "#/components/responses/GuardrailForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
+  /internal/assistant/documents/{documentId}/geo-references:
+    post:
+      operationId: createAssistantGeoReferenceDrafts
+      summary: Save extracted Geo References as drafts
+      description: Saves only validated Draft Geo References from a clearance-checked document. The service cannot confirm or place them on the map.
+      tags: [Agent Tools]
+      security:
+        - internalUserToken: []
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GeoReferenceDraftCreate" }
+      responses:
+        "201":
+          description: Draft references created or the matching extraction replayed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeoReferenceDraftCreateResult" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/GuardrailUnauthenticated" }
+        "403": { $ref: "#/components/responses/GuardrailForbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "413": { $ref: "#/components/responses/PayloadTooLarge" }
+        "409": { $ref: "#/components/responses/Conflict" }
         "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /internal/auth/jwks:
     get:
@@ -1425,6 +1649,11 @@ paths:
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
 components:
   securitySchemes:
+    internalUserToken:
+      type: apiKey
+      in: header
+      name: x-fieldloop-internal-user-token
+      description: Five-minute signed user identity token for server-to-server calls; never sent to the browser.
     serviceIdentity:
       type: http
       scheme: bearer
@@ -1486,6 +1715,28 @@ components:
         minimum: 0
 
   schemas:
+    AgentSessionCreate:
+      type: object
+      additionalProperties: false
+      required: [agent]
+      properties:
+        agent: { type: string, enum: [integrity-orchestrator, flood-situation] }
+    AgentMessageCreate:
+      type: object
+      additionalProperties: false
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1, maxLength: 4000 }
+    AgentSession:
+      type: object
+      additionalProperties: false
+      required: [id, agent, simulated, classification, status]
+      properties:
+        id: { type: string, format: uuid }
+        agent: { type: string, enum: [integrity-orchestrator, flood-situation] }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+        status: { type: string }
     ImportMapping:
       type: object
       additionalProperties: false
@@ -2046,7 +2297,7 @@ components:
       properties:
         name: { type: [string, "null"] }
         code: { type: [string, "null"] }
-        featureKind: { type: string, enum: [area, facility, linear, segment, barrier, consequence] }
+        featureKind: { type: string, enum: [area, facility, linear, segment, barrier, consequence, geo_reference] }
         classification: { type: string }
         simulated: { type: boolean }
         label: { type: [string, "null"] }
@@ -2056,6 +2307,99 @@ components:
         chainageTo: { type: [number, "null"] }
         evidenceObservedAt: { type: [string, "null"], format: date-time }
         domainPack: { type: [string, "null"] }
+        geoReferenceId: { type: [string, "null"], format: uuid }
+        assetId: { type: [string, "null"], format: uuid }
+        documentId: { type: [string, "null"], format: uuid }
+        geoReferenceKind: { type: [string, "null"], enum: [point, chainage, area, asset, null] }
+        sourceSnippet: { type: [string, "null"] }
+        confidence: { type: [number, "null"], minimum: 0, maximum: 1 }
+
+    GeoReference:
+      type: object
+      additionalProperties: false
+      required: [id, documentId, documentTitle, kind, geometry, chainageFrom, chainageTo, proposedLabel, sourceSnippet, confidence, targetAssetId, status, simulated, classification, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        documentId: { type: string, format: uuid }
+        documentTitle: { type: string }
+        kind: { type: string, enum: [point, chainage, area, asset] }
+        geometry:
+          oneOf:
+            - { $ref: "#/components/schemas/MapGeometry" }
+            - { type: "null" }
+        chainageFrom: { type: [number, "null"] }
+        chainageTo: { type: [number, "null"] }
+        proposedLabel: { type: [string, "null"] }
+        sourceSnippet: { type: string, minLength: 1, maxLength: 1200 }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        targetAssetId: { type: [string, "null"], format: uuid }
+        status: { type: string, enum: [draft, confirmed, rejected] }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
+        createdAt: { type: string, format: date-time }
+
+    GeoReferencePage:
+      allOf:
+        - $ref: "#/components/schemas/CursorPage"
+        - type: object
+          required: [items, limit]
+          properties:
+            items:
+              type: array
+              items: { $ref: "#/components/schemas/GeoReference" }
+            limit: { type: integer, minimum: 1, maximum: 200 }
+
+    GeoReferenceConfirm:
+      type: object
+      additionalProperties: false
+      properties:
+        targetAssetId: { type: string, format: uuid }
+
+    GeoReferenceDraftCreate:
+      type: object
+      additionalProperties: false
+      required: [references]
+      properties:
+        references:
+          type: array
+          maxItems: 50
+          items: { $ref: "#/components/schemas/GeoReferenceCandidate" }
+
+    GeoReferenceCandidate:
+      type: object
+      additionalProperties: false
+      required: [latitude, longitude, chainageFrom, chainageTo, assetCode, placeName, sourceSnippet, confidence]
+      properties:
+        latitude: { type: [number, "null"], minimum: -90, maximum: 90 }
+        longitude: { type: [number, "null"], minimum: -180, maximum: 180 }
+        chainageFrom: { type: [number, "null"], minimum: 0, maximum: 1000000000 }
+        chainageTo: { type: [number, "null"], minimum: 0, maximum: 1000000000 }
+        assetCode: { type: [string, "null"], maxLength: 128 }
+        placeName: { type: [string, "null"], maxLength: 256 }
+        sourceSnippet: { type: string, minLength: 1, maxLength: 1200 }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+
+    GeoReferenceDraftCreateResult:
+      type: object
+      additionalProperties: false
+      required: [references, replayed]
+      properties:
+        references:
+          type: array
+          items: { $ref: "#/components/schemas/GeoReference" }
+        replayed: { type: boolean }
+
+    GeoSourceDocument:
+      type: object
+      additionalProperties: false
+      required: [id, title, folder, text, simulated, classification]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        folder: { type: [string, "null"] }
+        text: { type: string, minLength: 1, maxLength: 100000 }
+        simulated: { type: boolean }
+        classification: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] }
 
     # BEGIN generated simulation schemas
     SimulationRun:

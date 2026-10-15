@@ -18,7 +18,7 @@ export class AgentChatRequestError extends Error {
   }
 }
 
-const sessionPath = "/api/assistant/v1/sessions";
+const sessionPath = "/api/v1/assistant/sessions";
 
 export async function createAgentSession(
   agent: string,

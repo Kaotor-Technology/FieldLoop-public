@@ -18,6 +18,22 @@ it("converts preparation at L1, holds L2, permits L0 recommendations and blocks 
   expect(evaluateToolCall(base, registered([base.tool]), "l0").decision).toBe("block");
   expect(evaluateToolCall({ ...base, target: "scada", actionType: "field_command" }, registered([base.tool])).decision).toBe("convert_l1");
 });
+it("treats Geo Reference extraction as an L0 internal Draft proposal", () => {
+  const proposal: ToolCallCheck = {
+    ...base, tool: "extract_geo_references", target: "fieldloop",
+    actionType: "internal_record", actionLevel: "l0",
+  };
+  expect(evaluateToolCall(proposal, registered([proposal.tool])))
+    .toEqual({ decision: "allow", reason: "recommendation_only", ceiling: "l2" });
+  expect(evaluateToolCall({ ...proposal, actionLevel: "l1" }, registered([proposal.tool])).decision)
+    .toBe("block");
+  expect(evaluateToolCall({ ...proposal, actionType: "system_of_record", target: "gis" }, registered([proposal.tool])).decision)
+    .toBe("block");
+  const unclassified: ToolCallCheck = { ...proposal };
+  delete unclassified.actionType;
+  delete unclassified.actionLevel;
+  expect(evaluateToolCall(unclassified, registered([proposal.tool])).decision).toBe("block");
+});
 it("never executes writes even if someone registers a dangerous tool or spoofs its action", () => {
   for (const tool of ["write_cmms", "write_gis", "set_valve", "approve_action", "execute_command"]) {
     expect(evaluateToolCall({ ...base, tool }, registered([tool])).decision).toBe("block");

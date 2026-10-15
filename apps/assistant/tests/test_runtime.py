@@ -39,6 +39,123 @@ def test_read_tool_runs_after_allow_with_user_identity_and_streams_every_event()
     assert final(events).data["citations"] == ["DL-01"]
 
 
+def test_geo_extraction_is_registered_and_runs_only_after_guardrail_check() -> None:
+    document_id = "11111111-2222-4333-8444-555555555555"
+    h = Harness(
+        [call("extract_geo_references", document_id=document_id), answer()],
+        platform={"/api/v1/simulation/runs/current": {"id": RUN_ID}},
+        simulated=True,
+    )
+
+    events = run(h, "inspection-data-prep")
+
+    check = next(
+        request for request in h.guardrail_requests
+        if request.url.path.endswith("tool-calls:check")
+    )
+    envelope = json.loads(check.content)
+    assert envelope["tool"] == "extract_geo_references"
+    assert envelope["target"] == "fieldloop"
+    assert envelope["actionType"] == "internal_record" and envelope["actionLevel"] == "l0"
+    assert envelope["simulationRunId"] == RUN_ID
+    assert check.headers[TOKEN_HEADER] == USER_TOKEN
+    scan_request = next(
+        request for request in h.guardrail_requests
+        if request.url.path.endswith("content:scan")
+    )
+    assert scan_request.headers[TOKEN_HEADER] == USER_TOKEN
+    assert scan_request.headers["x-fieldloop-classification"] == "INTERNAL"
+    assert scan_request.headers["idempotency-key"].startswith("geo-scan:")
+
+    source_request = next(
+        request for request in h.platform_requests if request.url.path.endswith("/geo-source")
+    )
+    save_request = next(
+        request for request in h.platform_requests if request.url.path.endswith("/geo-references")
+    )
+    assert source_request.method == "GET" and source_request.url.path.endswith("/geo-source")
+    assert source_request.headers[TOKEN_HEADER] == USER_TOKEN
+    assert "authorization" not in source_request.headers
+    assert save_request.method == "POST" and save_request.url.path.endswith("/geo-references")
+    assert save_request.headers[TOKEN_HEADER] == USER_TOKEN
+    assert len(save_request.headers["idempotency-key"]) >= 16
+    saved = json.loads(save_request.content)
+    assert saved["references"][0]["placeName"] == "Ban Klang"
+
+    completion_request = next(
+        request for request in h.guardrail_requests
+        if request.url.path.endswith("chat/completions")
+    )
+    completion = json.loads(completion_request.content)
+    assert completion["aiSystem"] == "demo-uc-1"
+    assert completion["response_format"]["type"] == "json_schema"
+    assert completion_request.headers[TOKEN_HEADER] == USER_TOKEN
+    assert completion_request.headers["x-fieldloop-classification"] == "INTERNAL"
+    assert h.request_order.index("guardrail/guardrail/v1/tool-calls:check") < h.request_order.index(
+        "platform/api/internal/assistant/documents/" + document_id + "/geo-source"
+    )
+    assert [event.name for event in events].count("guardrail.decision") == 1
+
+
+def test_simulated_geo_extraction_is_blocked_without_an_active_run() -> None:
+    h = Harness(
+        [
+            call("extract_geo_references", document_id="11111111-2222-4333-8444-555555555555"),
+            answer(),
+        ],
+        platform={"/api/v1/simulation/runs/current": {"id": None}},
+        simulated=True,
+    )
+
+    events = run(h, "inspection-data-prep")
+
+    assert h.platform_requests and all(
+        not request.url.path.endswith("/geo-source")
+        and not request.url.path.endswith("/geo-references")
+        for request in h.platform_requests
+    )
+    assert not any(
+        request.url.path.endswith("tool-calls:check") for request in h.guardrail_requests
+    )
+    assert any(
+        event.name == "guardrail.decision"
+        and event.data.get("reason") == "simulation_run_unavailable"
+        for event in events
+    )
+
+
+def test_geo_extraction_never_fetches_or_saves_when_guardrail_blocks_tool_call() -> None:
+    h = Harness(
+        [
+            call("extract_geo_references", document_id="11111111-2222-4333-8444-555555555555"),
+            answer(),
+        ],
+        guardrail=lambda _: {"decision": "block", "reason": "tool_not_registered"},
+    )
+
+    run(h, "inspection-data-prep")
+
+    assert h.platform_requests == []
+    assert not any(request.url.path.endswith("content:scan") for request in h.guardrail_requests)
+
+
+def test_geo_extraction_withholds_document_from_model_when_content_scan_fails() -> None:
+    h = Harness([
+        call("extract_geo_references", document_id="11111111-2222-4333-8444-555555555555"),
+        answer(),
+    ])
+    h.scan = lambda _: 503
+
+    run(h, "inspection-data-prep")
+
+    assert len(h.platform_requests) == 1
+    assert h.platform_requests[0].url.path.endswith("/geo-source")
+    assert not any(
+        request.url.path.endswith("chat/completions") for request in h.guardrail_requests
+    )
+    assert not any(request.url.path.endswith("/geo-references") for request in h.platform_requests)
+
+
 def test_user_token_never_enters_session_state_or_the_trace() -> None:
     h = Harness([call("get_barriers", bowtie_id=BOWTIE), answer()],
                 platform={rf"/api/v1/bowties/{BOWTIE}": CANVAS})
@@ -394,3 +511,55 @@ def test_repeated_identical_drafts_in_a_turn_are_stored_once() -> None:
     second = asyncio.run(create("management_summary", "text", ["EV-1"]))
     assert first == second and len(ctx.drafts.created) == 1  # type: ignore[union-attr]
     assert isinstance(ctx.drafts, Drafts)
+
+
+class _CpKnowledge:
+    async def search(self, query, folders, bbox):  # type: ignore[no-untyped-def]
+        return [{"content": "SYNTHETIC CP survey guidance; verify the approved interval.",
+                 "citation": {"document_id": "DOC-SYNTHETIC-CP-01",
+                              "title": "Synthetic CP Survey Guidance",
+                              "revision": "R2", "page": 4, "clause": "5.1"}}]
+
+
+def test_cp_survey_answer_preserves_retrieved_revision_through_the_real_runtime() -> None:
+    h = Harness([
+        call("transfer_to_agent", agent_name="code_standard"),
+        call("search_knowledge", query="CP survey interval"),
+        answer(answer="Verify the approved CP survey interval.", citations=["DOC-SYNTHETIC-CP-01"],
+               known=["Current synthetic guidance exists"], unknown=["Approved interval"],
+               assumptions=["DL-01 scope"], confidence_reason="One current synthetic reference"),
+    ], knowledge=_CpKnowledge(), simulated=True)
+    result = run(h, message="What CP survey interval applies to DL-01?")
+    last = final(result)
+    assert last.name == "answer.final"
+    assert last.data["citations"] == ["DOC-SYNTHETIC-CP-01"]
+    assert last.data["retrieved_citations"][0]["revision"] == "R2"
+    assert last.data["retrieved_citations"][0]["page"] == 4
+    assert last.data["known"] and last.data["unknown"] and last.data["assumptions"]
+    assert last.data["confidence_reason"]
+    assert any(e.data.get("phase") == "handoff" for e in result)
+    assert any(r.url.path.endswith("content:scan") for r in h.guardrail_requests)
+    for request in h.llm.requests:
+        instructions = str(request.config.system_instruction)  # type: ignore[union-attr]
+        assert "not verified against source text" in instructions
+        assert "never quote source text" in instructions
+
+
+def test_model_failure_keeps_steps_and_returns_a_safe_inline_error_event() -> None:
+    def broken_model(request):  # type: ignore[no-untyped-def]
+        raise RuntimeError("private Vertex failure details")
+
+    h = Harness([broken_model])
+    events = run(h)
+    assert events[0].name == "agent.step"
+    assert final(events).name == "answer.error"
+    assert "private Vertex" not in json.dumps([e.data for e in events])
+
+
+def test_wall_clock_limit_returns_incomplete(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    from fieldloop_assistant.limits import TurnBudget
+
+    monkeypatch.setattr(TurnBudget, "check_time", lambda self: self._hit("wall_clock"))
+    h = Harness([answer()])
+    last = final(run(h))
+    assert last.name == "answer.incomplete" and last.data["incomplete"] == "wall_clock"

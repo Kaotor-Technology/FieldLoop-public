@@ -124,6 +124,9 @@ export class PostgresWorkerStore implements WorkerStore {
   async ingest(signal: Signal): Promise<void> {
     if (signal.orgId !== this.orgId) throw new WorkerError("Unexpected Organisation", 403);
     await this.db.transaction().execute(async (trx) => {
+      // Bind every derived write to the validated Signal's run for this transaction only.
+      // The database run fence remains authoritative for organisation and active state.
+      await sql`SELECT set_config('app.simulation_run_id', ${signal.simulationRunId ?? ""}, true)`.execute(trx);
       await sql`SELECT pg_advisory_xact_lock(hashtextextended(${JSON.stringify([this.orgId, signal.id.toLowerCase()])}, 0))`.execute(trx);
       const previous = (await sql<{ same: boolean }>`SELECT content = ${JSON.stringify(signal)}::jsonb AS same
         FROM app.signal_receipt WHERE org_id = ${this.orgId} AND id = ${signal.id}::uuid`.execute(trx)).rows[0];

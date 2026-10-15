@@ -10,7 +10,8 @@ const targets: Readonly<Record<ActionType, readonly ActionTarget[]>> = {
   emergency_communication: ["stakeholders"], external_submission: ["regulator", "external-party"],
 };
 const reads = new Set(["search_knowledge", "get_document", "get_asset", "get_barriers", "get_bowtie_risk",
-  "get_action_requests", "get_stakeholders", "spatial_query", "get_scenario_state", "extract_geo_references"]);
+  "get_action_requests", "get_stakeholders", "spatial_query", "get_scenario_state"]);
+const draftTools = new Set(["create_draft", "extract_geo_references"]);
 export const levelRank = (level: ActionLevel): number => ["l0", "l1", "l2"].indexOf(level);
 export function targetMatches(type: ActionType, target: ActionTarget): boolean { return targets[type].includes(target); }
 export function effectiveCeiling(type: ActionType, lowered?: ActionLevel): ActionLevel {
@@ -34,12 +35,12 @@ export function evaluateToolCall(input: ToolCallCheck, registered: ToolRegistrat
       : { decision: "block", reason: "read_target_or_action_mismatch" };
   }
   // Never infer execution capability from a caller's tool name, URL or claimed action type.
-  if (input.tool !== "create_action_request" && input.tool !== "create_draft") {
+  if (input.tool !== "create_action_request" && !draftTools.has(input.tool)) {
     return { decision: "block", reason: "tool_has_no_safe_implementation" };
   }
   const { actionType, actionLevel, target } = input;
   if (!actionType || !actionLevel || !targetMatches(actionType, target)
-    || (input.tool === "create_draft" && actionType !== "internal_record")) {
+    || (draftTools.has(input.tool) && (actionType !== "internal_record" || actionLevel !== "l0"))) {
     return { decision: "block", reason: "action_target_mismatch" };
   }
   const ceiling = effectiveCeiling(actionType, lowered);

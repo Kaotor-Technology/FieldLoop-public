@@ -1,4 +1,5 @@
 import asyncio
+import json
 from typing import Any
 
 import pytest
@@ -35,6 +36,49 @@ class Drafts:
         return "draft-1"
 
 
+class GeoPlatform:
+    def __init__(self, source: dict[str, Any]) -> None:
+        self.source = source
+        self.reads: list[tuple[str, str]] = []
+        self.created: list[dict[str, Any]] = []
+
+    async def get_geo_source(self, document_id: str, internal_user_token: str) -> dict[str, Any]:
+        self.reads.append((document_id, internal_user_token))
+        return self.source
+
+    async def create_geo_reference_drafts(
+        self,
+        document_id: str,
+        internal_user_token: str,
+        idempotency_key: str,
+        references: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        self.created.append({
+            "document_id": document_id,
+            "internal_user_token": internal_user_token,
+            "idempotency_key": idempotency_key,
+            "references": references,
+        })
+        return {"references": references, "replayed": False}
+
+
+class GeoGuardrail:
+    def __init__(self, content: str) -> None:
+        self.content = content
+        self.scanned: list[dict[str, Any]] = []
+        self.scan_keys: list[str] = []
+        self.completions: list[dict[str, Any]] = []
+
+    async def scan_geo_content(self, **kwargs: Any) -> dict[str, Any]:
+        self.scanned.append(kwargs)
+        self.scan_keys.append(kwargs["idempotency_key"])
+        return {"decision": "allow", "content": kwargs["content"], "classification": "INTERNAL"}
+
+    async def structured_chat_completion(self, **kwargs: Any) -> dict[str, Any]:
+        self.completions.append(kwargs)
+        return {"choices": [{"message": {"content": self.content}}]}
+
+
 def context(**override: Any) -> ToolContext:
     base: dict[str, Any] = dict(
         session_id="s1", agent_id="regulatory", user_sub="user-1", user_token="tok",
@@ -53,6 +97,49 @@ def tool(ctx: ToolContext, name: str, allowed: tuple[str, ...] | None = None):
 def test_only_allowed_tools_are_built() -> None:
     names = [f.__name__ for f in build_tools(context(), ("get_barriers", "spatial_query"))]
     assert names == ["get_barriers"]  # spatial_query is in the vocabulary but not implemented
+
+
+def test_geo_extraction_builds_only_when_allowed_and_returns_confirmation_drafts() -> None:
+    document_id = "11111111-2222-4333-8444-555555555555"
+    source_text = "Latitude 13.75, Longitude 100.5 at Ban Klang"
+    candidate = {
+        "latitude": 13.75,
+        "longitude": 100.5,
+        "chainageFrom": None,
+        "chainageTo": None,
+        "assetCode": None,
+        "placeName": "Ban Klang",
+        "sourceSnippet": source_text,
+        "confidence": 0.91,
+    }
+    geo_platform = GeoPlatform({
+        "id": document_id, "folder": "Regulatory", "text": source_text,
+        "classification": "INTERNAL",
+    })
+    geo_guardrail = GeoGuardrail(json.dumps({"references": [candidate]}))
+    ctx = context(geo_platform=geo_platform, geo_guardrail=geo_guardrail, turn_id="turn-1")
+
+    assert [fn.__name__ for fn in build_tools(ctx, ("spatial_query",))] == []
+    extract = tool(ctx, "extract_geo_references")
+    result = asyncio.run(extract(document_id))
+
+    assert result == {
+        "status": "needs_human_confirmation", "references": [candidate], "replayed": False,
+    }
+    assert geo_platform.reads == [(document_id, "tok")]
+    assert geo_platform.created[0]["internal_user_token"] == "tok"
+    assert len(geo_platform.created[0]["idempotency_key"]) >= 16
+    assert geo_platform.created[0]["references"] == [candidate]
+    assert geo_guardrail.scanned[0]["content"] == source_text
+    assert geo_guardrail.scanned[0]["classification"] == "INTERNAL"
+    assert geo_guardrail.completions[0]["response_format"]["type"] == "json_schema"
+
+    asyncio.run(extract(document_id))
+    assert geo_platform.created[1]["idempotency_key"] == geo_platform.created[0]["idempotency_key"]
+    assert geo_guardrail.scan_keys[1] == geo_guardrail.scan_keys[0]
+
+    with pytest.raises(ValueError, match="UUID"):
+        asyncio.run(extract("not-a-document-id"))
 
 
 def test_knowledge_search_is_limited_to_the_agents_folders_and_collects_citations() -> None:
