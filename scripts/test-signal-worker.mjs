@@ -145,7 +145,23 @@ try {
 
   // Independent source fields from PR #47's Observation + SimulatedSignalEmitter, not signal-cases.json.
   // The rate does not imply a 24-hour total; the source separately publishes that aggregate.
+  // These are explicit database fixtures for stream isolation, not authored Scenario delivery.
+  const fixtureScenario = randomUUID();
+  await sql`INSERT INTO app.scenario(id,org_id,file,simulated,classification,created_by)
+    VALUES(${fixtureScenario}::uuid,${orgId},'worker-stream-fixture',true,'CONFIDENTIAL','worker-fixture')`.execute(database);
+  const activateRun = async (id) => {
+    await sql`INSERT INTO app.simulation_run(id,org_id,scenario_id,seed,speed,state,simulated,classification,created_by)
+      VALUES(${id}::uuid,${orgId},${fixtureScenario}::uuid,75,60,'running',true,'CONFIDENTIAL','worker-fixture')`.execute(database);
+    await sql`INSERT INTO app.simulation_workspace(org_id,active_run_id,baseline,simulated,classification,created_by)
+      VALUES(${orgId},${id}::uuid,'{}'::jsonb,true,'CONFIDENTIAL','worker-fixture')
+      ON CONFLICT(org_id) DO UPDATE SET active_run_id=excluded.active_run_id`.execute(database);
+  };
+  const finishRun = async (id) => {
+    await sql`UPDATE app.simulation_run SET state='retired' WHERE id=${id}::uuid`.execute(database);
+    await sql`UPDATE app.simulation_workspace SET active_run_id=NULL WHERE org_id=${orgId}`.execute(database);
+  };
   const sourceRun = randomUUID();
+  await activateRun(sourceRun);
   const sourceReading = (sample, observedAt) => reading({ ...sample, id: randomUUID(), orgId,
     simulationRunId: sourceRun, observedAt });
   const rainRateSourceSample = sourceReading(pr47Signals.rainRate, "2026-10-13T00:02:00Z");
@@ -156,6 +172,7 @@ try {
   await store.ingest(rainRateSourceSample);
   await store.ingest(rainAccumulationSourceSample);
   await store.ingest(pumpSourceSample);
+  await finishRun(sourceRun);
   const sourceSignalIds = [rainRateSourceSample.id, rainAccumulationSourceSample.id, pumpSourceSample.id];
   const sourceSignalIdList = sql.join(sourceSignalIds.map((id) => sql`${id}::uuid`));
   assert.equal(await count("signal_receipt", sql`AND id IN (${sourceSignalIdList})`), 3);
@@ -179,13 +196,18 @@ try {
 
   // Strict duration runs on a separately configured continuous source; sparse samples fail.
   const run = randomUUID();
+  await activateRun(run);
   const continuousReading = (simulationRunId, seconds) => reading({ source: "mock-continuous", tag: "DL-01.rectifier.output.continuous",
     simulationRunId, observedAt: new Date(Date.parse(base.observedAt) + (600 + seconds) * 1000).toISOString() });
   for (const seconds of [0, 60, 120, 121]) await store.ingest(continuousReading(run, seconds));
   assert.equal(await count("health_proposal"), proposalsAfterSourceSamples + 1);
+  await finishRun(run);
   const sparseRun = randomUUID();
+  await activateRun(sparseRun);
   for (const seconds of [0, 180]) await store.ingest(continuousReading(sparseRun, 1000 + seconds));
   assert.equal(await count("health_proposal"), proposalsAfterSourceSamples + 1);
+
+  await finishRun(sparseRun);
 
   // Spatial rule: boundary covered, outside/missing/invalid location do not match.
   await sql`UPDATE app.signal_rule SET spatial_geom = ST_MakeEnvelope(100, 13, 101, 14, 4326) WHERE id = ${cpRule.id}::uuid`.execute(database);
@@ -197,7 +219,10 @@ try {
   assert.equal(await count("health_proposal"), proposalsAfterSourceSamples + 2);
   await sql`UPDATE app.signal_rule SET spatial_geom = NULL WHERE id = ${cpRule.id}::uuid`.execute(database);
 
-  await store.ingest(reading({ simulationRunId: randomUUID(), observedAt: base.observedAt }));
+  const watermarkRun = randomUUID();
+  await activateRun(watermarkRun);
+  await store.ingest(reading({ simulationRunId: watermarkRun, observedAt: base.observedAt }));
+  await finishRun(watermarkRun);
   assert.equal(await count("health_proposal"), proposalsAfterSourceSamples + 3, "a new Scenario run must not inherit the previous run's observation watermark");
 
   // Transaction rollback after a later failure must remove receipt, Signal and Evidence as well.
