@@ -13,9 +13,12 @@ export type ActionDecision = "approved" | "rejected";
 // Realm example-realm has no step-up, so a decision needs a login at most this old (architecture §4.3).
 export const APPROVAL_MAX_AUTH_AGE_MS = 5 * 60 * 1000;
 export const APPROVAL_AUTH_CLOCK_SKEW_MS = 30 * 1000;
+/** Approver decisions are a separate port, so the Guardrail's `ActionServicePort` has no way to approve (PRD AX-9). */
+export interface ActionDecisionPort {
+  decide(user: ApproverIdentity, id: string, decision: ActionDecision, body: ActionDecisionCreate, key: string): Promise<ActionDecisionResult>;
+}
 export interface ActionServicePort {
   create(user: ActionIdentity, body: ActionRequestCreate, key: string): Promise<ActionRequest>;
-  decide(user: ApproverIdentity, id: string, decision: ActionDecision, body: ActionDecisionCreate, key: string): Promise<ActionDecisionResult>;
   check(user: ActionIdentity, body: ToolCallCheck, key: string): Promise<ToolCallDecision>;
   get(user: ActionIdentity, id: string): Promise<ActionRequest>;
   expire(orgId: string, simulatedOnly?: boolean): Promise<number>;
@@ -39,7 +42,7 @@ export function canonicalActionJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalActionJson).join(",")}]`;
   return `{${Object.keys(value).sort().map(key => `${JSON.stringify(key)}:${canonicalActionJson(Reflect.get(value, key))}`).join(",")}}`;
 }
-export class PostgresActionStore implements ActionServicePort {
+export class PostgresActionStore implements ActionServicePort, ActionDecisionPort {
   constructor(private readonly db: Kysely<Database>, private readonly simulatedOnly = true) {}
 
   async create(user: ActionIdentity, body: ActionRequestCreate, key: string): Promise<ActionRequest> {

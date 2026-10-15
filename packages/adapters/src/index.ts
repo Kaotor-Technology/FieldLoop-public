@@ -27,4 +27,4 @@ export {
 } from "./google-vertex-chat-completions.js";
 export { ACTION_CEILINGS, ActionError, effectiveCeiling, evaluateToolCall, targetMatches, levelRank } from "./action-policy.js";
 export type { ToolRegistration } from "./action-policy.js";
-export { APPROVAL_AUTH_CLOCK_SKEW_MS, APPROVAL_MAX_AUTH_AGE_MS, PostgresActionStore, type ActionDecision, type ActionServicePort, type ActionIdentity, type ApproverIdentity } from "./postgres-actions.js";
+export { APPROVAL_AUTH_CLOCK_SKEW_MS, APPROVAL_MAX_AUTH_AGE_MS, PostgresActionStore, type ActionDecision, type ActionDecisionPort, type ActionServicePort, type ActionIdentity, type ApproverIdentity } from "./postgres-actions.js";
