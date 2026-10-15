@@ -7,7 +7,9 @@ export type ActionType = ActionRequest["actionType"];
 export type ActionDecision = "approve" | "reject";
 export type DecisionBlock = "role" | "four_eyes" | "closed" | "expired" | null;
 
-export const actionRequestQueryKey = (id: string) => ["action-request", id] as const;
+export const actionRequestQueryKey = (id?: string) => id
+  ? ["action-request", id] as const
+  : ["action-request"] as const;
 
 // The server accepts a decision only within 5 minutes of the login (architecture §4.3) and stays authoritative.
 // The dialog asks for a new login a little earlier so a slow reader is not refused on the final click.

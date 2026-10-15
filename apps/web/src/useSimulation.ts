@@ -4,6 +4,7 @@ import { api, SessionError } from "./api-client";
 import { applySimulationEvent, simulationKey, type SimulationRun } from "./simulation-events";
 import { applyRiskRecalculatedEvent } from "./risk-events";
 import { invalidateHealthProposalQueries } from "./health-proposals";
+import { invalidateActionRequestQueries } from "./action-request-events";
 
 export function useSimulation(): UseQueryResult<SimulationRun | null, SessionError> {
   return useQuery({ queryKey: simulationKey, queryFn: async ({ signal }) => {
@@ -52,6 +53,14 @@ export function useSimulationEvents() {
     });
     stream.addEventListener("health_proposal.created", refreshHealthProposals);
     stream.addEventListener("barrier.health_changed", refreshHealthProposals);
+    const refreshActionRequests: EventListener = (event) => {
+      let payload: unknown;
+      if ("data" in event && typeof event.data === "string") {
+        try { payload = JSON.parse(event.data); } catch { payload = undefined; }
+      }
+      void invalidateActionRequestQueries(client, payload);
+    };
+    stream.addEventListener("action_request.updated", refreshActionRequests);
     return () => { stream.close(); };
   }, [client]);
   return connected;

@@ -1,7 +1,13 @@
 import asyncio
 import json
 
+import httpx
+import litellm
+import openai
+import pytest
 from fieldloop_assistant.guardrail_client import TOKEN_HEADER
+from fieldloop_assistant.guardrail_model import GuardrailLiteLlm, GuardrailResponseClient
+from google.adk.models.lite_llm import LiteLLMClient
 
 from .harness import Harness, answer, call, say
 from .support import BOWTIE, RUN_ID, USER_TOKEN
@@ -185,7 +191,8 @@ def test_convert_decision_skips_the_tool_and_reports_the_action_request() -> Non
               target="cmms", payload={"order": "inspect"}, rationale="Coating degraded",
               citations=["EV-1"]), answer()],
         guardrail=lambda body: {"decision": "convert_l1", "reason": "human_action_required",
-                                "ceiling": "l1", "actionRequest": {"id": request_id}},
+                                "ceiling": "l1", "policyId": "22222222-2222-4333-8444-555555555555",
+                                "actionRequest": {"id": request_id}},
         platform={"/api/v1/simulation/runs/current": {"id": RUN_ID}},
         simulated=True,
     )
@@ -195,6 +202,7 @@ def test_convert_decision_skips_the_tool_and_reports_the_action_request() -> Non
     assert envelope["simulationRunId"] == RUN_ID
     decision = next(e for e in events if e.name == "guardrail.decision")
     assert decision.data["decision"] == "convert_l1"
+    assert decision.data["policy_id"] == "22222222-2222-4333-8444-555555555555"
     assert decision.data["action_request_id"] == request_id
     assert final(events).data["action_request_ids"] == [request_id]
 
@@ -350,6 +358,123 @@ def test_scan_gates_search_results_for_an_agent_that_lists_the_tool() -> None:
     withheld = asyncio.run(go(refused))["results"][0]
     assert withheld["content"] is None and withheld["withheld"] == "content_scan_not_allowed"
     assert asyncio.run(go(None))["results"][0]["content"] is None  # no scanner: fail closed
+
+
+def test_rerouted_content_scan_is_reported_and_returned_for_the_guardrail_routed_model() -> None:
+    policy_id = "22222222-2222-4333-8444-555555555555"
+    h = Harness(
+        [call("search_knowledge", query="synthetic clause"), answer()],
+        knowledge=_Knowledge(),
+    )
+    h.scan = lambda body: {
+        "decision": "reroute", "content": "SYNTHETIC restricted passage",
+        "classification": "CONFIDENTIAL", "policyId": policy_id,
+        "reason": "Sensitive data requires the configured private model tier",
+    }
+
+    events = run(h, "regulatory")
+
+    decision = next(
+        event for event in events
+        if event.name == "guardrail.decision" and event.data.get("source") == "content_scan"
+    )
+    assert decision.data == {
+        "agent": "regulatory", "tool": "content:scan", "decision": "reroute",
+        "reason": "Sensitive data requires the configured private model tier",
+        "policy_id": policy_id, "source": "content_scan",
+    }
+    tool_responses = [
+        part.function_response.response
+        for item in h.llm.requests[-1].contents or []
+        for part in item.parts or []
+        if part.function_response is not None
+    ]
+    assert "SYNTHETIC restricted passage" in json.dumps(tool_responses, default=str)
+
+
+def test_guardrail_model_redaction_and_route_outcomes_are_emitted_in_agent_stream() -> None:
+    response = answer()
+    response.custom_metadata = {
+        "fieldloop_guardrail_decisions": [
+            {
+                "decision": "redact", "policy_id": "injection-policy",
+                "reason": "Input was redacted.",
+            },
+            {
+                "decision": "reroute", "policy_id": "routing-policy",
+                "reason": "Private tier required.",
+            },
+        ],
+    }
+    events = run(Harness([response]))
+
+    decisions = [event.data for event in events if event.name == "guardrail.decision"]
+    assert decisions == [
+        {
+            "agent": "integrity-orchestrator", "decision": "redact",
+            "reason": "Input was redacted.", "policy_id": "injection-policy",
+            "source": "model",
+        },
+        {
+            "agent": "integrity-orchestrator", "decision": "reroute",
+            "reason": "Private tier required.", "policy_id": "routing-policy",
+            "source": "model",
+        },
+    ]
+
+
+def test_litellm_mapped_guardrail_block_emits_policy_notice_before_answer_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reason = "SYNTHETIC completion blocked by policy."
+    policy_id = "synthetic-completion-policy"
+    problem = {
+        "code": "guardrail_blocked", "status": 403, "detail": reason,
+        "policyId": policy_id,
+        "error": {"code": "guardrail_blocked", "policy_id": policy_id, "message": reason},
+    }
+    headers = {
+        "x-fieldloop-guardrail-decisions": (
+            '[{"decision":"block","policyId":"synthetic-completion-policy",'
+            '"reason":"SYNTHETIC completion blocked by policy."}]'
+        ),
+    }
+    request = httpx.Request("POST", "https://guardrail.invalid/guardrail/v1/chat/completions")
+    response = httpx.Response(403, headers=headers, json=problem, request=request)
+
+    async def mapped_block(*args, **kwargs):  # type: ignore[no-untyped-def]
+        try:
+            raise openai.PermissionDeniedError(
+                "403 Guardrail blocked request", response=response, body=problem
+            )
+        except openai.PermissionDeniedError as original:
+            mapped = litellm.exceptions.APIError(
+                status_code=403, message=str(original), llm_provider="openai",
+                model="synthetic-model",
+            )
+            mapped.__context__ = original
+        raise mapped
+
+    monkeypatch.setattr(LiteLLMClient, "acompletion", mapped_block)
+    model = GuardrailLiteLlm(
+        model="openai/synthetic-model", api_base="https://guardrail.invalid/guardrail/v1",
+        api_key="synthetic-key", extra_body={"aiSystem": "synthetic-system"},
+        llm_client=GuardrailResponseClient(),
+    )
+    h = Harness([])
+    h.runtime._deps.model_factory = lambda _: model
+
+    events = run(h)
+
+    decision = next(event for event in events if event.name == "guardrail.decision")
+    error = next(event for event in events if event.name == "answer.error")
+    assert decision.data == {
+        "agent": "integrity-orchestrator", "decision": "block", "reason": reason,
+        "policy_id": policy_id, "source": "model",
+    }
+    assert decision.seq < error.seq
+    assert error.data["type"] == "APIError"
+    assert not any(event.name == "answer.final" for event in events)
 
 
 def test_idempotency_key_is_stable_within_a_turn_and_new_per_turn() -> None:

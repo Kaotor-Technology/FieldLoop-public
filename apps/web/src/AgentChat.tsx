@@ -7,6 +7,8 @@ import { cancelAgentTurn, createAgentSession, streamAgentMessage } from "./agent
 import type { AgentStreamEvent } from "./agent-chat-client";
 import { contextualizeAgentMessage } from "./agent-chat-context";
 import type { AgentContextChip } from "./agent-chat-context";
+import { actionRequestIdsForTurn, guardrailNoticeDetails, normalizeActionRequestIds } from "./agent-chat-artifacts";
+import { AgentArtifactCard } from "./AgentArtifactCard";
 import { useAgentChatStore } from "./agent-chat-store";
 import type { AgentAnswer, AgentTurn } from "./agent-chat-store";
 import { useCurrentSession } from "./SessionGate";
@@ -161,6 +163,7 @@ export function AgentChat({
         </div> : null}
         {turns.map((turn) => {
           const citations = turn.answer ? normalizeCitations(turn.answer, turn.id) : [];
+          const actionRequestIds = actionRequestIdsForTurn(turn);
           const isActive = isRunning && activeTurnId === turn.id;
           const turnAgentName = turn.agentId === "flood-situation" ? t("agentNameFlood") : t("agentNameIntegrity");
           return <article className="agent-chat-turn" key={turn.id}>
@@ -177,7 +180,7 @@ export function AgentChat({
                 {isActive ? <span>{t("agentWorkInProgress")}</span> : <span><span className="mono">{turn.steps.length}</span> {t("agentSteps")} · <span className="mono">{citations.length}</span> {t("agentSources")}</span>}
               </summary>
               <ol>{turn.steps.map((step) => <li key={step.stepId} className="agent-chat-step">
-                <div className="agent-chat-step-copy">{renderStep(step, t)}</div>
+                <div className="agent-chat-step-copy">{renderGuardrailNotice(step, t) ?? renderStep(step, t)}</div>
                 <span className={"agent-chat-step-status agent-chat-step-status-" + step.status}>{t("agentStepStatus." + step.status)}</span>
               </li>)}</ol>
             </details> : null}
@@ -207,6 +210,9 @@ export function AgentChat({
               </div> : null}
               {isActive && !turn.answer && !turn.partialAnswer ? <p className="agent-chat-streaming">{t("agentWaitingForAnswer")}</p> : null}
             </div>
+            {actionRequestIds.length > 0 ? <div className="agent-chat-artifacts" aria-label={t("agentArtifacts")}>
+              {actionRequestIds.map((actionRequestId) => <AgentArtifactCard key={actionRequestId} actionRequestId={actionRequestId} />)}
+            </div> : null}
           </article>;
         })}
       </div>
@@ -313,6 +319,16 @@ function renderStep(step: AgentTurn["steps"][number], translate: (key: string) =
   return <><strong>{step.name}</strong>{detail ? <span> · {renderMonoInline(detail)}</span> : null}</>;
 }
 
+function renderGuardrailNotice(step: AgentTurn["steps"][number], translate: (key: string) => string): ReactNode | undefined {
+  const notice = guardrailNoticeDetails(step);
+  if (!notice) return undefined;
+  return <div className={`agent-chat-guardrail-notice agent-chat-guardrail-${notice.kind}`} role="status">
+    <strong>{translate(`agentGuardrail.${notice.kind}`)}</strong>
+    <p>{notice.reason ? renderMonoInline(notice.reason) : translate("agentGuardrailReasonMissing")}</p>
+    <p><span>{translate("agentGuardrailPolicy")}</span> <span className="mono">{notice.policyId ?? translate("agentGuardrailPolicyMissing")}</span></p>
+  </div>;
+}
+
 function normalizeAnswer(data: Record<string, unknown>): AgentAnswer {
   const incomplete = readString(data["incomplete"]);
   return {
@@ -325,6 +341,7 @@ function normalizeAnswer(data: Record<string, unknown>): AgentAnswer {
     draftIds: readArray(data["draft_ids"]).filter((value): value is string => typeof value === "string"),
     confidence: readString(data["confidence"]) ?? "low",
     confidenceReason: readString(data["confidence_reason"]) ?? "",
+    actionRequestIds: normalizeActionRequestIds(data["action_request_ids"]),
     ...(incomplete ? { incomplete } : {}),
   };
 }

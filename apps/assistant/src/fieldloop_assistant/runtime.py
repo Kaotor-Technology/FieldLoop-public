@@ -34,6 +34,11 @@ from .catalog import AgentCatalog, AgentDefinition
 from .events import StreamEvent
 from .geo_extraction import GeoExtractionPlatform
 from .guardrail_client import GuardrailClient, blocked, idempotency_key
+from .guardrail_model import (
+    DECISIONS_METADATA_KEY,
+    GUARDRAIL_DECISIONS,
+    guardrail_error_decisions,
+)
 from .identity import AI_SYSTEM_HEADER, TOKEN_HEADER
 from .limits import TurnBudget
 from .tools import (
@@ -374,8 +379,9 @@ class AgentRuntime:
             definition.role_prompt, "Reasoning steps: " + "; ".join(definition.reasoning_template),
             "Refusal rules:", *[f"- {rule}" for rule in definition.refusal_rules], ANSWER_CONTRACT,
         ])
+        model = self._deps.model_factory(definition)
         return LlmAgent(
-            name=to_adk_name(definition.id), model=self._deps.model_factory(definition),
+            name=to_adk_name(definition.id), model=model,
             instruction=instruction, tools=tools,  # type: ignore[arg-type]
             sub_agents=[
                 self._build_agent(turn, self._deps.catalog.get(d), definition.id)
@@ -383,6 +389,7 @@ class AgentRuntime:
             ],
             before_model_callback=self._before_model(turn, definition),
             after_model_callback=self._after_model(turn),
+            on_model_error_callback=self._on_model_error(turn),
             before_tool_callback=self._before_tool(turn, definition, parent_id),
             after_tool_callback=self._after_tool(turn),
         )
@@ -436,9 +443,55 @@ class AgentRuntime:
                 kind="model", agent_id=from_adk_name(context.agent_name), tokens_in=tokens_in,
                 tokens_out=tokens_out, model=response.model_version,
             ))
+            self._emit_model_guardrail_decisions(
+                turn, context.agent_name,
+                (response.custom_metadata or {}).get(DECISIONS_METADATA_KEY),
+            )
             return None
 
         return callback
+
+    def _on_model_error(
+        self, turn: _Turn
+    ) -> Callable[[CallbackContext, LlmRequest, Exception], LlmResponse | None]:
+        def callback(
+            context: CallbackContext, request: LlmRequest, error: Exception
+        ) -> LlmResponse | None:
+            self._emit_model_guardrail_decisions(
+                turn, context.agent_name, guardrail_error_decisions(error)
+            )
+            # Preserve ADK's normal model failure behavior after surfacing any
+            # server-authored Guardrail block notice.
+            return None
+
+        return callback
+
+    def _emit_model_guardrail_decisions(
+        self, turn: _Turn, adk_agent_name: str, raw_decisions: object
+    ) -> None:
+        if not isinstance(raw_decisions, list):
+            return
+        agent = from_adk_name(adk_agent_name)
+        for item in raw_decisions:
+            if not isinstance(item, dict):
+                continue
+            decision = item.get("decision")
+            policy_id = item.get("policy_id")
+            reason = item.get("reason")
+            if (
+                not isinstance(decision, str) or decision not in GUARDRAIL_DECISIONS
+                or not isinstance(policy_id, str) or not policy_id
+                or not isinstance(reason, str) or not reason
+            ):
+                continue
+            turn.emit("guardrail.decision", {
+                "agent": agent, "decision": decision, "reason": reason,
+                "policy_id": policy_id, "source": "model",
+            })
+            self._record(turn, StepRecord(
+                kind="guardrail", agent_id=agent, tool_name="model",
+                guardrail_decision=decision, result_summary=reason[:200],
+            ))
 
     def _before_tool(
         self, turn: _Turn, definition: AgentDefinition, parent_id: str | None
@@ -482,6 +535,7 @@ class AgentRuntime:
         turn.emit("guardrail.decision", {
             "agent": agent, "tool": tool, "decision": decision["decision"],
             "reason": decision.get("reason"), "ceiling": decision.get("ceiling"),
+            "policy_id": decision.get("policyId"),
             "action_request_id": action_id, "held_request_id": held_id,
             "source": decision.get("source", "guardrail"),
         })
@@ -518,9 +572,22 @@ class AgentRuntime:
 
     async def _scan(self, turn: _Turn, definition: AgentDefinition, content: str) -> str | None:
         key = idempotency_key(f"{turn.session.id}:{turn.turn_id}", "content:scan", {"c": content})
-        return await self._deps.guardrail.scan_content(
+        outcome = await self._deps.guardrail.scan_content(
             turn.user_token, definition.ai_system_id, content, key
         )
+        if outcome.decision != "allow":
+            turn.emit("guardrail.decision", {
+                "agent": definition.id, "tool": "content:scan", "decision": outcome.decision,
+                "reason": outcome.reason, "policy_id": outcome.policy_id,
+                "source": "content_scan",
+            })
+            self._record(turn, StepRecord(
+                kind="guardrail", agent_id=definition.id, tool_name="content:scan",
+                guardrail_decision=outcome.decision, result_summary=outcome.reason[:200],
+            ))
+        # A reroute is safe to continue with because all model calls pass through the Guardrail
+        # gateway, which applies the registered classification route before forwarding.
+        return outcome.content if outcome.decision in {"allow", "reroute"} else None
 
     async def _check(
         self, turn: _Turn, definition: AgentDefinition, tool: str, args: Mapping[str, Any]

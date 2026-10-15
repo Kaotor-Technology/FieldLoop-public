@@ -387,7 +387,7 @@ paths:
               $ref: "#/components/schemas/ActionDecisionCreate"
             examples:
               syntheticApproval:
-                summary: SYNTHETIC approval of an exact payload
+                summary: SYNTHETIC schema illustration; no live approval or measured result.
                 value:
                   payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
                   reason: Reviewed the exact synthetic payload
@@ -401,7 +401,7 @@ paths:
                 $ref: "#/components/schemas/ActionDecisionResult"
               examples:
                 syntheticApproval:
-                  summary: SYNTHETIC approval result; no live action executed
+                  summary: SYNTHETIC approval record; no live action executed.
                   value:
                     actionRequest:
                       id: 00000000-0000-4000-8000-000000000095
@@ -463,7 +463,7 @@ paths:
               $ref: "#/components/schemas/ActionDecisionCreate"
             examples:
               syntheticRejection:
-                summary: SYNTHETIC rejection of an exact payload
+                summary: SYNTHETIC schema illustration; no live rejection or measured result.
                 value:
                   payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
                   reason: Requires additional synthetic source context
@@ -477,7 +477,7 @@ paths:
                 $ref: "#/components/schemas/ActionDecisionResult"
               examples:
                 syntheticRejection:
-                  summary: SYNTHETIC rejection result; no live action executed
+                  summary: SYNTHETIC rejection record; no live action executed.
                   value:
                     actionRequest:
                       id: 00000000-0000-4000-8000-000000000095
@@ -1335,6 +1335,9 @@ paths:
             X-FieldLoop-Policy-Id: { schema: { type: string, format: uuid } }
             X-FieldLoop-Intercept-Id: { schema: { type: string, format: uuid } }
             X-FieldLoop-Classification: { schema: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] } }
+            X-FieldLoop-Guardrail-Decisions:
+              description: JSON array of Guardrail outcomes applied to the request and response, with decision, policyId and reason.
+              schema: { type: string }
           content:
             application/json:
               schema:
@@ -2042,7 +2045,7 @@ paths:
           maxLength: 512
       responses:
         '200':
-          description: Event stream for barrier.health_changed, health_proposal.created, evidence.created, notification.delivered, simulation.state, simulation.reset and risk.recalculated.
+          description: Event stream for barrier.health_changed, health_proposal.created, evidence.created, action_request.updated, notification.delivered, simulation.state, simulation.reset and risk.recalculated.
           content:
             text/event-stream:
               schema:
@@ -3453,6 +3456,10 @@ components:
           type: string
           minLength: 1
           maxLength: 2000
+        policyId:
+          type: string
+          format: uuid
+          description: Guardrail Policy applied to this tool-call decision.
         ceiling:
           $ref: "#/components/schemas/ActionLevel"
         actionRequest:

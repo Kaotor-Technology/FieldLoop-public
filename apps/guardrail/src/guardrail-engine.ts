@@ -23,6 +23,13 @@ export interface GuardrailHttpResult {
   policyId?: string;
   interceptId?: string;
   classification?: GuardrailClassification;
+  decisions?: GuardrailDecisionNotice[];
+}
+
+export interface GuardrailDecisionNotice {
+  decision: "allow" | "redact" | "block" | "reroute";
+  policyId: string;
+  reason: string;
 }
 
 interface ContentScanInput {
@@ -185,6 +192,7 @@ export class GuardrailEngine {
       .flatMap((message) => typeof message.content === "string" && message.content.length > 0
         ? [{ get: () => message.content as string, set: (value: string) => { message.content = value; } }]
         : []);
+    const inputDecisions: GuardrailDecisionNotice[] = [];
     let effectiveClassification = classification;
     if (inputSegments.length > 0) {
       const joined = joinSegments(inputSegments.map((segment) => segment.get()));
@@ -213,6 +221,10 @@ export class GuardrailEngine {
         const replacements = splitSegments(scan.text, joined.separator, inputSegments.length);
         if (!replacements) return await this.failClosed(system, injection, "Safe input classification could not be applied", effectiveClassification, startedAt);
         replacements.forEach((value, index) => inputSegments[index]?.set(value));
+        inputDecisions.push({
+          decision: "redact", policyId: injection.id,
+          reason: "Sensitive values were redacted from the model input",
+        });
       }
     } else {
       const intercept = await this.record(system, injection, "allow", "No untrusted text was present in the request", effectiveClassification, startedAt);
@@ -231,6 +243,10 @@ export class GuardrailEngine {
       : `Request routed to the configured private ${route.modelClass} model`;
     const routeIntercept = await this.record(system, routing, rerouted ? "reroute" : "allow", routeReason, effectiveClassification, startedAt);
     if ("result" in routeIntercept) return routeIntercept.result;
+    const decisions = [
+      ...inputDecisions,
+      { decision: rerouted ? "reroute" as const : "allow" as const, policyId: routing.id, reason: routeReason },
+    ];
 
     let completion: unknown;
     try {
@@ -252,7 +268,11 @@ export class GuardrailEngine {
     if (outputSegments.length === 0) {
       const outputIntercept = await this.record(system, outputDlp, "allow", "Model response contained no scannable text", effectiveClassification, startedAt);
       if ("result" in outputIntercept) return outputIntercept.result;
-      return { statusCode: 200, body: response, policyId: outputDlp.id, interceptId: outputIntercept.id, classification: effectiveClassification };
+      return {
+        statusCode: 200, body: response, policyId: outputDlp.id, interceptId: outputIntercept.id,
+        classification: effectiveClassification,
+        decisions: [...decisions, { decision: "allow", policyId: outputDlp.id, reason: "Model response contained no scannable text" }],
+      };
     }
 
     const prompt = inputSegments.map((segment) => segment.get()).join("\n");
@@ -289,6 +309,10 @@ export class GuardrailEngine {
       policyId: outputDlp.id,
       interceptId: outputIntercept.id,
       classification: outputClassification,
+      decisions: [
+        ...decisions,
+        { decision: outputDecision, policyId: outputDlp.id, reason: outputReason },
+      ],
     };
   }
 
@@ -334,6 +358,7 @@ export class GuardrailEngine {
       policyId: policy.id,
       interceptId: recorded.id,
       classification,
+      decisions: [{ decision: "block", policyId: policy.id, reason }],
     };
   }
 
@@ -458,6 +483,7 @@ function blocked(
     policyId: policy.id,
     interceptId,
     classification,
+    decisions: [{ decision: "block", policyId: policy.id, reason }],
   };
 }
 

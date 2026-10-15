@@ -370,6 +370,12 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 .agent-chat-step-copy p { margin-top: var(--spacing-space-1); color: var(--muted); font-size: var(--type-body-sm-font-size); }
 .agent-chat-step-status { flex: 0 0 auto; color: var(--muted); font-size: var(--type-label-sm-font-size); }
 .agent-chat-step-status-blocked, .agent-chat-step-status-failed { color: var(--color-error); }
+.agent-chat-guardrail-notice { display: grid; gap: var(--spacing-space-1); padding: var(--spacing-space-2) var(--spacing-space-3); border-left: var(--spacing-indicator-width) solid var(--color-info); background: var(--color-info-subtle); }
+.agent-chat-guardrail-notice p { font-size: var(--type-body-sm-font-size); line-height: var(--type-body-sm-line-height); overflow-wrap: anywhere; }
+.agent-chat-guardrail-held, .agent-chat-guardrail-rerouted { border-color: var(--color-warning); background: var(--color-warning-subtle); }
+.agent-chat-guardrail-blocked { border-color: var(--color-error); background: var(--color-error-subtle); }
+.agent-chat-guardrail-converted { border-color: var(--color-success); background: var(--color-success-subtle); }
+.agent-chat-guardrail-notice > p:last-child { display: flex; flex-wrap: wrap; gap: var(--spacing-space-1); color: var(--muted); }
 .agent-chat-answer { display: grid; gap: var(--spacing-space-3); min-width: 0; }
 .agent-chat-answer-copy { color: var(--ink); font-size: var(--type-body-lg-font-size); line-height: var(--type-body-lg-line-height); white-space: pre-wrap; overflow-wrap: anywhere; }
 .agent-chat-citations { display: flex; flex-wrap: wrap; gap: var(--spacing-space-2); }
@@ -384,6 +390,21 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 .agent-chat-incomplete { padding: var(--spacing-space-3); color: var(--color-warning); background: var(--color-warning-subtle); border-radius: var(--rounded-md); }
 .agent-chat-error { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--spacing-space-3); padding: var(--spacing-space-3); color: var(--color-error); background: var(--color-error-subtle); border-radius: var(--rounded-md); }
 .agent-chat-streaming { color: var(--muted); font-size: var(--type-body-sm-font-size); }
+.agent-chat-artifacts { display: grid; gap: var(--spacing-space-3); }
+.agent-chat-artifact-card { display: grid; gap: var(--spacing-space-3); padding: var(--spacing-space-4); background: var(--surface); border: var(--spacing-border-hairline) solid var(--outline); border-left: var(--spacing-indicator-width) solid var(--color-info); border-radius: var(--rounded-md); box-shadow: var(--elevation-level-1); }
+.agent-chat-artifact-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--spacing-space-2); }
+.agent-chat-artifact-status { padding: var(--spacing-space-1) var(--spacing-space-2); color: var(--color-info); background: var(--color-info-subtle); border-radius: var(--rounded-full); font-size: var(--type-label-sm-font-size); }
+.agent-chat-artifact-details { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--spacing-space-2) var(--spacing-space-3); margin: 0; }
+.agent-chat-artifact-details dt { color: var(--muted); }
+.agent-chat-artifact-details dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.agent-chat-artifact-details dd.mono { font-size: var(--type-mono-sm-font-size); }
+.agent-chat-action-level { display: inline-flex; padding: var(--spacing-space-1) var(--spacing-space-2); color: var(--color-info); background: var(--color-info-subtle); border-radius: var(--rounded-xs); }
+.agent-chat-review-link { display: inline-flex; align-items: center; justify-content: center; justify-self: start; min-height: var(--spacing-touch-target); padding: var(--spacing-space-2) var(--spacing-space-3); color: var(--on-action); background: var(--action); border-radius: var(--rounded-md); font-weight: var(--type-label-md-font-weight); text-decoration: none; }
+.agent-chat-review-link:hover { background: var(--action-hover); }
+.agent-chat-review-link:focus-visible { outline: var(--spacing-indicator-width) solid var(--focus); outline-offset: var(--spacing-space-1); }
+.agent-chat-artifact-loading, .agent-chat-artifact-error { color: var(--muted); font-size: var(--type-body-sm-font-size); }
+.agent-chat-artifact-error { display: flex; align-items: center; flex-wrap: wrap; gap: var(--spacing-space-3); color: var(--color-error); }
+.agent-chat-artifact-error button { min-height: var(--spacing-touch-target); padding: var(--spacing-space-1) var(--spacing-space-3); color: var(--action); background: transparent; border: var(--spacing-border-hairline) solid var(--outline); border-radius: var(--rounded-md); }
 .agent-chat-composer { display: grid; gap: var(--spacing-space-2); padding: var(--spacing-space-3) var(--spacing-space-5); background: var(--surface); border-top: var(--spacing-border-hairline) solid var(--outline); }
 .agent-chat-context { display: flex; flex-wrap: wrap; gap: var(--spacing-space-2); }
 .agent-chat-context-chip { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--spacing-space-2); max-width: 100%; min-height: var(--spacing-touch-target); padding: var(--spacing-space-1) var(--spacing-space-2) var(--spacing-space-1) var(--spacing-space-3); color: var(--ink); background: var(--color-neutral-100); border-radius: var(--rounded-full); }
@@ -417,6 +438,9 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 :root[data-theme="dark"] .agent-chat-known { background: var(--color-dark-surface-raised); }
 :root[data-theme="dark"] .agent-chat-incomplete { color: var(--color-dark-warning); background: var(--color-dark-surface-raised); }
 :root[data-theme="dark"] .agent-chat-error { color: var(--color-dark-error); background: var(--color-dark-surface-raised); }
+:root[data-theme="dark"] .agent-chat-guardrail-notice, :root[data-theme="dark"] .agent-chat-guardrail-held, :root[data-theme="dark"] .agent-chat-guardrail-rerouted, :root[data-theme="dark"] .agent-chat-guardrail-blocked, :root[data-theme="dark"] .agent-chat-guardrail-converted { background: var(--color-dark-surface-raised); }
+:root[data-theme="dark"] .agent-chat-artifact-card { background: var(--color-dark-surface); }
+:root[data-theme="dark"] .agent-chat-artifact-status, :root[data-theme="dark"] .agent-chat-action-level { color: var(--color-dark-info); background: var(--color-dark-surface-raised); }
 :root[data-theme="dark"] .agent-chat-context-chip { background: var(--color-dark-surface-raised); }
 :root[data-theme="dark"] .agent-chat-unverified { color: var(--color-dark-warning); }
 

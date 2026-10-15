@@ -14,6 +14,7 @@ export interface AgentAnswer {
   draftIds: string[];
   confidence: string;
   confidenceReason: string;
+  actionRequestIds: string[];
   incomplete?: string;
 }
 

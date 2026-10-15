@@ -104,19 +104,19 @@ export class PostgresActionStore implements ActionServicePort, ActionDecisionPor
       const previous = await replay(trx, user, "check", body, key);
       if (previous) {
         // A changed policy cannot restore an old allow; re-evaluate before replaying artifacts.
-        if (result.decision === "block") return result;
+        if (result.decision === "block") return { ...result, policyId: registry.policy_id };
         const saved = previous.result;
         if (previous.action_request_id) {
           const action = await readAction(trx, user, previous.action_request_id);
-          if (action.status === "rejected" || action.status === "superseded") return { decision: "block", reason: "request_expired_or_superseded" };
-          if (saved.actionRequest?.payloadHash !== action.payloadHash) return { decision: "block", reason: "payload_changed" };
+          if (action.status === "rejected" || action.status === "superseded") return { decision: "block", reason: "request_expired_or_superseded", policyId: registry.policy_id };
+          if (saved.actionRequest?.payloadHash !== action.payloadHash) return { decision: "block", reason: "payload_changed", policyId: registry.policy_id };
           if (saved.heldRequestId) {
             const hold = (await sql<{ status: string }>`SELECT status FROM app.held_request WHERE id = ${saved.heldRequestId}::uuid AND org_id = ${user.orgId}`.execute(trx)).rows[0];
-            if (hold?.status !== "held") return { decision: "block", reason: "hold_no_longer_pending" };
+            if (hold?.status !== "held") return { decision: "block", reason: "hold_no_longer_pending", policyId: registry.policy_id };
           }
-          return { ...saved, actionRequest: action };
+          return { ...saved, policyId: registry.policy_id, actionRequest: action };
         }
-        return result;
+        return { ...result, policyId: registry.policy_id };
       }
       let action: ActionRequest | undefined;
       const interceptId = randomUUID();
@@ -140,7 +140,7 @@ export class PostgresActionStore implements ActionServicePort, ActionDecisionPor
           VALUES (${heldRequestId}::uuid, ${user.orgId}, ${interceptId}::uuid, ${action.id}::uuid, ${JSON.stringify(action.payload)}::jsonb,
             'held', ${action.expiresAt}::timestamptz, ${action.simulated}, ${action.classification}, ${user.sub})`.execute(trx);
       }
-      const response: ToolCallDecision = { ...result, ...(action ? { actionRequest: action } : {}), ...(heldRequestId ? { heldRequestId } : {}) };
+      const response: ToolCallDecision = { ...result, policyId: registry.policy_id, ...(action ? { actionRequest: action } : {}), ...(heldRequestId ? { heldRequestId } : {}) };
       await appendAuditEvent(trx, { orgId: user.orgId, actor: user.sub, action: "tool_call.checked", entity: interceptId,
         before: null, after: { ...response, aiSystemId: registry.id, tool: body.tool, target: body.target }, simulated: body.simulated, classification, createdBy: "guardrail" });
       await remember(trx, user, "check", body, key, response, action?.id, classification);
@@ -209,6 +209,7 @@ export class PostgresActionStore implements ActionServicePort, ActionDecisionPor
           WHERE action_request_id = ${id}::uuid AND org_id = ${user.orgId} AND status IN ('held', 'allowed')`.execute(trx);
       }
       const decided = { actionRequest: toAction(updated), approval: toApproval(approval) };
+      await appendActionRequestUpdate(trx, decided.actionRequest);
       await appendAuditEvent(trx, { orgId: user.orgId, actor: user.sub, action: decision === "approved" ? "action_request.approved" : "action_request.rejected",
         entity: id, before: { status: row.status, payloadHash: row.payload_hash },
         after: { status: updated.status, approvalId: approval.id, approverSub: user.sub, payloadHash: row.payload_hash, reason: body.reason, authTime: user.authTime.toISOString() },
@@ -324,9 +325,14 @@ async function insertAction(trx: Tx, user: ActionIdentity, body: ActionRequestCr
       ${body.simulated}, ${body.classification}, ${user.sub}, ${body.simulationRunId ?? null}::uuid, ${now}::timestamptz) RETURNING *`.execute(trx)).rows[0];
   if (!row) throw new Error("Action Request was not inserted");
   const action = toAction(row);
+  await appendActionRequestUpdate(trx, action);
   await appendAuditEvent(trx, { orgId: user.orgId, actor: user.sub, action: "action_request.created", entity: action.id,
     before: null, after: action, simulated: body.simulated, classification: body.classification, createdBy: "action-service" });
   return action;
+}
+async function appendActionRequestUpdate(trx: Tx, action: Pick<ActionRequest, "id" | "orgId" | "status" | "simulated" | "classification">): Promise<void> {
+  await appendWorkerEvent(trx, { id: randomUUID(), type: "action_request.updated", orgId: action.orgId, entityId: action.id,
+    status: action.status, simulated: action.simulated, classification: action.classification }, "action-service");
 }
 interface Saved { request_hash: string; result: ToolCallDecision & { approvalId?: string }; action_request_id: string | null }
 type DecisionKey = ActionDecisionCreate & { actionRequestId: string; simulated: boolean; classification: ActionClassification };
@@ -354,6 +360,7 @@ async function expireRequests(trx: Tx, orgId: string, simulatedOnly: boolean): P
     await sql`INSERT INTO app.notification (org_id, action_request_id, channel, recipient_ref, status, receipt, sandbox, simulated, classification, created_by, simulation_run_id)
       VALUES (${orgId}, ${row.id}::uuid, 'in_app', ${row.simulated ? 'sandbox:ai-governance' : 'role:fieldloop.manager'}, 'pending',
         '{"reason":"sla_expired"}'::jsonb, ${row.simulated}, ${row.simulated}, ${row.classification}, 'sla-expiry', ${row.simulation_run_id}::uuid)`.execute(trx);
+    await appendActionRequestUpdate(trx, { id: row.id, orgId, status: "rejected", simulated: row.simulated, classification: row.classification });
     await appendAuditEvent(trx, { orgId, actor: "sla-expiry", action: "action_request.expired", entity: row.id,
       before: null, after: { status: "rejected", reason: "sla_expired", escalated: true }, simulated: row.simulated, classification: row.classification, createdBy: "action-service" });
   }

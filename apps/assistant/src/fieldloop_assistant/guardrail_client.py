@@ -3,6 +3,7 @@
 import hashlib
 import json
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -22,6 +23,14 @@ def idempotency_key(session_id: str, tool: str, args: Mapping[str, Any]) -> str:
 
 def blocked(reason: str) -> dict[str, Any]:
     return {"decision": "block", "reason": reason}
+
+
+@dataclass(frozen=True)
+class ContentScanResult:
+    decision: str
+    content: str | None
+    policy_id: str | None
+    reason: str
 
 
 class GuardrailClient:
@@ -56,25 +65,49 @@ class GuardrailClient:
 
     async def scan_content(
         self, user_token: str, ai_system: str, content: str, key: str
-    ) -> str | None:
-        """`content:scan` (PRD GR-2). Returns text safe to quote to the model, else None."""
+    ) -> ContentScanResult:
+        """`content:scan` (PRD GR-2); the model gateway enforces any required reroute."""
         try:
             response = await self._client.post(
                 f"{self._base_url}/guardrail/v1/content:scan",
                 headers={TOKEN_HEADER: user_token, "Idempotency-Key": key},
                 json={"aiSystem": ai_system, "content": content},
             )
-            if response.status_code != 200:
-                return None
+        except httpx.HTTPError:
+            return ContentScanResult("block", None, None, "guardrail_unavailable")
+        if response.status_code == 403:
+            try:
+                problem = response.json()
+            except ValueError:
+                problem = None
+            details = problem if isinstance(problem, dict) else {}
+            error_payload = details.get("error")
+            error: dict[str, Any] = error_payload if isinstance(error_payload, dict) else {}
+            policy_id = details.get("policyId") or error.get("policy_id")
+            reason = details.get("detail") or error.get("message") or "guardrail_blocked"
+            return ContentScanResult(
+                "block", None, policy_id if isinstance(policy_id, str) else None,
+                reason if isinstance(reason, str) else "guardrail_blocked",
+            )
+        if response.status_code != 200:
+            reason = f"guardrail_status_{response.status_code}"
+            return ContentScanResult("block", None, None, reason)
+        try:
             result = response.json()
-        except (httpx.HTTPError, ValueError):
-            return None
+        except ValueError:
+            return ContentScanResult("block", None, None, "guardrail_invalid_response")
         if (
-            not isinstance(result, dict) or result.get("decision") != "allow"
+            not isinstance(result, dict)
+            or result.get("decision") not in {"allow", "reroute"}
             or not isinstance(result.get("content"), str)
+            or not isinstance(result.get("policyId"), str)
         ):
-            return None
-        return str(result["content"])
+            return ContentScanResult("block", None, None, "guardrail_invalid_response")
+        reason = result.get("reason")
+        return ContentScanResult(
+            result["decision"], result["content"], result["policyId"],
+            reason if isinstance(reason, str) else "Content scan completed",
+        )
 
     async def scan_geo_content(
         self,

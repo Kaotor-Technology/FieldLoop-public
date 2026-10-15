@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isActionDecisionCreate, isActionRequestCreate, isToolCallCheck } from "../src/actions.js";
+import { isActionDecisionCreate, isActionRequestCreate, isToolCallCheck, isToolCallDecision } from "../src/actions.js";
 const input = { actionType: "system_of_record", actionLevel: "l1", target: "cmms", payload: { title: "Synthetic work order" },
   rationale: "Prepare for the operator", citations: ["synthetic:procedure-1"], simulated: true, classification: "INTERNAL" };
 describe("Action contracts", () => {
@@ -33,5 +33,12 @@ describe("Action contracts", () => {
     expect(isActionRequestCreate({ ...input, expiresAt: "tomorrow" })).toBe(false);
     expect(isActionRequestCreate({ ...input, simulationRunId: "another-run" })).toBe(false);
     expect(isActionRequestCreate({ ...input, target: "https://example.test/write" })).toBe(false);
+  });
+  it("accepts the Guardrail policy identifier on a Tool Call Decision", () => {
+    expect(isToolCallDecision({
+      decision: "convert_l1", reason: "human_action_required",
+      policyId: "22222222-2222-4333-8444-555555555555",
+    })).toBe(true);
+    expect(isToolCallDecision({ decision: "block", reason: "blocked", policyId: "not-a-uuid" })).toBe(false);
   });
 });

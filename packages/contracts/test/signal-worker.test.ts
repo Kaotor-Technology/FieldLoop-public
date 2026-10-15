@@ -42,5 +42,9 @@ describe("registered worker contracts", () => {
     expect(isWorkerEvent({ ...event, type: "barrier.health_changed", health: "degraded" })).toBe(true);
     expect(isWorkerEvent({ ...event, type: "barrier.health_changed", health: "unknown" })).toBe(false);
     expect(isWorkerEvent({ ...event, type: "barrier.health.applied" })).toBe(false);
+    const actionRequestEvent = { id: rule.id, type: "action_request.updated", orgId: "fixture", entityId: rule.id,
+      status: "approved", simulated: true, classification: "CONFIDENTIAL" };
+    expect(isWorkerEvent(actionRequestEvent)).toBe(true);
+    expect(isWorkerEvent({ ...actionRequestEvent, status: undefined })).toBe(false);
   });
 });
