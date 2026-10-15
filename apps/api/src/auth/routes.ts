@@ -14,6 +14,9 @@ const PUBLIC_ROUTES = new Set([
   "GET /api/auth/callback",
   "POST /api/auth/backchannel-logout",
   "GET /api/internal/auth/jwks",
+  // These exact routes perform their own signed-token verification in the handler.
+  "GET /api/internal/assistant/documents/:documentId/geo-source",
+  "POST /api/internal/assistant/documents/:documentId/geo-references",
 ]);
 // The only routes that accept the internal user token as a Bearer credential: the reads behind the
 // assistant tools. Everything else ignores the header, so least privilege is explicit, not implied.

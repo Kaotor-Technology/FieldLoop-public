@@ -89,7 +89,9 @@ export class PostgresMapLayerStore implements MapLayerStore {
       ? await bindPostgisQuery<FeatureRow>(ASSET_LAYER_SQL, bboxValues).execute(this.db)
       : input.layer === "barriers"
         ? await bindPostgisQuery<FeatureRow>(BARRIER_LAYER_SQL, bboxValues).execute(this.db)
-        : await bindPostgisQuery<FeatureRow>(CONSEQUENCE_LAYER_SQL, bboxValues).execute(this.db);
+        : input.layer === "consequences"
+          ? await bindPostgisQuery<FeatureRow>(CONSEQUENCE_LAYER_SQL, bboxValues).execute(this.db)
+          : await bindPostgisQuery<FeatureRow>(GEO_REFERENCE_LAYER_SQL, bboxValues).execute(this.db);
 
     const riskByAsset = input.layer === "assets"
       ? await this.getRiskZonesForAssets(input, [...new Set(result.rows.flatMap((row) => row.asset_id ? [row.asset_id] : []))])
@@ -114,6 +116,12 @@ export class PostgresMapLayerStore implements MapLayerStore {
           chainageTo: row.chainage_to === null ? null : Number(row.chainage_to),
           evidenceObservedAt: row.evidence_observed_at,
           domainPack: row.domain_pack,
+          geoReferenceId: row.geo_reference_id ?? null,
+          assetId: row.asset_id ?? null,
+          documentId: row.document_id ?? null,
+          geoReferenceKind: row.geo_reference_kind ? parseGeoReferenceKind(row.geo_reference_kind) : null,
+          sourceSnippet: row.source_snippet ?? null,
+          confidence: row.confidence === null || row.confidence === undefined ? null : Number(row.confidence),
         },
       })),
     };
@@ -260,6 +268,11 @@ interface FeatureRow {
   chainage_to: number | null;
   evidence_observed_at: string | null;
   domain_pack: string | null;
+  geo_reference_id?: string;
+  document_id?: string | null;
+  geo_reference_kind?: string | null;
+  source_snippet?: string | null;
+  confidence?: number | string | null;
 }
 
 interface RiskInputRow {
@@ -478,8 +491,8 @@ function parseMapLayerRequest(request: FastifyRequest): {
 } {
   const params = request.params as { layer?: unknown };
   const query = request.query as { bbox?: unknown; zoom?: unknown };
-  if (params.layer !== "assets" && params.layer !== "barriers" && params.layer !== "consequences") {
-    throw new MapServiceError("validation_failed", 400, "Layer must be assets, barriers or consequences");
+  if (params.layer !== "assets" && params.layer !== "barriers" && params.layer !== "consequences" && params.layer !== "geo-references") {
+    throw new MapServiceError("validation_failed", 400, "Layer name is invalid");
   }
   const bboxParts = typeof query.bbox === "string" ? query.bbox.split(",").map(Number) : [];
   if (bboxParts.length !== 4 || bboxParts.some((value) => !Number.isFinite(value))) {
@@ -518,10 +531,17 @@ function parseMapGeometry(value: FeatureRow["geometry"]): MapGeometry {
 }
 
 function parseFeatureKind(value: string): NonNullable<MapFeature["properties"]["featureKind"]> {
-  if (["area", "facility", "linear", "segment", "barrier", "consequence"].includes(value)) {
+  if (["area", "facility", "linear", "segment", "barrier", "consequence", "geo_reference"].includes(value)) {
     return value as NonNullable<MapFeature["properties"]["featureKind"]>;
   }
   throw new Error("PostGIS returned an unsupported map feature kind");
+}
+
+function parseGeoReferenceKind(value: string): NonNullable<MapFeature["properties"]["geoReferenceKind"]> {
+  if (["point", "chainage", "area", "asset"].includes(value)) {
+    return value as NonNullable<MapFeature["properties"]["geoReferenceKind"]>;
+  }
+  throw new Error("PostGIS returned an unsupported Geo Reference kind");
 }
 
 function parseHealth(value: string | null): NonNullable<MapFeature["properties"]["health"]> | null {
@@ -698,4 +718,38 @@ WHERE c.org_id = $5 AND (c.classification = ANY($6::text[]) OR
   AND a.geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)
   AND a.geom IS NOT NULL
 ORDER BY c.id, a.id
+LIMIT $7`;
+
+export const GEO_REFERENCE_LAYER_SQL = `
+SELECT gr.id::text AS id,
+       CASE WHEN gr.target_type = 'asset' THEN gr.target_id::text ELSE NULL END AS asset_id,
+       ST_AsGeoJSON(gr.geom)::jsonb AS geometry,
+       COALESCE(gr.proposed_label, d.title, a.attributes->>'name', gr.id::text) AS name,
+       a.attributes->>'asset_code' AS code,
+       'geo_reference' AS feature_kind,
+       gr.classification,
+       gr.simulated,
+       CASE WHEN gr.simulated THEN 'SIMULATION' ELSE NULL END AS label,
+       NULL::text AS health, NULL::text AS risk_band,
+       gr.chainage_from, gr.chainage_to,
+       NULL::text AS evidence_observed_at,
+       a.domain_pack,
+       gr.id::text AS geo_reference_id,
+       gr.source_document_id::text AS document_id,
+       gr.kind AS geo_reference_kind,
+       gr.source_snippet,
+       gr.confidence
+FROM app.geo_reference gr
+LEFT JOIN app.controlled_document d ON d.org_id = gr.org_id AND d.id = gr.source_document_id
+LEFT JOIN app.asset a ON gr.target_type = 'asset' AND a.org_id = gr.org_id AND a.id = gr.target_id
+WHERE gr.org_id = $5 AND gr.status = 'confirmed' AND gr.geom IS NOT NULL
+  AND gr.simulation_retired_at IS NULL
+  AND GeometryType(gr.geom) IN ('POINT', 'LINESTRING', 'POLYGON', 'MULTIPOLYGON')
+  AND gr.geom && ST_MakeEnvelope($1, $2, $3, $4, 4326)
+  AND (gr.classification = ANY($6::text[]) OR
+    ($8::boolean AND gr.simulated IS TRUE AND gr.created_by IN ('seed:dl-01', 'seed:bangkok')))
+  AND (d.id IS NULL OR (d.classification = ANY($6::text[]) AND d.status = 'current' AND d.superseded_by IS NULL))
+  AND (a.id IS NULL OR (a.classification = ANY($6::text[]) OR
+    ($8::boolean AND a.simulated IS TRUE AND a.created_by IN ('seed:dl-01', 'seed:bangkok'))))
+ORDER BY gr.created_at DESC, gr.id DESC
 LIMIT $7`;

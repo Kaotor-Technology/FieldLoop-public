@@ -22,6 +22,7 @@ const app = buildApp({
   mapLayers: authRuntime.mapLayers,
   ...(authRuntime.audit ? { audit: authRuntime.audit } : {}),
   ...(authRuntime.health ? { health: authRuntime.health } : {}),
+  ...(authRuntime.geoReferences ? { geoReferences: authRuntime.geoReferences } : {}),
   ...(authRuntime.risk ? { risk: authRuntime.risk } : {}),
   ...(authRuntime.imports ? { imports: authRuntime.imports } : {}),
   domainPacks,

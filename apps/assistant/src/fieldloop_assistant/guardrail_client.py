@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from .identity import TOKEN_HEADER
+from .identity import CLASSIFICATIONS, TOKEN_HEADER
 
 DECISIONS = frozenset({"allow", "convert_l1", "hold_l2", "block"})
 
@@ -75,3 +75,72 @@ class GuardrailClient:
         ):
             return None
         return str(result["content"])
+
+    async def scan_geo_content(
+        self,
+        *,
+        ai_system: str,
+        content: str,
+        classification: str,
+        internal_user_token: str,
+        idempotency_key: str,
+    ) -> Mapping[str, Any]:
+        """Scan a controlled document and retain the effective classification for extraction."""
+        try:
+            response = await self._client.post(
+                f"{self._base_url}/guardrail/v1/content:scan",
+                headers={
+                    TOKEN_HEADER: internal_user_token,
+                    "Idempotency-Key": idempotency_key,
+                    "x-fieldloop-classification": classification,
+                },
+                json={"aiSystem": ai_system, "content": content},
+            )
+            if response.status_code != 200:
+                return {"decision": "block", "reason": f"guardrail_status_{response.status_code}"}
+            result = response.json()
+        except (httpx.HTTPError, ValueError):
+            return {"decision": "block", "reason": "guardrail_unavailable"}
+        if (
+            not isinstance(result, dict)
+            or result.get("decision") not in {"allow", "reroute"}
+            or not isinstance(result.get("content"), str)
+            or result.get("classification") not in CLASSIFICATIONS
+        ):
+            return {"decision": "block", "reason": "guardrail_invalid_response"}
+        return result
+
+    async def structured_chat_completion(
+        self,
+        *,
+        ai_system: str,
+        model: str,
+        messages: list[dict[str, str]],
+        response_format: dict[str, Any],
+        classification: str,
+        internal_user_token: str,
+    ) -> Mapping[str, Any]:
+        """Request structured output through Guardrail's scanned OpenAI-compatible endpoint."""
+        try:
+            response = await self._client.post(
+                f"{self._base_url}/guardrail/v1/chat/completions",
+                headers={
+                    TOKEN_HEADER: internal_user_token,
+                    "x-fieldloop-classification": classification,
+                    "accept": "application/json",
+                },
+                json={
+                    "aiSystem": ai_system,
+                    "model": model,
+                    "messages": messages,
+                    "response_format": response_format,
+                },
+            )
+            if response.status_code != 200:
+                raise RuntimeError("Guardrail structured completion was not allowed")
+            result = response.json()
+        except (httpx.HTTPError, ValueError) as error:
+            raise RuntimeError("Guardrail structured completion is unavailable") from error
+        if not isinstance(result, dict):
+            raise RuntimeError("Guardrail returned an invalid structured completion")
+        return result
