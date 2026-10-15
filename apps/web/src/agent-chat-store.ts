@@ -13,6 +13,7 @@ export interface AgentAnswer {
   assumptions: unknown[];
   confidence: string;
   confidenceReason: string;
+  actionRequestIds: string[];
   incomplete?: string;
 }
 
