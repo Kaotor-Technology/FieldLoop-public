@@ -462,6 +462,11 @@ paths:
                 value:
                   payloadHash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                   reason: Reviewed the exact synthetic payload.
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live approval or measured result.
+                value:
+                  payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
+                  reason: Synthetic approval for contract illustration
       responses:
         "201":
           description: Approval recorded, or idempotently replayed, with the Action
@@ -501,6 +506,37 @@ paths:
                       payloadHash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                       authTime: 2026-10-15T09:04:00.000Z
                       createdAt: 2026-10-15T09:04:01.000Z
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; no live action or approval.
+                  value:
+                    actionRequest:
+                      id: 00000000-0000-4000-8000-000000000095
+                      orgId: synthetic-org
+                      actionType: system_of_record
+                      actionLevel: l1
+                      target: cmms
+                      payload:
+                        title: Synthetic work order
+                      payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
+                      rationale: Prepare for the operator
+                      citations:
+                        - synthetic:procedure-1
+                      requestedBy: synthetic-user
+                      requester:
+                        kind: person
+                      status: approved
+                      expiresAt: '2026-10-15T12:15:00Z'
+                      simulated: true
+                      classification: INTERNAL
+                    approval:
+                      id: 00000000-0000-4000-8000-000000000096
+                      actionRequestId: 00000000-0000-4000-8000-000000000095
+                      approverSub: synthetic-manager
+                      decision: approved
+                      reason: Synthetic approval for contract illustration
+                      payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
+                      authTime: '2026-10-15T12:00:00Z'
+                      createdAt: '2026-10-15T12:00:30Z'
         "400": *a1
         "401": *a2
         "403": *a3
@@ -538,6 +574,11 @@ paths:
                 value:
                   payloadHash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                   reason: Preconditions were not satisfied in the simulation.
+              syntheticSchemaIllustration:
+                summary: Synthetic schema illustration; not a live rejection or measured result.
+                value:
+                  payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
+                  reason: Synthetic rejection for contract illustration
       responses:
         "200":
           description: Rejection recorded, or idempotently replayed, with the Action
@@ -577,6 +618,37 @@ paths:
                       payloadHash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
                       authTime: 2026-10-15T09:04:00.000Z
                       createdAt: 2026-10-15T09:04:01.000Z
+                syntheticSchemaIllustration:
+                  summary: Synthetic schema illustration; no live action or approval.
+                  value:
+                    actionRequest:
+                      id: 00000000-0000-4000-8000-000000000095
+                      orgId: synthetic-org
+                      actionType: system_of_record
+                      actionLevel: l1
+                      target: cmms
+                      payload:
+                        title: Synthetic work order
+                      payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
+                      rationale: Prepare for the operator
+                      citations:
+                        - synthetic:procedure-1
+                      requestedBy: synthetic-user
+                      requester:
+                        kind: person
+                      status: rejected
+                      expiresAt: '2026-10-15T12:15:00Z'
+                      simulated: true
+                      classification: INTERNAL
+                    approval:
+                      id: 00000000-0000-4000-8000-000000000097
+                      actionRequestId: 00000000-0000-4000-8000-000000000095
+                      approverSub: synthetic-manager
+                      decision: rejected
+                      reason: Synthetic rejection for contract illustration
+                      payloadHash: f124ec1476224cdc079c2dc1a12bb299b735d96a7bba2e450960bf9a26c432fe
+                      authTime: '2026-10-15T12:00:00Z'
+                      createdAt: '2026-10-15T12:00:30Z'
         "400": *a1
         "401": *a2
         "403": *a3
@@ -1216,6 +1288,9 @@ paths:
             X-FieldLoop-Policy-Id: { schema: { type: string, format: uuid } }
             X-FieldLoop-Intercept-Id: { schema: { type: string, format: uuid } }
             X-FieldLoop-Classification: { schema: { type: string, enum: [PUBLIC, INTERNAL, CONFIDENTIAL, HIGHLY_RESTRICTED] } }
+            X-FieldLoop-Guardrail-Decisions:
+              description: JSON array of Guardrail outcomes applied to the request and response, with decision, policyId and reason.
+              schema: { type: string }
           content:
             application/json:
               schema:
@@ -1923,7 +1998,7 @@ paths:
           maxLength: 512
       responses:
         '200':
-          description: Event stream for barrier.health_changed, health_proposal.created, evidence.created, notification.delivered, simulation.state, simulation.reset and risk.recalculated.
+          description: Event stream for barrier.health_changed, health_proposal.created, evidence.created, action_request.updated, notification.delivered, simulation.state, simulation.reset and risk.recalculated.
           content:
             text/event-stream:
               schema:
@@ -3430,6 +3505,10 @@ components:
           type: string
           minLength: 1
           maxLength: 2000
+        policyId:
+          type: string
+          format: uuid
+          description: Guardrail Policy applied to this tool-call decision.
         ceiling:
           $ref: "#/components/schemas/ActionLevel"
         actionRequest:

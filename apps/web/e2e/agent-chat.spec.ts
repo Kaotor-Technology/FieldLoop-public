@@ -7,8 +7,31 @@ const citedAnswer = "The synthetic Code & Standard catalogue lists the CP survey
 test.beforeEach(async ({ page, request }) => {
   await request.get("/test/reset");
   await page.addInitScript(() => {
-    const mockWindow = window as Window & { __agentController?: ReadableStreamDefaultController<Uint8Array> };
+    const mockWindow = window as Window & {
+      __agentController?: ReadableStreamDefaultController<Uint8Array>;
+      __fieldLoopEmit?: (name: string, data: Record<string, unknown>) => void;
+      __fieldLoopEventSourceCount?: () => number;
+    };
     const eventChunk = (name: string, data: Record<string, unknown>) => new TextEncoder().encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
+    class TestEventSource extends EventTarget {
+      static readonly instances = new Set<TestEventSource>();
+      onopen: ((this: EventSource, event: Event) => unknown) | null = null;
+      onerror: ((this: EventSource, event: Event) => unknown) | null = null;
+      constructor(readonly url: string) {
+        super();
+        TestEventSource.instances.add(this);
+        queueMicrotask(() => this.onopen?.call(this as unknown as EventSource, new Event("open")));
+      }
+      close() { TestEventSource.instances.delete(this); }
+      emit(name: string, data: Record<string, unknown>) {
+        this.dispatchEvent(new MessageEvent(name, { data: JSON.stringify(data) }));
+      }
+    }
+    Object.defineProperty(window, "EventSource", { configurable: true, value: TestEventSource });
+    mockWindow.__fieldLoopEmit = (name, data) => {
+      for (const stream of TestEventSource.instances) stream.emit(name, data);
+    };
+    mockWindow.__fieldLoopEventSourceCount = () => TestEventSource.instances.size;
     if (!sessionStorage.getItem("__agentRequests")) sessionStorage.setItem("__agentRequests", "[]");
     if (!sessionStorage.getItem("__agentMode")) sessionStorage.setItem("__agentMode", "normal");
     const originalFetch = window.fetch.bind(window);
@@ -37,6 +60,27 @@ test.beforeEach(async ({ page, request }) => {
       }
       if (url.pathname.endsWith("/messages") && method === "POST") {
         const mode = sessionStorage.getItem("__agentMode");
+        if (mode === "action" || mode === "held" || mode === "blocked") {
+          const actionRequestId = "00000000-0000-4000-8000-000000000097";
+          const decision = mode === "action" ? "convert_l1" : mode === "held" ? "hold_l2" : "block";
+          return new Response(new ReadableStream<Uint8Array>({
+            start(controller) {
+              controller.enqueue(eventChunk("guardrail.decision", {
+                decision,
+                reason: mode === "action" ? "Converted to a human review request." : mode === "held" ? "Held for human review." : "The tool call was blocked.",
+                policy_id: "SYNTHETIC-POLICY-1",
+                ...(mode === "action" ? { action_request_id: actionRequestId } : mode === "held" ? { held_request_id: "synthetic-held-1" } : {}),
+              }));
+              controller.enqueue(eventChunk("answer.final", {
+                answer: "The Guardrail decision is recorded.",
+                citations: [], retrieved_citations: [], known: [], unknown: [], assumptions: [],
+                confidence: "medium", confidence_reason: "Synthetic fixture.",
+                action_request_ids: mode === "action" ? [actionRequestId] : [],
+              }));
+              controller.close();
+            },
+          }), { headers: { "content-type": "text/event-stream" } });
+        }
         const messageRequests = requests.filter((request) => request.path === url.pathname).length;
         if (mode === "error-once" && messageRequests === 1) {
           return new Response(new ReadableStream<Uint8Array>({
@@ -96,13 +140,33 @@ test.beforeEach(async ({ page, request }) => {
       }
       return new Response(JSON.stringify({ code: "not_found" }), { status: 404, headers: { "content-type": "application/json" } });
     };
+    const originalFetchForActions = window.fetch.bind(window);
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const inputUrl = input instanceof Request ? input.url : String(input);
+      const url = new URL(inputUrl, window.location.href);
+      const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+      if (url.pathname === "/api/v1/action-requests/00000000-0000-4000-8000-000000000097" && method === "GET") {
+        if (sessionStorage.getItem("__actionRequestStatus") === "unavailable") {
+          return Response.json({ code: "service_unavailable" }, { status: 503 });
+        }
+        return Response.json({
+          id: "00000000-0000-4000-8000-000000000097", orgId: "synthetic-org", actionType: "system_of_record",
+          actionLevel: "l1", target: "cmms", payload: { title: "Synthetic work order" },
+          payloadHash: "a".repeat(64), rationale: "Prepare for human review.", citations: ["synthetic:procedure-1"],
+          requestedBy: "synthetic-operator", requester: { kind: "assistant", aiSystemId: "00000000-0000-4000-8000-000000000001" },
+          status: sessionStorage.getItem("__actionRequestStatus") === "approved" ? "approved" : "open",
+          expiresAt: "2026-10-15T13:00:00.000Z", simulated: true, classification: "INTERNAL",
+        });
+      }
+      return originalFetchForActions(input, init);
+    };
   });
   await page.goto("/map");
   await page.getByRole("link", { name: "Sign in as operator" }).click();
   await expect(page.getByRole("heading", { name: "Geo Command Map", exact: true })).toBeVisible();
 });
 
-async function setAgentMode(page: import("@playwright/test").Page, mode: "normal" | "hold" | "error-once" | "slow" | "limit" | "reference") {
+async function setAgentMode(page: import("@playwright/test").Page, mode: "normal" | "hold" | "error-once" | "slow" | "limit" | "reference" | "action" | "held" | "blocked") {
   await page.evaluate((value) => sessionStorage.setItem("__agentMode", value), mode);
 }
 
@@ -164,6 +228,75 @@ test("workspace sends map context and presents the streamed trace, answer basis 
   expect(message?.headers.authorization).toBeUndefined();
   expect(message?.headers["x-fieldloop-internal-user-token"]).toBeUndefined();
   await page.screenshot({ path: "e2e/evidence/agent-chat-workspace.png", fullPage: true });
+});
+
+test("renders Action Request cards without chat approval and refreshes status from the Query cache after SSE", async ({ page }) => {
+  const actionRequestId = "00000000-0000-4000-8000-000000000097";
+  await setAgentMode(page, "action");
+  await page.goto("/agent");
+  await expect.poll(() => page.evaluate(() => {
+    const target = window as Window & { __fieldLoopEventSourceCount?: () => number };
+    return target.__fieldLoopEventSourceCount?.();
+  })).toBe(1);
+  await page.getByRole("textbox", { name: "Message" }).fill("Prepare the synthetic work order");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  const card = page.locator(".agent-chat-artifact-card");
+  await expect(card).toBeVisible();
+  await expect(card).toContainText("L1");
+  await expect(card).toContainText("SLA");
+  await expect(card).toContainText("Open");
+  await card.scrollIntoViewIfNeeded();
+  await expect(card).toBeInViewport({ ratio: 0.8 });
+  await page.screenshot({ path: "e2e/evidence/agent-chat-action-request.png", fullPage: true });
+  const timeline = page.locator(".agent-chat-timeline");
+  await timeline.locator("summary").click();
+  await expect(timeline.locator(".agent-chat-guardrail-converted")).toContainText("SYNTHETIC-POLICY-1");
+  const reviewLink = card.getByRole("link", { name: "Review and approve" });
+  await expect(reviewLink).toHaveAttribute("href", `/actions/${actionRequestId}`);
+  await expect(page.getByText("SYNTHETIC-POLICY-1", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+
+  await page.evaluate((id) => {
+    sessionStorage.setItem("__actionRequestStatus", "approved");
+    const target = window as Window & { __fieldLoopEmit?: (name: string, data: Record<string, unknown>) => void };
+    target.__fieldLoopEmit?.("action_request.updated", { id: "synthetic-event-id", entityId: id, status: "approved" });
+  }, actionRequestId);
+  await expect(card).toContainText("Approved");
+  await expect(card.getByRole("link", { name: "Review and approve" })).toHaveCount(0);
+});
+
+test("opens the approval dialog from an actionable Action Request card", async ({ page }) => {
+  const actionRequestId = "00000000-0000-4000-8000-000000000097";
+  await setAgentMode(page, "action");
+  await page.goto("/agent");
+  await page.getByRole("textbox", { name: "Message" }).fill("Prepare the synthetic work order");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  const card = page.locator(".agent-chat-artifact-card");
+  await expect(card).toContainText("Open");
+  const reviewLink = card.getByRole("link", { name: "Review and approve" });
+  await expect(reviewLink).toHaveAttribute("href", `/actions/${actionRequestId}`);
+  await reviewLink.click();
+  await expect(page).toHaveURL(new RegExp(`/actions/${actionRequestId}$`));
+  await expect(page.getByRole("heading", { name: actionRequestId })).toBeVisible();
+  await page.getByRole("button", { name: "Review and approve" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+});
+
+test("shows distinct held and blocked Guardrail notices with policy IDs", async ({ page }) => {
+  for (const mode of ["held", "blocked"] as const) {
+    await setAgentMode(page, mode);
+    await page.goto("/agent");
+    await page.getByRole("textbox", { name: "Message" }).fill("Check the synthetic action");
+    await page.getByRole("button", { name: "Send" }).click();
+    const timeline = page.locator(".agent-chat-timeline");
+    await timeline.locator("summary").click();
+    await expect(timeline.getByText("SYNTHETIC-POLICY-1", { exact: true })).toBeVisible();
+    await expect(timeline.locator(mode === "held" ? ".agent-chat-guardrail-held" : ".agent-chat-guardrail-blocked")).toBeVisible();
+    await expect(page.locator(".agent-chat-artifact-card")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+  }
 });
 
 test("context chips remove only their own URL state", async ({ page }) => {

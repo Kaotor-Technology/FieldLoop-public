@@ -48,7 +48,7 @@ export async function invalidateHealthProposalQueries(
 
   if (eventType === "barrier.health_changed") {
     const event = isWorkerEvent(payload) && payload.type === "barrier.health_changed" ? payload : undefined;
-    if (event?.health) {
+    if (event?.barrierId && event.health) {
       await applyBarrierHealthToMapCache(client, event.barrierId, event.health);
       await Promise.all([
         client.invalidateQueries({ queryKey: healthProposalsQueryKey }),
