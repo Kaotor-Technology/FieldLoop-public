@@ -1,18 +1,20 @@
 import { useState, type FormEvent } from "react";
 import type { TFunction } from "i18next";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import { useCurrentSession } from "./SessionGate";
-import { commandPackageQueryKey, getCommandPackages, recordCommandPackageOutcome, type CommandPackage, type CommandPackageOutcome, type CommandPackageStatus } from "./command-packages";
+import { commandPackageQueryKey, commandPackageStatuses, getCommandPackages, recordCommandPackageOutcome, type CommandPackage, type CommandPackageOutcome } from "./command-packages";
 
-const statuses: CommandPackageStatus[] = ["queued", "executed", "not_executed"];
 const requiredApprovalCount = 2;
 
 export function CommandPackageQueue() {
   const { t, i18n } = useTranslation();
   const session = useCurrentSession();
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as Record<string, unknown>;
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState<CommandPackageStatus>("queued");
+  const status = commandPackageStatuses.find((candidate) => candidate === search["status"]) ?? "queued";
   const user = session.data;
   const operator = Boolean(user && !user.sub.startsWith("agent:") && user.roles.includes("fieldloop.operator"));
   const pages = useInfiniteQuery({
@@ -49,7 +51,11 @@ export function CommandPackageQueue() {
     </header>
 
     <nav className="command-package-tabs" aria-label={t("commandPackagesFilters")}>
-      {statuses.map((item) => <button key={item} type="button" aria-pressed={status === item} onClick={() => { setStatus(item); outcome.reset(); }}>
+      {commandPackageStatuses.map((item) => <button key={item} type="button" aria-pressed={status === item} onClick={() => {
+        if (status === item) return;
+        outcome.reset();
+        void navigate({ to: "/command-packages", search: { status: item } });
+      }}>
         {t(`commandPackageFilter.${item}`)}
       </button>)}
     </nav>

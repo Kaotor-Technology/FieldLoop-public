@@ -4,6 +4,7 @@ import { api } from "./api-client";
 export type CommandPackage = components["schemas"]["CommandPackage"];
 export type CommandPackageStatus = components["schemas"]["CommandPackageExecutionStatus"];
 export type CommandPackageOutcome = components["schemas"]["CommandPackageOutcomeCreate"];
+export const commandPackageStatuses = ["queued", "executed", "not_executed"] as const satisfies readonly CommandPackageStatus[];
 
 export const commandPackageQueryKey = (status: CommandPackageStatus) => ["command-packages", status] as const;
 

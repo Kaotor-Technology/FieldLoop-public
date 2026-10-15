@@ -9,6 +9,7 @@ import { AuditPage } from "./AuditPage";
 import { AgentWorkspace } from "./AgentWorkspace";
 import { ActionRequestPage } from "./ActionRequestPage";
 import { CommandPackageQueue } from "./CommandPackageQueue";
+import { commandPackageStatuses } from "./command-packages";
 import { usePreferences } from "./preferences";
 import "./i18n";
 import "@fontsource/ibm-plex-sans-thai/400.css";
@@ -36,7 +37,10 @@ const auditRoute = createRoute({
 const commandPackagesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/command-packages",
-  validateSearch: (search: Record<string, unknown>) => search,
+  validateSearch: (search: Record<string, unknown>) => {
+    const status = commandPackageStatuses.find((candidate) => candidate === search["status"]);
+    return status ? { status } : {};
+  },
   component: CommandPackageQueue,
 });
 const bowtieRoute = createRoute({

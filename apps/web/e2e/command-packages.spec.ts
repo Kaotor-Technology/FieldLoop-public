@@ -73,6 +73,16 @@ test("queue loads the next page using the returned cursor", async ({ page }) => 
   expect(cursors).toEqual([null, "second-page"]);
 });
 
+test("queue status filters are restored from and written to the URL", async ({ page }) => {
+  await signInAsOperator(page);
+  await page.goto("/command-packages?status=executed");
+  const navigation = page.getByRole("navigation", { name: "Filter Command Packages" });
+  await expect(navigation.getByRole("button", { name: "Executed", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await navigation.getByRole("button", { name: "Not executed", exact: true }).click();
+  await expect(page).toHaveURL(/\/command-packages\?status=not_executed$/);
+  await expect(navigation.getByRole("button", { name: "Not executed", exact: true })).toHaveAttribute("aria-pressed", "true");
+});
+
 test("operator records executed or not executed and the result becomes Evidence", async ({ page }) => {
   await signInAsOperator(page);
   const queueResponse = page.waitForResponse((response) => response.request().method() === "GET" && response.url().includes("/api/v1/command-packages"));
