@@ -155,7 +155,8 @@ describe("BFF auth routes", () => {
 
   it.each([
     ["an encoded verb separator", "/api/v1/action-requests/action-1%3Aapprove", "/api/v1/action-requests/action-1:approve"],
-    ["the approvals sub-resource", "/api/v1/action-requests/action-1/approvals", "/api/v1/action-requests/:id/approvals"],
+    // Static stub: the real approvals route (FL-96) is registered under the parametric pattern and covered in action-routes.test.ts.
+    ["the approvals sub-resource", "/api/v1/action-requests/action-1/approvals", "/api/v1/action-requests/action-1/approvals"],
     ["a query string", "/api/v1/held-requests/held-1:reject?x=1", "/api/v1/held-requests/held-1:reject"],
   ])("requires fresh reauthentication for a decision sent with %s", async (_label, url, route) => {
     const getCurrentUser = vi.fn(async () => ({
