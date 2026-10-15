@@ -66,6 +66,8 @@ it("rejects malformed input without invoking the assistant", async () => {
     ["/api/v1/assistant/sessions", { agent: "code-standard" }],
     ["/api/v1/assistant/sessions", { agent: "integrity-orchestrator", simulated: false }],
     [`/api/v1/assistant/sessions/${sessionId}/messages`, { message: "x".repeat(4001) }],
+    [`/api/v1/assistant/sessions/${sessionId}/messages`, { message: true }],
+    [`/api/v1/assistant/sessions/${sessionId}/messages`, { message: 39 }],
     ["/api/v1/assistant/sessions/invalid/messages", { message: "CP?" }],
   ] as const) {
     expect((await app.inject({ method: "POST", url: url as string, headers, payload })).statusCode).toBe(400);

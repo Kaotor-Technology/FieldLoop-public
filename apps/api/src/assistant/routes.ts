@@ -31,13 +31,13 @@ export function registerAssistantRoutes(app: FastifyInstance, assistant?: Assist
       return value;
     }
     routes.post<{ Body: AgentSessionCreate }>("/api/v1/assistant/sessions", {
-      preValidation: async (request) => rejectExtraFields(request.body, "agent"),
+      preValidation: async (request) => validateBody(request.body, "agent"),
       schema: { body: { type: "object", additionalProperties: false, required: ["agent"], properties: {
         agent: { type: "string", enum: ["integrity-orchestrator", "flood-situation"] },
       } } },
     }, async (request, reply) => reply.code(201).send(await port().create(request.body, await token(request), AbortSignal.timeout(10_000))));
     routes.post<{ Body: AgentMessageCreate }>("/api/v1/assistant/sessions/:sessionId/messages", {
-      preValidation: async (request) => rejectExtraFields(request.body, "message"),
+      preValidation: async (request) => validateBody(request.body, "message"),
       schema: { body: { type: "object", additionalProperties: false, required: ["message"], properties: {
         message: { type: "string", minLength: 1, maxLength: 4000 },
       } } },
@@ -63,8 +63,10 @@ export function registerAssistantRoutes(app: FastifyInstance, assistant?: Assist
   });
 }
 
-function rejectExtraFields(body: unknown, allowed: string): void {
-  if (body && typeof body === "object" && Object.keys(body).some((key) => key !== allowed)) {
+function validateBody(body: unknown, allowed: string): void {
+  if (!body || typeof body !== "object" || Array.isArray(body) ||
+      Object.keys(body).some((key) => key !== allowed) ||
+      typeof (body as Record<string, unknown>)[allowed] !== "string") {
     throw new AssistantError(400, "validation_failed");
   }
 }
