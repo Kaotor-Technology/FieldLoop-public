@@ -25,7 +25,7 @@ assert.ok(Array.isArray(producerCommand)&&producerCommand.length&&producerComman
 const produce=(scenario,action)=>JSON.parse(execFileSync(producerCommand[0],[...producerCommand.slice(1),scenario,action],{
  encoding:'utf8',timeout:120000,env:{...process.env,FIELDLOOP_ENV:'local',FIELDLOOP_DATABASE_URL:producerDatabaseUrl}}));
 const signals=result=>result.messages.map(m=>JSON.parse(Buffer.from(m.data,'base64').toString('utf8')));
-const semantic=items=>items.map(({id,simulationRunId,...rest})=>rest);
+const semantic=items=>items.map(item=>Object.fromEntries(Object.entries(item).filter(([key])=>!['id','simulationRunId'].includes(key))));
 try {
  docker('run','--rm','-d','--name',container,...(process.env.FIELDLOOP_DEMO_DOCKER_NETWORK?['--network',process.env.FIELDLOOP_DEMO_DOCKER_NETWORK]:[]),
   '-e','POSTGRES_PASSWORD=fixture','-e','POSTGRES_DB=fieldloop_dev','-p','127.0.0.1::5432','fieldloop-db-test:pg16');
@@ -121,4 +121,4 @@ try {
  await sql`SELECT app.assert_simulation_run(${finalRun.id}::uuid,${finalRun.org})`.execute(guardrail);
  console.log('PASS forward/down migration; worker direct UPDATE denied; wrong-org and retired runs rejected');
  console.log('LIMITATION: local in-memory transport, fixture identity verifier and outbound collector; not Google OIDC, PubSub or deployment proof.');
-}finally{if(app)await app.close();if(guardrail)await guardrail.destroy();if(application)await application.destroy();if(database)await database.destroy();try{docker('rm','-f',container);}catch{}}
+}finally{if(app)await app.close();if(guardrail)await guardrail.destroy();if(application)await application.destroy();if(database)await database.destroy();try{docker('rm','-f',container);}catch{ /* Preserve the original test failure if container cleanup also fails. */ }}
