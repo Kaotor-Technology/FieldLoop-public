@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import type { TFunction } from "i18next";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
@@ -26,11 +26,11 @@ export function CommandPackageQueue() {
     retry: 1,
   });
   const outcome = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: CommandPackageOutcome }) => {
+    mutationFn: ({ id, body, idempotencyKey }: { id: string; body: CommandPackageOutcome; idempotencyKey: string }) => {
       if (!user) throw new Error("Session is unavailable");
-      return recordCommandPackageOutcome(id, body, user.csrfToken);
+      return recordCommandPackageOutcome(id, body, user.csrfToken, idempotencyKey);
     },
-    onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["command-packages"] }); },
+    onSettled: async () => { await queryClient.invalidateQueries({ queryKey: ["command-packages"] }); },
   });
   const language = i18n.language.startsWith("th") ? "th" : "en";
   const items = pages.data?.pages.flatMap((page) => page.items) ?? [];
@@ -67,7 +67,7 @@ export function CommandPackageQueue() {
     </div>}
     {pages.data && items.length === 0 && <p className="command-package-empty" role="status">{t(`commandPackageEmpty.${status}`)}</p>}
     <div className="command-package-list" aria-busy={pages.isFetching}>
-      {items.map((item) => <CommandPackageCard key={item.id} item={item} t={t} onSubmit={(body) => outcome.mutate({ id: item.id, body })}
+      {items.map((item) => <CommandPackageCard key={item.id} item={item} t={t} onSubmit={(body, idempotencyKey) => outcome.mutate({ id: item.id, body, idempotencyKey })}
         isSubmitting={outcome.isPending && outcome.variables?.id === item.id}
         {...(outcome.isError && outcome.variables?.id === item.id ? { error: t("commandPackageOutcomeFailed") } : {})}
         {...(outcome.isSuccess && outcome.variables?.id === item.id ? { success: t("commandPackageOutcomeSaved") } : {})}
@@ -82,19 +82,25 @@ export function CommandPackageQueue() {
 function CommandPackageCard({ item, t, onSubmit, isSubmitting, error, success }: {
   item: CommandPackage;
   t: TFunction;
-  onSubmit: (body: CommandPackageOutcome) => void;
+  onSubmit: (body: CommandPackageOutcome, idempotencyKey: string) => void;
   isSubmitting: boolean;
   error?: string;
   success?: string;
 }) {
   const [executionStatus, setExecutionStatus] = useState<"executed" | "not_executed">("executed");
   const [outcome, setOutcome] = useState("");
+  const submission = useRef<{ signature: string; idempotencyKey: string } | null>(null);
   const approved = item.actionStatus === "approved" && item.approvalCount >= requiredApprovalCount && item.executionStatus === "queued";
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!approved || !outcome.trim()) return;
-    onSubmit({ executionStatus, outcome: outcome.trim() });
+    const body = { executionStatus, outcome: outcome.trim() };
+    const signature = JSON.stringify(body);
+    if (submission.current?.signature !== signature) {
+      submission.current = { signature, idempotencyKey: `command-outcome:${crypto.randomUUID()}` };
+    }
+    onSubmit(body, submission.current.idempotencyKey);
   }
 
   return <article className="command-package-card" aria-labelledby={`command-package-${item.id}`}>

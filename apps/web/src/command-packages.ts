@@ -20,9 +20,10 @@ export async function recordCommandPackageOutcome(
   commandPackageId: string,
   outcome: CommandPackageOutcome,
   csrfToken: string,
+  idempotencyKey: string,
 ): Promise<CommandPackage> {
   const { data, response } = await api.POST("/v1/command-packages/{commandPackageId}/outcome", {
-    params: { path: { commandPackageId }, header: { "X-CSRF-Token": csrfToken, "Idempotency-Key": `command-outcome:${crypto.randomUUID()}` } },
+    params: { path: { commandPackageId }, header: { "X-CSRF-Token": csrfToken, "Idempotency-Key": idempotencyKey } },
     body: outcome,
   });
   if (!response.ok || !data) throw new Error("Command Package outcome could not be recorded");

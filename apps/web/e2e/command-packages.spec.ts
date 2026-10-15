@@ -109,6 +109,32 @@ test("operator records executed or not executed and the result becomes Evidence"
   await expect(recorded).toContainText("Evidence ID");
 });
 
+test("outcome retries reuse the idempotency key and reconcile the queue", async ({ page }) => {
+  await signInAsOperator(page);
+  await page.goto("/command-packages");
+  const approved = page.locator(".command-package-card").filter({ hasText: "SYNTHETIC-GATE-2" });
+  await approved.getByRole("textbox", { name: "Outcome and reason" }).fill("Gate inspected; operator confirmed simulated position.");
+  const keys: string[] = [];
+  let attempts = 0;
+  await page.route("**/api/v1/command-packages/*/outcome", async (route) => {
+    keys.push(route.request().headers()["idempotency-key"] ?? "");
+    if (attempts++ === 0) {
+      await route.fulfill({ status: 503, contentType: "application/problem+json", body: JSON.stringify({ status: 503, code: "service_unavailable" }) });
+      return;
+    }
+    await route.continue();
+  });
+  const submit = approved.getByRole("button", { name: "Record outcome", exact: true });
+  await submit.click();
+  await expect(approved.getByRole("alert")).toContainText("could not be recorded");
+  const saved = page.waitForResponse((response) => response.request().method() === "POST" && response.url().endsWith("/outcome"));
+  await submit.click();
+  expect((await saved).status()).toBe(200);
+  expect(keys).toHaveLength(2);
+  expect(keys[0]).toBe(keys[1]);
+  await expect(approved).toHaveCount(0);
+});
+
 test("Command Package queue has no axe violations in both themes and reflows in Thai", async ({ page }) => {
   await signInAsOperator(page);
   await page.goto("/command-packages");
