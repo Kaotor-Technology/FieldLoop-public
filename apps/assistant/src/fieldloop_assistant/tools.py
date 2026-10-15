@@ -131,6 +131,7 @@ class ToolContext:
     drafts: DraftStore | None
     state: TurnState
     scan: Callable[[str], Awaitable[str | None]] | None = None
+    reference_catalog: tuple[Mapping[str, Any], ...] = ()
     geo_platform: GeoExtractionPlatform | None = None
     geo_guardrail: GeoExtractionGuardrail | None = None
     turn_id: str = ""
@@ -162,11 +163,27 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
         """
         text = _text(query, "query", 1200)
         wanted = folders or list(ctx.knowledge_folders)
-        if ctx.knowledge is None:
-            return {"results": [], "error": "knowledge_unavailable"}
         allowed_folders = [f for f in wanted if f in ctx.knowledge_folders]
         if not allowed_folders:
             raise ToolInputError("folders are outside this agent's Knowledge Library scope")
+        if re.search(
+            r"\bASME\b|\bAPI\s+(?:(?:RP|STD|SPEC|TR)\s+)?[0-9]|^API$", text, re.IGNORECASE
+        ):
+            if "Codes & Standards" not in allowed_folders:
+                raise ToolInputError("reference search is outside this agent's folder scope")
+            # Bibliography is deliberately separate from verified passage citations.
+            # Never send an unlicensed standard query to the full-text/embedding path.
+            references = [
+                dict(record) for record in ctx.reference_catalog
+                if re.search(r"(?<!\w)" + re.escape(record["standard"]).replace(
+                    r"\ ", r"\s+"
+                ) + r"(?!\w)", text, re.IGNORECASE)
+                or text.upper() == record["publisher"]
+            ]
+            ctx.state.warnings.append("reference_not_verified_against_source_text")
+            return {"results": [], "references": references, "untrusted_content": True}
+        if ctx.knowledge is None:
+            return {"results": [], "error": "knowledge_unavailable"}
         found = await ctx.knowledge.search(text, allowed_folders, None)
         results: list[dict[str, Any]] = []
         for item in found:

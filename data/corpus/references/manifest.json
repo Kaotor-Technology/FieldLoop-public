@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "scope": "local_public_bibliographic_fixture_only",
+  "acceptance": "not_assessed",
+  "records": [
+    {
+      "publisher": "ASME",
+      "standard": "ASME B31.8",
+      "title": "Gas Transmission and Distribution Piping Systems",
+      "edition": "2025",
+      "sourceUrl": "https://www.asme.org/codes-standards/find-codes-standards/b31-8-gas-transmission-distribution-piping-systems",
+      "observedHeading": "B31.8 - 2025",
+      "classification": "PUBLIC",
+      "contentState": "metadata_only",
+      "clause": null,
+      "editionCurrency": "not_assessed",
+      "status": "draft",
+      "verificationLabel": "not verified against source text"
+    },
+    {
+      "publisher": "ASME",
+      "standard": "ASME B31.8S",
+      "title": "Managing System Integrity of Gas Pipelines",
+      "edition": "2025",
+      "sourceUrl": "https://www.asme.org/codes-standards/find-codes-standards/b31-8s-managing-system-integrity-gas-pipelines",
+      "observedHeading": "B31.8S - 2025",
+      "classification": "PUBLIC",
+      "contentState": "metadata_only",
+      "clause": null,
+      "editionCurrency": "not_assessed",
+      "status": "draft",
+      "verificationLabel": "not verified against source text"
+    },
+    {
+      "publisher": "API",
+      "standard": "API RP 1160",
+      "title": "Managing System Integrity for Hazardous Liquid Pipelines",
+      "edition": "3rd Edition",
+      "sourceUrl": "https://www.api.org/products-and-services/standards/important-standards-announcements/recommended-practice-1160",
+      "observedHeading": "API Recommended Practice 1160, 3rd Edition",
+      "classification": "PUBLIC",
+      "contentState": "metadata_only",
+      "clause": null,
+      "editionCurrency": "not_assessed",
+      "status": "draft",
+      "verificationLabel": "not verified against source text"
+    }
+  ]
+}

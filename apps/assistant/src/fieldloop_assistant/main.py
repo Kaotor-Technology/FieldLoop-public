@@ -20,6 +20,7 @@ from .geo_extraction import HttpGeoExtractionPlatform
 from .guardrail_client import GuardrailClient
 from .identity import InternalTokenVerifier
 from .knowledge import KnowledgeScope, KnowledgeSearch
+from .reference_catalog import load_reference_catalog
 from .runtime import AgentRuntime, RuntimeDeps
 from .service import create_service
 from .tools import DEFINITION_VOCABULARY, HttpPlatformReader, KnowledgeProvider
@@ -94,6 +95,7 @@ def build_app(settings: Settings | None) -> FastAPI:
     if settings is None:
         return create_service(None, None, None)
     catalog = load_catalog(settings.packs_dir, settings.schema_path, DEFINITION_VOCABULARY)
+    references = load_reference_catalog(settings.schema_path.parents[2])
     pool: AsyncConnectionPool[AsyncConnection[DictRow]] = AsyncConnectionPool(
         settings.database_url, open=False, min_size=0, max_size=5,
         kwargs={"row_factory": dict_row},
@@ -104,7 +106,9 @@ def build_app(settings: Settings | None) -> FastAPI:
 
     def knowledge(session: SessionRecord) -> KnowledgeProvider | None:
         # Imported lazily: constructing Vertex embeddings needs project credentials.
-        project = os.environ.get("FIELDLOOP_GCP_PROJECT")
+        project = os.environ.get("FIELDLOOP_GCP_PROJECT", "").strip()
+        if not project:
+            project = os.environ.get("GOOGLE_CLOUD_PROJECT", "").strip()
         if not project:
             return None
         from fieldloop_adapters.embeddings import vertex_embeddings
@@ -123,7 +127,7 @@ def build_app(settings: Settings | None) -> FastAPI:
         adk_sessions=adk_sessions,
         model_factory=lambda d: guardrail_model(d, settings.guardrail_url),
         geo_platform=HttpGeoExtractionPlatform(http, settings.platform_url),
-        knowledge=knowledge,
+        knowledge=knowledge, reference_catalog=references,
         drafts=lambda s: PostgresDraftStore(pool, s.org_id, s.simulated, s.classification),
     )
     verifier = InternalTokenVerifier(

@@ -18,6 +18,8 @@ COPY --from=build --chown=fieldloop:fieldloop /app/.venv /app/.venv
 # Agent definitions are Domain Pack data (architecture §7.2) validated against the shared schema.
 COPY --chown=fieldloop:fieldloop domain-packs /app/domain-packs
 COPY --chown=fieldloop:fieldloop packages/contracts/agent-definition.v1.schema.json /app/packages/contracts/agent-definition.v1.schema.json
+COPY --chown=fieldloop:fieldloop packages/contracts/reference-catalog.v1.schema.json /app/packages/contracts/reference-catalog.v1.schema.json
+COPY --chown=fieldloop:fieldloop data/corpus/references/manifest.json data/corpus/references/source-observations.json /app/data/corpus/references/
 USER fieldloop
 EXPOSE 8080
 CMD ["sh", "-c", "exec uvicorn fieldloop_assistant.main:app --host 0.0.0.0 --port \"${PORT:-8080}\""]
