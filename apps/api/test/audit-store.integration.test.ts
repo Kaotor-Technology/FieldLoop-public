@@ -4,6 +4,7 @@ import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { CurrentUser } from "../src/auth/service.js";
 import { AuditServiceError } from "../src/audit/model.js";
+import { PostgresHealthStore } from "../src/health/postgres-store.js";
 import { PostgresAuditStore } from "../src/audit/postgres-store.js";
 
 const databaseUrl = process.env["FIELDLOOP_AUDIT_TEST_DATABASE_URL"];
@@ -37,6 +38,28 @@ integration("PostgresAuditStore against migrated PostgreSQL", () => {
     await append(otherOrgId, "barrier.health_changed", "barrier-1", "PUBLIC");
   });
   afterAll(async () => { await pool?.end(); });
+
+  it.each(["accept", "reject"] as const)("shows only the hash-bound reason of a real %s decision", async (decision) => {
+    const organisation = `audit-decision-${randomUUID()}`;
+    const actor = user("CONFIDENTIAL", organisation);
+    const ownerId = randomUUID(), barrierId = randomUUID(), proposalId = randomUUID();
+    await pool.query("INSERT INTO app.app_user (id,org_id,keycloak_sub,roles_snapshot) VALUES ($1,$2,$3,'[\"fieldloop.manager\"]'::jsonb)", [ownerId, organisation, actor.sub]);
+    await pool.query("INSERT INTO app.barrier (id,org_id,type,side,health,owner_id,simulated,classification) VALUES ($1,$2,'technical','preventive','healthy',$3,true,'CONFIDENTIAL')", [barrierId, organisation, ownerId]);
+    await pool.query("INSERT INTO app.health_proposal (id,org_id,barrier_id,proposed_health,status,simulated,classification) VALUES ($1,$2,$3,'degraded','open',true,'CONFIDENTIAL')", [proposalId, organisation, barrierId]);
+    const db = new Kysely<Record<string, never>>({ dialect: new PostgresDialect({ pool }) });
+    const reason = `Synthetic owner ${decision} reason`;
+    await new PostgresHealthStore(db).decide({ user: actor, proposalId, decision, reason, idempotencyKey: randomUUID() });
+    const events = await store.listEvents(actor, { entityId: proposalId }, undefined, 50);
+    expect(events.items).toHaveLength(1);
+    expect(events.items[0]).toMatchObject({ actor: actor.sub, reason, action: `health_proposal.${decision === "accept" ? "accepted" : "rejected"}` });
+    expect((await store.listEvents(user("PUBLIC", organisation), { entityId: proposalId }, undefined, 50)).items).toEqual([]);
+    expect((await store.listEvents(user("HIGHLY_RESTRICTED", "another-org"), { entityId: proposalId }, undefined, 50)).items).toEqual([]);
+    // The audit row is immutable; later domain changes must not substitute an unbound reason.
+    await pool.query("UPDATE app.health_proposal SET reason='Unbound replacement' WHERE id=$1", [proposalId]);
+    expect((await store.listEvents(actor, { entityId: proposalId }, undefined, 50)).items[0]).toMatchObject({ reason: null });
+    await pool.query("UPDATE app.health_proposal SET reason=$1,classification='HIGHLY_RESTRICTED' WHERE id=$2", [reason, proposalId]);
+    expect((await store.listEvents(actor, { entityId: proposalId }, undefined, 50)).items[0]).toMatchObject({ reason: null });
+  });
 
   it("returns only the user's Organisation, newest first, with the stored hash chain", async () => {
     const page = await store.listEvents(user("HIGHLY_RESTRICTED"), {}, undefined, 50);

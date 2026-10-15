@@ -34,8 +34,13 @@ export function evaluateToolCall(input: ToolCallCheck, registered: ToolRegistrat
       ? { decision: "allow", reason: "registered_read" }
       : { decision: "block", reason: "read_target_or_action_mismatch" };
   }
+  // This registered legacy operation only prepares a human work order; it never grants execution.
+  const cmmsProposal = input.tool === "cmms.create_work_order";
+  if (cmmsProposal && (input.target !== "cmms" || input.actionType !== "system_of_record" || input.actionLevel !== "l1")) {
+    return { decision: "block", reason: "action_target_mismatch" };
+  }
   // Never infer execution capability from a caller's tool name, URL or claimed action type.
-  if (input.tool !== "create_action_request" && !draftTools.has(input.tool)) {
+  if (input.tool !== "create_action_request" && !draftTools.has(input.tool) && !cmmsProposal) {
     return { decision: "block", reason: "tool_has_no_safe_implementation" };
   }
   const { actionType, actionLevel, target } = input;

@@ -73,6 +73,7 @@ export function AuditLog({ events, filter, isLoading = false, hasError = false, 
             <th scope="col">{t("auditColumnAction")}</th>
             <th scope="col">{t("auditColumnEntity")}</th>
             <th scope="col">{t("auditColumnActor")}</th>
+            <th scope="col">{t("auditColumnReason")}</th>
             <th scope="col">{t("auditColumnClassification")}</th>
             <th scope="col">{t("auditColumnIntegrity")}</th>
           </tr>
@@ -86,6 +87,7 @@ export function AuditLog({ events, filter, isLoading = false, hasError = false, 
             </td>
             <td><code className="mono">{event.entity}</code></td>
             <td><code className="mono">{event.actor}</code></td>
+            <td>{event.reason ?? t("notRecorded")}</td>
             <td>{t(`classifications.${event.classification}`)}</td>
             <td>
               <details className="audit-hashes">

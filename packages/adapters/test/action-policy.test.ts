@@ -52,3 +52,21 @@ it("blocks targets outside the AI System allowlist before any proposal (PRD GR-4
   expect(evaluateToolCall({ aiSystem: base.aiSystem, tool: "get_asset", target: "fieldloop", simulated: true, classification: "INTERNAL" }, registered(["get_asset"], ["cmms"])))
     .toEqual({ decision: "block", reason: "target_not_registered" });
 });
+
+it("converts only an explicitly registered CMMS work-order operation into fixed L1 preparation", () => {
+  const alias = { ...base, tool: "cmms.create_work_order" };
+  const registration = registered([alias.tool]);
+  expect(evaluateToolCall(alias, registration)).toEqual({ decision: "convert_l1", reason: "human_action_required", ceiling: "l1" });
+  expect(evaluateToolCall(alias, registered([base.tool])).decision).toBe("block");
+  expect(evaluateToolCall(alias, registration, "l0").decision).toBe("block");
+  const missingType = { ...alias };
+  delete missingType.actionType;
+  for (const input of [
+    { ...alias, actionLevel: "l0" as const },
+    { ...alias, actionLevel: "l2" as const },
+    { ...alias, target: "gis" as const },
+    { ...alias, target: "fieldloop" as const, actionType: "internal_record" as const },
+    missingType,
+    { ...alias, tool: "cmms.delete_work_order" },
+  ]) expect(evaluateToolCall(input, registered([input.tool])).decision).toBe("block");
+});

@@ -1,4 +1,4 @@
-export { DEMO_AGENT_TOOL_NAMES } from "./demo-agent-tools.js";
+export { DEMO_AGENT_TOOL_NAMES, DEMO_REGISTERED_TOOL_NAMES } from "./demo-agent-tools.js";
 export { createGoogleCloudSqlPool } from "./cloud-sql.js";
 export { loadDomainPacks, type LoadedDomainPack } from "./domain-pack-loader.js";
 export { GoogleCloudBlobStore, createGoogleCloudBlobStore } from "./google-cloud-blob-store.js";

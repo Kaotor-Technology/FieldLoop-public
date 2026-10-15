@@ -5,6 +5,7 @@ import { calculateRisk, DEMO_RISK_MATRIX, RiskInputError } from "@fieldloop/doma
 import type { RiskInput, RiskSeverity, RiskZone } from "@fieldloop/contracts";
 import type { MapFeature, MapFeatureCollection, MapGeometry, MapLayerName } from "@fieldloop/map";
 import type { AuthDatabase } from "../auth/postgres-store.js";
+import { DL01_STATIC_STRIP_BAND } from "./strip-band-seed.js";
 
 export type MapBoundingBox = readonly [west: number, south: number, east: number, north: number];
 export type { MapFeature, MapFeatureCollection, MapLayerName } from "@fieldloop/map";
@@ -447,6 +448,32 @@ export function registerMapLayerRoutes(app: FastifyInstance, store: MapLayerStor
       if (error instanceof MapServiceError) return problem(error.statusCode, error.code, error.message);
       request.log.error({ err: error }, "Asset query failed");
       return problem(503, "service_unavailable", "Asset data is unavailable");
+    }
+  });
+
+  app.get("/api/v1/assets/:assetId/strip", async (request, reply) => {
+    const user = request.fieldLoopCurrentUser;
+    const problem = (status: number, code: string, title: string) => reply.code(status)
+      .type("application/problem+json")
+      .send({ type: "about:blank", title, status, code, traceId: request.id });
+    if (!user) return problem(401, "unauthenticated", "Authentication required");
+    const { assetId } = request.params as { assetId: string };
+    if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(assetId)) {
+      return problem(400, "validation_failed", "Asset identifier is invalid");
+    }
+    try {
+      const asset = await store.getAsset({
+        assetId, orgId: user.orgId, clearance: user.clearance,
+        allowSeededDemoGeometry: user.roles.some((role) => DEMO_ROLES.has(role)),
+      });
+      if (!asset || asset.code !== DL01_STATIC_STRIP_BAND.assetCode || !asset.simulated || asset.label !== "SYNTHETIC") {
+        return problem(404, "not_found", "Chainage strip was not found");
+      }
+      return reply.header("cache-control", "private, no-store").send(DL01_STATIC_STRIP_BAND);
+    } catch (error) {
+      if (error instanceof MapServiceError) return problem(error.statusCode, error.code, error.message);
+      request.log.error({ err: error }, "Asset strip query failed");
+      return problem(503, "service_unavailable", "Asset strip data is unavailable");
     }
   });
 

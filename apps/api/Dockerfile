@@ -7,6 +7,7 @@ COPY DESIGN.md ./
 COPY packages ./packages
 COPY apps/web ./apps/web
 COPY data/synthetic/dl-01/bowtie-a.json ./data/synthetic/dl-01/bowtie-a.json
+COPY data/synthetic/dl-01/strip-band.json ./data/synthetic/dl-01/strip-band.json
 COPY data/synthetic/bangkok/bowtie-d.json ./data/synthetic/bangkok/bowtie-d.json
 COPY apps/api ./apps/api
 COPY apps/guardrail ./apps/guardrail
@@ -21,6 +22,7 @@ ENV NODE_ENV=production PORT=8080
 WORKDIR /app/apps/api
 COPY --from=build --chown=node:node /output ./
 COPY --from=build --chown=node:node /workspace/apps/web/dist /app/apps/web/dist
+COPY --from=build --chown=node:node /workspace/data/synthetic/dl-01/strip-band.json /app/data/synthetic/dl-01/strip-band.json
 COPY --from=build --chown=node:node /workspace/domain-packs /app/domain-packs
 USER node
 EXPOSE 8080

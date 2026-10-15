@@ -94,3 +94,17 @@ describe("Gen AI Safety contracts (FL-85 / FL-36)", () => {
     expect(() => parseGenAiSafetyPack(health, "ai-safety.yaml")).toThrow(/health/);
   });
 });
+
+it("permits the one proposal-only CMMS operation in explicit AI registration, not arbitrary namespaced writes", async () => {
+  const value = await seed();
+  const ai = value["aiSystem"] as { tools: string[] };
+  const policy = (value["policies"] as { kind: string; settings: { allowedTools: string[] } }[]).find(p => p.kind === "tool-call");
+  if (!policy) throw new Error("Missing tool policy fixture");
+  ai.tools = [...ai.tools, "cmms.create_work_order"];
+  policy.settings.allowedTools = [...policy.settings.allowedTools, "cmms.create_work_order"];
+  expect(parseGenAiSafetyPack(value, "synthetic-alias.yaml").aiSystem.tools).toContain("cmms.create_work_order");
+  for (const invalid of ["cmms.delete_work_order", "cmms.create_work_order.extra", "https://example.test/write"]) {
+    ai.tools = [...ai.tools.slice(0, -1), invalid];
+    expect(() => parseGenAiSafetyPack(value, "synthetic-alias.yaml")).toThrow();
+  }
+});
