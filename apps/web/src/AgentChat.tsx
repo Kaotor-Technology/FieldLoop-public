@@ -26,6 +26,7 @@ interface CitationView {
   revision?: string;
   page?: string;
   clause?: string;
+  referenceOnly: boolean;
 }
 
 export function AgentChat({
@@ -147,6 +148,7 @@ export function AgentChat({
       {citation.page ? <><dt>{t("agentSourcePage")}</dt><dd className="mono">{citation.page}</dd></> : null}
       {citation.clause ? <><dt>{t("agentSourceClause")}</dt><dd className="mono">{citation.clause}</dd></> : null}
     </dl>
+    {citation.referenceOnly ? <p className="agent-chat-unverified">{t("agentReferenceOnly")}</p> : null}
   </div> : <p className="agent-chat-muted">{t("agentSourceChoose")}</p>;
 
   return <section className={"agent-chat agent-chat-" + variant} aria-label={t("agentWorkspace")}>
@@ -167,7 +169,7 @@ export function AgentChat({
               <span className="agent-chat-avatar" aria-hidden="true">AG</span>
               <div><h3>{turnAgentName}</h3><p>{t("agentOnBehalf")}</p></div>
               {turn.simulated ? <span className="agent-chat-tag agent-chat-tag-simulation">SIMULATION</span> : null}
-              {!turn.simulated ? <span className="agent-chat-tag">{turn.classification}</span> : null}
+              <span className="agent-chat-tag">{turn.classification}</span>
             </header>
 
             {turn.steps.length > 0 ? <details className="agent-chat-timeline" open={turn.status === "running"}>
@@ -325,15 +327,17 @@ function normalizeCitations(answer: AgentAnswer, turnId = "turn"): CitationView[
     const record = isRecord(value) ? value : undefined;
     const id = typeof value === "string"
       ? value
-      : readString(record?.["id"]) ?? readString(record?.["documentId"]) ?? readString(record?.["reference"]) ?? String(index + 1);
+      : readString(record?.["id"]) ?? readString(record?.["documentId"]) ?? readString(record?.["document_id"]) ?? readString(record?.["reference"]) ?? String(index + 1);
     const detail = answer.retrievedCitations.map((item) => isRecord(item) ? item : undefined)
-      .find((item) => item && [item["id"], item["documentId"], item["citation"], item["reference"]].includes(id));
+      .find((item) => item && [item["id"], item["documentId"], item["document_id"], item["citation"], item["reference"]].includes(id));
     const revision = readString(record?.["revision"]) ?? readString(detail?.["revision"]);
-    const page = readString(record?.["page"]) ?? readString(detail?.["page"]);
+    const pageValue = record?.["page"] ?? detail?.["page"];
+    const page = typeof pageValue === "number" && Number.isFinite(pageValue) ? String(pageValue) : readString(pageValue);
     const clause = readString(record?.["clause"]) ?? readString(detail?.["clause"]);
     return {
       key: turnId + ":" + id + ":" + String(index),
       id,
+      referenceOnly: /^(?:ASME|API)(?:[\s-]|$)/i.test(id) || record?.["referenceOnly"] === true || detail?.["referenceOnly"] === true,
       title: readString(record?.["title"]) ?? readString(record?.["name"]) ?? readString(detail?.["title"]) ?? id,
       ...(revision ? { revision } : {}),
       ...(page ? { page } : {}),

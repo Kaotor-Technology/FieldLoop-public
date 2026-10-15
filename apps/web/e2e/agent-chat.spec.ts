@@ -15,7 +15,7 @@ test.beforeEach(async ({ page, request }) => {
     window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
       const inputUrl = input instanceof Request ? input.url : String(input);
       const url = new URL(inputUrl, window.location.href);
-      if (!url.pathname.startsWith("/api/assistant/v1/")) return originalFetch(input, init);
+      if (!url.pathname.startsWith("/api/v1/assistant/")) return originalFetch(input, init);
 
       const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
       const body = typeof init?.body === "string" ? JSON.parse(init.body) as unknown : undefined;
@@ -23,7 +23,7 @@ test.beforeEach(async ({ page, request }) => {
       requests.push({ path: url.pathname, method, body, headers: Object.fromEntries(new Headers(init?.headers).entries()) });
       sessionStorage.setItem("__agentRequests", JSON.stringify(requests));
 
-      if (url.pathname === "/api/assistant/v1/sessions" && method === "POST") {
+      if (url.pathname === "/api/v1/assistant/sessions" && method === "POST") {
         const requestedAgent = body !== null && typeof body === "object" && "agent" in body && typeof body.agent === "string" ? body.agent : "integrity-orchestrator";
         return new Response(JSON.stringify({ id: "session-synthetic-1-" + requestedAgent, agent: requestedAgent, simulated: true, classification: "INTERNAL" }), {
           status: 201, headers: { "content-type": "application/json" },
@@ -85,8 +85,8 @@ test.beforeEach(async ({ page, request }) => {
             if (mode === "slow") await new Promise((resolve) => setTimeout(resolve, 300));
             controller.enqueue(eventChunk("answer.final", {
               answer: "The synthetic Code & Standard catalogue lists the CP survey interval for the selected segment.",
-              citations: [{ id: "DOC-SYNTHETIC-CP-01", title: "Synthetic CP Survey Guidance", revision: "R2", page: "4", clause: "5.1" }],
-              retrieved_citations: [{ id: "DOC-SYNTHETIC-CP-01", title: "Synthetic CP Survey Guidance", revision: "R2", page: "4", clause: "5.1" }],
+              citations: mode === "reference" ? ["ASME B31.8 (edition not verified)"] : ["DOC-SYNTHETIC-CP-01"],
+              retrieved_citations: [{ document_id: "DOC-SYNTHETIC-CP-01", title: "Synthetic CP Survey Guidance", revision: "R2", page: 4, clause: "5.1" }],
               known: ["The synthetic catalogue contains CP survey guidance."], unknown: ["The route measurement basis is not provided."], assumptions: ["The selected route maps to this catalogue entry."],
               confidence: "medium", confidence_reason: "One synthetic catalogue entry supports this answer.",
             }));
@@ -102,7 +102,7 @@ test.beforeEach(async ({ page, request }) => {
   await expect(page.getByRole("heading", { name: "Geo Command Map", exact: true })).toBeVisible();
 });
 
-async function setAgentMode(page: import("@playwright/test").Page, mode: "normal" | "hold" | "error-once" | "slow" | "limit") {
+async function setAgentMode(page: import("@playwright/test").Page, mode: "normal" | "hold" | "error-once" | "slow" | "limit" | "reference") {
   await page.evaluate((value) => sessionStorage.setItem("__agentMode", value), mode);
 }
 
@@ -149,10 +149,11 @@ test("workspace sends map context and presents the streamed trace, answer basis 
   await expect(sources).toContainText("Revision");
   await expect(sources).toContainText("R2");
   await expect(sources).toContainText("5.1");
+  await expect(sources.locator("dd").filter({ hasText: /^4$/ })).toBeVisible();
   await expect(sources).not.toContainText(/licen[cs]e/i);
 
   const requests = await readAgentRequests(page);
-  const create = requests.find((request) => request.path === "/api/assistant/v1/sessions");
+  const create = requests.find((request) => request.path === "/api/v1/assistant/sessions");
   const message = requests.find((request) => request.path.endsWith("/messages"));
   expect(create?.body).toEqual({ agent: "integrity-orchestrator" });
   expect(message?.body?.message).toContain("synthetic-segment-01");
@@ -253,7 +254,7 @@ test("the selected map story carries its matching Agent into the full workspace"
   await page.getByRole("textbox", { name: "Message" }).fill("What is the current flood context?");
   await page.getByRole("button", { name: "Send" }).click();
   await expect(page.getByRole("log", { name: "Agent conversation" }).getByRole("heading", { name: "Flood Situation" })).toBeVisible();
-  expect((await readAgentRequests(page)).find((request) => request.path === "/api/assistant/v1/sessions")?.body).toEqual({ agent: "flood-situation" });
+  expect((await readAgentRequests(page)).find((request) => request.path === "/api/v1/assistant/sessions")?.body).toEqual({ agent: "flood-situation" });
 });
 
 for (const route of ["workspace", "docked"] as const) {
@@ -291,4 +292,15 @@ test("Thai Agent Chat meets typography rules and reflows at 320px", async ({ pag
   expect(layout.width).toBeLessThanOrEqual(layout.viewport);
   const axe = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
   expect(axe.violations).toEqual([]);
+});
+
+
+test("unlicensed standards show a reference-only source warning", async ({ page }) => {
+  await setAgentMode(page, "reference");
+  await page.goto("/agent");
+  await page.getByRole("textbox", { name: "Message" }).fill("Which standard should I verify?");
+  await page.getByRole("button", { name: "Send" }).click();
+  await page.getByRole("button", { name: "Source 1: ASME B31.8 (edition not verified)" }).click();
+  await expect(page.getByRole("complementary", { name: "Cited sources" }))
+    .toContainText("Reference only — not verified against source text");
 });

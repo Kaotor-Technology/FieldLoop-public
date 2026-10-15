@@ -101,6 +101,7 @@
   "agentConfidenceReasonMissing": "Reason not provided",
   "agentSourcesPane": "Cited sources",
   "agentCitedSources": "Cited sources",
+  "agentReferenceOnly": "Reference only — not verified against source text",
   "agentSourceReference": "Reference",
   "agentSourceRevision": "Revision",
   "agentSourcePage": "Page",
