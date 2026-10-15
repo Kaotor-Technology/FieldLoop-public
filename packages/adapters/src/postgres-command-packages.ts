@@ -112,7 +112,9 @@ export class PostgresCommandPackageStore implements CommandPackageServicePort {
         a.payload->>'action' AS action, COALESCE(a.rationale, '') AS rationale, a.citations,
         p.procedure_ref, p.preconditions, p.barrier_id::text,
         (SELECT count(DISTINCT ap.approver_sub)::int FROM app.approval ap WHERE ap.org_id = a.org_id
-          AND ap.action_request_id = a.id AND ap.decision = 'approved' AND ap.voided_at IS NULL AND ap.payload_hash = a.payload_hash) AS approval_count,
+          AND ap.action_request_id = a.id AND ap.decision = 'approved' AND ap.voided_at IS NULL AND ap.payload_hash = a.payload_hash
+          AND ap.approver_sub <> a.requested_by AND ap.approver_sub NOT LIKE 'agent:%'
+          AND ap.simulated = a.simulated AND ap.classification IS NOT DISTINCT FROM a.classification) AS approval_count,
         a.status AS action_status, a.rejection_reason,
         p.execution_status, p.outcome, e.id::text AS evidence_id, p.executed_by, p.recorded_at,
         p.simulated, p.classification, p.created_at, a.expires_at, p.outcome_actor,
@@ -214,7 +216,9 @@ async function readCommandPackage(trx: Tx, user: ActionIdentity, id: string, for
       a.payload->>'action' AS action, COALESCE(a.rationale, '') AS rationale, a.citations,
       p.procedure_ref, p.preconditions, p.barrier_id::text,
       (SELECT count(DISTINCT ap.approver_sub)::int FROM app.approval ap WHERE ap.org_id = a.org_id
-        AND ap.action_request_id = a.id AND ap.decision = 'approved' AND ap.voided_at IS NULL AND ap.payload_hash = a.payload_hash) AS approval_count,
+        AND ap.action_request_id = a.id AND ap.decision = 'approved' AND ap.voided_at IS NULL AND ap.payload_hash = a.payload_hash
+        AND ap.approver_sub <> a.requested_by AND ap.approver_sub NOT LIKE 'agent:%'
+        AND ap.simulated = a.simulated AND ap.classification IS NOT DISTINCT FROM a.classification) AS approval_count,
       a.status AS action_status, a.rejection_reason,
       p.execution_status, p.outcome, e.id::text AS evidence_id, p.executed_by, p.recorded_at,
       p.simulated, p.classification, p.created_at, a.expires_at, p.outcome_actor,

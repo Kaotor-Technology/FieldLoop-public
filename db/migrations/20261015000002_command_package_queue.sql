@@ -117,7 +117,9 @@ BEGIN
             OR parent.status <> 'approved' OR parent.expires_at <= clock_timestamp() OR parent.simulation_retired_at IS NOT NULL
             OR (SELECT count(DISTINCT ap.approver_sub) FROM app.approval ap WHERE ap.org_id = parent.org_id
                 AND ap.action_request_id = parent.id AND ap.decision = 'approved' AND ap.voided_at IS NULL
-                AND ap.payload_hash = parent.payload_hash) < 2 THEN
+                AND ap.payload_hash = parent.payload_hash AND ap.approver_sub <> parent.requested_by
+                AND ap.approver_sub NOT LIKE 'agent:%' AND ap.simulated = parent.simulated
+                AND ap.classification IS NOT DISTINCT FROM parent.classification) < 2 THEN
             RAISE EXCEPTION 'Command Package outcome requires an unexpired approved Action Request and may be recorded once' USING ERRCODE = 'check_violation';
         END IF;
     END IF;
