@@ -19,6 +19,7 @@ test("Command Package queue shows required details and locks outcomes before two
   await expect(pending).toContainText("Deploy mobile pump");
   await expect(pending).toContainText("Reduce simulated flood exposure");
   await expect(pending).toContainText("PROC-SYN-7");
+  await expect(pending).toContainText("Reduce standing water at the synthetic hospital access route.");
   await expect(pending).toContainText("Pump isolated from live grid");
   await expect(pending.getByText("SIMULATION", { exact: true })).toBeVisible();
   await expect(pending.getByRole("textbox", { name: "Outcome and reason" })).toBeDisabled();

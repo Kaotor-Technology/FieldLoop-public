@@ -391,6 +391,7 @@
   "commandPackageRationale": "เหตุผล",
   "commandPackageProcedure": "ขั้นตอนปฏิบัติงาน",
   "commandPackagePreconditions": "เงื่อนไขก่อนเริ่ม",
+  "commandPackageExpectedEffect": "ผลที่คาดหวัง",
   "commandPackageCitations": "แหล่งอ้างอิง",
   "commandPackageApproval": "สถานะการอนุมัติ",
   "commandPackageApprovalCount": "อนุมัติโดยมนุษย์ {{count}} จาก 2 คน",

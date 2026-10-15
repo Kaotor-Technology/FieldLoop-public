@@ -97,6 +97,7 @@ function CommandPackageCard({ item, t, onSubmit, isSubmitting, error, success }:
       <div><dt>{t("commandPackageRationale")}</dt><dd>{item.rationale}</dd></div>
       <div><dt>{t("commandPackageProcedure")}</dt><dd className="mono" lang="en">{item.procedure}</dd></div>
       <div><dt>{t("commandPackagePreconditions")}</dt><dd><ul>{item.preconditions.map((condition) => <li key={condition}>{condition}</li>)}</ul></dd></div>
+      <div><dt>{t("commandPackageExpectedEffect")}</dt><dd>{item.expectedEffect}</dd></div>
       <div><dt>{t("commandPackageCitations")}</dt><dd><ul>{item.citations.map((citation) => <li className="mono" key={citation}>{citation}</li>)}</ul></dd></div>
       <div><dt>{t("commandPackageApproval")}</dt><dd>
         <span className="command-package-state">{t(`commandPackageActionStatus.${item.actionStatus}`)}</span>

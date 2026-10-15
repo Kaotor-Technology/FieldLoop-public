@@ -391,6 +391,7 @@
   "commandPackageRationale": "Rationale",
   "commandPackageProcedure": "Procedure",
   "commandPackagePreconditions": "Preconditions",
+  "commandPackageExpectedEffect": "Expected effect",
   "commandPackageCitations": "Citations",
   "commandPackageApproval": "Approval status",
   "commandPackageApprovalCount": "{{count}} of 2 required human approvals",
