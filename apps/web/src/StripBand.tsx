@@ -9,43 +9,82 @@ export interface StripBandProps {
 }
 
 const COPY = {
-  en: { title: "Strip", axis: "Chainage", snapshot: "Read-only seed snapshot", segments: "Segments",
-    barriers: "Barriers", facilities: "Facilities", unlocated: "No confirmed Chainage — Asset-scoped Barriers are not positioned.",
-    inspections: "Inspection features", noInspections: "No located inspection features in the seed.",
-    threats: "Threat Categories", noThreats: "No located Threat Categories in the seed.",
-    healthy: "Healthy", degraded: "Degraded", failed: "Failed", unverified: "Unverified" },
-  th: { title: "แถบระยะทาง", axis: "ระยะทางตามแนวเส้น", snapshot: "ข้อมูล seed แบบอ่านอย่างเดียว", segments: "ช่วงของแนวเส้น",
-    barriers: "มาตรการป้องกัน", facilities: "สถานี", unlocated: "ไม่มีระยะทางที่ยืนยัน — มาตรการระดับสินทรัพย์ไม่ถูกวางตำแหน่ง",
-    inspections: "รายการตรวจสอบ", noInspections: "ไม่มีรายการตรวจสอบที่ระบุตำแหน่งใน seed",
-    threats: "หมวดภัยคุกคาม", noThreats: "ไม่มีหมวดภัยคุกคามที่ระบุตำแหน่งใน seed",
-    healthy: "ปกติ", degraded: "เสื่อมสภาพ", failed: "ล้มเหลว", unverified: "ยังไม่ยืนยัน" },
+  en: {
+    title: "Strip", axis: "Chainage (m)", segments: "Segments", barriers: "Barriers", facilities: "Facilities",
+    unlocated: "No confirmed Chainage — Asset-scoped Barriers are not positioned.",
+    inspections: "No located inspection features", threats: "No located Threat Categories",
+    healthy: "Healthy", degraded: "Degraded", failed: "Failed", unverified: "Unverified",
+  },
+  th: {
+    title: "แถบระยะทาง", axis: "ระยะทางตามแนวเส้น (ม.)", segments: "ช่วงของแนวเส้น", barriers: "มาตรการป้องกัน", facilities: "สถานี",
+    unlocated: "ไม่มีระยะทางที่ยืนยัน — มาตรการระดับสินทรัพย์ยังไม่มีตำแหน่ง",
+    inspections: "ไม่มีรายการตรวจสอบที่ระบุตำแหน่ง", threats: "ไม่มีหมวดภัยคุกคามที่ระบุตำแหน่ง",
+    healthy: "ปกติ", degraded: "เสื่อมสภาพ", failed: "ล้มเหลว", unverified: "ยังไม่ยืนยัน",
+  },
 } as const;
-
 
 /** Presentational, read-only component. No seed import, auth decision, or interactive map synchronization. */
 export function StripBand({ data, language = "en" }: StripBandProps) {
   const text = COPY[language];
+  const segments = [...data.segments].sort((left, right) => left.chainageFromM - right.chainageFromM || left.id.localeCompare(right.id));
+  const facilities = [...data.facilities].sort((left, right) => left.chainageM - right.chainageM || left.id.localeCompare(right.id));
+  const barriers = [...data.barriers].sort((left, right) =>
+    (left.chainageM ?? Number.POSITIVE_INFINITY) - (right.chainageM ?? Number.POSITIVE_INFINITY) || left.name.localeCompare(right.name),
+  );
+  const hasUnlocatedBarriers = barriers.some((barrier) => barrier.chainageM === null);
+  const formatter = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 0 });
+
   return <section className="strip-band" lang={language} aria-label={text.title}>
-    <header><h2>{text.title} · <span className="strip-mono">{data.assetCode}</span></h2>
+    <header className="strip-band-header">
+      <h2>{text.title} · <span className="strip-mono">{data.assetCode}</span></h2>
       <span className="strip-simulation" lang="en">SIMULATION · SYNTHETIC</span>
-      <p>{text.snapshot} · <span className="strip-mono">{data.classification}</span></p>
+      <span className="strip-classification strip-mono">{data.classification}</span>
     </header>
-    <div className="strip-axis"><span>{text.axis} (m)</span><span className="strip-mono">0 — {data.lengthM}</span></div>
-    <h3>{text.segments}</h3>
-    <div className="strip-segments" aria-hidden="true">{data.segments.map(segment => <span key={segment.id}
-      style={{ left: `${segment.chainageFromM / data.lengthM * 100}%`,
-        width: `${(segment.chainageToM - segment.chainageFromM) / data.lengthM * 100}%` }} />)}</div>
-    <ol className="strip-segment-list">{data.segments.map(segment => <li key={segment.id}>
-      <span className="strip-mono" lang="en">{segment.name}</span><span className="strip-mono">{segment.chainageFromM} — {segment.chainageToM} m</span>
-    </li>)}</ol>
-    <h3>{text.facilities}</h3><ul className="strip-facilities">{data.facilities.map(facility => <li key={facility.id}>
-      <span className="strip-mono" lang="en">{facility.name}</span> · <span className="strip-mono">{facility.chainageM} m</span>
-    </li>)}</ul>
-    <h3>{text.barriers}</h3><p>{text.unlocated}</p>
-    <ul className="strip-barriers" role="list">{data.barriers.map(barrier => <li key={barrier.id}>
-      <span className="strip-mono" lang="en">{barrier.name}</span> <HealthBadge health={barrier.health} label={text[barrier.health]} />
-    </li>)}</ul>
-    <h3>{text.inspections}</h3><p>{text.noInspections}</p>
-    <h3>{text.threats}</h3><p>{text.noThreats}</p>
+    <div className="strip-axis"><span>{text.axis}</span><span className="strip-mono">0 — {formatter.format(data.lengthM)}</span></div>
+    <div className="strip-lane">
+      <h3>{text.segments}</h3>
+      <div className="strip-segments" role="list" aria-label={text.segments}>
+        {segments.map((segment) => <span key={segment.id} role="listitem"
+          aria-label={`${segment.name}, ${formatter.format(segment.chainageFromM)} to ${formatter.format(segment.chainageToM)} m`}
+          title={`${segment.name} · ${formatter.format(segment.chainageFromM)} — ${formatter.format(segment.chainageToM)} m`}
+          style={{ left: `${segment.chainageFromM / data.lengthM * 100}%`,
+            width: `${(segment.chainageToM - segment.chainageFromM) / data.lengthM * 100}%` }}>
+          <span className="strip-segment-name strip-mono">{shortSegmentName(segment.name, data.assetCode)}</span>
+        </span>)}
+      </div>
+    </div>
+    <div className="strip-lane strip-facility-lane">
+      <h3>{text.facilities}</h3>
+      <ul className="strip-facilities" aria-label={text.facilities}>
+        {facilities.map((facility) => <li key={facility.id}
+          aria-label={`${facility.name}, ${formatter.format(facility.chainageM)} m`}
+          style={{ left: `${facility.chainageM / data.lengthM * 100}%` }}>
+          <span className="strip-facility-name strip-mono">{shortFacilityName(facility.name, data.assetCode)}</span>
+          <span className="strip-mono">{formatter.format(facility.chainageM)} m</span>
+        </li>)}
+      </ul>
+    </div>
+    <div className="strip-lane strip-barrier-lane">
+      <h3>{text.barriers}</h3>
+      <div className="strip-barrier-content">
+        {hasUnlocatedBarriers && <p className="strip-unlocated">{text.unlocated}</p>}
+        <ul className="strip-barriers" aria-label={text.barriers} tabIndex={0}>
+          {barriers.map((barrier) => <li key={barrier.id}>
+            <span className="strip-barrier-name strip-mono" lang="en">{barrier.name}</span>
+            {barrier.chainageM !== null && <span className="strip-mono">{formatter.format(barrier.chainageM)} m</span>}
+            <HealthBadge health={barrier.health} label={text[barrier.health]} />
+          </li>)}
+        </ul>
+      </div>
+    </div>
+    <p className="strip-band-empty">{data.inspections.length === 0 ? text.inspections : `${text.inspections}: ${data.inspections.length}`} · {data.threatCategories.length === 0 ? text.threats : `${text.threats}: ${data.threatCategories.length}`}</p>
   </section>;
+}
+
+function shortSegmentName(name: string, assetCode: string): string {
+  return name.replace(`${assetCode} `, "").replace(/^Segment\s+/i, "");
+}
+
+function shortFacilityName(name: string, assetCode: string): string {
+  return name.replace(`${assetCode} `, "").replace(/^Block Valve Station\s+/i, "BVS ");
 }

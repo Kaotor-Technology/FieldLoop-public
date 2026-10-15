@@ -1,4 +1,5 @@
 import type { MapFeatureCollection, MapLayerName } from "@fieldloop/map";
+import type { StripBandData } from "./strip-band-data";
 import createClient from "openapi-fetch";
 import type { paths } from "@fieldloop/contracts";
 
@@ -25,5 +26,13 @@ export async function getMapLayer(input: {
     signal: input.signal,
   });
   if (error || !data) throw new Error("Map layers are unavailable for this Organisation or clearance");
+  return data;
+}
+
+export async function getAssetStrip(assetId: string, signal: AbortSignal): Promise<StripBandData> {
+  const { data, error } = await client.GET("/v1/assets/{assetId}/strip", {
+    params: { path: { assetId } }, signal,
+  });
+  if (error || !data) throw new Error("Asset Chainage strip is unavailable for this Organisation or clearance");
   return data;
 }

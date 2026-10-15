@@ -16,7 +16,8 @@ import { AgentChat } from "./AgentChat";
 import { buildAgentContextChips, removeAgentContextSearch } from "./agent-chat-context";
 import { applyBarrierHealthToMapCache, decideHealthProposal, getHealthProposalPage, healthProposalsQueryKey } from "./health-proposals";
 import { useCurrentSession } from "./SessionGate";
-import { getMapConfig, getMapLayer } from "./map-api";
+import { getAssetStrip, getMapConfig, getMapLayer } from "./map-api";
+import { StripBand } from "./StripBand";
 import { useSimulation } from "./useSimulation";
 import {
   barrierMarkerStatus,
@@ -60,7 +61,7 @@ interface ViewportBounds {
 }
 
 export function GeoCommandMap() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const search = useSearch({ from: "/map" });
   const navigate = useNavigate({ from: "/map" });
   const domain: "all" | "pipeline-integrity" | "flood-water" = search["domain"] === "pipeline-integrity" || search["domain"] === "flood-water" ? search["domain"] : "all";
@@ -86,6 +87,14 @@ export function GeoCommandMap() {
   const [mapRetry, setMapRetry] = useState(0);
   const { data: simulationRun } = useSimulation();
   const mapConfig = useQuery({ queryKey: ["map-config"], queryFn: ({ signal }) => getMapConfig(signal), retry: 1 });
+  const stripBand = useQuery({
+    queryKey: ["asset-strip", "DL-01"],
+    queryFn: ({ signal }) => getAssetStrip("DL-01", signal),
+    enabled: domain === "pipeline-integrity",
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    retry: 1,
+  });
   const visibleLayers = useQueries({
     queries: LAYERS.map((layer) => ({
       queryKey: ["map-layer", layer, bounds?.bbox, bounds?.zoom],
@@ -435,7 +444,7 @@ export function GeoCommandMap() {
     }
   };
 
-  return <main id="main-content" className="geo-command-map" tabIndex={-1}>
+  return <main id="main-content" className={`geo-command-map${domain === "pipeline-integrity" ? " geo-command-map-with-strip" : ""}`} tabIndex={-1}>
     <nav className="nav-rail" aria-label={t("primaryNavigation")}>
       <a className="nav-rail-item nav-rail-item-active" href="/map" aria-current="page" aria-label={t("mapNav")} title={t("mapNav")}>
         <span aria-hidden="true">⌖</span><span>{t("mapNav")}</span>
@@ -519,6 +528,14 @@ export function GeoCommandMap() {
         </div>
       </footer>
     </section>
+
+    {domain === "pipeline-integrity" && <section className="chainage-strip-dock" aria-label={t("chainageStrip")}>
+      {stripBand.data ? <StripBand data={stripBand.data} language={i18n.resolvedLanguage === "th" ? "th" : "en"} /> :
+        <div className="strip-band-status" role={stripBand.isError ? "alert" : "status"}>
+          <span>{stripBand.isError ? t("stripBandError") : t("stripBandLoading")}</span>
+          {stripBand.isError && <button type="button" onClick={() => { void stripBand.refetch(); }}>{t("retry")}</button>}
+        </div>}
+    </section>}
 
     <aside className="context-panel" aria-label={t("contextPanel")}>
       <header className="context-header">

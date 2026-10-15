@@ -36,3 +36,26 @@ it("localizes Thai copy and renders Facilities without relabelling them as Barri
   expect(html).toContain("Fixture Facility");
   expect(html).toContain("25 m");
 });
+
+it("sorts located rows by Chainage and groups unlocated Barriers after located ones", async () => {
+  const { StripBand } = await import("../src/StripBand");
+  const html = renderToStaticMarkup(createElement(StripBand, { data: { ...fixture,
+    segments: [
+      { id: "later-segment", name: "Segment 002", chainageFromM: 50, chainageToM: 100 },
+      { id: "earlier-segment", name: "Segment 001", chainageFromM: 0, chainageToM: 50 },
+    ],
+    facilities: [
+      { id: "later-facility", name: "Station 002", chainageM: 75 },
+      { id: "earlier-facility", name: "Station 001", chainageM: 25 },
+    ],
+    barriers: [
+      { id: "later-barrier", name: "Located 75", health: "healthy", chainageM: 75 },
+      { id: "unlocated-barrier", name: "Unlocated", health: "unverified", chainageM: null },
+      { id: "earlier-barrier", name: "Located 25", health: "degraded", chainageM: 25 },
+    ],
+  } }));
+  expect(html.indexOf("Segment 001")).toBeLessThan(html.indexOf("Segment 002"));
+  expect(html.indexOf("Station 001")).toBeLessThan(html.indexOf("Station 002"));
+  expect(html.indexOf("Located 25")).toBeLessThan(html.indexOf("Located 75"));
+  expect(html.indexOf("Located 75")).toBeLessThan(html.indexOf("Unlocated"));
+});
