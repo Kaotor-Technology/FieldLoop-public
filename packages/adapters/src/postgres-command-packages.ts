@@ -236,8 +236,6 @@ async function readCommandPackage(trx: Tx, user: ActionIdentity, id: string, for
     WHERE p.org_id = ${user.orgId} AND p.id = ${id}::uuid
       AND p.simulation_retired_at IS NULL AND a.simulation_retired_at IS NULL
       AND (e.id IS NULL OR e.simulation_retired_at IS NULL)
-      AND array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], p.classification)
-        >= array_position(ARRAY['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'HIGHLY_RESTRICTED']::text[], b.classification)
       AND (NOT ${simulatedOnly} OR p.simulated)
     ${lock}`.execute(trx)).rows[0];
   if (!row) throw new CommandPackageError(404, "not_found");
