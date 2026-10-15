@@ -8,6 +8,7 @@ import pg from 'pg';
 import {domainPackRecordId,loadDemoDomainPacks} from '../apps/api/dist/domain-packs.js';
 import {PostgresWorkerStore} from '../apps/signal-worker/dist/postgres-store.js';
 import {buildApp} from '../apps/signal-worker/dist/app.js';
+import {deterministicUuid} from '../db/seed/common.mjs';
 import {loadSeed as dlSeed} from '../db/seed/dl-01/seed.mjs';
 import {loadSeed as floodSeed} from '../db/seed/bangkok/seed.mjs';
 import {buildDataset as dlData} from '../data/synthetic/dl-01/generate.mjs';
@@ -85,6 +86,27 @@ try {
   const proposals=async id=>(await sql`SELECT proposed_health,status,simulation_run_id FROM app.health_proposal
    WHERE simulation_retired_at IS NULL AND org_id=${org} AND signal_receipt_id=${id}::uuid`.execute(database)).rows;
   if(scenario==='cp-rectifier-failure'){
+   // AC1: inspect this exact seeded survey, independently of newer Signal Evidence.
+   const surveyId=deterministicUuid(`fieldloop:dl-01:${org}:evidence:cp-survey-2025`);
+   const surveys=(await sql`SELECT e.id,e.kind,e.source,e.observed_at,
+    b.evidence_interval=INTERVAL '12 months' AS annual_interval,
+    e.observed_at+b.evidence_interval AS due_at,r.clock,
+    e.observed_at+b.evidence_interval < ${first.startsAt}::timestamptz AS expired_at_start,
+    e.observed_at+b.evidence_interval < r.clock AS expired_at_completion
+    FROM app.evidence e JOIN app.barrier b ON b.id=e.barrier_id AND b.org_id=e.org_id
+    JOIN app.simulation_run r ON r.id=${first.run.id}::uuid AND r.org_id=e.org_id
+    WHERE e.id=${surveyId}::uuid AND e.org_id=${org} AND e.simulation_retired_at IS NULL
+     AND b.code='cathodic-protection'`.execute(database)).rows;
+   assert.equal(surveys.length,1,'the exact current seeded CP survey must exist');
+   const survey=surveys[0];
+   assert.equal(survey.kind,'performance_check');assert.equal(survey.source,'manual');
+   assert.equal(survey.observed_at.toISOString(),'2025-10-13T00:00:00.000Z');
+   assert.equal(survey.annual_interval,true);
+   assert.equal(survey.due_at.toISOString(),'2026-10-13T00:00:00.000Z');
+   assert.ok(Date.parse(first.startsAt)<survey.due_at.getTime());
+   assert.equal(survey.expired_at_start,false);assert.equal(survey.expired_at_completion,true);
+   assert.ok(survey.due_at.getTime()<survey.clock.getTime());
+
    const zero=original.find(s=>s.tag==='DL-01.rectifier.output'&&s.value===0);assert.ok(zero);
    const result=await proposals(zero.id);assert.equal(result.length,1);assert.equal(result[0].proposed_health,'failed');assert.equal(result[0].status,'open');
    assert.ok(original.some(s=>s.tag.endsWith('work_order.overdue')&&s.value===1),'actual authored overdue observation delivered');
