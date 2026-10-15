@@ -3,7 +3,7 @@ import json
 from typing import Any
 
 import pytest
-from fieldloop_assistant.tools import ToolContext, TurnState, build_tools
+from fieldloop_assistant.tools import ToolContext, ToolInputError, TurnState, build_tools
 
 from .support import BOWTIE
 
@@ -95,8 +95,8 @@ def tool(ctx: ToolContext, name: str, allowed: tuple[str, ...] | None = None):
 
 
 def test_only_allowed_tools_are_built() -> None:
-    names = [f.__name__ for f in build_tools(context(), ("get_barriers", "spatial_query"))]
-    assert names == ["get_barriers"]  # spatial_query is in the vocabulary but not implemented
+    names = [f.__name__ for f in build_tools(context(), ("get_barriers", "get_action_requests", "spatial_query"))]
+    assert names == ["get_barriers", "get_action_requests"]  # spatial_query remains vocabulary only
 
 
 def test_geo_extraction_builds_only_when_allowed_and_returns_confirmation_drafts() -> None:
@@ -177,11 +177,47 @@ def test_get_asset_reads_the_by_id_endpoint_and_reports_missing() -> None:
 
 def test_create_draft_records_the_session_and_user_and_never_approves() -> None:
     ctx = context()
-    result = asyncio.run(tool(ctx, "create_draft")("management_summary", "text", ["EV-1"]))
+    result = asyncio.run(tool(ctx, "create_draft")("note", "text", ["EV-1"]))
     assert result == {"draft_id": "draft-1", "status": "needs_approval"}
     created = ctx.drafts.created[0]  # type: ignore[union-attr]
     assert created["user_sub"] == "user-1" and created["session_id"] == "s1"
     assert ctx.state.draft_ids == ["draft-1"]
+
+
+def test_get_action_requests_reads_with_user_token_and_records_source_paths() -> None:
+    action_id = "11111111-2222-4333-8444-555555555555"
+    action = {"id": action_id, "actionType": "system_of_record", "status": "open", "simulated": True}
+    platform = Platform([action])
+    ctx = context(platform=platform)
+
+    result = asyncio.run(tool(ctx, "get_action_requests")(25))
+
+    assert result == {"action_requests": [action]}
+    assert platform.calls == [("/api/v1/action-requests?limit=25", "tok")]
+    assert f"/api/v1/action-requests/{action_id}" in ctx.state.read_record_paths
+
+
+def test_management_summary_requires_cited_source_links_for_numeric_facts() -> None:
+    path = f"/api/v1/bowties/{BOWTIE}/risk"
+    ctx = context()
+    ctx.state.read_record_paths.add(path)
+    create = tool(ctx, "create_draft")
+
+    result = asyncio.run(create("management_summary", f"Current score: [4]({path})", [path]))
+    assert result["status"] == "needs_approval"
+    assert ctx.drafts.created[0]["citations"] == [path]  # type: ignore[union-attr]
+
+    with pytest.raises(ToolInputError, match="unverified"):
+        asyncio.run(create("management_summary", "Current score: 4", []))
+    with pytest.raises(ToolInputError, match="source record"):
+        asyncio.run(create("management_summary", "Current score: [4](/api/v1/bowties/00000000-0000-4000-8000-000000000001/risk)", []))
+
+
+def test_management_summary_can_label_unverified_numeric_judgement() -> None:
+    ctx = context()
+    result = asyncio.run(tool(ctx, "create_draft")(
+        "management_summary", "Estimated count: 3 — judgement — unverified", []))
+    assert result["status"] == "needs_approval"
 
 
 def test_create_action_request_body_never_posts_anything() -> None:

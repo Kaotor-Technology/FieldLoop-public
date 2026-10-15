@@ -136,6 +136,31 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '503': { $ref: '#/components/responses/ServiceUnavailable' }
   /v1/action-requests:
+    get:
+      operationId: listActionRequests
+      summary: List current Action Requests visible to the user
+      description: Returns a bounded Organisation and clearance scoped list. Retired simulation records are excluded.
+      tags:
+        - Actions
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        "200":
+          description: Current Action Requests ordered newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 100
+                items:
+                  $ref: "#/components/schemas/ActionRequest"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
     post:
       operationId: createActionRequest
       summary: Prepare a proposed human action

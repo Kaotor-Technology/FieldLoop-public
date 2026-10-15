@@ -11,6 +11,18 @@ export function registerActionRoutes(app: FastifyInstance, actions?: ActionServi
       if (status >= 500) request.log.error({ errorType: error instanceof Error ? error.name : "unknown" }, "Action service failed");
       return reply.code(status).type("application/problem+json").send({ type: "about:blank", title: "Action Request could not be completed", status, code, traceId: request.id });
     });
+    routes.get("/api/v1/action-requests", async (request, reply) => {
+      const user = request.fieldLoopCurrentUser;
+      if (!user) throw new ActionError(401, "unauthenticated");
+      const query = request.query as Record<string, unknown>;
+      const rawLimit = query["limit"];
+      const limit = rawLimit === undefined ? 50 : typeof rawLimit === "string" && /^\d{1,3}$/.test(rawLimit) ? Number(rawLimit) : Number.NaN;
+      if (!Number.isInteger(limit) || limit < 1 || limit > 100 || Object.keys(query).some(key => key !== "limit")) {
+        throw new ActionError(400, "validation_failed");
+      }
+      if (!actions) throw new ActionError(503, "service_unavailable");
+      return reply.header("cache-control", "private, no-store").send(await actions.list(user, limit));
+    });
     routes.post("/api/v1/action-requests", async (request, reply) => {
       const user = request.fieldLoopCurrentUser;
       if (!user) throw new ActionError(401, "unauthenticated");

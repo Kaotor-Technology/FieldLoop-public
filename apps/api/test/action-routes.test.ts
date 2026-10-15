@@ -9,13 +9,14 @@ function fixture() {
   const user: CurrentUser = { sub: "synthetic-operator", roles: ["fieldloop.operator"], orgId: "synthetic-org", clearance: "INTERNAL", persona: "Integrity Engineer", csrfToken: "synthetic-csrf", authTime: new Date() };
   const auth: AuthServicePort = {
     getCurrentUser: async cookie => { if (cookie !== "valid") throw new AuthError("Session required", 401); return user; },
+    getCurrentUserFromInternalToken: async token => { if (token !== "internal") throw new AuthError("Token required", 401); return user; },
     startLogin: async () => new URL("https://example.test"), startReauthentication: async () => new URL("https://example.test"),
     completeLogin: async () => { throw new Error("unused"); }, issueInternalUserToken: async () => { throw new Error("unused"); },
     logout: async () => new URL("https://example.test"), backchannelLogout: async () => {}, jwks: async () => ({ keys: [] }),
   };
   const body = { actionType: "system_of_record", actionLevel: "l1", target: "cmms", payload: { title: "Synthetic work order" }, rationale: "Prepare for human entry", citations: ["synthetic:procedure"], simulated: true, classification: "INTERNAL" };
   const action = { ...body, id: randomUUID(), orgId: user.orgId, requestedBy: user.sub, requester: { kind: "person" }, status: "open", payloadHash: "a".repeat(64), expiresAt: new Date(Date.now()+900_000).toISOString() };
-  const actions: ActionServicePort = { create: vi.fn().mockResolvedValue(action), get: vi.fn().mockResolvedValue(action), check: vi.fn(), expire: vi.fn() };
+  const actions: ActionServicePort = { create: vi.fn().mockResolvedValue(action), list: vi.fn().mockResolvedValue([action]), get: vi.fn().mockResolvedValue(action), check: vi.fn(), expire: vi.fn() };
   const app = buildApp({ auth, actions }); apps.push(app);
   const headers = { cookie: "fl_session=valid", "x-csrf-token": user.csrfToken, "idempotency-key": "synthetic-create-key" };
   return { app, body, actions, headers, user, action };
@@ -48,4 +49,14 @@ it("returns scoped records and RFC 9457 storage failures", async () => {
   vi.mocked(actions.create).mockRejectedValueOnce(new Error("secret database detail"));
   const failed = await app.inject({ method: "POST", url: "/api/v1/action-requests", payload: body, headers });
   expect(failed.statusCode).toBe(503); expect(failed.body).not.toContain("secret database detail");
+});
+
+it("lists a bounded set of Action Requests for the signed-in user", async () => {
+  const { app, actions, user, action } = fixture();
+  const response = await app.inject({ method: "GET", url: "/api/v1/action-requests?limit=25", headers: { authorization: "Bearer internal" } });
+  expect(response.statusCode).toBe(200);
+  expect(response.json()).toEqual([action]);
+  expect(response.headers["cache-control"]).toBe("private, no-store");
+  expect(actions.list).toHaveBeenCalledWith(user, 25);
+  expect((await app.inject({ method: "GET", url: "/api/v1/action-requests?limit=101", headers: { authorization: "Bearer internal" } })).statusCode).toBe(400);
 });

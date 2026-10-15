@@ -22,6 +22,7 @@ const PUBLIC_ROUTES = new Set([
 // assistant tools. Everything else ignores the header, so least privilege is explicit, not implied.
 const INTERNAL_TOKEN_READ_ROUTES: ReadonlySet<string> = new Set([
   "/api/v1/assets/:assetId",
+  "/api/v1/action-requests",
   "/api/v1/bowties/:bowtieId",
   "/api/v1/bowties/:bowtieId/risk",
   "/api/v1/simulation/runs/current",

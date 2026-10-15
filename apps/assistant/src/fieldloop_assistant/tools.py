@@ -87,6 +87,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec("get_asset", "read", "Read an Asset by identifier."),
     ToolSpec("get_barriers", "read", "Read the Barriers and Barrier Health of a Bowtie."),
     ToolSpec("get_bowtie_risk", "read", "Read the current Risk Score of a Bowtie."),
+    ToolSpec("get_action_requests", "read", "Read current Action Requests visible to the signed-in user."),
     ToolSpec("get_scenario_state", "read", "Read the current simulation run state."),
     ToolSpec(
         "extract_geo_references", "propose",
@@ -110,6 +111,7 @@ class TurnState:
     """What one turn produced; read by the runtime to build the structured answer."""
 
     citations: list[dict[str, Any]] = field(default_factory=list)
+    read_record_paths: set[str] = field(default_factory=set)
     action_request_ids: list[str] = field(default_factory=list)
     held_request_ids: list[str] = field(default_factory=list)
     draft_ids: list[str] = field(default_factory=list)
@@ -147,6 +149,30 @@ def _uuid(value: str, name: str) -> str:
     if not isinstance(value, str) or not re.fullmatch(UUID_RE, value):
         raise ToolInputError(f"{name} must be a UUID")
     return value
+
+
+def _validate_management_summary(content: str, citations: list[str], read_record_paths: set[str]) -> None:
+    link_pattern = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
+    links = list(link_pattern.finditer(content))
+    for link in links:
+        source_path = link.group(2)
+        if source_path not in read_record_paths:
+            raise ToolInputError("summary links must point to a source record read during this turn")
+        if re.search(r"\d", link.group(1)) and source_path not in citations:
+            raise ToolInputError("numeric source links must also appear in the Draft citations")
+
+    for citation in citations:
+        if citation not in read_record_paths:
+            raise ToolInputError("Draft citations must refer to source records read during this turn")
+
+    for line in content.splitlines():
+        without_links = link_pattern.sub("", line)
+        if re.search(r"\d", without_links) and not re.search(
+            r"judgement\s*(?:—|–|-)\s*unverified", line, re.IGNORECASE
+        ):
+            raise ToolInputError(
+                "numeric facts need a cited source record link or the label 'judgement — unverified'"
+            )
 
 
 def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[..., Awaitable[Any]]]:
@@ -209,6 +235,7 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
             raise ToolInputError("asset_id contains unsupported characters")
         asset = await ctx.platform.get(f"/api/v1/assets/{wanted}", ctx.user_token)
         if isinstance(asset, dict) and "id" in asset:
+            ctx.state.read_record_paths.add(f"/api/v1/assets/{wanted}")
             return {"asset": asset}
         error = asset.get("error") if isinstance(asset, dict) else None
         return {"asset": None, "error": "asset_not_found" if error == "platform_404" else error}
@@ -224,6 +251,7 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
         if not isinstance(canvas, dict) or "barriers" not in canvas:
             error = canvas.get("error") if isinstance(canvas, dict) else None
             return {"barriers": [], "error": error or "unavailable"}
+        ctx.state.read_record_paths.add(path)
         return {
             "bowtie_id": canvas["id"], "simulated": canvas.get("simulated", False),
             "classification": canvas.get("classification"), "barriers": canvas["barriers"],
@@ -237,7 +265,26 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
         """
         path = f"/api/v1/bowties/{_uuid(bowtie_id, 'bowtie_id')}/risk"
         risk: dict[str, Any] = await ctx.platform.get(path, ctx.user_token)
+        if isinstance(risk, dict) and not risk.get("error"):
+            ctx.state.read_record_paths.add(path)
         return risk
+
+    async def get_action_requests(limit: int = 50) -> dict[str, Any]:
+        """Read a bounded list of Action Requests visible to the signed-in user.
+
+        Args:
+            limit: Maximum number of current Action Requests to return (1–100).
+        """
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise ToolInputError("limit must be an integer between 1 and 100")
+        path = f"/api/v1/action-requests?limit={limit}"
+        records = await ctx.platform.get(path, ctx.user_token)
+        if not isinstance(records, list):
+            return {"action_requests": [], "error": "action_requests_unavailable"}
+        for record in records:
+            if isinstance(record, dict) and isinstance(record.get("id"), str) and re.fullmatch(UUID_RE, record["id"]):
+                ctx.state.read_record_paths.add(f"/api/v1/action-requests/{record['id']}")
+        return {"action_requests": records}
 
     async def get_scenario_state() -> dict[str, Any]:
         """Read the current simulation run state (Scenario, clock, status)."""
@@ -300,6 +347,8 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
         clean_kind = _text(kind, "kind", 64)
         clean_content = _text(content, "content", 20_000)
         clean_citations = [_text(c, "citation", 2048) for c in citations][:50]
+        if clean_kind == "management_summary":
+            _validate_management_summary(clean_content, clean_citations, ctx.state.read_record_paths)
         digest = hashlib.sha256(
             json.dumps([clean_kind, clean_content, clean_citations]).encode("utf-8")
         ).hexdigest()
@@ -315,7 +364,8 @@ def build_tools(ctx: ToolContext, allowed: tuple[str, ...]) -> list[Callable[...
 
     available: Mapping[str, Callable[..., Awaitable[Any]]] = {
         "search_knowledge": search_knowledge, "get_asset": get_asset, "get_barriers": get_barriers,
-        "get_bowtie_risk": get_bowtie_risk, "get_scenario_state": get_scenario_state,
+        "get_bowtie_risk": get_bowtie_risk, "get_action_requests": get_action_requests,
+        "get_scenario_state": get_scenario_state,
         "extract_geo_references": extract_geo_references,
         "create_action_request": create_action_request, "create_draft": create_draft,
     }
