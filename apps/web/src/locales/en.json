@@ -132,6 +132,8 @@
     "fromDocument": "Source document: {{title}}",
     "type": "Reference type",
     "confidence": "Extraction confidence",
+    "lowConfidence": "Low confidence",
+    "lowConfidenceHint": "Check the source excerpt before you place this on the map. It stays off the map until you confirm it.",
     "coordinates": "Proposed coordinates (latitude, longitude)",
     "source": "Source excerpt",
     "documentId": "Document ID",

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { decideGeoReference, geoReferenceDraftsQueryKey, getGeoReferenceDrafts, type GeoReference } from "./geo-references";
+import { decideGeoReference, geoReferenceDraftsQueryKey, getGeoReferenceDrafts, isLowConfidence, type GeoReference } from "./geo-references";
 import { monoNumericText } from "./mono-numeric-text";
 import { useCurrentSession } from "./SessionGate";
 
@@ -69,7 +69,9 @@ export function GeoReferenceReview({ targetAssets }: { targetAssets: TargetAsset
           <div className="geo-reference-row-heading">
             <strong>{monoNumericText(reference.proposedLabel ?? reference.documentTitle)}</strong>
             {reference.simulated && <span className="health-proposal-simulation" lang="en">SIMULATION</span>}
+            {isLowConfidence(reference) && <span className="geo-reference-low-confidence">{t("geoReferenceReview.lowConfidence")}</span>}
           </div>
+          {isLowConfidence(reference) && <p className="geo-reference-low-confidence-hint">{t("geoReferenceReview.lowConfidenceHint")}</p>}
           <p className="geo-reference-source">{t("geoReferenceReview.fromDocument", { title: reference.documentTitle })}</p>
           <p className="geo-reference-snippet">“{monoNumericText(reference.sourceSnippet)}”</p>
           <dl className="geo-reference-metadata">

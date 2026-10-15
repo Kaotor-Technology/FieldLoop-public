@@ -5,6 +5,9 @@ const client = createClient<paths>({ baseUrl: "/api", credentials: "same-origin"
 
 export type GeoReference = components["schemas"]["GeoReference"];
 export type GeoReferencePage = components["schemas"]["GeoReferencePage"];
+export const LOW_CONFIDENCE_THRESHOLD = 0.5;
+export const isLowConfidence = (reference: Pick<GeoReference, "confidence">): boolean =>
+  reference.confidence < LOW_CONFIDENCE_THRESHOLD;
 export const geoReferenceDraftsQueryKey = ["geo-references", "drafts"] as const;
 
 export async function getGeoReferenceDrafts(signal: AbortSignal): Promise<GeoReferencePage> {

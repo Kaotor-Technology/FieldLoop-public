@@ -201,6 +201,8 @@ button:disabled { cursor: not-allowed; color: var(--color-neutral-600); backgrou
 .geo-reference-list { display: grid; gap: var(--spacing-space-3); margin: 0; padding: 0; list-style: none; }
 .geo-reference-row { display: grid; gap: var(--spacing-space-3); padding: var(--spacing-space-3); border: var(--spacing-border-hairline) solid var(--outline); border-radius: var(--rounded-md); background: var(--surface-raised); }
 .geo-reference-row-heading { justify-content: flex-start; flex-wrap: wrap; }
+.geo-reference-low-confidence { padding: var(--spacing-space-1) var(--spacing-space-2); border: var(--spacing-border-hairline) solid var(--color-error); border-radius: var(--rounded-sm); color: var(--color-error); }
+.geo-reference-low-confidence-hint { margin: 0; color: var(--muted); }
 .geo-reference-source, .geo-reference-empty { color: var(--muted); }
 .geo-reference-snippet { padding: var(--spacing-space-3); border-inline-start: var(--spacing-indicator-width) solid var(--action); background: var(--canvas); overflow-wrap: anywhere; }
 .geo-reference-metadata { display: grid; gap: var(--spacing-space-2); margin: 0; }
