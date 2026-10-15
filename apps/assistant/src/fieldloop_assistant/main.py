@@ -9,7 +9,6 @@ from pathlib import Path
 import httpx
 from fastapi import FastAPI
 from google.adk.models.base_llm import BaseLlm
-from google.adk.models.lite_llm import LiteLlm
 from google.adk.sessions import DatabaseSessionService
 from psycopg import AsyncConnection
 from psycopg.rows import DictRow, dict_row
@@ -18,6 +17,7 @@ from psycopg_pool import AsyncConnectionPool
 from .catalog import AgentDefinition, load_catalog
 from .geo_extraction import HttpGeoExtractionPlatform
 from .guardrail_client import GuardrailClient
+from .guardrail_model import GuardrailLiteLlm, GuardrailResponseClient
 from .identity import InternalTokenVerifier
 from .knowledge import KnowledgeScope, KnowledgeSearch
 from .reference_catalog import load_reference_catalog
@@ -72,11 +72,12 @@ class Settings:
 
 def guardrail_model(definition: AgentDefinition, guardrail_url: str) -> BaseLlm:
     """Every model call goes to the Guardrail's OpenAI-compatible endpoint (PRD GR-1)."""
-    return LiteLlm(
+    return GuardrailLiteLlm(
         model=f"openai/{ROUTES[definition.model_tier]}",
         api_base=f"{guardrail_url.rstrip('/')}/guardrail/v1",
         api_key="not-a-secret",  # the Guardrail authenticates the internal user token header
         extra_body={"aiSystem": definition.ai_system_id},
+        llm_client=GuardrailResponseClient(),
     )
 
 

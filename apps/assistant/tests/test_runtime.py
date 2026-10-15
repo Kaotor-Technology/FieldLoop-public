@@ -354,6 +354,69 @@ def test_scan_gates_search_results_for_an_agent_that_lists_the_tool() -> None:
     assert asyncio.run(go(None))["results"][0]["content"] is None  # no scanner: fail closed
 
 
+def test_rerouted_content_scan_is_reported_and_returned_for_the_guardrail_routed_model() -> None:
+    policy_id = "22222222-2222-4333-8444-555555555555"
+    h = Harness(
+        [call("search_knowledge", query="synthetic clause"), answer()],
+        knowledge=_Knowledge(),
+    )
+    h.scan = lambda body: {
+        "decision": "reroute", "content": "SYNTHETIC restricted passage",
+        "classification": "CONFIDENTIAL", "policyId": policy_id,
+        "reason": "Sensitive data requires the configured private model tier",
+    }
+
+    events = run(h, "regulatory")
+
+    decision = next(
+        event for event in events
+        if event.name == "guardrail.decision" and event.data.get("source") == "content_scan"
+    )
+    assert decision.data == {
+        "agent": "regulatory", "tool": "content:scan", "decision": "reroute",
+        "reason": "Sensitive data requires the configured private model tier",
+        "policy_id": policy_id, "source": "content_scan",
+    }
+    tool_responses = [
+        part.function_response.response
+        for item in h.llm.requests[-1].contents or []
+        for part in item.parts or []
+        if part.function_response is not None
+    ]
+    assert "SYNTHETIC restricted passage" in json.dumps(tool_responses, default=str)
+
+
+def test_guardrail_model_redaction_and_route_outcomes_are_emitted_in_agent_stream() -> None:
+    response = answer()
+    response.custom_metadata = {
+        "fieldloop_guardrail_decisions": [
+            {
+                "decision": "redact", "policy_id": "injection-policy",
+                "reason": "Input was redacted.",
+            },
+            {
+                "decision": "reroute", "policy_id": "routing-policy",
+                "reason": "Private tier required.",
+            },
+        ],
+    }
+    events = run(Harness([response]))
+
+    decisions = [event.data for event in events if event.name == "guardrail.decision"]
+    assert decisions == [
+        {
+            "agent": "integrity-orchestrator", "decision": "redact",
+            "reason": "Input was redacted.", "policy_id": "injection-policy",
+            "source": "model",
+        },
+        {
+            "agent": "integrity-orchestrator", "decision": "reroute",
+            "reason": "Private tier required.", "policy_id": "routing-policy",
+            "source": "model",
+        },
+    ]
+
+
 def test_idempotency_key_is_stable_within_a_turn_and_new_per_turn() -> None:
     proposal = call("create_action_request", action_type="internal_record", action_level="l2",
                     target="fieldloop", payload={"n": 1}, rationale="r", citations=["c"])

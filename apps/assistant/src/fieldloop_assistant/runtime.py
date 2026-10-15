@@ -34,6 +34,7 @@ from .catalog import AgentCatalog, AgentDefinition
 from .events import StreamEvent
 from .geo_extraction import GeoExtractionPlatform
 from .guardrail_client import GuardrailClient, blocked, idempotency_key
+from .guardrail_model import DECISIONS_METADATA_KEY
 from .identity import AI_SYSTEM_HEADER, TOKEN_HEADER
 from .limits import TurnBudget
 from .tools import (
@@ -436,6 +437,30 @@ class AgentRuntime:
                 kind="model", agent_id=from_adk_name(context.agent_name), tokens_in=tokens_in,
                 tokens_out=tokens_out, model=response.model_version,
             ))
+            raw_decisions = (response.custom_metadata or {}).get(DECISIONS_METADATA_KEY)
+            if isinstance(raw_decisions, list):
+                agent = from_adk_name(context.agent_name)
+                for item in raw_decisions:
+                    if not isinstance(item, dict):
+                        continue
+                    decision = item.get("decision")
+                    policy_id = item.get("policy_id")
+                    reason = item.get("reason")
+                    if (
+                        not isinstance(decision, str)
+                        or decision not in {"allow", "redact", "block", "reroute"}
+                        or not isinstance(policy_id, str) or not policy_id
+                        or not isinstance(reason, str) or not reason
+                    ):
+                        continue
+                    turn.emit("guardrail.decision", {
+                        "agent": agent, "decision": decision, "reason": reason,
+                        "policy_id": policy_id, "source": "model",
+                    })
+                    self._record(turn, StepRecord(
+                        kind="guardrail", agent_id=agent, tool_name="model",
+                        guardrail_decision=decision, result_summary=reason[:200],
+                    ))
             return None
 
         return callback
@@ -519,9 +544,22 @@ class AgentRuntime:
 
     async def _scan(self, turn: _Turn, definition: AgentDefinition, content: str) -> str | None:
         key = idempotency_key(f"{turn.session.id}:{turn.turn_id}", "content:scan", {"c": content})
-        return await self._deps.guardrail.scan_content(
+        outcome = await self._deps.guardrail.scan_content(
             turn.user_token, definition.ai_system_id, content, key
         )
+        if outcome.decision != "allow":
+            turn.emit("guardrail.decision", {
+                "agent": definition.id, "tool": "content:scan", "decision": outcome.decision,
+                "reason": outcome.reason, "policy_id": outcome.policy_id,
+                "source": "content_scan",
+            })
+            self._record(turn, StepRecord(
+                kind="guardrail", agent_id=definition.id, tool_name="content:scan",
+                guardrail_decision=outcome.decision, result_summary=outcome.reason[:200],
+            ))
+        # A reroute is safe to continue with because all model calls pass through the Guardrail
+        # gateway, which applies the registered classification route before forwarding.
+        return outcome.content if outcome.decision in {"allow", "reroute"} else None
 
     async def _check(
         self, turn: _Turn, definition: AgentDefinition, tool: str, args: Mapping[str, Any]
