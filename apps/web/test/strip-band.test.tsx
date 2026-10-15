@@ -59,3 +59,16 @@ it("sorts located rows by Chainage and groups unlocated Barriers after located o
   expect(html.indexOf("Located 25")).toBeLessThan(html.indexOf("Located 75"));
   expect(html.indexOf("Located 75")).toBeLessThan(html.indexOf("Unlocated"));
 });
+
+it("uses IBM Plex Mono for non-empty Inspection and Threat Category counts", async () => {
+  const { StripBand } = await import("../src/StripBand");
+  const html = renderToStaticMarkup(createElement(StripBand, { data: {
+    ...fixture,
+    inspections: [{ id: "inspection" }],
+    threatCategories: [{ id: "threat" }, { id: "other-threat" }],
+  } }));
+  expect(html).toMatch(/Inspections:?\s*<span class="strip-mono">1<\/span>/);
+  expect(html).toMatch(/Threat Categories:?\s*<span class="strip-mono">2<\/span>/);
+  expect(html).not.toContain("No located inspection features");
+  expect(html).not.toContain("No located Threat Categories");
+});

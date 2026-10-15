@@ -12,13 +12,15 @@ const COPY = {
   en: {
     title: "Strip", axis: "Chainage (m)", segments: "Segments", barriers: "Barriers", facilities: "Facilities",
     unlocated: "No confirmed Chainage — Asset-scoped Barriers are not positioned.",
-    inspections: "No located inspection features", threats: "No located Threat Categories",
+    inspections: "Inspections", noInspections: "No located inspection features",
+    threats: "Threat Categories", noThreats: "No located Threat Categories",
     healthy: "Healthy", degraded: "Degraded", failed: "Failed", unverified: "Unverified",
   },
   th: {
     title: "แถบระยะทาง", axis: "ระยะทางตามแนวเส้น (ม.)", segments: "ช่วงของแนวเส้น", barriers: "มาตรการป้องกัน", facilities: "สถานี",
     unlocated: "ไม่มีระยะทางที่ยืนยัน — มาตรการระดับสินทรัพย์ยังไม่มีตำแหน่ง",
-    inspections: "ไม่มีรายการตรวจสอบที่ระบุตำแหน่ง", threats: "ไม่มีหมวดภัยคุกคามที่ระบุตำแหน่ง",
+    inspections: "รายการตรวจสอบ", noInspections: "ไม่มีรายการตรวจสอบที่ระบุตำแหน่ง",
+    threats: "หมวดภัยคุกคาม", noThreats: "ไม่มีหมวดภัยคุกคามที่ระบุตำแหน่ง",
     healthy: "ปกติ", degraded: "เสื่อมสภาพ", failed: "ล้มเหลว", unverified: "ยังไม่ยืนยัน",
   },
 } as const;
@@ -77,7 +79,15 @@ export function StripBand({ data, language = "en" }: StripBandProps) {
         </ul>
       </div>
     </div>
-    <p className="strip-band-empty">{data.inspections.length === 0 ? text.inspections : `${text.inspections}: ${data.inspections.length}`} · {data.threatCategories.length === 0 ? text.threats : `${text.threats}: ${data.threatCategories.length}`}</p>
+    <p className="strip-band-empty">
+      <span>{data.inspections.length === 0 ? text.noInspections : text.inspections}
+        {data.inspections.length > 0 && <>: <span className="strip-mono">{formatter.format(data.inspections.length)}</span></>}
+      </span>
+      {" · "}
+      <span>{data.threatCategories.length === 0 ? text.noThreats : text.threats}
+        {data.threatCategories.length > 0 && <>: <span className="strip-mono">{formatter.format(data.threatCategories.length)}</span></>}
+      </span>
+    </p>
   </section>;
 }
 
