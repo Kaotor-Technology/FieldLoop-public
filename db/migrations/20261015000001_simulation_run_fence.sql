@@ -35,7 +35,30 @@ BEGIN
 END $$;
 
 -- migrate:down
--- Restore the preceding invoker-rights function and its public execute policy.
+-- Remove every explicit ACL introduced above so earlier role migrations can drop
+-- their roles during a full rollback. Restore the preceding invoker/public policy.
+REVOKE EXECUTE ON FUNCTION app.assert_simulation_run(uuid, text) FROM fieldloop_app;
+DO $$
+DECLARE role_name text; environment text;
+BEGIN
+    IF current_database() IN ('fieldloop_dev', 'fieldloop_demo') THEN
+        environment := replace(current_database(), 'fieldloop_', '');
+        FOREACH role_name IN ARRAY ARRAY[
+            'fieldloop_app_' || environment,
+            'fieldloop_simulator_' || environment,
+            'fl-v2-simulator-' || environment || '@example-project.iam',
+            'fl-v2-signal-worker-' || environment || '@example-project.iam'
+        ] LOOP
+            IF EXISTS (SELECT FROM pg_roles WHERE rolname = role_name) THEN
+                EXECUTE format('REVOKE EXECUTE ON FUNCTION app.assert_simulation_run(uuid, text) FROM %I', role_name);
+            END IF;
+        END LOOP;
+    END IF;
+    role_name := 'fieldloop_guardrail_' || replace(current_database(), 'fieldloop_', '');
+    IF EXISTS (SELECT FROM pg_roles WHERE rolname = role_name) THEN
+        EXECUTE format('REVOKE EXECUTE ON FUNCTION app.assert_simulation_run(uuid, text) FROM %I', role_name);
+    END IF;
+END $$;
 ALTER FUNCTION app.assert_simulation_run(uuid, text) SECURITY INVOKER;
 ALTER FUNCTION app.assert_simulation_run(uuid, text) SET search_path = app, pg_temp;
 GRANT EXECUTE ON FUNCTION app.assert_simulation_run(uuid, text) TO PUBLIC;
