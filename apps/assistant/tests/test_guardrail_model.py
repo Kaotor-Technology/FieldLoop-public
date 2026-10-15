@@ -1,6 +1,8 @@
 import asyncio
-from types import SimpleNamespace
 
+import httpx
+import litellm
+import openai
 import pytest
 from fieldloop_assistant.guardrail_model import (
     GuardrailLiteLlm,
@@ -45,64 +47,44 @@ def test_guardrail_response_header_logs_invalid_json(caplog) -> None:  # type: i
     assert "contained invalid JSON" in caplog.text
 
 
-def test_guardrail_client_preserves_block_decision_when_completion_returns_403(
-    monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize("include_decision_header", [True, False])
+def test_guardrail_client_recovers_block_decision_from_litellm_mapped_403(
+    monkeypatch: pytest.MonkeyPatch, include_decision_header: bool
 ) -> None:
-    headers = {
-        "x-fieldloop-guardrail-decisions": '[{"decision":"block",'
-        '"policyId":"synthetic-policy","reason":"SYNTHETIC policy blocked completion."}]',
-    }
-
-    class SyntheticGuardrailBlock(Exception):
-        status_code = 403
-        body = {
+    reason = "SYNTHETIC policy blocked completion."
+    problem = {
+        "code": "guardrail_blocked",
+        "detail": reason,
+        "policyId": "synthetic-policy",
+        "error": {
             "code": "guardrail_blocked",
-            "detail": "SYNTHETIC policy blocked completion.",
-            "policyId": "synthetic-policy",
-            "error": {"code": "guardrail_blocked", "policy_id": "synthetic-policy"},
-        }
-        response = SimpleNamespace(status_code=403, headers=headers)
-
-    async def blocked_completion(*args, **kwargs):  # type: ignore[no-untyped-def]
-        raise SyntheticGuardrailBlock("blocked")
-
-    monkeypatch.setattr(LiteLLMClient, "acompletion", blocked_completion)
-    client = GuardrailResponseClient()
-
-    async def call_client():  # type: ignore[no-untyped-def]
-        await client.acompletion(model="synthetic", messages=[], tools=None)
-
-    with pytest.raises(SyntheticGuardrailBlock) as caught:
-        asyncio.run(call_client())
-
-    assert guardrail_error_decisions(caught.value) == [
-        {
-            "decision": "block",
             "policy_id": "synthetic-policy",
-            "reason": "SYNTHETIC policy blocked completion.",
+            "message": reason,
         },
-    ]
-
-
-def test_guardrail_client_recovers_block_decision_from_litellm_error_body(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class SyntheticGuardrailBlock(Exception):
-        status_code = 403
-        body = {
-            "code": "guardrail_blocked",
-            "detail": "SYNTHETIC policy blocked completion.",
-            "policyId": "synthetic-policy",
-            "error": {
-                "code": "guardrail_blocked",
-                "policy_id": "synthetic-policy",
-                "message": "SYNTHETIC policy blocked completion.",
-            },
-        }
-        response = SimpleNamespace(status_code=403, headers={})
+    }
+    headers = {}
+    if include_decision_header:
+        headers["x-fieldloop-guardrail-decisions"] = (
+            '[{"decision":"block","policyId":"synthetic-policy",'
+            '"reason":"SYNTHETIC policy blocked completion."}]'
+        )
+    request = httpx.Request("POST", "https://guardrail.invalid/guardrail/v1/chat/completions")
+    response = httpx.Response(403, headers=headers, json=problem, request=request)
 
     async def blocked_completion(*args, **kwargs):  # type: ignore[no-untyped-def]
-        raise SyntheticGuardrailBlock("blocked")
+        try:
+            raise openai.PermissionDeniedError(
+                "403 Guardrail blocked request", response=response, body=problem
+            )
+        except openai.PermissionDeniedError as original:
+            # This is LiteLLM 1.81's mapping shape: the APIError loses the HTTP
+            # response/body and retains the original exception as __context__.
+            raise litellm.exceptions.APIError(
+                status_code=403,
+                message=str(original),
+                llm_provider="openai",
+                model="synthetic-model",
+            ) from original
 
     monkeypatch.setattr(LiteLLMClient, "acompletion", blocked_completion)
     client = GuardrailResponseClient()
@@ -110,14 +92,17 @@ def test_guardrail_client_recovers_block_decision_from_litellm_error_body(
     async def call_client():  # type: ignore[no-untyped-def]
         await client.acompletion(model="synthetic", messages=[], tools=None)
 
-    with pytest.raises(SyntheticGuardrailBlock) as caught:
+    with pytest.raises(litellm.exceptions.APIError) as caught:
         asyncio.run(call_client())
 
+    assert getattr(caught.value, "response", None) is None
+    assert getattr(caught.value, "body", None) is None
+    assert isinstance(caught.value.__cause__, openai.PermissionDeniedError)
     assert guardrail_error_decisions(caught.value) == [
         {
             "decision": "block",
             "policy_id": "synthetic-policy",
-            "reason": "SYNTHETIC policy blocked completion.",
+            "reason": reason,
         },
     ]
 

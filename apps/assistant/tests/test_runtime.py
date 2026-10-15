@@ -1,7 +1,13 @@
 import asyncio
 import json
 
+import httpx
+import litellm
+import openai
+import pytest
 from fieldloop_assistant.guardrail_client import TOKEN_HEADER
+from fieldloop_assistant.guardrail_model import GuardrailLiteLlm, GuardrailResponseClient
+from google.adk.models.lite_llm import LiteLLMClient
 
 from .harness import Harness, answer, call, say
 from .support import BOWTIE, RUN_ID, USER_TOKEN
@@ -417,29 +423,55 @@ def test_guardrail_model_redaction_and_route_outcomes_are_emitted_in_agent_strea
     ]
 
 
-def test_blocked_guardrail_model_completion_emits_policy_notice_before_answer_error() -> None:
-    def blocked_completion(_request):  # type: ignore[no-untyped-def]
-        error = RuntimeError("synthetic Guardrail HTTP 403")
-        error._fieldloop_guardrail_decisions = [{  # type: ignore[attr-defined]
-            "decision": "block",
-            "policy_id": "completion-policy",
-            "reason": "Completion was blocked by policy.",
-        }]
-        raise error
+def test_litellm_mapped_guardrail_block_emits_policy_notice_before_answer_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reason = "SYNTHETIC completion blocked by policy."
+    policy_id = "synthetic-completion-policy"
+    problem = {
+        "code": "guardrail_blocked", "status": 403, "detail": reason,
+        "policyId": policy_id,
+        "error": {"code": "guardrail_blocked", "policy_id": policy_id, "message": reason},
+    }
+    headers = {
+        "x-fieldloop-guardrail-decisions": (
+            '[{"decision":"block","policyId":"synthetic-completion-policy",'
+            '"reason":"SYNTHETIC completion blocked by policy."}]'
+        ),
+    }
+    request = httpx.Request("POST", "https://guardrail.invalid/guardrail/v1/chat/completions")
+    response = httpx.Response(403, headers=headers, json=problem, request=request)
 
-    h = Harness([blocked_completion])
+    async def mapped_block(*args, **kwargs):  # type: ignore[no-untyped-def]
+        try:
+            raise openai.PermissionDeniedError(
+                "403 Guardrail blocked request", response=response, body=problem
+            )
+        except openai.PermissionDeniedError as original:
+            raise litellm.exceptions.APIError(
+                status_code=403, message=str(original), llm_provider="openai",
+                model="synthetic-model",
+            ) from original
+
+    monkeypatch.setattr(LiteLLMClient, "acompletion", mapped_block)
+    model = GuardrailLiteLlm(
+        model="openai/synthetic-model", api_base="https://guardrail.invalid/guardrail/v1",
+        api_key="synthetic-key", extra_body={"aiSystem": "synthetic-system"},
+        llm_client=GuardrailResponseClient(),
+    )
+    h = Harness([])
+    h.runtime._deps.model_factory = lambda _: model
 
     events = run(h)
 
     decision = next(event for event in events if event.name == "guardrail.decision")
     error = next(event for event in events if event.name == "answer.error")
     assert decision.data == {
-        "agent": "integrity-orchestrator", "decision": "block",
-        "reason": "Completion was blocked by policy.",
-        "policy_id": "completion-policy", "source": "model",
+        "agent": "integrity-orchestrator", "decision": "block", "reason": reason,
+        "policy_id": policy_id, "source": "model",
     }
     assert decision.seq < error.seq
-    assert error.data["type"] == "RuntimeError"
+    assert error.data["type"] == "APIError"
     assert not any(event.name == "answer.final" for event in events)
 
 

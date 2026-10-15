@@ -77,29 +77,35 @@ class GuardrailResponseClient(LiteLLMClient):
 
 
 def _read_error_decisions(error: Exception) -> list[dict[str, str]]:
-    response = getattr(error, "response", None)
-    decisions = read_guardrail_decisions(getattr(response, "headers", None))
-    if decisions:
-        return decisions
+    current: BaseException | None = error
+    visited: set[int] = set()
+    while isinstance(current, Exception) and id(current) not in visited:
+        visited.add(id(current))
+        response = getattr(current, "response", None)
+        decisions = read_guardrail_decisions(getattr(response, "headers", None))
+        if decisions:
+            return decisions
 
-    # LiteLLM may turn the HTTP response into an APIError and retain its JSON body
-    # without the response headers. The Guardrail's 403 problem body still carries
-    # the policy ID and reason needed for the user-facing block notice.
-    body = getattr(error, "body", None)
-    status = getattr(error, "status_code", getattr(response, "status_code", None))
-    if not isinstance(body, Mapping) or status != 403:
-        return []
-    error_body = body.get("error")
-    if (
-        body.get("code") != "guardrail_blocked"
-        or not isinstance(error_body, Mapping)
-        or error_body.get("code") != "guardrail_blocked"
-    ):
-        return []
-    policy_id = body.get("policyId") or error_body.get("policy_id")
-    reason = body.get("detail") or error_body.get("message")
-    if isinstance(policy_id, str) and policy_id and isinstance(reason, str) and reason:
-        return [{"decision": "block", "policy_id": policy_id, "reason": reason}]
+        # LiteLLM can remap an OpenAI 403 into an APIError without the HTTP
+        # response fields; the original exception remains in the cause/context chain.
+        body = getattr(current, "body", None)
+        status = getattr(current, "status_code", getattr(response, "status_code", None))
+        if isinstance(body, Mapping) and status == 403:
+            error_body = body.get("error")
+            if (
+                body.get("code") == "guardrail_blocked"
+                and isinstance(error_body, Mapping)
+                and error_body.get("code") == "guardrail_blocked"
+            ):
+                policy_id = body.get("policyId") or error_body.get("policy_id")
+                reason = body.get("detail") or error_body.get("message")
+                if (
+                    isinstance(policy_id, str) and policy_id
+                    and isinstance(reason, str) and reason
+                ):
+                    return [{"decision": "block", "policy_id": policy_id, "reason": reason}]
+
+        current = current.__cause__ or current.__context__
     return []
 
 
