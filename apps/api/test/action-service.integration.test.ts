@@ -335,6 +335,7 @@ integration("FL-87 real PostgreSQL actions and tool checks", () => {
       expect((await store.get(approver, action.id)).status).toBe("open");
       expect(await count("SELECT count(*) FROM app.audit_event WHERE org_id=$1 AND action='action_request.approved'", [approver.orgId])).toBe(0);
     });
+  });
   it("queues approved L1 field commands and records each outcome as scoped Evidence", async () => {
     const { user, barrierId } = await fixture();
     const packages = new PostgresCommandPackageStore(db);
