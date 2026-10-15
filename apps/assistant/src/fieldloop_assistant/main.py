@@ -106,7 +106,9 @@ def build_app(settings: Settings | None) -> FastAPI:
 
     def knowledge(session: SessionRecord) -> KnowledgeProvider | None:
         # Imported lazily: constructing Vertex embeddings needs project credentials.
-        project = os.environ.get("FIELDLOOP_GCP_PROJECT")
+        project = os.environ.get("FIELDLOOP_GCP_PROJECT", "").strip()
+        if not project:
+            project = os.environ.get("GOOGLE_CLOUD_PROJECT", "").strip()
         if not project:
             return None
         from fieldloop_adapters.embeddings import vertex_embeddings
