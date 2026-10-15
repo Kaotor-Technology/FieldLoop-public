@@ -263,7 +263,20 @@ test("renders Action Request cards without chat approval and refreshes status fr
     target.__fieldLoopEmit?.("action_request.updated", { id: "synthetic-event-id", entityId: id, status: "approved" });
   }, actionRequestId);
   await expect(card).toContainText("Approved");
+  await expect(card.getByRole("link", { name: "Review and approve" })).toHaveCount(0);
+});
 
+test("opens the approval dialog from an actionable Action Request card", async ({ page }) => {
+  const actionRequestId = "00000000-0000-4000-8000-000000000097";
+  await setAgentMode(page, "action");
+  await page.goto("/agent");
+  await page.getByRole("textbox", { name: "Message" }).fill("Prepare the synthetic work order");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  const card = page.locator(".agent-chat-artifact-card");
+  await expect(card).toContainText("Open");
+  const reviewLink = card.getByRole("link", { name: "Review and approve" });
+  await expect(reviewLink).toHaveAttribute("href", `/actions/${actionRequestId}`);
   await reviewLink.click();
   await expect(page).toHaveURL(new RegExp(`/actions/${actionRequestId}$`));
   await expect(page.getByRole("heading", { name: actionRequestId })).toBeVisible();
