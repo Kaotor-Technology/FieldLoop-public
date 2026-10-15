@@ -92,6 +92,12 @@ CREATE DATABASE fieldloop_demo;
 SQL
 dbmate_database fieldloop_dev up
 dbmate_database fieldloop_demo up
+# Reproduce FL-316: the IAM login can appear after the original optional GRANT.
+# Replaying up must repair only the environment's runtime membership.
+for environment in dev demo; do
+  run_psql_database "fieldloop_${environment}" -c "REVOKE fieldloop_simulator_${environment} FROM \"fl-v2-simulator-${environment}@example-project.iam\"; DELETE FROM public.schema_migrations WHERE version = '20261015110000';"
+  dbmate_database "fieldloop_${environment}" up
+done
 run_psql_database fieldloop_dev < db/test/bff_auth_roles.sql
 run_psql_database fieldloop_demo < db/test/bff_auth_roles.sql
 run_psql_database fieldloop_dev < db/test/simulator_roles.sql
