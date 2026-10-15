@@ -21,6 +21,9 @@ from .identity import TOKEN_HEADER
 
 MAX_DOCUMENT_CHARS = 100_000
 MAX_CHAINAGE_METRES = 1_000_000_000
+# A place name alone cannot be located on the map, so it is never more than low confidence.
+LOW_CONFIDENCE_THRESHOLD = 0.5
+PLACE_NAME_ONLY_CONFIDENCE_CAP = 0.4
 GEO_AI_SYSTEM = "demo-uc-1"
 _KP_MEASURE = re.compile(r"(?<![\w.])(\d{1,6})\s*\+\s*(\d{1,3}(?:\.\d{1,3})?)(?!\d)", re.IGNORECASE)
 _CHAINAGE_LABEL = re.compile(
@@ -248,6 +251,9 @@ def validate_geo_references(value: Any, source_text: str) -> list[GeoReferenceCa
             raise GeoExtractionValidationError(
                 "Candidate does not contain a grounded location reference"
             )
+        confidence = candidate.confidence
+        if latitude is None and chainage_from is None and not asset_code:
+            confidence = min(confidence, PLACE_NAME_ONLY_CONFIDENCE_CAP)
         candidates.append(
             candidate.model_copy(
                 update={
@@ -255,6 +261,7 @@ def validate_geo_references(value: Any, source_text: str) -> list[GeoReferenceCa
                     "longitude": longitude,
                     "chainage_from": chainage_from,
                     "chainage_to": chainage_to,
+                    "confidence": confidence,
                 }
             )
         )

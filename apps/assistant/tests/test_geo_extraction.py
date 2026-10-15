@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 from fieldloop_assistant.geo_extraction import (
+    LOW_CONFIDENCE_THRESHOLD,
     GeoExtractionBlockedError,
     GeoExtractionValidationError,
     extract_geo_references,
@@ -96,6 +97,44 @@ def test_validates_thai_place_name_from_exact_excerpt() -> None:
     parsed = validate_geo_references({"references": [candidate]}, excerpt)[0]
 
     assert parsed.place_name == "บางกระเจ้า"
+
+
+def test_ambiguous_thai_place_name_is_capped_at_low_confidence() -> None:
+    excerpt = "พบรอยรั่วใกล้ท่าน้ำ"
+    candidate = {
+        "latitude": None,
+        "longitude": None,
+        "chainageFrom": None,
+        "chainageTo": None,
+        "assetCode": None,
+        "placeName": "ท่าน้ำ",
+        "sourceSnippet": excerpt,
+        "confidence": 0.95,
+    }
+
+    parsed = validate_geo_references({"references": [candidate]}, excerpt)[0]
+
+    assert parsed.confidence < LOW_CONFIDENCE_THRESHOLD
+    assert parsed.latitude is None and parsed.chainage_from is None
+
+
+def test_grounded_chainage_keeps_model_confidence() -> None:
+    excerpt = "Valve marker at KP 45+200"
+    candidate = {
+        "latitude": None,
+        "longitude": None,
+        "chainageFrom": None,
+        "chainageTo": None,
+        "assetCode": None,
+        "placeName": None,
+        "sourceSnippet": excerpt,
+        "confidence": 0.92,
+    }
+
+    parsed = validate_geo_references({"references": [candidate]}, excerpt)[0]
+
+    assert parsed.chainage_from == 45_200
+    assert parsed.confidence == 0.92
 
 
 def test_validates_segment_and_facility_ids_from_table_rows() -> None:
@@ -223,6 +262,38 @@ def test_tool_scans_then_saves_only_grounded_drafts() -> None:
         assert platform.created[0]["chainageFrom"] == 45_200
         assert platform.created[0]["confidence"] == 0.2
         assert result["replayed"] is False
+
+    asyncio.run(exercise())
+
+
+def test_tool_saves_ambiguous_thai_place_as_low_confidence_draft_without_location() -> None:
+    async def exercise() -> None:
+        source = "พบรอยรั่วใกล้ท่าน้ำ"
+        model_output = json.dumps(
+            {
+                "references": [
+                    {
+                        "latitude": None,
+                        "longitude": None,
+                        "chainageFrom": None,
+                        "chainageTo": None,
+                        "assetCode": None,
+                        "placeName": "ท่าน้ำ",
+                        "sourceSnippet": source,
+                        "confidence": 0.9,
+                    }
+                ]
+            }
+        )
+        platform = FakePlatform(source)
+        await extract_geo_references(
+            "doc-1", "signed-token", platform, FakeGuardrail(model_output),
+            allowed_folders=("Safety",), idempotency_key="geo-test-key-0002"
+        )
+        saved = platform.created[0]
+        assert saved["confidence"] < LOW_CONFIDENCE_THRESHOLD
+        assert saved["latitude"] is None and saved["chainageFrom"] is None
+        assert "status" not in saved
 
     asyncio.run(exercise())
 
