@@ -8,7 +8,6 @@ import type { AgentStreamEvent } from "./agent-chat-client";
 import { contextualizeAgentMessage } from "./agent-chat-context";
 import type { AgentContextChip } from "./agent-chat-context";
 import { actionRequestIdsForTurn, guardrailNoticeDetails, normalizeActionRequestIds } from "./agent-chat-artifacts";
-import { useActionRequestEvents } from "./action-request-events";
 import { AgentArtifactCard } from "./AgentArtifactCard";
 import { useAgentChatStore } from "./agent-chat-store";
 import type { AgentAnswer, AgentTurn } from "./agent-chat-store";
@@ -39,7 +38,6 @@ export function AgentChat({
   agentId = "integrity-orchestrator",
   workspaceSearch,
 }: AgentChatProps) {
-  useActionRequestEvents();
   const { t, i18n } = useTranslation();
   const session = useCurrentSession();
   const textareaId = useId();

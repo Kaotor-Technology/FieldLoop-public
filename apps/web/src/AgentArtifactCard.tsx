@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import type { components } from "@fieldloop/contracts";
 import { useTranslation } from "react-i18next";
-import { actionRequestQueryKey } from "./action-request-events";
+import { actionRequestQueryKey } from "./action-approval";
 import { api } from "./api-client";
 
 type ActionRequest = components["schemas"]["ActionRequest"];

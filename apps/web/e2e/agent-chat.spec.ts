@@ -10,6 +10,7 @@ test.beforeEach(async ({ page, request }) => {
     const mockWindow = window as Window & {
       __agentController?: ReadableStreamDefaultController<Uint8Array>;
       __fieldLoopEmit?: (name: string, data: Record<string, unknown>) => void;
+      __fieldLoopEventSourceCount?: () => number;
     };
     const eventChunk = (name: string, data: Record<string, unknown>) => new TextEncoder().encode(`event: ${name}\ndata: ${JSON.stringify(data)}\n\n`);
     class TestEventSource extends EventTarget {
@@ -30,6 +31,7 @@ test.beforeEach(async ({ page, request }) => {
     mockWindow.__fieldLoopEmit = (name, data) => {
       for (const stream of TestEventSource.instances) stream.emit(name, data);
     };
+    mockWindow.__fieldLoopEventSourceCount = () => TestEventSource.instances.size;
     if (!sessionStorage.getItem("__agentRequests")) sessionStorage.setItem("__agentRequests", "[]");
     if (!sessionStorage.getItem("__agentMode")) sessionStorage.setItem("__agentMode", "normal");
     const originalFetch = window.fetch.bind(window);
@@ -232,6 +234,10 @@ test("renders Action Request cards without chat approval and refreshes status fr
   const actionRequestId = "00000000-0000-4000-8000-000000000097";
   await setAgentMode(page, "action");
   await page.goto("/agent");
+  await expect.poll(() => page.evaluate(() => {
+    const target = window as Window & { __fieldLoopEventSourceCount?: () => number };
+    return target.__fieldLoopEventSourceCount?.();
+  })).toBe(1);
   await page.getByRole("textbox", { name: "Message" }).fill("Prepare the synthetic work order");
   await page.getByRole("button", { name: "Send" }).click();
 
