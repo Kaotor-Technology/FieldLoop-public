@@ -1,0 +1,17 @@
+# Gitleaks config for the public mirror (installed as .gitleaks.toml by export-public.sh).
+# The private .gitleaksignore lists fingerprints that contain commit hashes, which change
+# when the mirror rewrites history, so the verified false positives are allowed by path.
+title = "FieldLoop public mirror"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Verified false positives: idempotency keys in test fixtures and public legal document keys"
+targetRules = ["generic-api-key"]
+paths = [
+  '''^data/corpus/legal/manifest\.json$''',
+  '''^data/corpus/legal/storage/[a-z]+\.json$''',
+  '''^apps/api/test/health(-store)?\.test\.ts$''',
+  '''^scripts/test-signal-worker\.mjs$''',
+]

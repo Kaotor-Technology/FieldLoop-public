@@ -715,7 +715,7 @@ components:
 
 ## Overview
 
-**What this is.** The UI for AI-Harness Living Bowtie (codename FieldLoop v2), from [PRD.md](PRD.md). It is a **map-first operations console**. Barrier-based risk for pipelines, urban flood, OT/cyber and Gen AI is shown on a Geo Command Map. AI assistants draft and check work, and every consequential action is approved by a person.
+**What this is.** The UI for AI-Harness Living Bowtie (codename FieldLoop v2), from the product requirements. It is a **map-first operations console**. Barrier-based risk for pipelines, urban flood, OT/cyber and Gen AI is shown on a Geo Command Map. AI assistants draft and check work, and every consequential action is approved by a person.
 
 **Who uses it** (PRD §4):
 - **Daily users:** domain risk engineers (pipeline integrity, flood operations, OT security, AI risk), the primary persona, and Barrier Owners (inspection, maintenance, SOC).
@@ -1253,7 +1253,7 @@ Motion explains change in the world: something moved, failed, or arrived. It is 
 
 ## Assumptions
 
-Decisions that PRD.md does not specify, made here for review:
+Decisions that the product requirements do not specify, made here for review:
 
 1. **Brand personality "Precise · Accountable · Calm · Grounded · Candid"** comes from the live site's tagline, its palette and its explicit "X is not Y" copy. The site gives no stated brand values.
 2. **Brand colours are reused from fieldloop.kaotor.com:** `secondary` #102E2B, `primary` #14604E, `brand-mint` #7FCEAE, `focus` #A97918, canvas #F3F5F2, ink #18332F and stop #8D2719. The error colour was adjusted to #A12B1B for a stronger solid button. Neutrals were extended into a full sage scale.
